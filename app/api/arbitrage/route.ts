@@ -1,19 +1,15 @@
 import { NextResponse } from "next/server";
 import { fetchMLBOdds, parseOddsLines } from "@/lib/odds/the-odds-api";
 import { findArbitrage, findEVBets } from "@/lib/odds/arbitrage";
+import { getApiKey } from "@/lib/odds/api-keys";
 
 export const revalidate = 30;
 
 export async function GET() {
-  const apiKey = process.env.THE_ODDS_API_KEY;
+  const apiKey = getApiKey();
 
   if (!apiKey) {
-    return NextResponse.json({
-      arbitrage: [],
-      evBets: [],
-      message: "Configure THE_ODDS_API_KEY for live arbitrage scanning",
-      demo: true,
-    });
+    return NextResponse.json({ arbitrage: [], evBets: [], error: "No API keys available" });
   }
 
   try {
@@ -24,26 +20,21 @@ export async function GET() {
     for (const game of rawGames) {
       const oddsLines = parseOddsLines(game);
       const gameName = `${game.away_team} @ ${game.home_team}`;
-
-      const arbs = findArbitrage(oddsLines, gameName);
-      const evBets = findEVBets(oddsLines, gameName);
-
-      allArbs.push(...arbs);
-      allEV.push(...evBets);
+      allArbs.push(...findArbitrage(oddsLines, gameName));
+      allEV.push(...findEVBets(oddsLines, gameName));
     }
 
-    // Sort: best arbs first, best EV first
     allArbs.sort((a, b) => a.holdPercentage - b.holdPercentage);
     allEV.sort((a, b) => b.evPercentage - a.evPercentage);
 
     return NextResponse.json({
       arbitrage: allArbs,
-      evBets: allEV.slice(0, 20), // top 20 EV bets
+      evBets: allEV.slice(0, 20),
       gamesScanned: rawGames.length,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
     console.error("Arbitrage scan error:", error);
-    return NextResponse.json({ error: "Scan failed" }, { status: 500 });
+    return NextResponse.json({ error: "Scan failed", arbitrage: [], evBets: [] }, { status: 500 });
   }
 }

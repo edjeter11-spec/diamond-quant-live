@@ -66,6 +66,15 @@ export async function fetchMLBOdds(apiKey: string): Promise<OddsAPIGame[]> {
   const url = `${BASE_URL}/sports/${SPORT}/odds/?apiKey=${apiKey}&regions=us&markets=${markets}&oddsFormat=american&bookmakers=${BOOKMAKERS.join(",")}`;
 
   const res = await fetch(url, { next: { revalidate: 30 } });
+
+  // Check remaining quota from headers
+  const remaining = res.headers.get("x-requests-remaining");
+  if (remaining !== null && parseInt(remaining) <= 0) {
+    // Key is exhausted — mark it for rotation
+    const { markKeyExhausted } = await import("./api-keys");
+    markKeyExhausted(apiKey);
+  }
+
   if (!res.ok) {
     throw new Error(`Odds API error: ${res.status} ${res.statusText}`);
   }

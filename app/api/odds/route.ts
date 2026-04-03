@@ -1,57 +1,71 @@
 import { NextResponse } from "next/server";
 import { fetchMLBOdds, parseOddsLines, findBestLine } from "@/lib/odds/the-odds-api";
 import { findArbitrage, findEVBets } from "@/lib/odds/arbitrage";
+import { getApiKey, markKeyExhausted, getActiveKeyCount } from "@/lib/odds/api-keys";
 
 export const revalidate = 30;
 
 export async function GET() {
-  const apiKey = process.env.THE_ODDS_API_KEY;
+  const apiKey = getApiKey();
 
   if (!apiKey) {
     return NextResponse.json({
       games: [],
       timestamp: new Date().toISOString(),
-      demo: false,
-      error: "API key not configured",
+      error: "No API keys configured",
     });
   }
 
-  try {
-    const rawGames = await fetchMLBOdds(apiKey);
+  // Try with current key, fall back to next if exhausted
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const key = getApiKey();
+    if (!key) break;
 
-    const games = rawGames.map((game) => {
-      const oddsLines = parseOddsLines(game);
-      const arbitrage = findArbitrage(oddsLines, `${game.away_team} @ ${game.home_team}`);
-      const evBets = findEVBets(oddsLines, `${game.away_team} @ ${game.home_team}`);
+    try {
+      const rawGames = await fetchMLBOdds(key);
 
-      const bestHomeML = findBestLine(oddsLines, "home", "ml");
-      const bestAwayML = findBestLine(oddsLines, "away", "ml");
-      const bestOver = findBestLine(oddsLines, "home", "total_over");
-      const bestUnder = findBestLine(oddsLines, "home", "total_under");
+      // Check if we got real data (bookmakers present)
+      const hasData = rawGames.some((g) => g.bookmakers.length > 0);
+      if (!hasData && getActiveKeyCount() > 1) {
+        markKeyExhausted(key);
+        continue; // try next key
+      }
 
-      return {
-        id: game.id,
-        homeTeam: game.home_team,
-        awayTeam: game.away_team,
-        commenceTime: game.commence_time,
-        oddsLines,
-        arbitrage,
-        evBets,
-        bestLines: { bestHomeML, bestAwayML, bestOver, bestUnder },
-      };
-    });
+      const games = rawGames.map((game) => {
+        const oddsLines = parseOddsLines(game);
+        const arbitrage = findArbitrage(oddsLines, `${game.away_team} @ ${game.home_team}`);
+        const evBets = findEVBets(oddsLines, `${game.away_team} @ ${game.home_team}`);
 
-    return NextResponse.json({
-      games,
-      timestamp: new Date().toISOString(),
-      demo: false,
-    });
-  } catch (error) {
-    console.error("Odds API error:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch odds", games: [], demo: false },
-      { status: 500 }
-    );
+        return {
+          id: game.id,
+          homeTeam: game.home_team,
+          awayTeam: game.away_team,
+          commenceTime: game.commence_time,
+          oddsLines,
+          arbitrage,
+          evBets,
+          bestLines: {
+            bestHomeML: findBestLine(oddsLines, "home", "ml"),
+            bestAwayML: findBestLine(oddsLines, "away", "ml"),
+            bestOver: findBestLine(oddsLines, "home", "total_over"),
+            bestUnder: findBestLine(oddsLines, "home", "total_under"),
+          },
+        };
+      });
+
+      return NextResponse.json({
+        games,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error: any) {
+      console.error(`Odds API error (key ${attempt + 1}):`, error.message);
+      markKeyExhausted(key);
+      // Try next key
+    }
   }
+
+  return NextResponse.json(
+    { error: "All API keys exhausted", games: [] },
+    { status: 503 }
+  );
 }
-

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { fetchMLBOdds, fetchPlayerProps, parsePlayerProps } from "@/lib/odds/the-odds-api";
 import { devig } from "@/lib/model/kelly";
+import { getApiKey } from "@/lib/odds/api-keys";
 
 export const revalidate = 60;
 
@@ -18,14 +19,13 @@ const PROP_MARKETS = [
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const market = searchParams.get("market") || "pitcher_strikeouts";
-  const apiKey = process.env.THE_ODDS_API_KEY;
+  const apiKey = getApiKey();
 
   if (!apiKey) {
     return NextResponse.json({
       props: [],
       markets: PROP_MARKETS,
-      demo: false,
-      error: "Odds API key not configured — add THE_ODDS_API_KEY to .env",
+      error: "No API keys available",
     });
   }
 
