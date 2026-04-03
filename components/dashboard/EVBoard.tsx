@@ -72,10 +72,10 @@ export default function EVBoard() {
               <button
                 key={i}
                 onClick={() => handleAddToParlay(bet)}
-                className="w-full px-4 py-3 flex items-center gap-3 hover:bg-gunmetal/30 transition-colors text-left group"
+                className="w-full px-3 sm:px-4 py-2.5 sm:py-3 flex items-center gap-2 sm:gap-3 hover:bg-gunmetal/30 active:bg-gunmetal/40 transition-colors text-left"
               >
                 {/* Rank */}
-                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                <div className={`w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center text-[9px] sm:text-[10px] font-bold flex-shrink-0 ${
                   i < 3 ? "bg-gold/15 text-gold" : "bg-gunmetal text-mercury"
                 }`}>
                   {i + 1}
@@ -83,25 +83,25 @@ export default function EVBoard() {
 
                 {/* Info */}
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1">
                     {confidenceIcon(bet.confidence)}
-                    <p className="text-sm font-medium text-silver truncate">{bet.pick}</p>
+                    <p className="text-xs sm:text-sm font-medium text-silver truncate">{bet.pick}</p>
                   </div>
-                  <p className="text-xs text-mercury/60 truncate">{bet.game} • {bet.bookmaker}</p>
+                  <p className="text-[10px] sm:text-xs text-mercury/60 truncate">{bet.game} • {bet.bookmaker}</p>
                 </div>
 
                 {/* Odds & EV */}
                 <div className="text-right flex-shrink-0">
-                  <p className="text-sm font-mono font-semibold text-silver">
+                  <p className="text-xs sm:text-sm font-mono font-semibold text-silver">
                     {formatOdds(bet.odds)}
                   </p>
-                  <p className="text-xs font-mono text-neon font-semibold">
-                    +{bet.evPercentage.toFixed(1)}% EV
+                  <p className="text-[10px] sm:text-xs font-mono text-neon font-semibold">
+                    +{bet.evPercentage.toFixed(1)}%
                   </p>
                 </div>
 
-                {/* Kelly */}
-                <div className="text-right flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                {/* Kelly — always visible on mobile */}
+                <div className="text-right flex-shrink-0 hidden sm:block sm:opacity-0 sm:group-hover:opacity-100 sm:transition-opacity">
                   <p className="text-xs text-mercury">Kelly</p>
                   <p className="text-xs font-mono text-gold">${bet.kellyStake.toFixed(0)}</p>
                 </div>

@@ -48,41 +48,41 @@ export default function ArbitrageAlert({ arbitrage }: ArbitrageAlertProps) {
       {/* Arb Cards */}
       <div className="p-3 space-y-3">
         {arbitrage.map((arb, i) => (
-          <div key={i} className="bg-bunker/60 rounded-lg p-4 border border-gold/10">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs text-mercury">{arb.game}</span>
-              <div className="flex items-center gap-1.5">
-                <Trophy className="w-3.5 h-3.5 text-gold" />
-                <span className="text-sm font-bold text-gold font-mono">
-                  +{arb.profit.toFixed(2)}% guaranteed
+          <div key={i} className="bg-bunker/60 rounded-lg p-3 sm:p-4 border border-gold/10">
+            <div className="flex items-center justify-between mb-2 sm:mb-3">
+              <span className="text-[11px] sm:text-xs text-mercury truncate mr-2">{arb.game}</span>
+              <div className="flex items-center gap-1 flex-shrink-0">
+                <Trophy className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-gold" />
+                <span className="text-xs sm:text-sm font-bold text-gold font-mono">
+                  +{arb.profit.toFixed(2)}%
                 </span>
               </div>
             </div>
 
-            <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center justify-between gap-2 sm:gap-4">
               {/* Side 1 */}
-              <div className="flex-1 p-3 rounded-lg bg-gunmetal/50 text-center">
-                <p className="text-xs text-mercury mb-1">{arb.side1.bookmaker}</p>
-                <p className="text-sm font-semibold text-silver">{arb.side1.pick}</p>
-                <p className="text-lg font-bold font-mono text-neon">
+              <div className="flex-1 p-2 sm:p-3 rounded-lg bg-gunmetal/50 text-center">
+                <p className="text-[10px] sm:text-xs text-mercury mb-0.5">{arb.side1.bookmaker}</p>
+                <p className="text-xs sm:text-sm font-semibold text-silver">{arb.side1.pick}</p>
+                <p className="text-base sm:text-lg font-bold font-mono text-neon">
                   {arb.side1.odds > 0 ? "+" : ""}{arb.side1.odds}
                 </p>
-                <p className="text-xs text-mercury mt-1">
-                  <DollarSign className="w-3 h-3 inline" />{arb.stake1.toFixed(2)}
+                <p className="text-[10px] sm:text-xs text-mercury mt-0.5">
+                  <DollarSign className="w-2.5 h-2.5 sm:w-3 sm:h-3 inline" />{arb.stake1.toFixed(2)}
                 </p>
               </div>
 
-              <ArrowRight className="w-4 h-4 text-gold/50 flex-shrink-0" />
+              <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gold/50 flex-shrink-0" />
 
               {/* Side 2 */}
-              <div className="flex-1 p-3 rounded-lg bg-gunmetal/50 text-center">
-                <p className="text-xs text-mercury mb-1">{arb.side2.bookmaker}</p>
-                <p className="text-sm font-semibold text-silver">{arb.side2.pick}</p>
-                <p className="text-lg font-bold font-mono text-neon">
+              <div className="flex-1 p-2 sm:p-3 rounded-lg bg-gunmetal/50 text-center">
+                <p className="text-[10px] sm:text-xs text-mercury mb-0.5">{arb.side2.bookmaker}</p>
+                <p className="text-xs sm:text-sm font-semibold text-silver">{arb.side2.pick}</p>
+                <p className="text-base sm:text-lg font-bold font-mono text-neon">
                   {arb.side2.odds > 0 ? "+" : ""}{arb.side2.odds}
                 </p>
-                <p className="text-xs text-mercury mt-1">
-                  <DollarSign className="w-3 h-3 inline" />{arb.stake2.toFixed(2)}
+                <p className="text-[10px] sm:text-xs text-mercury mt-0.5">
+                  <DollarSign className="w-2.5 h-2.5 sm:w-3 sm:h-3 inline" />{arb.stake2.toFixed(2)}
                 </p>
               </div>
             </div>

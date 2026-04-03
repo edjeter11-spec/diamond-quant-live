@@ -79,12 +79,12 @@ export default function PlayerProps() {
         </div>
 
         {/* Market Filter */}
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex gap-1.5 overflow-x-auto scrollbar-hide pb-0.5">
           {Object.entries(MARKET_LABELS).slice(0, 5).map(([key, label]) => (
             <button
               key={key}
               onClick={() => setSelectedMarket(key)}
-              className={`px-2 py-1 rounded text-[11px] font-medium transition-colors ${
+              className={`px-2 py-1 rounded text-[11px] font-medium transition-colors whitespace-nowrap flex-shrink-0 ${
                 selectedMarket === key
                   ? "bg-electric/20 text-electric border border-electric/30"
                   : "text-mercury hover:bg-slate/30 border border-transparent"

@@ -122,6 +122,18 @@ body {
   }
 }
 
+/* Hide scrollbar for mobile tab nav */
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Prevent text selection on buttons for mobile */
+button { -webkit-tap-highlight-color: transparent; }
+
+/* Mobile safe area padding */
+@supports(padding: max(0px)) {
+  .safe-bottom { padding-bottom: max(0.5rem, env(safe-area-inset-bottom)); }
+}
+
 /* Number counter animation */
 @keyframes count-up {
   from { opacity: 0; transform: translateY(4px); }

@@ -91,23 +91,23 @@ export default function GameCard({ game, oddsInfo }: GameCardProps) {
       </div>
 
       {/* Matchup */}
-      <div className="px-4 py-3 space-y-2">
+      <div className="px-3 sm:px-4 py-2.5 sm:py-3 space-y-1.5 sm:space-y-2">
         {/* Away Team */}
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <span className="text-lg font-bold font-mono text-silver w-10">{game.awayAbbrev}</span>
-            <span className="text-sm text-mercury truncate max-w-[120px]">{game.awayPitcher}</span>
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <span className="text-base sm:text-lg font-bold font-mono text-silver w-9 sm:w-10 flex-shrink-0">{game.awayAbbrev}</span>
+            <span className="text-xs sm:text-sm text-mercury truncate">{game.awayPitcher}</span>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 sm:gap-4 flex-shrink-0 ml-2">
             {oddsInfo?.bestAwayML && (
-              <span className={`text-sm font-mono font-semibold ${
+              <span className={`text-xs sm:text-sm font-mono font-semibold ${
                 oddsInfo.bestAwayML.odds > 0 ? "text-neon" : "text-silver"
               }`}>
                 {formatOdds(oddsInfo.bestAwayML.odds)}
               </span>
             )}
             {game.status !== "pre" && (
-              <span className={`text-xl font-bold font-mono w-8 text-right ${
+              <span className={`text-lg sm:text-xl font-bold font-mono w-7 sm:w-8 text-right ${
                 game.awayScore > game.homeScore ? "text-neon" : "text-silver"
               }`}>
                 {game.awayScore}
@@ -118,20 +118,20 @@ export default function GameCard({ game, oddsInfo }: GameCardProps) {
 
         {/* Home Team */}
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <span className="text-lg font-bold font-mono text-silver w-10">{game.homeAbbrev}</span>
-            <span className="text-sm text-mercury truncate max-w-[120px]">{game.homePitcher}</span>
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <span className="text-base sm:text-lg font-bold font-mono text-silver w-9 sm:w-10 flex-shrink-0">{game.homeAbbrev}</span>
+            <span className="text-xs sm:text-sm text-mercury truncate">{game.homePitcher}</span>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 sm:gap-4 flex-shrink-0 ml-2">
             {oddsInfo?.bestHomeML && (
-              <span className={`text-sm font-mono font-semibold ${
+              <span className={`text-xs sm:text-sm font-mono font-semibold ${
                 oddsInfo.bestHomeML.odds > 0 ? "text-neon" : "text-silver"
               }`}>
                 {formatOdds(oddsInfo.bestHomeML.odds)}
               </span>
             )}
             {game.status !== "pre" && (
-              <span className={`text-xl font-bold font-mono w-8 text-right ${
+              <span className={`text-lg sm:text-xl font-bold font-mono w-7 sm:w-8 text-right ${
                 game.homeScore > game.awayScore ? "text-neon" : "text-silver"
               }`}>
                 {game.homeScore}
@@ -142,7 +142,7 @@ export default function GameCard({ game, oddsInfo }: GameCardProps) {
       </div>
 
       {/* Footer */}
-      <div className="flex items-center gap-3 px-4 py-2 border-t border-slate/30 text-[11px] text-mercury/70">
+      <div className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-1.5 sm:py-2 border-t border-slate/30 text-[10px] sm:text-[11px] text-mercury/70">
         <div className="flex items-center gap-1">
           <MapPin className="w-3 h-3" />
           {game.venue}

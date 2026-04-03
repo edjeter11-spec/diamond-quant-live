@@ -62,45 +62,45 @@ export default function QuantVerdict({ game, analysis }: QuantVerdictProps) {
       </div>
 
       {/* Main Verdict */}
-      <div className="p-5">
-        <div className="text-center mb-6">
-          <p className="text-sm text-mercury mb-1">{game.awayTeam} @ {game.homeTeam}</p>
-          <p className={`text-2xl font-bold ${conf.text} mb-1`}>{analysis.pick}</p>
-          <p className="text-xs text-mercury">Best price @ {analysis.bookmaker}</p>
+      <div className="p-4 sm:p-5">
+        <div className="text-center mb-4 sm:mb-6">
+          <p className="text-xs sm:text-sm text-mercury mb-1">{game.awayTeam} @ {game.homeTeam}</p>
+          <p className={`text-xl sm:text-2xl font-bold ${conf.text} mb-1`}>{analysis.pick}</p>
+          <p className="text-[11px] sm:text-xs text-mercury">Best price @ {analysis.bookmaker}</p>
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-3 gap-4 mb-5">
+        <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-4 sm:mb-5">
           {/* Win Prob */}
-          <div className="text-center p-3 rounded-lg bg-gunmetal/50">
-            <Target className="w-4 h-4 text-electric mx-auto mb-1.5" />
-            <p className="text-2xl font-bold font-mono text-silver">
+          <div className="text-center p-2 sm:p-3 rounded-lg bg-gunmetal/50">
+            <Target className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-electric mx-auto mb-1" />
+            <p className="text-lg sm:text-2xl font-bold font-mono text-silver">
               {(analysis.winProb * 100).toFixed(1)}%
             </p>
-            <p className="text-[10px] text-mercury uppercase tracking-wider mt-1">Win Prob</p>
+            <p className="text-[9px] sm:text-[10px] text-mercury uppercase tracking-wider mt-0.5">Win Prob</p>
           </div>
 
           {/* EV */}
-          <div className="text-center p-3 rounded-lg bg-gunmetal/50">
-            <TrendingUp className="w-4 h-4 text-neon mx-auto mb-1.5" />
-            <p className={`text-2xl font-bold font-mono ${analysis.evPercentage > 0 ? "text-neon" : "text-danger"}`}>
+          <div className="text-center p-2 sm:p-3 rounded-lg bg-gunmetal/50">
+            <TrendingUp className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-neon mx-auto mb-1" />
+            <p className={`text-lg sm:text-2xl font-bold font-mono ${analysis.evPercentage > 0 ? "text-neon" : "text-danger"}`}>
               {analysis.evPercentage > 0 ? "+" : ""}{analysis.evPercentage.toFixed(1)}%
             </p>
-            <p className="text-[10px] text-mercury uppercase tracking-wider mt-1">EV Edge</p>
+            <p className="text-[9px] sm:text-[10px] text-mercury uppercase tracking-wider mt-0.5">EV Edge</p>
           </div>
 
           {/* Kelly */}
-          <div className="text-center p-3 rounded-lg bg-gunmetal/50">
-            <DollarSign className="w-4 h-4 text-gold mx-auto mb-1.5" />
-            <p className="text-2xl font-bold font-mono text-gold">
+          <div className="text-center p-2 sm:p-3 rounded-lg bg-gunmetal/50">
+            <DollarSign className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gold mx-auto mb-1" />
+            <p className="text-lg sm:text-2xl font-bold font-mono text-gold">
               ${analysis.kellyStake.toFixed(0)}
             </p>
-            <p className="text-[10px] text-mercury uppercase tracking-wider mt-1">Kelly Stake</p>
+            <p className="text-[9px] sm:text-[10px] text-mercury uppercase tracking-wider mt-0.5">Kelly</p>
           </div>
         </div>
 
         {/* Odds Comparison */}
-        <div className="flex items-center justify-between px-4 py-2.5 rounded-lg bg-gunmetal/30 mb-4">
+        <div className="flex items-center justify-between px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg bg-gunmetal/30 mb-3 sm:mb-4">
           <div className="text-center">
             <p className="text-xs text-mercury">Market</p>
             <p className="text-lg font-mono font-bold text-silver">{formatOdds(analysis.marketOdds)}</p>

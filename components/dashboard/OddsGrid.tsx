@@ -1,7 +1,6 @@
 "use client";
 
 import { useStore } from "@/lib/store";
-import { ArrowUpRight, ArrowDownRight, Star } from "lucide-react";
 
 interface OddsGridProps {
   gameId: string;
@@ -47,16 +46,20 @@ export default function OddsGrid({ gameId }: OddsGridProps) {
     });
   };
 
+  const awayShort = awayTeam?.split(" ").pop() ?? "Away";
+  const homeShort = homeTeam?.split(" ").pop() ?? "Home";
+
   return (
     <div className="glass rounded-xl overflow-hidden">
-      <div className="px-4 py-3 border-b border-slate/50">
+      <div className="px-3 sm:px-4 py-2.5 sm:py-3 border-b border-slate/50">
         <h3 className="text-sm font-semibold text-silver tracking-wide uppercase">
           Live Odds Grid
         </h3>
-        <p className="text-xs text-mercury mt-0.5">Click any odds to add to parlay builder</p>
+        <p className="text-[11px] text-mercury mt-0.5">Tap odds to add to parlay</p>
       </div>
 
-      <div className="overflow-x-auto">
+      {/* Desktop Table */}
+      <div className="hidden sm:block overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-slate/30">
@@ -75,8 +78,8 @@ export default function OddsGrid({ gameId }: OddsGridProps) {
             </tr>
             <tr className="border-b border-slate/20">
               <th className="px-4 py-1" />
-              <th className="px-3 py-1 text-[10px] text-mercury/60 font-normal">{awayTeam?.split(" ").pop()}</th>
-              <th className="px-3 py-1 text-[10px] text-mercury/60 font-normal">{homeTeam?.split(" ").pop()}</th>
+              <th className="px-3 py-1 text-[10px] text-mercury/60 font-normal">{awayShort}</th>
+              <th className="px-3 py-1 text-[10px] text-mercury/60 font-normal">{homeShort}</th>
               <th className="px-3 py-1 text-[10px] text-mercury/60 font-normal">Away</th>
               <th className="px-3 py-1 text-[10px] text-mercury/60 font-normal">Home</th>
               <th className="px-3 py-1 text-[10px] text-mercury/60 font-normal">Over</th>
@@ -87,37 +90,30 @@ export default function OddsGrid({ gameId }: OddsGridProps) {
             {oddsLines?.map((line: any, idx: number) => (
               <tr key={idx} className="border-b border-slate/10 hover:bg-gunmetal/50 transition-colors">
                 <td className="px-4 py-2.5">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-silver">{line.bookmaker}</span>
-                  </div>
+                  <span className="text-sm font-medium text-silver">{line.bookmaker}</span>
                 </td>
-                {/* Away ML */}
                 <td className="px-1 py-1.5 text-center">
                   <button
                     onClick={() => handleClickOdds(line.bookmaker, line.awayML, "moneyline", `${awayTeam} ML`, 0.5)}
                     className={`inline-block px-3 py-1.5 rounded font-mono text-sm font-semibold transition-all hover:scale-105 ${
                       isBestOdds(line.bookmaker, line.awayML, bestLines?.bestAwayML)
-                        ? "best-odds"
-                        : "text-silver hover:bg-slate/30"
+                        ? "best-odds" : "text-silver hover:bg-slate/30"
                     }`}
                   >
                     {formatOdds(line.awayML)}
                   </button>
                 </td>
-                {/* Home ML */}
                 <td className="px-1 py-1.5 text-center">
                   <button
                     onClick={() => handleClickOdds(line.bookmaker, line.homeML, "moneyline", `${homeTeam} ML`, 0.5)}
                     className={`inline-block px-3 py-1.5 rounded font-mono text-sm font-semibold transition-all hover:scale-105 ${
                       isBestOdds(line.bookmaker, line.homeML, bestLines?.bestHomeML)
-                        ? "best-odds"
-                        : "text-silver hover:bg-slate/30"
+                        ? "best-odds" : "text-silver hover:bg-slate/30"
                     }`}
                   >
                     {formatOdds(line.homeML)}
                   </button>
                 </td>
-                {/* Away Spread */}
                 <td className="px-1 py-1.5 text-center">
                   <button
                     onClick={() => handleClickOdds(line.bookmaker, line.spreadPrice, "spread", `${awayTeam} ${line.awaySpread > 0 ? "+" : ""}${line.awaySpread}`, 0.5)}
@@ -127,7 +123,6 @@ export default function OddsGrid({ gameId }: OddsGridProps) {
                     <span className="text-silver">{formatOdds(line.spreadPrice)}</span>
                   </button>
                 </td>
-                {/* Home Spread */}
                 <td className="px-1 py-1.5 text-center">
                   <button
                     onClick={() => handleClickOdds(line.bookmaker, line.spreadPrice, "spread", `${homeTeam} ${line.homeSpread}`, 0.5)}
@@ -137,38 +132,93 @@ export default function OddsGrid({ gameId }: OddsGridProps) {
                     <span className="text-silver">{formatOdds(line.spreadPrice)}</span>
                   </button>
                 </td>
-                {/* Over */}
                 <td className="px-1 py-1.5 text-center">
                   <button
                     onClick={() => handleClickOdds(line.bookmaker, line.overPrice, "total", `Over ${line.total}`, 0.5)}
                     className={`inline-block px-2 py-1.5 rounded font-mono text-xs transition-all hover:bg-slate/30 ${
                       isBestOdds(line.bookmaker, line.overPrice, bestLines?.bestOver)
-                        ? "best-odds"
-                        : "text-silver"
+                        ? "best-odds" : "text-silver"
                     }`}
                   >
-                    <span className="text-amber">O{line.total}</span>{" "}
-                    {formatOdds(line.overPrice)}
+                    <span className="text-amber">O{line.total}</span> {formatOdds(line.overPrice)}
                   </button>
                 </td>
-                {/* Under */}
                 <td className="px-1 py-1.5 text-center">
                   <button
                     onClick={() => handleClickOdds(line.bookmaker, line.underPrice, "total", `Under ${line.total}`, 0.5)}
                     className={`inline-block px-2 py-1.5 rounded font-mono text-xs transition-all hover:bg-slate/30 ${
                       isBestOdds(line.bookmaker, line.underPrice, bestLines?.bestUnder)
-                        ? "best-odds"
-                        : "text-silver"
+                        ? "best-odds" : "text-silver"
                     }`}
                   >
-                    <span className="text-purple">U{line.total}</span>{" "}
-                    {formatOdds(line.underPrice)}
+                    <span className="text-purple">U{line.total}</span> {formatOdds(line.underPrice)}
                   </button>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
+      </div>
+
+      {/* Mobile Card Layout */}
+      <div className="sm:hidden divide-y divide-slate/15">
+        {oddsLines?.map((line: any, idx: number) => (
+          <div key={idx} className="px-3 py-3">
+            {/* Book name */}
+            <p className="text-xs font-semibold text-silver mb-2">{line.bookmaker}</p>
+
+            {/* Moneyline row */}
+            <div className="grid grid-cols-2 gap-2 mb-2">
+              <button
+                onClick={() => handleClickOdds(line.bookmaker, line.awayML, "moneyline", `${awayTeam} ML`, 0.5)}
+                className={`flex items-center justify-between px-3 py-2 rounded-lg transition-all active:scale-95 ${
+                  isBestOdds(line.bookmaker, line.awayML, bestLines?.bestAwayML)
+                    ? "best-odds" : "bg-gunmetal/40 text-silver"
+                }`}
+              >
+                <span className="text-[11px] text-mercury/70">{awayShort}</span>
+                <span className="font-mono text-sm font-bold">{formatOdds(line.awayML)}</span>
+              </button>
+              <button
+                onClick={() => handleClickOdds(line.bookmaker, line.homeML, "moneyline", `${homeTeam} ML`, 0.5)}
+                className={`flex items-center justify-between px-3 py-2 rounded-lg transition-all active:scale-95 ${
+                  isBestOdds(line.bookmaker, line.homeML, bestLines?.bestHomeML)
+                    ? "best-odds" : "bg-gunmetal/40 text-silver"
+                }`}
+              >
+                <span className="text-[11px] text-mercury/70">{homeShort}</span>
+                <span className="font-mono text-sm font-bold">{formatOdds(line.homeML)}</span>
+              </button>
+            </div>
+
+            {/* Spread + Total row */}
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => handleClickOdds(line.bookmaker, line.spreadPrice, "spread", `${homeTeam} ${line.homeSpread}`, 0.5)}
+                className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-gunmetal/25 text-mercury transition-all active:scale-95"
+              >
+                <span className="text-[10px]">RL</span>
+                <span className="font-mono text-xs">
+                  <span className="text-electric">{line.homeSpread}</span>{" "}
+                  {formatOdds(line.spreadPrice)}
+                </span>
+              </button>
+              <button
+                onClick={() => handleClickOdds(line.bookmaker, line.overPrice, "total", `Over ${line.total}`, 0.5)}
+                className={`flex items-center justify-between px-3 py-1.5 rounded-lg transition-all active:scale-95 ${
+                  isBestOdds(line.bookmaker, line.overPrice, bestLines?.bestOver)
+                    ? "best-odds" : "bg-gunmetal/25 text-mercury"
+                }`}
+              >
+                <span className="text-[10px]">O/U</span>
+                <span className="font-mono text-xs">
+                  <span className="text-amber">O{line.total}</span>{" "}
+                  {formatOdds(line.overPrice)}
+                </span>
+              </button>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
