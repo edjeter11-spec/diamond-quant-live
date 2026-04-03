@@ -17,6 +17,7 @@ import BetSlip from "@/components/dashboard/BetSlip";
 import PicksBoard from "@/components/dashboard/PicksBoard";
 import ModelTracker from "@/components/dashboard/ModelTracker";
 import BotChallenge from "@/components/dashboard/BotChallenge";
+import ModelBrain from "@/components/dashboard/ModelBrain";
 import { matchGames } from "@/lib/mlb/match-games";
 import { backupOddsToStorage, getOddsBackup } from "@/lib/odds/cache";
 import { sendDiscordAlert } from "@/lib/odds/sportsbooks";
@@ -555,7 +556,8 @@ export default function WarRoom() {
             )}
 
             {activeTab === "bot" && (
-              <div className="max-w-3xl mx-auto">
+              <div className="max-w-3xl mx-auto space-y-4">
+                <ModelBrain />
                 <BotChallenge />
               </div>
             )}

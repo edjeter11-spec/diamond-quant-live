@@ -107,6 +107,11 @@ export interface EVBet {
   halfKellyStake: number;
   confidence: string;     // "HIGH" | "MEDIUM" | "LOW"
   reasoning: string[];
+  // Edge tracking
+  isSuspicious?: boolean;
+  warning?: string;
+  firstSpotted?: string;  // ISO timestamp when edge was first detected
+  edgeAge?: number;       // seconds since first spotted
 }
 
 export interface ParlayLeg {

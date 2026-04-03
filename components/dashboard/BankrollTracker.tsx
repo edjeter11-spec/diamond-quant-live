@@ -1,9 +1,10 @@
 "use client";
 
 import { useStore } from "@/lib/store";
-import { Wallet, TrendingUp, TrendingDown, Check, XCircle, Minus } from "lucide-react";
+import { Wallet, TrendingUp, TrendingDown, Check, XCircle, Minus, Zap } from "lucide-react";
 import { useState } from "react";
-import { americanToDecimal } from "@/lib/model/kelly";
+import { americanToDecimal, americanToImpliedProb } from "@/lib/model/kelly";
+import { loadLearningState, learnFromBet, saveLearningState } from "@/lib/bot/learning";
 
 export default function BankrollTracker() {
   const { bankroll, betHistory, setBankroll, settleBet } = useStore();
@@ -26,6 +27,19 @@ export default function BankrollTracker() {
       payout = stake;
     }
     settleBet(betId, result, payout);
+
+    // SELF-LEARNING: Feed result to the model
+    const bet = betHistory.find((b) => b.id === betId);
+    if (bet && result !== "push") {
+      const learningState = loadLearningState();
+      const updated = learnFromBet(learningState, {
+        market: bet.market,
+        fairProb: americanToImpliedProb(bet.odds), // approximation
+        result: result as "win" | "loss",
+        evAtPlacement: bet.evAtPlacement ?? 0,
+      });
+      saveLearningState(updated);
+    }
   };
 
   const profitLoss = bankroll.currentBankroll - bankroll.startingBankroll;

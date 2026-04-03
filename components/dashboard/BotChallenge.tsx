@@ -11,6 +11,7 @@ import {
   loadBotState, saveBotState, hasTodaysPicks, generateDailyPicks,
   settlePicksFromScores, type BotState, type BotPick,
 } from "@/lib/bot/bot-picks";
+import { loadLearningState, learnFromBet, saveLearningState } from "@/lib/bot/learning";
 
 export default function BotChallenge() {
   const { oddsData, scores } = useStore();
@@ -18,11 +19,25 @@ export default function BotChallenge() {
   const [expandedPick, setExpandedPick] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
 
-  // Auto-settle pending picks when scores update
+  // Auto-settle pending picks + feed results to learning system
   useEffect(() => {
     if (scores.length === 0) return;
     const updated = settlePicksFromScores(botState, scores);
     if (updated !== botState) {
+      // Find newly settled picks and feed to learning loop
+      let learningState = loadLearningState();
+      for (const pick of updated.picks) {
+        const old = botState.picks.find((p) => p.id === pick.id);
+        if (old?.result === "pending" && pick.result !== "pending" && pick.result !== "push") {
+          learningState = learnFromBet(learningState, {
+            market: pick.market,
+            fairProb: pick.fairProb / 100,
+            result: pick.result as "win" | "loss",
+            evAtPlacement: pick.evEdge,
+          });
+        }
+      }
+      saveLearningState(learningState);
       setBotState(updated);
     }
   }, [scores]); // eslint-disable-line react-hooks/exhaustive-deps

@@ -61,15 +61,43 @@ export interface PlayerAnalysis {
   };
 }
 
-// Search for a player by name
+// Search for a player by name — exact match first, then fuzzy
 export async function searchPlayer(name: string): Promise<{ id: number; fullName: string; team: string; position: string } | null> {
   try {
     const url = `${MLB_API}/sports/1/players?season=${new Date().getFullYear()}&search=${encodeURIComponent(name)}`;
     const res = await fetch(url, { next: { revalidate: 3600 } });
     if (!res.ok) return null;
     const data = await res.json();
-    const player = data.people?.[0];
-    if (!player) return null;
+    const people = data.people ?? [];
+    if (people.length === 0) return null;
+
+    // Priority 1: exact full name match (case-insensitive)
+    const nameLower = name.toLowerCase().trim();
+    let player = people.find((p: any) => p.fullName?.toLowerCase() === nameLower);
+
+    // Priority 2: last name match
+    if (!player) {
+      const lastName = nameLower.split(" ").pop() ?? "";
+      const firstName = nameLower.split(" ")[0] ?? "";
+      player = people.find((p: any) => {
+        const pLast = p.fullName?.toLowerCase().split(" ").pop() ?? "";
+        const pFirst = p.fullName?.toLowerCase().split(" ")[0] ?? "";
+        return pLast === lastName && pFirst.startsWith(firstName.slice(0, 3));
+      });
+    }
+
+    // Priority 3: contains match (both first and last name words appear)
+    if (!player) {
+      const words = nameLower.split(" ").filter(Boolean);
+      player = people.find((p: any) => {
+        const pName = p.fullName?.toLowerCase() ?? "";
+        return words.every((w: string) => pName.includes(w));
+      });
+    }
+
+    // Priority 4: first result (fallback)
+    if (!player) player = people[0];
+
     return {
       id: player.id,
       fullName: player.fullName,
