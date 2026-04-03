@@ -47,10 +47,11 @@ export async function GET(req: Request) {
         .filter((g) => {
           const gameTime = new Date(g.commence_time);
           const now = new Date();
-          return gameTime.getTime() - now.getTime() < 12 * 60 * 60 * 1000 &&
+          // Include games from 4hrs ago through next 24hrs
+          return gameTime.getTime() - now.getTime() < 24 * 60 * 60 * 1000 &&
                  gameTime.getTime() > now.getTime() - 4 * 60 * 60 * 1000;
         })
-        .slice(0, 3) // Reduced from 4 to 3 to save calls
+        .slice(0, 4)
         .map((g) => ({ id: g.id, away_team: g.away_team, home_team: g.home_team }));
       setCache(eventsCacheKey, todayGames);
     }
