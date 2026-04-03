@@ -25,8 +25,32 @@ export function setCache(key: string, data: any) {
 
 // Cache TTLs
 export const CACHE_TTL = {
-  ODDS: 60_000,        // 60 seconds for game odds
-  PROPS: 120_000,      // 2 minutes for player props
-  EVENTS: 300_000,     // 5 minutes for event list
-  ANALYSIS: 300_000,   // 5 minutes for team analysis
+  ODDS: 60_000,
+  PROPS: 120_000,
+  EVENTS: 300_000,
+  ANALYSIS: 300_000,
 };
+
+// ── Edge Timestamp Tracking ──
+// Tracks when each EV edge was first spotted
+const edgeTimestamps = new Map<string, number>();
+
+export function getEdgeAge(pickKey: string): number {
+  const first = edgeTimestamps.get(pickKey);
+  if (!first) return 0;
+  return Math.floor((Date.now() - first) / 1000);
+}
+
+export function stampEdge(pickKey: string) {
+  if (!edgeTimestamps.has(pickKey)) {
+    edgeTimestamps.set(pickKey, Date.now());
+  }
+}
+
+// Clean old edges (>30 min)
+export function cleanEdges() {
+  const cutoff = Date.now() - 30 * 60 * 1000;
+  for (const [key, ts] of edgeTimestamps) {
+    if (ts < cutoff) edgeTimestamps.delete(key);
+  }
+}

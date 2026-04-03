@@ -27,6 +27,7 @@ interface Pick {
   commenceTime?: string;
   isSuspicious?: boolean;
   warning?: string;
+  edgeAge?: number; // seconds since first spotted
 }
 
 export default function PicksBoard() {
@@ -113,6 +114,7 @@ export default function PicksBoard() {
             commenceTime: game.commenceTime,
             isSuspicious: bet.isSuspicious ?? false,
             warning: bet.warning,
+            edgeAge: bet.edgeAge ?? 0,
           });
         }
       }
@@ -284,6 +286,14 @@ function PickCard({ pick, isExpanded, onToggle, onAddToParlay, formatOdds }: {
           <p className="text-xs sm:text-sm font-mono font-bold text-silver">{formatOdds(pick.odds)}</p>
           <p className="text-[9px] sm:text-[10px] font-mono text-neon font-semibold">+{pick.evPercentage.toFixed(1)}%</p>
         </div>
+        {/* Edge age / freshness */}
+        {pick.edgeAge !== undefined && pick.edgeAge > 0 && (
+          <span className={`hidden sm:inline text-[8px] font-mono px-1 py-0.5 rounded flex-shrink-0 ${
+            pick.edgeAge < 120 ? "bg-neon/10 text-neon" : pick.edgeAge < 600 ? "bg-amber/10 text-amber" : "bg-danger/10 text-danger"
+          }`} title="Time since this edge was first detected">
+            {pick.edgeAge < 60 ? `${pick.edgeAge}s` : `${Math.floor(pick.edgeAge / 60)}m`}
+          </span>
+        )}
         <ChevronDown className={`w-3.5 h-3.5 text-mercury/40 flex-shrink-0 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
       </button>
 

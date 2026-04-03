@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { fetchMLBOdds, parseOddsLines, findBestLine } from "@/lib/odds/the-odds-api";
 import { findArbitrage, findEVBets } from "@/lib/odds/arbitrage";
 import { getApiKey, markKeyExhausted, getActiveKeyCount } from "@/lib/odds/api-keys";
-import { getCached, setCache, CACHE_TTL } from "@/lib/odds/server-cache";
+import { getCached, setCache, CACHE_TTL, stampEdge, getEdgeAge, cleanEdges } from "@/lib/odds/server-cache";
 import { filterRealArbs, filterRealEV } from "@/lib/odds/sportsbooks";
 
 // Increased revalidate to reduce calls
@@ -42,7 +42,12 @@ export async function GET() {
         const rawEvBets = findEVBets(oddsLines, `${game.away_team} @ ${game.home_team}`);
         // Filter out dead lines and suspicious edges
         const arbitrage = filterRealArbs(rawArbitrage);
-        const evBets = filterRealEV(rawEvBets);
+        const evBets = filterRealEV(rawEvBets).map((bet: any) => {
+          const edgeKey = `${game.id}-${bet.pick}-${bet.bookmaker}`;
+          stampEdge(edgeKey);
+          return { ...bet, edgeAge: getEdgeAge(edgeKey), firstSpotted: new Date(Date.now() - getEdgeAge(edgeKey) * 1000).toISOString() };
+        });
+        cleanEdges();
 
         return {
           id: game.id,
