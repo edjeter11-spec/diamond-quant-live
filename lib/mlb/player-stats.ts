@@ -54,11 +54,14 @@ export interface GameLogEntry {
 
 export interface PlayerAnalysis {
   player: PlayerSeasonStats;
+  lastYearStats?: Partial<PlayerSeasonStats>;
+  careerStats?: Partial<PlayerSeasonStats>;
+  dataSource: "current" | "lastYear" | "career"; // which season the primary stats are from
   last10Games: GameLogEntry[];
   vsOpponent: { games: number; avgStat: number; trend: string };
   recommendation: {
     side: "over" | "under" | "lean_over" | "lean_under" | "no_edge";
-    confidence: number; // 0-100
+    confidence: number;
     reasons: string[];
   };
 }
@@ -103,8 +106,8 @@ export async function searchPlayer(name: string): Promise<{ id: number; fullName
 }
 
 // Fetch pitcher season stats
-export async function fetchPitcherSeasonStats(playerId: number): Promise<any> {
-  const year = new Date().getFullYear();
+export async function fetchPitcherSeasonStats(playerId: number, season?: number): Promise<any> {
+  const year = season ?? new Date().getFullYear();
   const url = `${MLB_API}/people/${playerId}/stats?stats=season&season=${year}&group=pitching`;
   const res = await fetch(url, { next: { revalidate: 300 } });
   if (!res.ok) return null;
@@ -113,10 +116,20 @@ export async function fetchPitcherSeasonStats(playerId: number): Promise<any> {
 }
 
 // Fetch batter season stats
-export async function fetchBatterSeasonStats(playerId: number): Promise<any> {
-  const year = new Date().getFullYear();
+export async function fetchBatterSeasonStats(playerId: number, season?: number): Promise<any> {
+  const year = season ?? new Date().getFullYear();
   const url = `${MLB_API}/people/${playerId}/stats?stats=season&season=${year}&group=hitting`;
   const res = await fetch(url, { next: { revalidate: 300 } });
+  if (!res.ok) return null;
+  const data = await res.json();
+  return data.stats?.[0]?.splits?.[0]?.stat ?? null;
+}
+
+// Fetch career stats
+export async function fetchCareerStats(playerId: number, isPitcher: boolean): Promise<any> {
+  const group = isPitcher ? "pitching" : "hitting";
+  const url = `${MLB_API}/people/${playerId}/stats?stats=career&group=${group}`;
+  const res = await fetch(url, { next: { revalidate: 3600 } });
   if (!res.ok) return null;
   const data = await res.json();
   return data.stats?.[0]?.splits?.[0]?.stat ?? null;
@@ -177,17 +190,24 @@ export async function analyzePlayer(
   if (!player) return null;
 
   const isPitcher = market.startsWith("pitcher_");
-  const gameLog = await fetchGameLog(player.id, isPitcher);
+  const lastYear = new Date().getFullYear() - 1;
 
-  // Get season stats
-  const seasonRaw = isPitcher
-    ? await fetchPitcherSeasonStats(player.id)
-    : await fetchBatterSeasonStats(player.id);
+  // Fetch current season, last year, career, and game log in parallel
+  const [seasonRaw, lastYearRaw, careerRaw, gameLog] = await Promise.all([
+    isPitcher ? fetchPitcherSeasonStats(player.id) : fetchBatterSeasonStats(player.id),
+    isPitcher ? fetchPitcherSeasonStats(player.id, lastYear) : fetchBatterSeasonStats(player.id, lastYear),
+    fetchCareerStats(player.id, isPitcher),
+    fetchGameLog(player.id, isPitcher),
+  ]);
 
-  if (!seasonRaw) return null;
+  // Use last year as fallback if current season has no data (early season)
+  const primaryRaw = seasonRaw ?? lastYearRaw;
+  if (!primaryRaw && !lastYearRaw && !careerRaw) return null;
 
-  // Build season stats
-  const gamesPlayed = parseInt(seasonRaw.gamesPlayed || seasonRaw.gamesPitched || "0");
+  // Build season stats (use current season, fall back to last year for early season)
+  const raw = primaryRaw ?? lastYearRaw ?? careerRaw;
+  if (!raw) return null;
+  const gamesPlayed = parseInt(raw.gamesPlayed || raw.gamesPitched || "0");
   const seasonStats: PlayerSeasonStats = {
     name: player.fullName,
     team: player.team,
@@ -199,29 +219,29 @@ export async function analyzePlayer(
   };
 
   if (isPitcher) {
-    const totalK = parseInt(seasonRaw.strikeOuts) || 0;
-    const ip = parseFloat(seasonRaw.inningsPitched) || 0;
-    seasonStats.era = parseFloat(seasonRaw.era) || 0;
-    seasonStats.whip = parseFloat(seasonRaw.whip) || 0;
+    const totalK = parseInt(raw.strikeOuts) || 0;
+    const ip = parseFloat(raw.inningsPitched) || 0;
+    seasonStats.era = parseFloat(raw.era) || 0;
+    seasonStats.whip = parseFloat(raw.whip) || 0;
     seasonStats.strikeouts = totalK;
     seasonStats.k9 = ip > 0 ? (totalK / ip) * 9 : 0;
-    seasonStats.bb9 = ip > 0 ? ((parseInt(seasonRaw.baseOnBalls) || 0) / ip) * 9 : 0;
+    seasonStats.bb9 = ip > 0 ? ((parseInt(raw.baseOnBalls) || 0) / ip) * 9 : 0;
     seasonStats.inningsPitched = ip;
-    seasonStats.wins = parseInt(seasonRaw.wins) || 0;
-    seasonStats.losses = parseInt(seasonRaw.losses) || 0;
+    seasonStats.wins = parseInt(raw.wins) || 0;
+    seasonStats.losses = parseInt(raw.losses) || 0;
     seasonStats.avgStrikeoutsPerGame = gamesPlayed > 0 ? totalK / gamesPlayed : 0;
   } else {
-    const hits = parseInt(seasonRaw.hits) || 0;
-    const doubles = parseInt(seasonRaw.doubles) || 0;
-    const triples = parseInt(seasonRaw.triples) || 0;
-    const hr = parseInt(seasonRaw.homeRuns) || 0;
+    const hits = parseInt(raw.hits) || 0;
+    const doubles = parseInt(raw.doubles) || 0;
+    const triples = parseInt(raw.triples) || 0;
+    const hr = parseInt(raw.homeRuns) || 0;
     const tb = hits + doubles + triples * 2 + hr * 3;
-    seasonStats.avg = parseFloat(seasonRaw.avg) || 0;
-    seasonStats.ops = parseFloat(seasonRaw.ops) || 0;
+    seasonStats.avg = parseFloat(raw.avg) || 0;
+    seasonStats.ops = parseFloat(raw.ops) || 0;
     seasonStats.hits = hits;
     seasonStats.homeRuns = hr;
-    seasonStats.rbi = parseInt(seasonRaw.rbi) || 0;
-    seasonStats.stolenBases = parseInt(seasonRaw.stolenBases) || 0;
+    seasonStats.rbi = parseInt(raw.rbi) || 0;
+    seasonStats.stolenBases = parseInt(raw.stolenBases) || 0;
     seasonStats.totalBases = tb;
     seasonStats.hitsPerGame = gamesPlayed > 0 ? hits / gamesPlayed : 0;
     seasonStats.tbPerGame = gamesPlayed > 0 ? tb / gamesPlayed : 0;
@@ -257,8 +277,16 @@ export async function analyzePlayer(
     market, line, avgLast10, avgVsOpp, hitRate, trending, seasonStats, last10.length, vsOpp.length
   );
 
+  // Build last year's stats
+  const lastYearStats = lastYearRaw ? buildStatSummary(lastYearRaw, isPitcher) : undefined;
+  const careerStatsObj = careerRaw ? buildStatSummary(careerRaw, isPitcher) : undefined;
+  const dataSource = seasonRaw ? "current" as const : lastYearRaw ? "lastYear" as const : "career" as const;
+
   return {
     player: seasonStats,
+    lastYearStats,
+    careerStats: careerStatsObj,
+    dataSource,
     last10Games: last10,
     vsOpponent: {
       games: vsOpp.length,
@@ -267,6 +295,42 @@ export async function analyzePlayer(
     },
     recommendation,
   };
+}
+
+// Build a stat summary from raw API data
+function buildStatSummary(raw: any, isPitcher: boolean): Partial<PlayerSeasonStats> {
+  const gp = parseInt(raw.gamesPlayed || raw.gamesPitched || "0");
+  if (isPitcher) {
+    const totalK = parseInt(raw.strikeOuts) || 0;
+    const ip = parseFloat(raw.inningsPitched) || 0;
+    return {
+      gamesPlayed: gp,
+      era: parseFloat(raw.era) || 0,
+      whip: parseFloat(raw.whip) || 0,
+      strikeouts: totalK,
+      k9: ip > 0 ? (totalK / ip) * 9 : 0,
+      wins: parseInt(raw.wins) || 0,
+      losses: parseInt(raw.losses) || 0,
+      avgStrikeoutsPerGame: gp > 0 ? totalK / gp : 0,
+    };
+  } else {
+    const hits = parseInt(raw.hits) || 0;
+    const doubles = parseInt(raw.doubles) || 0;
+    const triples = parseInt(raw.triples) || 0;
+    const hr = parseInt(raw.homeRuns) || 0;
+    const tb = hits + doubles + triples * 2 + hr * 3;
+    return {
+      gamesPlayed: gp,
+      avg: parseFloat(raw.avg) || 0,
+      ops: parseFloat(raw.ops) || 0,
+      hits, homeRuns: hr,
+      rbi: parseInt(raw.rbi) || 0,
+      stolenBases: parseInt(raw.stolenBases) || 0,
+      totalBases: tb,
+      hitsPerGame: gp > 0 ? hits / gp : 0,
+      tbPerGame: gp > 0 ? tb / gp : 0,
+    };
+  }
 }
 
 function getStatForMarket(game: GameLogEntry, market: string, isPitcher: boolean): number {

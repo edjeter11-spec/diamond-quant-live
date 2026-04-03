@@ -21,15 +21,22 @@ interface PropLine {
   fairUnderProb: number;
 }
 
+interface StatBlock {
+  gamesPlayed?: number; era?: number; whip?: number; strikeouts?: number;
+  k9?: number; avgStrikeoutsPerGame?: number; avg?: number; ops?: number;
+  hits?: number; homeRuns?: number; rbi?: number; stolenBases?: number;
+  hitsPerGame?: number; tbPerGame?: number; wins?: number; losses?: number;
+  totalBases?: number;
+}
+
 interface PlayerAnalysis {
-  player: {
+  player: StatBlock & {
     name: string; team: string; teamAbbrev: string; position: string;
-    gamesPlayed: number; number?: string; photo?: string;
-    era?: number; whip?: number; strikeouts?: number;
-    k9?: number; avgStrikeoutsPerGame?: number; avg?: number; ops?: number;
-    hits?: number; homeRuns?: number; rbi?: number; stolenBases?: number;
-    hitsPerGame?: number; tbPerGame?: number;
+    number?: string; photo?: string;
   };
+  lastYearStats?: StatBlock;
+  careerStats?: StatBlock;
+  dataSource?: "current" | "lastYear" | "career";
   last10Games: Array<{
     date: string; opponent: string; strikeouts?: number;
     hitsB?: number; homeRuns?: number; totalBases?: number; rbi?: number;
@@ -274,29 +281,43 @@ export default function PlayerProps() {
             </div>
           </div>
 
-          {/* Stats Grid */}
+          {/* Data source notice */}
+          {searchResult.dataSource && searchResult.dataSource !== "current" && (
+            <div className="flex items-center gap-1.5 px-2 py-1.5 rounded bg-amber/5 border border-amber/15 mb-2">
+              <AlertCircle className="w-3 h-3 text-amber flex-shrink-0" />
+              <p className="text-[10px] text-amber">
+                {searchResult.dataSource === "lastYear" ? "Early season — showing last year's stats as primary" : "Showing career stats (no recent season data)"}
+              </p>
+            </div>
+          )}
+
+          {/* Current / Primary Stats */}
+          <p className="text-[9px] text-mercury uppercase tracking-wider mb-1 font-semibold">
+            {searchResult.dataSource === "lastYear" ? `${new Date().getFullYear() - 1} Season` : searchResult.dataSource === "career" ? "Career" : `${new Date().getFullYear()} Season`}
+          </p>
           <div className="grid grid-cols-4 gap-1.5 sm:gap-2 mb-3">
-            {searchResult.player.era !== undefined && (
-              <>
-                <StatBox label="ERA" value={searchResult.player.era.toFixed(2)} />
-                <StatBox label="K/9" value={searchResult.player.k9?.toFixed(1) ?? "—"} />
-                <StatBox label="WHIP" value={searchResult.player.whip?.toFixed(2) ?? "—"} />
-                <StatBox label="K/G" value={searchResult.player.avgStrikeoutsPerGame?.toFixed(1) ?? "—"} />
-              </>
-            )}
-            {searchResult.player.avg !== undefined && (
-              <>
-                <StatBox label="AVG" value={searchResult.player.avg.toFixed(3)} />
-                <StatBox label="OPS" value={searchResult.player.ops?.toFixed(3) ?? "—"} />
-                <StatBox label="Hits" value={String(searchResult.player.hits ?? 0)} />
-                <StatBox label="HR" value={String(searchResult.player.homeRuns ?? 0)} />
-                <StatBox label="RBI" value={String(searchResult.player.rbi ?? 0)} />
-                <StatBox label="H/G" value={searchResult.player.hitsPerGame?.toFixed(2) ?? "—"} />
-                <StatBox label="TB/G" value={searchResult.player.tbPerGame?.toFixed(2) ?? "—"} />
-                <StatBox label="SB" value={String(searchResult.player.stolenBases ?? 0)} />
-              </>
-            )}
+            <SeasonStatsGrid stats={searchResult.player} />
           </div>
+
+          {/* Last Year Stats */}
+          {searchResult.lastYearStats && searchResult.dataSource === "current" && (
+            <div className="mb-3">
+              <p className="text-[9px] text-mercury uppercase tracking-wider mb-1 font-semibold">{new Date().getFullYear() - 1} Season</p>
+              <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
+                <SeasonStatsGrid stats={searchResult.lastYearStats} />
+              </div>
+            </div>
+          )}
+
+          {/* Career Stats */}
+          {searchResult.careerStats && (
+            <div className="mb-3">
+              <p className="text-[9px] text-mercury uppercase tracking-wider mb-1 font-semibold">Career</p>
+              <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
+                <SeasonStatsGrid stats={searchResult.careerStats} />
+              </div>
+            </div>
+          )}
 
           {/* Last 10+ Games Chart */}
           {searchResult.last10Games.length > 0 && (
@@ -651,4 +672,38 @@ function StatBox({ label, value }: { label: string; value: string }) {
       <p className="text-[9px] text-mercury/60 uppercase">{label}</p>
     </div>
   );
+}
+
+function SeasonStatsGrid({ stats }: { stats: Partial<StatBlock> }) {
+  if (stats.era !== undefined) {
+    // Pitcher
+    return (
+      <>
+        <StatBox label="ERA" value={stats.era?.toFixed(2) ?? "—"} />
+        <StatBox label="K/9" value={stats.k9?.toFixed(1) ?? "—"} />
+        <StatBox label="WHIP" value={stats.whip?.toFixed(2) ?? "—"} />
+        <StatBox label="K/G" value={stats.avgStrikeoutsPerGame?.toFixed(1) ?? "—"} />
+        {stats.wins !== undefined && <StatBox label="W" value={String(stats.wins)} />}
+        {stats.losses !== undefined && <StatBox label="L" value={String(stats.losses)} />}
+        {stats.strikeouts !== undefined && <StatBox label="K" value={String(stats.strikeouts)} />}
+        {stats.gamesPlayed !== undefined && <StatBox label="GP" value={String(stats.gamesPlayed)} />}
+      </>
+    );
+  }
+  if (stats.avg !== undefined) {
+    // Batter
+    return (
+      <>
+        <StatBox label="AVG" value={stats.avg?.toFixed(3) ?? "—"} />
+        <StatBox label="OPS" value={stats.ops?.toFixed(3) ?? "—"} />
+        <StatBox label="Hits" value={String(stats.hits ?? 0)} />
+        <StatBox label="HR" value={String(stats.homeRuns ?? 0)} />
+        <StatBox label="RBI" value={String(stats.rbi ?? 0)} />
+        <StatBox label="H/G" value={stats.hitsPerGame?.toFixed(2) ?? "—"} />
+        <StatBox label="TB/G" value={stats.tbPerGame?.toFixed(2) ?? "—"} />
+        <StatBox label="SB" value={String(stats.stolenBases ?? 0)} />
+      </>
+    );
+  }
+  return <StatBox label="GP" value={String(stats.gamesPlayed ?? 0)} />;
 }
