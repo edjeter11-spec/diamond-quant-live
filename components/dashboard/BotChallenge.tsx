@@ -27,9 +27,10 @@ export default function BotChallenge() {
     }
   }, [scores]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Generate today's picks
+  // Generate picks function
   const generatePicks = useCallback(() => {
     if (oddsData.length === 0) return;
+    if (hasTodaysPicks(botState)) return; // already have today's
     setGenerating(true);
 
     const picks = generateDailyPicks(oddsData, botState.currentBankroll);
@@ -46,6 +47,13 @@ export default function BotChallenge() {
 
     setGenerating(false);
   }, [oddsData, botState]);
+
+  // AUTO-GENERATE: when odds data loads and we don't have today's picks yet
+  useEffect(() => {
+    if (oddsData.length > 0 && !hasTodaysPicks(botState)) {
+      generatePicks();
+    }
+  }, [oddsData]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const formatOdds = (odds: number) => (odds > 0 ? `+${odds}` : `${odds}`);
   const today = new Date().toISOString().split("T")[0];
@@ -146,21 +154,37 @@ export default function BotChallenge() {
         )}
       </div>
 
-      {/* Generate Picks Button */}
+      {/* Status / Manual Generate Button */}
       {!hasToday && (
-        <button
-          onClick={generatePicks}
-          disabled={generating || oddsData.length === 0}
-          className="w-full py-3 rounded-xl bg-electric/15 border border-electric/25 text-electric text-sm font-bold hover:bg-electric/25 active:scale-[0.98] transition-all disabled:opacity-40 flex items-center justify-center gap-2"
-        >
+        <div className="glass rounded-xl p-4 text-center">
           {generating ? (
-            <><RefreshCw className="w-4 h-4 animate-spin" /> Analyzing markets...</>
+            <div className="flex items-center justify-center gap-2">
+              <RefreshCw className="w-4 h-4 text-electric animate-spin" />
+              <span className="text-sm text-electric font-medium">Bot is analyzing markets and selecting picks...</span>
+            </div>
           ) : oddsData.length === 0 ? (
-            <><Clock className="w-4 h-4" /> Waiting for odds data...</>
+            <div className="flex items-center justify-center gap-2">
+              <Clock className="w-4 h-4 text-amber" />
+              <span className="text-sm text-mercury">Waiting for odds data to load — picks will generate automatically</span>
+            </div>
           ) : (
-            <><Zap className="w-4 h-4" /> Generate Today's 4 Picks</>
+            <div>
+              <p className="text-sm text-mercury mb-2">Couldn't find 4 qualifying picks yet. More games need to have lines posted.</p>
+              <button
+                onClick={generatePicks}
+                className="px-4 py-2 rounded-lg bg-electric/15 border border-electric/25 text-electric text-xs font-bold hover:bg-electric/25 transition-all"
+              >
+                <Zap className="w-3.5 h-3.5 inline mr-1" /> Try Again
+              </button>
+            </div>
           )}
-        </button>
+        </div>
+      )}
+      {hasToday && (
+        <div className="flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-neon/5 border border-neon/15">
+          <CheckCircle className="w-3.5 h-3.5 text-neon" />
+          <span className="text-xs text-neon font-medium">Today's picks locked in — auto-generated from live odds</span>
+        </div>
       )}
 
       {/* Today's Picks */}
