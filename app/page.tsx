@@ -15,6 +15,7 @@ import LineMovement from "@/components/dashboard/LineMovement";
 import SelectedGameBanner from "@/components/dashboard/SelectedGameBanner";
 import BetSlip from "@/components/dashboard/BetSlip";
 import PicksBoard from "@/components/dashboard/PicksBoard";
+import ModelTracker from "@/components/dashboard/ModelTracker";
 import { matchGames } from "@/lib/mlb/match-games";
 import { backupOddsToStorage, getOddsBackup } from "@/lib/odds/cache";
 import {
@@ -39,6 +40,21 @@ function playAlertSound() {
   } catch {}
 }
 
+// Browser push notification
+function sendNotification(title: string, body: string) {
+  if (typeof window === "undefined") return;
+  if (Notification.permission === "granted") {
+    new Notification(title, { body, icon: "/favicon.ico", badge: "/favicon.ico" });
+  }
+}
+
+function requestNotificationPermission() {
+  if (typeof window === "undefined") return;
+  if ("Notification" in window && Notification.permission === "default") {
+    Notification.requestPermission();
+  }
+}
+
 export default function WarRoom() {
   const {
     selectedGameId, activeTab, setActiveTab, sidebarOpen, toggleSidebar,
@@ -60,6 +76,7 @@ export default function WarRoom() {
 
   useEffect(() => {
     hydrate();
+    requestNotificationPermission();
   }, [hydrate]);
 
   const fetchData = useCallback(async () => {
@@ -125,10 +142,16 @@ export default function WarRoom() {
     if (currentArbCount > prevArbCount && prevArbCount > 0) {
       setArbFlash(true);
       if (soundEnabled) playAlertSound();
+      sendNotification("Arbitrage Alert", `${currentArbCount - prevArbCount} new arbitrage opportunity found!`);
       setTimeout(() => setArbFlash(false), 3000);
     }
+    // Also notify on big +EV picks
+    const bigEV = oddsData.flatMap((g: any) => g.evBets ?? []).filter((b: any) => b.evPercentage > 8);
+    if (bigEV.length > 0 && prevArbCount === 0 && !isLoading) {
+      sendNotification("High EV Alert", `${bigEV[0].pick} at ${bigEV[0].bookmaker} — +${bigEV[0].evPercentage.toFixed(1)}% edge`);
+    }
     setPrevArbCount(currentArbCount);
-  }, [currentArbCount, prevArbCount, soundEnabled]);
+  }, [currentArbCount, prevArbCount, soundEnabled, oddsData, isLoading]);
 
   const selectedOdds = oddsData.find((g: any) => g.id === selectedGameId);
   const selectedScore = scores.find((s: any) => s.id === selectedGameId);
@@ -422,6 +445,9 @@ export default function WarRoom() {
 
                   {/* Center — Main Picks Board */}
                   <div className="flex-1 min-w-0 space-y-3 sm:space-y-4">
+                    {/* Model accuracy at the top */}
+                    <ModelTracker />
+
                     <PicksBoard />
 
                     {/* Game deep-dive (when a game is selected) */}
@@ -492,6 +518,7 @@ export default function WarRoom() {
 
             {activeTab === "bankroll" && (
               <div className="max-w-2xl mx-auto space-y-4">
+                <ModelTracker />
                 <BankrollTracker />
                 <button
                   onClick={() => openBetSlip()}

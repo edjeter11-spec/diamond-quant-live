@@ -5,7 +5,7 @@ import { useStore } from "@/lib/store";
 import {
   Trophy, Zap, Layers, TrendingUp, Target, ChevronDown,
   Star, DollarSign, ArrowUpRight, ArrowDownRight, BarChart3,
-  Flame, Brain, Clock, Swords, Activity, CircleDot,
+  Flame, Brain, Clock, Swords, Activity, CircleDot, ArrowUp, ArrowDown, Shield,
 } from "lucide-react";
 
 interface Pick {
@@ -125,11 +125,13 @@ export default function PicksBoard() {
     return result;
   }
 
-  // Build sections with unique picks
+  // Build sections with unique picks — each pick only appears ONCE across all sections
   const topLocks = takeUnique(allEV, 4, (p) => p.confidence === "HIGH" || p.evPercentage > 5);
   const longshots = takeUnique(allEV, 4, (p) => p.odds > 120);
   const moneylines = takeUnique(allEV, 5, (p) => p.market === "moneyline");
-  const totals = takeUnique(allEV, 5, (p) => p.market === "total");
+  const runLines = takeUnique(allEV, 5, (p) => p.market === "spread");
+  const overs = takeUnique(allEV, 5, (p) => p.market === "total" && p.pick.toLowerCase().includes("over"));
+  const unders = takeUnique(allEV, 5, (p) => p.market === "total" && p.pick.toLowerCase().includes("under"));
 
   // Parlay of the day: best uncorrelated ML picks (different games)
   const parlayPool = allEV.filter((p) => p.market === "moneyline" && p.evPercentage > 1 && !isGameFinished(p.game));
@@ -154,7 +156,9 @@ export default function PicksBoard() {
     { key: "locks", title: "TOP LOCKS", subtitle: "Highest confidence — model's best plays", icon: Trophy, iconColor: "text-gold", bg: "bg-gold/5", border: "border-gold/20", picks: topLocks },
     { key: "longshots", title: "LONGSHOT VALUE", subtitle: "Underdogs with +EV edge", icon: Zap, iconColor: "text-amber", bg: "bg-amber/5", border: "border-amber/20", picks: longshots },
     { key: "ml", title: "MONEYLINES", subtitle: "Best ML value today", icon: Swords, iconColor: "text-neon", bg: "bg-neon/5", border: "border-neon/20", picks: moneylines },
-    { key: "totals", title: "TOTALS & O/U", subtitle: "Over/unders with edge", icon: BarChart3, iconColor: "text-electric", bg: "bg-electric/5", border: "border-electric/20", picks: totals },
+    { key: "rl", title: "RUN LINES", subtitle: "Spread picks with value", icon: Shield, iconColor: "text-purple", bg: "bg-purple/5", border: "border-purple/20", picks: runLines },
+    { key: "overs", title: "OVERS", subtitle: "Game totals leaning over", icon: ArrowUp, iconColor: "text-neon", bg: "bg-neon/5", border: "border-neon/15", picks: overs },
+    { key: "unders", title: "UNDERS", subtitle: "Game totals leaning under", icon: ArrowDown, iconColor: "text-electric", bg: "bg-electric/5", border: "border-electric/15", picks: unders },
   ];
 
   return (
