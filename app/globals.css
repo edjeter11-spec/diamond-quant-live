@@ -1,0 +1,154 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+:root {
+  --void: #0a0a0f;
+  --bunker: #0f1117;
+  --gunmetal: #1a1d2e;
+  --neon: #00ff88;
+  --electric: #00d4ff;
+  --gold: #ffd700;
+  --danger: #ff3b5c;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #2a2d3e #0f1117;
+}
+
+*::-webkit-scrollbar {
+  width: 6px;
+}
+*::-webkit-scrollbar-track {
+  background: #0f1117;
+}
+*::-webkit-scrollbar-thumb {
+  background: #2a2d3e;
+  border-radius: 3px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: #3a3d4e;
+}
+
+body {
+  background: var(--void);
+  color: #c4c8d8;
+  font-family: 'Inter', system-ui, sans-serif;
+  overflow-x: hidden;
+}
+
+/* Neon glow effects */
+@layer utilities {
+  .glow-neon {
+    box-shadow: 0 0 8px rgba(0, 255, 136, 0.3), 0 0 20px rgba(0, 255, 136, 0.1);
+  }
+  .glow-gold {
+    box-shadow: 0 0 8px rgba(255, 215, 0, 0.3), 0 0 20px rgba(255, 215, 0, 0.1);
+  }
+  .glow-danger {
+    box-shadow: 0 0 8px rgba(255, 59, 92, 0.3), 0 0 20px rgba(255, 59, 92, 0.1);
+  }
+  .glow-electric {
+    box-shadow: 0 0 8px rgba(0, 212, 255, 0.3), 0 0 20px rgba(0, 212, 255, 0.1);
+  }
+
+  .text-glow-neon {
+    text-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
+  }
+  .text-glow-gold {
+    text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+  }
+
+  .border-glow-neon {
+    border-color: rgba(0, 255, 136, 0.3);
+  }
+
+  /* Glass card */
+  .glass {
+    background: rgba(15, 17, 23, 0.8);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(42, 45, 62, 0.5);
+  }
+
+  .glass-hover:hover {
+    background: rgba(26, 29, 46, 0.8);
+    border-color: rgba(0, 255, 136, 0.2);
+  }
+
+  /* Gradient backgrounds */
+  .bg-grid {
+    background-image:
+      linear-gradient(rgba(42, 45, 62, 0.3) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(42, 45, 62, 0.3) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+
+  /* Best odds highlight */
+  .best-odds {
+    background: rgba(0, 255, 136, 0.08);
+    border: 1px solid rgba(0, 255, 136, 0.25);
+    color: #00ff88;
+  }
+
+  /* Arbitrage flash */
+  .arb-alert {
+    background: linear-gradient(135deg, rgba(255, 215, 0, 0.15), rgba(255, 215, 0, 0.05));
+    border: 1px solid rgba(255, 215, 0, 0.4);
+    animation: pulse-neon 2s ease-in-out infinite;
+  }
+
+  /* Positive/Negative EV */
+  .ev-positive {
+    color: #00ff88;
+  }
+  .ev-negative {
+    color: #ff3b5c;
+  }
+
+  /* Ticker animation */
+  .ticker-wrap {
+    overflow: hidden;
+    white-space: nowrap;
+  }
+  .ticker-content {
+    display: inline-flex;
+    animation: ticker 40s linear infinite;
+  }
+  .ticker-content:hover {
+    animation-play-state: paused;
+  }
+}
+
+/* Number counter animation */
+@keyframes count-up {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.count-animate {
+  animation: count-up 0.3s ease-out;
+}
+
+/* Pulse ring for live indicator */
+.live-pulse {
+  position: relative;
+}
+.live-pulse::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  background: #ff3b5c;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  animation: live-ring 1.5s ease-out infinite;
+}
+@keyframes live-ring {
+  0% { box-shadow: 0 0 0 0 rgba(255, 59, 92, 0.6); }
+  100% { box-shadow: 0 0 0 12px rgba(255, 59, 92, 0); }
+}
