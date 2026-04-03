@@ -14,10 +14,29 @@ import EVBoard from "@/components/dashboard/EVBoard";
 import LineMovement from "@/components/dashboard/LineMovement";
 import SelectedGameBanner from "@/components/dashboard/SelectedGameBanner";
 import BetSlip from "@/components/dashboard/BetSlip";
+import { matchGames } from "@/lib/mlb/match-games";
+import { backupOddsToStorage, getOddsBackup } from "@/lib/odds/cache";
 import {
   Diamond, BarChart3, Layers, User, Wallet, Users, RefreshCw,
-  Radio, ChevronLeft, ChevronRight, X, HelpCircle,
+  Radio, ChevronLeft, ChevronRight, X, HelpCircle, Volume2, VolumeX, AlertTriangle,
 } from "lucide-react";
+
+// Arb alert sound (short beep)
+function playAlertSound() {
+  try {
+    const ctx = new AudioContext();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.value = 880;
+    osc.type = "sine";
+    gain.gain.value = 0.15;
+    osc.start();
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+    osc.stop(ctx.currentTime + 0.3);
+  } catch {}
+}
 
 export default function WarRoom() {
   const {
@@ -33,8 +52,11 @@ export default function WarRoom() {
   const [betSlipPrefill, setBetSlipPrefill] = useState<any>(null);
   const [analyses, setAnalyses] = useState<any[]>([]);
   const [showHelp, setShowHelp] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [arbFlash, setArbFlash] = useState(false);
+  const [prevArbCount, setPrevArbCount] = useState(0);
+  const [isDemo, setIsDemo] = useState(false);
 
-  // Hydrate persisted state on mount
   useEffect(() => {
     hydrate();
   }, [hydrate]);
@@ -44,36 +66,68 @@ export default function WarRoom() {
     try {
       const [scoresRes, oddsRes, analysisRes] = await Promise.all([
         fetch("/api/scores").then((r) => r.json()).catch(() => ({ games: [] })),
-        fetch("/api/odds").then((r) => r.json()).catch(() => ({ games: [] })),
+        fetch("/api/odds").then((r) => r.json()).catch(() => ({ games: [], demo: true })),
         fetch("/api/analysis").then((r) => r.json()).catch(() => ({ analyses: [] })),
       ]);
 
-      setScores(scoresRes.games ?? []);
-      setOddsData(oddsRes.games ?? []);
+      const scoreGames = scoresRes.games ?? [];
+      let oddsGames = oddsRes.games ?? [];
+      setIsDemo(oddsRes.demo === true);
+
+      // If odds API failed, try backup
+      if (oddsGames.length === 0) {
+        const backup = getOddsBackup();
+        if (backup && backup.age < 30) {
+          oddsGames = backup.data;
+          setIsDemo(true);
+        }
+      } else {
+        backupOddsToStorage(oddsGames);
+      }
+
+      setScores(scoreGames);
+      setOddsData(oddsGames);
       setAnalyses(analysisRes.analyses ?? []);
+      snapshotOdds(oddsGames);
 
-      // Snapshot odds for line movement tracking
-      snapshotOdds(oddsRes.games ?? []);
-
-      const merged = (scoresRes.games ?? []).map((score: any) => {
-        const odds = (oddsRes.games ?? []).find(
-          (o: any) => o.homeTeam === score.homeTeam || o.homeTeam?.includes(score.homeAbbrev)
-        );
+      // Robust game matching
+      const matchMap = matchGames(scoreGames, oddsGames);
+      const merged = scoreGames.map((score: any) => {
+        const odds = matchMap.get(score.homeTeam);
         return { ...score, odds };
       });
       setGames(merged);
+
+      // Auto-select first live game (or first upcoming) if nothing selected
+      if (!selectedGameId && scoreGames.length > 0) {
+        const liveGame = scoreGames.find((g: any) => g.status === "live");
+        const upcoming = scoreGames.find((g: any) => g.status === "pre");
+        const pick = liveGame ?? upcoming ?? scoreGames[0];
+        if (pick) selectGame(pick.id);
+      }
     } catch (e) {
       console.error("Fetch error:", e);
     }
     setLoading(false);
     setRefreshing(false);
-  }, [setScores, setOddsData, setGames, setLoading, snapshotOdds]);
+  }, [setScores, setOddsData, setGames, setLoading, snapshotOdds, selectedGameId, selectGame]);
 
   useEffect(() => {
     fetchData();
     const interval = setInterval(fetchData, 30000);
     return () => clearInterval(interval);
   }, [fetchData]);
+
+  // Arb alert: flash + sound when new arbs appear
+  const currentArbCount = oddsData.reduce((sum: number, g: any) => sum + (g.arbitrage?.length ?? 0), 0);
+  useEffect(() => {
+    if (currentArbCount > prevArbCount && prevArbCount > 0) {
+      setArbFlash(true);
+      if (soundEnabled) playAlertSound();
+      setTimeout(() => setArbFlash(false), 3000);
+    }
+    setPrevArbCount(currentArbCount);
+  }, [currentArbCount, prevArbCount, soundEnabled]);
 
   const selectedOdds = oddsData.find((g: any) => g.id === selectedGameId);
   const selectedScore = scores.find((s: any) => s.id === selectedGameId);
@@ -196,7 +250,23 @@ export default function WarRoom() {
             ))}
           </nav>
 
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            {isDemo && (
+              <span className="hidden sm:flex items-center gap-1 px-2 py-1 rounded bg-amber/10 border border-amber/20 text-[10px] text-amber font-semibold">
+                <AlertTriangle className="w-3 h-3" /> DEMO
+              </span>
+            )}
+            <button
+              onClick={() => setSoundEnabled(!soundEnabled)}
+              className="p-1.5 sm:p-2 rounded-lg hover:bg-gunmetal/50 transition-colors"
+              title={soundEnabled ? "Mute alerts" : "Enable alert sounds"}
+            >
+              {soundEnabled ? (
+                <Volume2 className="w-4 h-4 text-neon" />
+              ) : (
+                <VolumeX className="w-4 h-4 text-mercury/50" />
+              )}
+            </button>
             <button
               onClick={() => setShowHelp(!showHelp)}
               className="p-1.5 sm:p-2 rounded-lg hover:bg-gunmetal/50 transition-colors"
@@ -343,7 +413,11 @@ export default function WarRoom() {
 
                   {/* Center — Main Panel */}
                   <div className="flex-1 min-w-0 space-y-3 sm:space-y-4">
-                    {allArbs.length > 0 && <ArbitrageAlert arbitrage={allArbs} />}
+                    {allArbs.length > 0 && (
+                      <div className={arbFlash ? "animate-flash-gold rounded-xl" : ""}>
+                        <ArbitrageAlert arbitrage={allArbs} />
+                      </div>
+                    )}
 
                     {/* Selected Game Banner */}
                     {selectedGameId && selectedScore && (

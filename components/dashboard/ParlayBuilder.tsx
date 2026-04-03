@@ -1,7 +1,9 @@
 "use client";
 
 import { useStore } from "@/lib/store";
-import { Layers, X, Sparkles, Save, Trash2, TrendingUp, AlertTriangle } from "lucide-react";
+import { Layers, X, Sparkles, Save, Trash2, TrendingUp, AlertTriangle, ChevronDown } from "lucide-react";
+import { useState } from "react";
+import type { ParlaySlip } from "@/lib/model/types";
 
 export default function ParlayBuilder() {
   const {
@@ -142,23 +144,58 @@ export default function ParlayBuilder() {
         </div>
       )}
 
-      {/* Saved Parlays */}
+      {/* Saved Parlays — expandable */}
       {savedParlays.length > 0 && (
-        <div className="border-t border-slate/30 px-4 py-3">
-          <p className="text-xs text-mercury mb-2 uppercase tracking-wider">Saved ({savedParlays.length})</p>
-          {savedParlays.map((parlay, i) => (
-            <div key={i} className="flex items-center justify-between py-1.5">
+        <SavedParlays parlays={savedParlays} formatOdds={formatOdds} />
+      )}
+    </div>
+  );
+}
+
+function SavedParlays({ parlays, formatOdds }: { parlays: ParlaySlip[]; formatOdds: (n: number) => string }) {
+  const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
+
+  return (
+    <div className="border-t border-slate/30 px-4 py-3">
+      <p className="text-xs text-mercury mb-2 uppercase tracking-wider">Saved ({parlays.length})</p>
+      <div className="space-y-1.5">
+        {parlays.map((parlay, i) => (
+          <div key={i}>
+            <button
+              onClick={() => setExpandedIdx(expandedIdx === i ? null : i)}
+              className="w-full flex items-center justify-between py-1.5 hover:bg-gunmetal/20 rounded px-1 -mx-1 transition-colors"
+            >
               <span className="text-xs text-mercury">{parlay.legs.length}-leg parlay</span>
               <div className="flex items-center gap-2">
                 <span className="text-xs font-mono text-silver">{formatOdds(parlay.combinedOdds)}</span>
                 <span className={`text-xs font-mono ${parlay.evPercentage > 0 ? "text-neon" : "text-danger"}`}>
                   {parlay.evPercentage > 0 ? "+" : ""}{parlay.evPercentage.toFixed(1)}%
                 </span>
+                <ChevronDown className={`w-3 h-3 text-mercury/50 transition-transform ${expandedIdx === i ? "rotate-180" : ""}`} />
               </div>
-            </div>
-          ))}
-        </div>
-      )}
+            </button>
+            {expandedIdx === i && (
+              <div className="ml-2 pl-2 border-l border-slate/20 mt-1 mb-2 space-y-1 animate-slide-up">
+                {parlay.legs.map((leg, li) => (
+                  <div key={li} className="flex items-center justify-between">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[11px] text-silver truncate">{leg.pick}</p>
+                      <p className="text-[9px] text-mercury/50 truncate">{leg.game} • {leg.bookmaker}</p>
+                    </div>
+                    <span className="text-[11px] font-mono text-mercury ml-2 flex-shrink-0">
+                      {formatOdds(leg.odds)}
+                    </span>
+                  </div>
+                ))}
+                <div className="flex items-center justify-between pt-1 border-t border-slate/10">
+                  <span className="text-[10px] text-mercury/60">Payout</span>
+                  <span className="text-xs font-mono text-gold">${parlay.potentialPayout.toFixed(2)}</span>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

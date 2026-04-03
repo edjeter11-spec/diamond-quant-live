@@ -22,9 +22,10 @@ export async function GET(req: Request) {
 
   if (!apiKey) {
     return NextResponse.json({
-      props: getDemoProps(),
+      props: [],
       markets: PROP_MARKETS,
-      demo: true,
+      demo: false,
+      error: "Odds API key not configured — add THE_ODDS_API_KEY to .env",
     });
   }
 
@@ -63,22 +64,23 @@ export async function GET(req: Request) {
     const grouped = groupByPlayer(allProps);
 
     return NextResponse.json({
-      props: grouped.length > 0 ? grouped : getDemoProps(),
+      props: grouped,
       markets: PROP_MARKETS,
       events: todayGames.map((g) => ({
         id: g.id,
         game: `${g.away_team} @ ${g.home_team}`,
         time: g.commence_time,
       })),
-      demo: grouped.length === 0,
+      demo: false,
+      message: grouped.length === 0 ? "No props available yet — books haven't posted lines for this market" : undefined,
     });
   } catch (error) {
     console.error("Props API error:", error);
     return NextResponse.json({
-      props: getDemoProps(),
+      props: [],
       markets: PROP_MARKETS,
-      demo: true,
-      error: "Failed to fetch live props",
+      demo: false,
+      error: "Failed to fetch live props — try again in a moment",
     });
   }
 }
@@ -117,31 +119,3 @@ function groupByPlayer(props: ReturnType<typeof parsePlayerProps>) {
   });
 }
 
-function getDemoProps() {
-  const players = [
-    { name: "Gerrit Cole", line: 7.5, market: "pitcher_strikeouts", team: "NYY" },
-    { name: "Clayton Kershaw", line: 5.5, market: "pitcher_strikeouts", team: "LAD" },
-    { name: "Aaron Judge", line: 1.5, market: "batter_total_bases", team: "NYY" },
-    { name: "Mookie Betts", line: 1.5, market: "batter_hits", team: "LAD" },
-    { name: "Shohei Ohtani", line: 0.5, market: "batter_home_runs", team: "LAD" },
-    { name: "Rafael Devers", line: 1.5, market: "batter_total_bases", team: "BOS" },
-    { name: "Bobby Witt Jr.", line: 1.5, market: "batter_hits", team: "KC" },
-    { name: "Framber Valdez", line: 5.5, market: "pitcher_strikeouts", team: "HOU" },
-  ];
-
-  return players.map((p) => ({
-    playerName: p.name,
-    line: p.line,
-    market: p.market,
-    team: p.team,
-    books: [
-      { bookmaker: "DraftKings", overPrice: -115 + Math.floor(Math.random() * 20), underPrice: -105 + Math.floor(Math.random() * 15) },
-      { bookmaker: "FanDuel", overPrice: -120 + Math.floor(Math.random() * 25), underPrice: -100 + Math.floor(Math.random() * 15) },
-      { bookmaker: "BetMGM", overPrice: -110 + Math.floor(Math.random() * 20), underPrice: -110 + Math.floor(Math.random() * 15) },
-    ],
-    bestOver: { bookmaker: "FanDuel", price: -105 },
-    bestUnder: { bookmaker: "DraftKings", price: -100 },
-    fairOverProb: 48 + Math.floor(Math.random() * 8),
-    fairUnderProb: 48 + Math.floor(Math.random() * 8),
-  }));
-}
