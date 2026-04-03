@@ -14,6 +14,7 @@ import EVBoard from "@/components/dashboard/EVBoard";
 import LineMovement from "@/components/dashboard/LineMovement";
 import SelectedGameBanner from "@/components/dashboard/SelectedGameBanner";
 import BetSlip from "@/components/dashboard/BetSlip";
+import PicksBoard from "@/components/dashboard/PicksBoard";
 import { matchGames } from "@/lib/mlb/match-games";
 import { backupOddsToStorage, getOddsBackup } from "@/lib/odds/cache";
 import {
@@ -380,23 +381,31 @@ export default function WarRoom() {
           <>
             {activeTab === "dashboard" && (
               <>
+                {/* Mobile: View Games button */}
                 <button
                   onClick={() => setMobileGamesOpen(true)}
                   className="lg:hidden w-full mb-3 flex items-center justify-center gap-2 py-2.5 rounded-xl glass glass-hover text-sm font-medium text-mercury"
                 >
                   <BarChart3 className="w-4 h-4" />
-                  View Today's Games ({scores.length})
+                  Today's Games ({scores.length})
                   <ChevronRight className="w-4 h-4" />
                 </button>
 
+                {/* Arb Alert */}
+                {allArbs.length > 0 && (
+                  <div className={`mb-3 ${arbFlash ? "animate-flash-gold rounded-xl" : ""}`}>
+                    <ArbitrageAlert arbitrage={allArbs} />
+                  </div>
+                )}
+
                 <div className="flex gap-4">
                   {/* Left Sidebar — Desktop */}
-                  <div className={`hidden lg:block transition-all duration-300 ${sidebarOpen ? "w-80" : "w-12"} flex-shrink-0`}>
+                  <div className={`hidden lg:block transition-all duration-300 ${sidebarOpen ? "w-72" : "w-12"} flex-shrink-0`}>
                     <div className="sticky top-24">
                       <div className="flex items-center justify-between mb-3">
                         {sidebarOpen && (
                           <h2 className="text-xs font-semibold text-mercury uppercase tracking-wider">
-                            Today's Games ({scores.length})
+                            Games ({scores.length})
                           </h2>
                         )}
                         <button onClick={toggleSidebar} className="p-1 hover:bg-gunmetal/50 rounded">
@@ -411,54 +420,39 @@ export default function WarRoom() {
                     </div>
                   </div>
 
-                  {/* Center — Main Panel */}
+                  {/* Center — Main Picks Board */}
                   <div className="flex-1 min-w-0 space-y-3 sm:space-y-4">
-                    {allArbs.length > 0 && (
-                      <div className={arbFlash ? "animate-flash-gold rounded-xl" : ""}>
-                        <ArbitrageAlert arbitrage={allArbs} />
-                      </div>
-                    )}
+                    <PicksBoard />
 
-                    {/* Selected Game Banner */}
+                    {/* Game deep-dive (when a game is selected) */}
                     {selectedGameId && selectedScore && (
-                      <SelectedGameBanner
-                        game={selectedScore}
-                        onDeselect={() => selectGame(null)}
-                      />
+                      <>
+                        <SelectedGameBanner game={selectedScore} onDeselect={() => selectGame(null)} />
+                        <QuantVerdict
+                          game={{
+                            homeTeam: selectedOdds?.homeTeam ?? "Select a game",
+                            awayTeam: selectedOdds?.awayTeam ?? "",
+                          }}
+                          analysis={buildVerdict()}
+                          onPlaceBet={selectedOdds ? () => {
+                            const verdict = buildVerdict();
+                            if (verdict) {
+                              openBetSlip({
+                                game: `${selectedOdds.awayTeam} @ ${selectedOdds.homeTeam}`,
+                                pick: verdict.pick,
+                                odds: verdict.marketOdds,
+                                bookmaker: verdict.bookmaker,
+                                market: "moneyline",
+                                evAtPlacement: verdict.evPercentage,
+                              });
+                            }
+                          } : undefined}
+                        />
+                        <OddsGrid gameId={selectedGameId} />
+                      </>
                     )}
 
-                    <QuantVerdict
-                      game={{
-                        homeTeam: selectedOdds?.homeTeam ?? "Select a game",
-                        awayTeam: selectedOdds?.awayTeam ?? "",
-                      }}
-                      analysis={buildVerdict()}
-                      onPlaceBet={selectedOdds ? () => {
-                        const verdict = buildVerdict();
-                        if (verdict) {
-                          openBetSlip({
-                            game: `${selectedOdds.awayTeam} @ ${selectedOdds.homeTeam}`,
-                            pick: verdict.pick,
-                            odds: verdict.marketOdds,
-                            bookmaker: verdict.bookmaker,
-                            market: "moneyline",
-                            evAtPlacement: verdict.evPercentage,
-                          });
-                        }
-                      } : undefined}
-                    />
-
-                    {selectedGameId && <OddsGrid gameId={selectedGameId} />}
-
-                    <EVBoard onPlaceBet={(bet: any) => openBetSlip({
-                      game: bet.game,
-                      pick: bet.pick,
-                      odds: bet.odds,
-                      bookmaker: bet.bookmaker,
-                      market: bet.market,
-                      evAtPlacement: bet.evPercentage,
-                    })} />
-
+                    {/* Parlay builder on mobile */}
                     <div className="xl:hidden">
                       <ParlayBuilder />
                     </div>
