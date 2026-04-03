@@ -60,8 +60,8 @@ export default function TopPropsOfDay() {
   async function buildTopProps() {
     setLoading(true);
 
-    // Fetch all prop markets in parallel
-    const markets = ["pitcher_strikeouts", "batter_hits", "batter_home_runs", "batter_total_bases", "batter_rbis"];
+    // Only fetch 2 markets to conserve API calls (server-side cache will help)
+    const markets = ["pitcher_strikeouts", "batter_hits"];
 
     try {
       const results = await Promise.all(
@@ -77,61 +77,55 @@ export default function TopPropsOfDay() {
         }
       });
 
-      // Score each prop and pick the top 5
+      // Score each prop and pick the top 5 (allow single-book props too)
       const scored = allProps
-        .filter((p) => p.prop.books?.length >= 2) // need 2+ books for real comparison
+        .filter((p) => p.prop.bestOver && p.prop.bestUnder)
         .map((p) => scoreAndAnalyzeProp(p.prop, p.market))
         .filter((p): p is PropAnalysis => p !== null)
         .sort((a, b) => b.confidence - a.confidence)
         .slice(0, 5)
         .map((p, i) => ({ ...p, rank: i + 1 }));
 
-      // For the top 5, fetch detailed player analysis
-      const enriched = await Promise.all(
-        scored.map(async (pick) => {
-          try {
-            const res = await fetch(
-              `/api/player-analysis?name=${encodeURIComponent(pick.playerName)}&market=${pick.market}&line=${pick.line}`
-            );
-            if (res.ok) {
-              const analysis = await res.json();
-              const isPitcher = pick.market.startsWith("pitcher_");
-              const gameLog = analysis.last10Games ?? [];
+      // Enrich with player analysis — only for top 2 to save API calls
+      // The rest just use the prop data directly
+      for (let i = 0; i < Math.min(scored.length, 2); i++) {
+        const pick = scored[i];
+        try {
+          const res = await fetch(
+            `/api/player-analysis?name=${encodeURIComponent(pick.playerName)}&market=${pick.market}&line=${pick.line}`
+          );
+          if (res.ok) {
+            const analysis = await res.json();
+            const isPitcher = pick.market.startsWith("pitcher_");
+            const gameLog = analysis.last10Games ?? [];
+            const statKey = isPitcher ? "strikeouts" : "hitsB";
+            const values = gameLog.map((g: any) => g[statKey] ?? 0);
+            const avg = values.length > 0 ? values.reduce((a: number, b: number) => a + b, 0) / values.length : 0;
+            const overCount = values.filter((v: number) => v > pick.line).length;
 
-              // Compute real stats from the analysis
-              const statKey = isPitcher ? "strikeouts" : pick.market.includes("hits") ? "hitsB" : pick.market.includes("home_run") ? "homeRuns" : pick.market.includes("total_bases") ? "totalBases" : "rbi";
-              const values = gameLog.map((g: any) => g[statKey] ?? 0);
-              const avg = values.length > 0 ? values.reduce((a: number, b: number) => a + b, 0) / values.length : 0;
-              const overCount = values.filter((v: number) => v > pick.line).length;
+            pick.stats.last10Avg = Math.round(avg * 100) / 100;
+            pick.stats.hitRate = values.length > 0 ? Math.round((overCount / values.length) * 100) : 50;
 
-              pick.stats.last10Avg = Math.round(avg * 100) / 100;
-              pick.stats.hitRate = values.length > 0 ? Math.round((overCount / values.length) * 100) : 50;
+            const last5 = values.slice(-5);
+            const first5 = values.slice(0, 5);
+            const avgLast5 = last5.length > 0 ? last5.reduce((a: number, b: number) => a + b, 0) / last5.length : 0;
+            const avgFirst5 = first5.length > 0 ? first5.reduce((a: number, b: number) => a + b, 0) / first5.length : 0;
+            pick.stats.trend = avgLast5 > avgFirst5 + 0.2 ? "up" : avgLast5 < avgFirst5 - 0.2 ? "down" : "flat";
 
-              // Trend
-              const last5 = values.slice(-5);
-              const first5 = values.slice(0, 5);
-              const avgLast5 = last5.length > 0 ? last5.reduce((a: number, b: number) => a + b, 0) / last5.length : 0;
-              const avgFirst5 = first5.length > 0 ? first5.reduce((a: number, b: number) => a + b, 0) / first5.length : 0;
-              pick.stats.trend = avgLast5 > avgFirst5 + 0.2 ? "up" : avgLast5 < avgFirst5 - 0.2 ? "down" : "flat";
+            pick.reasoning = buildDetailedReasoning(pick, analysis);
+            pick.aiSummary = buildAISummary(pick, analysis);
 
-              // Rebuild reasoning with real data
-              pick.reasoning = buildDetailedReasoning(pick, analysis);
-              pick.aiSummary = buildAISummary(pick, analysis);
-
-              // Use analysis recommendation if available
-              if (analysis.recommendation) {
-                const side = analysis.recommendation.side;
-                if (side === "over" || side === "lean_over") pick.recommendation = "OVER";
-                else if (side === "under" || side === "lean_under") pick.recommendation = "UNDER";
-                pick.confidence = Math.max(pick.confidence, analysis.recommendation.confidence);
-              }
+            if (analysis.recommendation) {
+              const side = analysis.recommendation.side;
+              if (side === "over" || side === "lean_over") pick.recommendation = "OVER";
+              else if (side === "under" || side === "lean_under") pick.recommendation = "UNDER";
+              pick.confidence = Math.max(pick.confidence, analysis.recommendation.confidence);
             }
-          } catch {}
-          return pick;
-        })
-      );
+          }
+        } catch {}
+      }
 
-      setTopProps(enriched);
+      setTopProps(scored);
     } catch (err) {
       console.error("Top props error:", err);
     }
