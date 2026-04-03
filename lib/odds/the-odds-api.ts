@@ -12,15 +12,31 @@ const SPORT = "baseball_mlb";
 const BOOKMAKERS = [
   "draftkings",
   "fanduel",
+  "fanatics",
   "betmgm",
+  "hardrockbet",
+  "betrivers",
+  "espnbet",
   "pointsbetus",
   "bovada",
   "williamhill_us",
-  "betrivers",
   "unibet_us",
-  "foxbet",
-  "barstool",
 ];
+
+// Display names for bookmakers
+export const BOOK_DISPLAY: Record<string, { name: string; short: string; color: string }> = {
+  draftkings: { name: "DraftKings", short: "DK", color: "#53d337" },
+  fanduel: { name: "FanDuel", short: "FD", color: "#1493ff" },
+  fanatics: { name: "Fanatics", short: "FAN", color: "#e31837" },
+  betmgm: { name: "BetMGM", short: "MGM", color: "#c4a962" },
+  hardrockbet: { name: "Hard Rock", short: "HR", color: "#ff6b00" },
+  betrivers: { name: "BetRivers", short: "BR", color: "#ffd700" },
+  espnbet: { name: "ESPN BET", short: "ESPN", color: "#d00" },
+  pointsbetus: { name: "PointsBet", short: "PB", color: "#e44" },
+  bovada: { name: "Bovada", short: "BOV", color: "#cc0000" },
+  williamhill_us: { name: "Caesars", short: "CZR", color: "#00594c" },
+  unibet_us: { name: "Unibet", short: "UNI", color: "#14805e" },
+};
 
 interface OddsAPIGame {
   id: string;

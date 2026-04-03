@@ -1,0 +1,361 @@
+// ──────────────────────────────────────────────────────────
+// MLB Player Stats + Matchup History
+// Pulls from the free MLB Stats API
+// ──────────────────────────────────────────────────────────
+
+const MLB_API = "https://statsapi.mlb.com/api/v1";
+
+export interface PlayerSeasonStats {
+  name: string;
+  team: string;
+  teamAbbrev: string;
+  position: string;
+  gamesPlayed: number;
+  // Pitcher stats
+  era?: number;
+  whip?: number;
+  strikeouts?: number;
+  k9?: number;
+  bb9?: number;
+  inningsPitched?: number;
+  wins?: number;
+  losses?: number;
+  avgStrikeoutsPerGame?: number;
+  // Batter stats
+  avg?: number;
+  ops?: number;
+  hits?: number;
+  homeRuns?: number;
+  rbi?: number;
+  stolenBases?: number;
+  totalBases?: number;
+  hitsPerGame?: number;
+  tbPerGame?: number;
+}
+
+export interface GameLogEntry {
+  date: string;
+  opponent: string;
+  // Pitcher
+  strikeouts?: number;
+  inningsPitched?: number;
+  earnedRuns?: number;
+  hits?: number;
+  walks?: number;
+  // Batter
+  atBats?: number;
+  hitsB?: number;
+  homeRuns?: number;
+  rbi?: number;
+  totalBases?: number;
+}
+
+export interface PlayerAnalysis {
+  player: PlayerSeasonStats;
+  last10Games: GameLogEntry[];
+  vsOpponent: { games: number; avgStat: number; trend: string };
+  recommendation: {
+    side: "over" | "under" | "lean_over" | "lean_under" | "no_edge";
+    confidence: number; // 0-100
+    reasons: string[];
+  };
+}
+
+// Search for a player by name
+export async function searchPlayer(name: string): Promise<{ id: number; fullName: string; team: string; position: string } | null> {
+  try {
+    const url = `${MLB_API}/sports/1/players?season=${new Date().getFullYear()}&search=${encodeURIComponent(name)}`;
+    const res = await fetch(url, { next: { revalidate: 3600 } });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const player = data.people?.[0];
+    if (!player) return null;
+    return {
+      id: player.id,
+      fullName: player.fullName,
+      team: player.currentTeam?.name ?? "Unknown",
+      position: player.primaryPosition?.abbreviation ?? "??",
+    };
+  } catch {
+    return null;
+  }
+}
+
+// Fetch pitcher season stats
+export async function fetchPitcherSeasonStats(playerId: number): Promise<any> {
+  const year = new Date().getFullYear();
+  const url = `${MLB_API}/people/${playerId}/stats?stats=season&season=${year}&group=pitching`;
+  const res = await fetch(url, { next: { revalidate: 300 } });
+  if (!res.ok) return null;
+  const data = await res.json();
+  return data.stats?.[0]?.splits?.[0]?.stat ?? null;
+}
+
+// Fetch batter season stats
+export async function fetchBatterSeasonStats(playerId: number): Promise<any> {
+  const year = new Date().getFullYear();
+  const url = `${MLB_API}/people/${playerId}/stats?stats=season&season=${year}&group=hitting`;
+  const res = await fetch(url, { next: { revalidate: 300 } });
+  if (!res.ok) return null;
+  const data = await res.json();
+  return data.stats?.[0]?.splits?.[0]?.stat ?? null;
+}
+
+// Fetch game log (last N games)
+export async function fetchGameLog(playerId: number, isPitcher: boolean): Promise<GameLogEntry[]> {
+  const year = new Date().getFullYear();
+  const group = isPitcher ? "pitching" : "hitting";
+  const url = `${MLB_API}/people/${playerId}/stats?stats=gameLog&season=${year}&group=${group}`;
+  const res = await fetch(url, { next: { revalidate: 300 } });
+  if (!res.ok) return [];
+  const data = await res.json();
+  const splits = data.stats?.[0]?.splits ?? [];
+
+  return splits.slice(-15).map((s: any) => {
+    const stat = s.stat;
+    const opponent = s.opponent?.name ?? "Unknown";
+    const date = s.date ?? "";
+
+    if (isPitcher) {
+      return {
+        date,
+        opponent,
+        strikeouts: parseInt(stat.strikeOuts) || 0,
+        inningsPitched: parseFloat(stat.inningsPitched) || 0,
+        earnedRuns: parseInt(stat.earnedRuns) || 0,
+        hits: parseInt(stat.hits) || 0,
+        walks: parseInt(stat.baseOnBalls) || 0,
+      };
+    } else {
+      const h = parseInt(stat.hits) || 0;
+      const doubles = parseInt(stat.doubles) || 0;
+      const triples = parseInt(stat.triples) || 0;
+      const hr = parseInt(stat.homeRuns) || 0;
+      const tb = h + doubles + triples * 2 + hr * 3;
+      return {
+        date,
+        opponent,
+        atBats: parseInt(stat.atBats) || 0,
+        hitsB: h,
+        homeRuns: hr,
+        rbi: parseInt(stat.rbi) || 0,
+        totalBases: tb,
+      };
+    }
+  });
+}
+
+// Analyze a player for a specific prop market
+export async function analyzePlayer(
+  playerName: string,
+  market: string,
+  line: number,
+  opponentTeam?: string
+): Promise<PlayerAnalysis | null> {
+  const player = await searchPlayer(playerName);
+  if (!player) return null;
+
+  const isPitcher = market.startsWith("pitcher_");
+  const gameLog = await fetchGameLog(player.id, isPitcher);
+
+  // Get season stats
+  const seasonRaw = isPitcher
+    ? await fetchPitcherSeasonStats(player.id)
+    : await fetchBatterSeasonStats(player.id);
+
+  if (!seasonRaw) return null;
+
+  // Build season stats
+  const gamesPlayed = parseInt(seasonRaw.gamesPlayed || seasonRaw.gamesPitched || "0");
+  const seasonStats: PlayerSeasonStats = {
+    name: player.fullName,
+    team: player.team,
+    teamAbbrev: player.team.split(" ").pop()?.slice(0, 3).toUpperCase() ?? "???",
+    position: player.position,
+    gamesPlayed,
+  };
+
+  if (isPitcher) {
+    const totalK = parseInt(seasonRaw.strikeOuts) || 0;
+    const ip = parseFloat(seasonRaw.inningsPitched) || 0;
+    seasonStats.era = parseFloat(seasonRaw.era) || 0;
+    seasonStats.whip = parseFloat(seasonRaw.whip) || 0;
+    seasonStats.strikeouts = totalK;
+    seasonStats.k9 = ip > 0 ? (totalK / ip) * 9 : 0;
+    seasonStats.bb9 = ip > 0 ? ((parseInt(seasonRaw.baseOnBalls) || 0) / ip) * 9 : 0;
+    seasonStats.inningsPitched = ip;
+    seasonStats.wins = parseInt(seasonRaw.wins) || 0;
+    seasonStats.losses = parseInt(seasonRaw.losses) || 0;
+    seasonStats.avgStrikeoutsPerGame = gamesPlayed > 0 ? totalK / gamesPlayed : 0;
+  } else {
+    const hits = parseInt(seasonRaw.hits) || 0;
+    const doubles = parseInt(seasonRaw.doubles) || 0;
+    const triples = parseInt(seasonRaw.triples) || 0;
+    const hr = parseInt(seasonRaw.homeRuns) || 0;
+    const tb = hits + doubles + triples * 2 + hr * 3;
+    seasonStats.avg = parseFloat(seasonRaw.avg) || 0;
+    seasonStats.ops = parseFloat(seasonRaw.ops) || 0;
+    seasonStats.hits = hits;
+    seasonStats.homeRuns = hr;
+    seasonStats.rbi = parseInt(seasonRaw.rbi) || 0;
+    seasonStats.stolenBases = parseInt(seasonRaw.stolenBases) || 0;
+    seasonStats.totalBases = tb;
+    seasonStats.hitsPerGame = gamesPlayed > 0 ? hits / gamesPlayed : 0;
+    seasonStats.tbPerGame = gamesPlayed > 0 ? tb / gamesPlayed : 0;
+  }
+
+  // Analyze last 10 games
+  const last10 = gameLog.slice(-10);
+
+  // Get stat values for the specific market
+  const statValues = last10.map((g) => getStatForMarket(g, market, isPitcher));
+  const avgLast10 = statValues.length > 0 ? statValues.reduce((a, b) => a + b, 0) / statValues.length : 0;
+
+  // Vs opponent analysis
+  const vsOpp = opponentTeam
+    ? gameLog.filter((g) => g.opponent.toLowerCase().includes(opponentTeam.toLowerCase().split(" ").pop() ?? ""))
+    : [];
+  const vsOppStats = vsOpp.map((g) => getStatForMarket(g, market, isPitcher));
+  const avgVsOpp = vsOppStats.length > 0 ? vsOppStats.reduce((a, b) => a + b, 0) / vsOppStats.length : avgLast10;
+
+  // Trend analysis
+  const last5 = statValues.slice(-5);
+  const first5 = statValues.slice(0, 5);
+  const avgLast5 = last5.length > 0 ? last5.reduce((a, b) => a + b, 0) / last5.length : 0;
+  const avgFirst5 = first5.length > 0 ? first5.reduce((a, b) => a + b, 0) / first5.length : 0;
+  const trending = avgLast5 > avgFirst5 ? "up" : avgLast5 < avgFirst5 ? "down" : "flat";
+
+  // Hit rate (how often they go over)
+  const overCount = statValues.filter((v) => v > line).length;
+  const hitRate = statValues.length > 0 ? overCount / statValues.length : 0.5;
+
+  // Build recommendation
+  const recommendation = buildRecommendation(
+    market, line, avgLast10, avgVsOpp, hitRate, trending, seasonStats, last10.length, vsOpp.length
+  );
+
+  return {
+    player: seasonStats,
+    last10Games: last10,
+    vsOpponent: {
+      games: vsOpp.length,
+      avgStat: Math.round(avgVsOpp * 100) / 100,
+      trend: trending,
+    },
+    recommendation,
+  };
+}
+
+function getStatForMarket(game: GameLogEntry, market: string, isPitcher: boolean): number {
+  if (isPitcher) {
+    if (market.includes("strikeout")) return game.strikeouts ?? 0;
+    if (market.includes("outs") || market.includes("recorded")) return (game.inningsPitched ?? 0) * 3;
+    return game.strikeouts ?? 0;
+  } else {
+    if (market.includes("hits")) return game.hitsB ?? 0;
+    if (market.includes("total_bases")) return game.totalBases ?? 0;
+    if (market.includes("home_run")) return game.homeRuns ?? 0;
+    if (market.includes("rbi")) return game.rbi ?? 0;
+    return game.hitsB ?? 0;
+  }
+}
+
+function buildRecommendation(
+  market: string,
+  line: number,
+  avgLast10: number,
+  avgVsOpp: number,
+  hitRate: number,
+  trending: string,
+  stats: PlayerSeasonStats,
+  sampleSize: number,
+  oppSampleSize: number
+): PlayerAnalysis["recommendation"] {
+  const reasons: string[] = [];
+  let score = 0; // positive = over, negative = under
+
+  // Average vs line
+  const avgDiff = avgLast10 - line;
+  if (avgDiff > 0.5) {
+    score += 20;
+    reasons.push(`Averaging ${avgLast10.toFixed(1)} over last ${sampleSize} games (line: ${line})`);
+  } else if (avgDiff < -0.5) {
+    score -= 20;
+    reasons.push(`Averaging ${avgLast10.toFixed(1)} over last ${sampleSize} games (under the ${line} line)`);
+  } else {
+    reasons.push(`Averaging ${avgLast10.toFixed(1)} — right at the line of ${line}`);
+  }
+
+  // Hit rate
+  if (hitRate > 0.65) {
+    score += 15;
+    reasons.push(`Hit the over in ${(hitRate * 100).toFixed(0)}% of recent games`);
+  } else if (hitRate < 0.35) {
+    score -= 15;
+    reasons.push(`Only hit the over in ${(hitRate * 100).toFixed(0)}% of recent games`);
+  }
+
+  // Trend
+  if (trending === "up") {
+    score += 10;
+    reasons.push("Trending up — recent games better than earlier stretch");
+  } else if (trending === "down") {
+    score -= 10;
+    reasons.push("Trending down — recent games worse than earlier stretch");
+  }
+
+  // Vs opponent
+  if (oppSampleSize >= 2) {
+    if (avgVsOpp > line + 0.3) {
+      score += 12;
+      reasons.push(`Averages ${avgVsOpp.toFixed(1)} vs this opponent (${oppSampleSize} games)`);
+    } else if (avgVsOpp < line - 0.3) {
+      score -= 12;
+      reasons.push(`Only averages ${avgVsOpp.toFixed(1)} vs this opponent (${oppSampleSize} games)`);
+    }
+  }
+
+  // Pitcher-specific
+  if (market.includes("strikeout") && stats.k9) {
+    if (stats.k9 > 9.5) {
+      score += 8;
+      reasons.push(`Elite K rate: ${stats.k9.toFixed(1)} K/9 this season`);
+    } else if (stats.k9 < 7.0) {
+      score -= 8;
+      reasons.push(`Low K rate: ${stats.k9.toFixed(1)} K/9 this season`);
+    }
+  }
+
+  // Batter-specific
+  if (market.includes("hits") && stats.avg) {
+    if (stats.avg > 0.290) {
+      score += 8;
+      reasons.push(`Hitting ${stats.avg.toFixed(3)} this season — well above average`);
+    } else if (stats.avg < 0.230) {
+      score -= 8;
+      reasons.push(`Batting just ${stats.avg.toFixed(3)} this season — below average`);
+    }
+  }
+
+  if (market.includes("total_bases") && stats.ops) {
+    if (stats.ops > 0.850) {
+      score += 8;
+      reasons.push(`Strong ${stats.ops.toFixed(3)} OPS — extra-base power`);
+    }
+  }
+
+  // Determine side
+  let side: PlayerAnalysis["recommendation"]["side"];
+  const absScore = Math.abs(score);
+  if (score > 15) side = "over";
+  else if (score > 5) side = "lean_over";
+  else if (score < -15) side = "under";
+  else if (score < -5) side = "lean_under";
+  else side = "no_edge";
+
+  return {
+    side,
+    confidence: Math.min(absScore, 80),
+    reasons,
+  };
+}
