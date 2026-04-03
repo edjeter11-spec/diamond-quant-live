@@ -24,9 +24,11 @@ interface PropLine {
 interface PlayerAnalysis {
   player: {
     name: string; team: string; teamAbbrev: string; position: string;
-    gamesPlayed: number; era?: number; whip?: number; strikeouts?: number;
+    gamesPlayed: number; number?: string; photo?: string;
+    era?: number; whip?: number; strikeouts?: number;
     k9?: number; avgStrikeoutsPerGame?: number; avg?: number; ops?: number;
-    hits?: number; homeRuns?: number; rbi?: number; hitsPerGame?: number; tbPerGame?: number;
+    hits?: number; homeRuns?: number; rbi?: number; stolenBases?: number;
+    hitsPerGame?: number; tbPerGame?: number;
   };
   last10Games: Array<{
     date: string; opponent: string; strikeouts?: number;
@@ -243,15 +245,37 @@ export default function PlayerProps() {
         </div>
       )}
       {searchResult && (
-        <div className="px-3 sm:px-4 py-3 bg-electric/5 border-b border-electric/15">
-          <div className="flex items-center gap-2 mb-2">
-            <Search className="w-4 h-4 text-electric" />
-            <p className="text-sm font-semibold text-silver">{searchResult.player.name}</p>
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-electric/10 text-electric">{searchResult.player.team}</span>
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-gunmetal text-mercury">{searchResult.player.position}</span>
+        <div className="px-3 sm:px-4 py-4 bg-electric/5 border-b border-electric/15">
+          {/* Player Card Header with Photo */}
+          <div className="flex gap-3 mb-3">
+            {/* Headshot */}
+            {searchResult.player.photo && (
+              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden bg-gunmetal/50 flex-shrink-0 border border-slate/30">
+                <img
+                  src={searchResult.player.photo}
+                  alt={searchResult.player.name}
+                  className="w-full h-full object-cover"
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                />
+              </div>
+            )}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-base sm:text-lg font-bold text-silver">{searchResult.player.name}</h3>
+                {searchResult.player.number && (
+                  <span className="text-xs font-mono text-electric">#{searchResult.player.number}</span>
+                )}
+              </div>
+              <div className="flex items-center gap-2 mt-0.5">
+                <span className="text-xs px-2 py-0.5 rounded bg-electric/15 text-electric font-medium">{searchResult.player.team}</span>
+                <span className="text-xs px-2 py-0.5 rounded bg-gunmetal text-mercury">{searchResult.player.position}</span>
+                <span className="text-[10px] text-mercury/50">{searchResult.player.gamesPlayed}G this season</span>
+              </div>
+            </div>
           </div>
-          {/* Stats */}
-          <div className="grid grid-cols-4 gap-2 mb-3">
+
+          {/* Stats Grid */}
+          <div className="grid grid-cols-4 gap-1.5 sm:gap-2 mb-3">
             {searchResult.player.era !== undefined && (
               <>
                 <StatBox label="ERA" value={searchResult.player.era.toFixed(2)} />
@@ -264,50 +288,85 @@ export default function PlayerProps() {
               <>
                 <StatBox label="AVG" value={searchResult.player.avg.toFixed(3)} />
                 <StatBox label="OPS" value={searchResult.player.ops?.toFixed(3) ?? "—"} />
-                <StatBox label="H/G" value={searchResult.player.hitsPerGame?.toFixed(1) ?? "—"} />
-                <StatBox label="TB/G" value={searchResult.player.tbPerGame?.toFixed(1) ?? "—"} />
+                <StatBox label="Hits" value={String(searchResult.player.hits ?? 0)} />
+                <StatBox label="HR" value={String(searchResult.player.homeRuns ?? 0)} />
+                <StatBox label="RBI" value={String(searchResult.player.rbi ?? 0)} />
+                <StatBox label="H/G" value={searchResult.player.hitsPerGame?.toFixed(2) ?? "—"} />
+                <StatBox label="TB/G" value={searchResult.player.tbPerGame?.toFixed(2) ?? "—"} />
+                <StatBox label="SB" value={String(searchResult.player.stolenBases ?? 0)} />
               </>
             )}
           </div>
-          {/* Last games chart */}
+
+          {/* Last 10+ Games Chart */}
           {searchResult.last10Games.length > 0 && (
-            <div className="mb-3">
-              <p className="text-[10px] text-mercury mb-1 uppercase">Last {searchResult.last10Games.length} Games — {MARKET_LABELS[selectedMarket]}</p>
-              <div className="flex items-end gap-1 h-12">
+            <div className="mb-3 rounded-lg bg-gunmetal/20 p-3">
+              <p className="text-[10px] text-mercury uppercase tracking-wider mb-2 font-semibold">
+                Last {searchResult.last10Games.length} Games
+              </p>
+              <div className="flex items-end gap-1 h-20">
                 {searchResult.last10Games.map((game: any, gi: number) => {
                   const statKey = MARKET_STAT_KEY[selectedMarket] || "strikeouts";
                   const val = game[statKey] ?? 0;
                   const maxVal = Math.max(...searchResult.last10Games.map((g: any) => g[statKey] ?? 0), 1);
                   const height = maxVal > 0 ? (val / maxVal) * 100 : 0;
                   return (
-                    <div key={gi} className="flex-1 flex flex-col items-center gap-0.5">
-                      <span className="text-[8px] font-mono text-mercury/60">{val}</span>
-                      <div className="w-full rounded-t bg-electric/50" style={{ height: `${Math.max(height, 8)}%` }} />
-                      <span className="text-[7px] text-mercury/40 truncate w-full text-center">
+                    <div key={gi} className="flex-1 flex flex-col items-center gap-0.5" title={`${game.opponent}: ${val}`}>
+                      <span className="text-[8px] font-mono text-silver font-bold">{val}</span>
+                      <div
+                        className="w-full rounded-t bg-gradient-to-t from-electric/60 to-electric/30 transition-all"
+                        style={{ height: `${Math.max(height, 6)}%` }}
+                      />
+                      <span className="text-[7px] text-mercury/50 truncate w-full text-center">
                         {game.opponent?.split(" ").pop()?.slice(0, 3)}
                       </span>
                     </div>
                   );
                 })}
               </div>
+
+              {/* Game log table */}
+              <div className="mt-3 space-y-0.5">
+                {searchResult.last10Games.slice(-5).reverse().map((game: any, gi: number) => {
+                  const statKey = MARKET_STAT_KEY[selectedMarket] || "strikeouts";
+                  const val = game[statKey] ?? 0;
+                  return (
+                    <div key={gi} className="flex items-center gap-2 text-[10px]">
+                      <span className="text-mercury/50 w-16 truncate">{game.opponent?.split(" ").pop()}</span>
+                      <div className="flex-1 h-1 bg-gunmetal rounded-full overflow-hidden">
+                        <div className="h-full bg-electric/50 rounded-full" style={{ width: `${Math.min((val / Math.max(...searchResult.last10Games.map((g: any) => g[statKey] ?? 0), 1)) * 100, 100)}%` }} />
+                      </div>
+                      <span className="font-mono text-silver font-bold w-5 text-right">{val}</span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
+
           {/* Recommendation */}
           {searchResult.recommendation && (
-            <div className={`rounded-lg p-2.5 border ${
+            <div className={`rounded-lg p-3 border ${
               searchResult.recommendation.side.includes("over") ? "bg-neon/5 border-neon/20" :
               searchResult.recommendation.side.includes("under") ? "bg-purple/5 border-purple/20" :
               "bg-gunmetal/30 border-slate/20"
             }`}>
-              <div className="flex items-center gap-2 mb-1.5">
-                <Target className="w-3.5 h-3.5 text-gold" />
-                <span className={`text-xs font-bold ${SIDE_LABELS[searchResult.recommendation.side]?.color ?? "text-mercury"}`}>
+              <div className="flex items-center gap-2 mb-2">
+                <Target className="w-4 h-4 text-gold" />
+                <span className={`text-sm font-bold ${SIDE_LABELS[searchResult.recommendation.side]?.color ?? "text-mercury"}`}>
                   {SIDE_LABELS[searchResult.recommendation.side]?.label ?? "ANALYZING"}
                 </span>
-                <span className="text-[10px] font-mono text-mercury ml-auto">{searchResult.recommendation.confidence}% conf</span>
+                <div className="ml-auto flex items-center gap-1.5">
+                  <div className="w-12 h-1.5 bg-gunmetal rounded-full overflow-hidden">
+                    <div className={`h-full rounded-full ${searchResult.recommendation.confidence > 50 ? "bg-neon" : "bg-amber"}`} style={{ width: `${searchResult.recommendation.confidence}%` }} />
+                  </div>
+                  <span className="text-[10px] font-mono text-mercury">{searchResult.recommendation.confidence}%</span>
+                </div>
               </div>
-              {searchResult.recommendation.reasons.slice(0, 3).map((r: string, ri: number) => (
-                <p key={ri} className="text-[11px] text-mercury flex gap-1"><span className="text-electric">{'>'}</span> {r}</p>
+              {searchResult.recommendation.reasons.map((r: string, ri: number) => (
+                <p key={ri} className="text-[11px] text-mercury flex gap-1.5 mb-0.5">
+                  <span className="text-electric font-bold">{'>'}</span> {r}
+                </p>
               ))}
             </div>
           )}

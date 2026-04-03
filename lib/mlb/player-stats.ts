@@ -11,6 +11,8 @@ export interface PlayerSeasonStats {
   teamAbbrev: string;
   position: string;
   gamesPlayed: number;
+  number?: string;
+  photo?: string;
   // Pitcher stats
   era?: number;
   whip?: number;
@@ -61,48 +63,39 @@ export interface PlayerAnalysis {
   };
 }
 
-// Search for a player by name — exact match first, then fuzzy
-export async function searchPlayer(name: string): Promise<{ id: number; fullName: string; team: string; position: string } | null> {
+// Search for a player by name — uses the correct MLB search endpoint
+export async function searchPlayer(name: string): Promise<{ id: number; fullName: string; team: string; position: string; number: string; photo: string } | null> {
   try {
-    const url = `${MLB_API}/sports/1/players?season=${new Date().getFullYear()}&search=${encodeURIComponent(name)}`;
+    // Use the people/search endpoint — actually filters by name
+    const url = `${MLB_API}/people/search?names=${encodeURIComponent(name)}&sportIds=1&active=true`;
     const res = await fetch(url, { next: { revalidate: 3600 } });
     if (!res.ok) return null;
     const data = await res.json();
     const people = data.people ?? [];
     if (people.length === 0) return null;
 
-    // Priority 1: exact full name match (case-insensitive)
-    const nameLower = name.toLowerCase().trim();
-    let player = people.find((p: any) => p.fullName?.toLowerCase() === nameLower);
+    const player = people[0]; // This endpoint actually returns correct matches
+    const teamId = player.currentTeam?.id;
 
-    // Priority 2: last name match
-    if (!player) {
-      const lastName = nameLower.split(" ").pop() ?? "";
-      const firstName = nameLower.split(" ")[0] ?? "";
-      player = people.find((p: any) => {
-        const pLast = p.fullName?.toLowerCase().split(" ").pop() ?? "";
-        const pFirst = p.fullName?.toLowerCase().split(" ")[0] ?? "";
-        return pLast === lastName && pFirst.startsWith(firstName.slice(0, 3));
-      });
+    // Get team name from roster if not directly available
+    let teamName = "Unknown";
+    if (teamId) {
+      try {
+        const teamRes = await fetch(`${MLB_API}/teams/${teamId}`, { next: { revalidate: 86400 } });
+        if (teamRes.ok) {
+          const teamData = await teamRes.json();
+          teamName = teamData.teams?.[0]?.name ?? "Unknown";
+        }
+      } catch {}
     }
-
-    // Priority 3: contains match (both first and last name words appear)
-    if (!player) {
-      const words = nameLower.split(" ").filter(Boolean);
-      player = people.find((p: any) => {
-        const pName = p.fullName?.toLowerCase() ?? "";
-        return words.every((w: string) => pName.includes(w));
-      });
-    }
-
-    // Priority 4: first result (fallback)
-    if (!player) player = people[0];
 
     return {
       id: player.id,
       fullName: player.fullName,
-      team: player.currentTeam?.name ?? "Unknown",
+      team: teamName,
       position: player.primaryPosition?.abbreviation ?? "??",
+      number: player.primaryNumber ?? "",
+      photo: `https://img.mlbstatic.com/mlb-photos/image/upload/d_people:generic:headshot:67:current.png/w_213,q_auto:best/v1/people/${player.id}/headshot/67/current`,
     };
   } catch {
     return null;
@@ -201,6 +194,8 @@ export async function analyzePlayer(
     teamAbbrev: player.team.split(" ").pop()?.slice(0, 3).toUpperCase() ?? "???",
     position: player.position,
     gamesPlayed,
+    number: player.number,
+    photo: player.photo,
   };
 
   if (isPitcher) {
