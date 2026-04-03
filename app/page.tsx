@@ -12,9 +12,11 @@ import PlayerProps from "@/components/dashboard/PlayerProps";
 import BankrollTracker from "@/components/dashboard/BankrollTracker";
 import EVBoard from "@/components/dashboard/EVBoard";
 import LineMovement from "@/components/dashboard/LineMovement";
+import SelectedGameBanner from "@/components/dashboard/SelectedGameBanner";
+import BetSlip from "@/components/dashboard/BetSlip";
 import {
   Diamond, BarChart3, Layers, User, Wallet, Users, RefreshCw,
-  Radio, ChevronLeft, ChevronRight, X,
+  Radio, ChevronLeft, ChevronRight, X, HelpCircle,
 } from "lucide-react";
 
 export default function WarRoom() {
@@ -22,21 +24,36 @@ export default function WarRoom() {
     selectedGameId, activeTab, setActiveTab, sidebarOpen, toggleSidebar,
     games, oddsData, scores, isLoading,
     setGames, setOddsData, setScores, setLoading, lastUpdate,
+    selectGame, snapshotOdds, getLineMovements, hydrate,
   } = useStore();
 
   const [refreshing, setRefreshing] = useState(false);
   const [mobileGamesOpen, setMobileGamesOpen] = useState(false);
+  const [betSlipOpen, setBetSlipOpen] = useState(false);
+  const [betSlipPrefill, setBetSlipPrefill] = useState<any>(null);
+  const [analyses, setAnalyses] = useState<any[]>([]);
+  const [showHelp, setShowHelp] = useState(false);
+
+  // Hydrate persisted state on mount
+  useEffect(() => {
+    hydrate();
+  }, [hydrate]);
 
   const fetchData = useCallback(async () => {
     setRefreshing(true);
     try {
-      const [scoresRes, oddsRes] = await Promise.all([
+      const [scoresRes, oddsRes, analysisRes] = await Promise.all([
         fetch("/api/scores").then((r) => r.json()).catch(() => ({ games: [] })),
         fetch("/api/odds").then((r) => r.json()).catch(() => ({ games: [] })),
+        fetch("/api/analysis").then((r) => r.json()).catch(() => ({ analyses: [] })),
       ]);
 
       setScores(scoresRes.games ?? []);
       setOddsData(oddsRes.games ?? []);
+      setAnalyses(analysisRes.analyses ?? []);
+
+      // Snapshot odds for line movement tracking
+      snapshotOdds(oddsRes.games ?? []);
 
       const merged = (scoresRes.games ?? []).map((score: any) => {
         const odds = (oddsRes.games ?? []).find(
@@ -50,7 +67,7 @@ export default function WarRoom() {
     }
     setLoading(false);
     setRefreshing(false);
-  }, [setScores, setOddsData, setGames, setLoading]);
+  }, [setScores, setOddsData, setGames, setLoading, snapshotOdds]);
 
   useEffect(() => {
     fetchData();
@@ -59,30 +76,53 @@ export default function WarRoom() {
   }, [fetchData]);
 
   const selectedOdds = oddsData.find((g: any) => g.id === selectedGameId);
+  const selectedScore = scores.find((s: any) => s.id === selectedGameId);
+  const selectedAnalysis = analyses.find((a: any) =>
+    selectedScore && (a.homeTeam === selectedScore.homeTeam || a.homeAbbrev === selectedScore.homeAbbrev)
+  );
 
+  // Build quant verdict using real analysis data when available
   const buildVerdict = () => {
     if (!selectedOdds?.evBets?.length) return null;
     const best = selectedOdds.evBets[0];
+
+    // Use engine analysis if available
+    const engineProb = selectedAnalysis?.homeWinProb
+      ? (best.pick.includes(selectedOdds.homeTeam) ? selectedAnalysis.homeWinProb / 100 : selectedAnalysis.awayWinProb / 100)
+      : best.fairProb / 100;
+
+    const engineReasoning = selectedAnalysis?.reasoning?.length > 0
+      ? selectedAnalysis.reasoning
+      : [];
+
+    const defaultReasoning = [
+      "Market odds are mispriced relative to model fair value",
+      `Best available line at ${best.bookmaker}`,
+      `${best.evPercentage.toFixed(1)}% edge — quarter-Kelly sizing applied`,
+    ];
+
     return {
-      winProb: best.fairProb / 100,
+      winProb: engineProb,
       evPercentage: best.evPercentage,
       kellyStake: best.kellyStake,
       confidence: best.confidence,
       pick: best.pick,
       fairOdds: best.fairOdds,
       marketOdds: best.odds,
-      reasoning: best.reasoning?.length > 0
-        ? best.reasoning
-        : [
-          "Market odds are mispriced relative to model fair value",
-          `Best available line at ${best.bookmaker}`,
-          `${best.evPercentage.toFixed(1)}% edge — quarter-Kelly sizing applied`,
-        ],
+      reasoning: [...engineReasoning, ...defaultReasoning].slice(0, 5),
       bookmaker: best.bookmaker,
     };
   };
 
   const allArbs = oddsData.flatMap((g: any) => g.arbitrage ?? []);
+
+  // Get line movements for selected game
+  const lineMovements = selectedGameId ? getLineMovements(selectedGameId) : [];
+
+  const openBetSlip = (prefill?: any) => {
+    setBetSlipPrefill(prefill ?? null);
+    setBetSlipOpen(true);
+  };
 
   const tabs = [
     { key: "dashboard" as const, icon: BarChart3, label: "Board" },
@@ -122,13 +162,11 @@ export default function WarRoom() {
 
   return (
     <div className="min-h-screen bg-void bg-grid">
-      {/* Live Ticker */}
       <LiveTicker />
 
       {/* Header */}
       <header className="border-b border-slate/30 bg-bunker/80 backdrop-blur-lg sticky top-0 z-40">
         <div className="max-w-[1800px] mx-auto px-3 sm:px-4 py-2.5 sm:py-3 flex items-center justify-between">
-          {/* Logo */}
           <div className="flex items-center gap-2 sm:gap-3">
             <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-gradient-to-br from-neon/20 to-electric/20 flex items-center justify-center border border-neon/20 flex-shrink-0">
               <Diamond className="w-4 h-4 sm:w-5 sm:h-5 text-neon" />
@@ -141,7 +179,6 @@ export default function WarRoom() {
             </div>
           </div>
 
-          {/* Desktop Nav Tabs */}
           <nav className="hidden md:flex items-center gap-1">
             {tabs.map((tab) => (
               <button
@@ -159,8 +196,14 @@ export default function WarRoom() {
             ))}
           </nav>
 
-          {/* Status */}
           <div className="flex items-center gap-2 sm:gap-3">
+            <button
+              onClick={() => setShowHelp(!showHelp)}
+              className="p-1.5 sm:p-2 rounded-lg hover:bg-gunmetal/50 transition-colors"
+              title="What do these terms mean?"
+            >
+              <HelpCircle className="w-4 h-4 text-mercury" />
+            </button>
             <button
               onClick={fetchData}
               disabled={refreshing}
@@ -169,18 +212,15 @@ export default function WarRoom() {
             >
               <RefreshCw className={`w-4 h-4 text-mercury ${refreshing ? "animate-spin" : ""}`} />
             </button>
-            <div className="hidden sm:flex items-center gap-2">
-              <div className="flex items-center gap-1.5">
-                <Radio className="w-3 h-3 text-neon" />
-                <span className="text-[10px] text-mercury font-mono">
-                  {lastUpdate ? `Updated ${new Date(lastUpdate).toLocaleTimeString()}` : "Connecting..."}
-                </span>
-              </div>
+            <div className="hidden sm:flex items-center gap-1.5">
+              <Radio className="w-3 h-3 text-neon" />
+              <span className="text-[10px] text-mercury font-mono">
+                {lastUpdate ? `Updated ${new Date(lastUpdate).toLocaleTimeString()}` : "Connecting..."}
+              </span>
             </div>
           </div>
         </div>
 
-        {/* Mobile Bottom Nav — tabs */}
         <div className="md:hidden flex items-center gap-0.5 px-2 pb-2 overflow-x-auto scrollbar-hide">
           {tabs.map((tab) => (
             <button
@@ -199,7 +239,39 @@ export default function WarRoom() {
         </div>
       </header>
 
-      {/* Mobile Games Sheet (slide-over) */}
+      {/* Help Panel */}
+      {showHelp && (
+        <div className="max-w-[1800px] mx-auto px-2 sm:px-4 pt-3">
+          <div className="glass rounded-xl p-4 sm:p-5 animate-slide-up">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-silver">Quick Guide</h3>
+              <button onClick={() => setShowHelp(false)} className="p-1 hover:bg-gunmetal/50 rounded">
+                <X className="w-4 h-4 text-mercury" />
+              </button>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+              <div className="p-3 rounded-lg bg-gunmetal/30">
+                <p className="font-semibold text-neon mb-1">+EV (Positive Expected Value)</p>
+                <p className="text-mercury">A bet where the true probability of winning is higher than what the odds imply. Over time, +EV bets make money.</p>
+              </div>
+              <div className="p-3 rounded-lg bg-gunmetal/30">
+                <p className="font-semibold text-gold mb-1">Kelly Stake</p>
+                <p className="text-mercury">The mathematically optimal bet size based on your edge and bankroll. We use quarter-Kelly (safer) by default.</p>
+              </div>
+              <div className="p-3 rounded-lg bg-gunmetal/30">
+                <p className="font-semibold text-electric mb-1">Arbitrage (Arb)</p>
+                <p className="text-mercury">When odds across different books guarantee profit regardless of outcome. Rare but free money when found.</p>
+              </div>
+              <div className="p-3 rounded-lg bg-gunmetal/30">
+                <p className="font-semibold text-purple mb-1">Fair Odds / Vig</p>
+                <p className="text-mercury">Fair odds = what the line should be without the book's cut. The vig (juice) is the book's profit margin built into the odds.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Mobile Games Sheet */}
       {mobileGamesOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
           <div className="absolute inset-0 bg-black/60" onClick={() => setMobileGamesOpen(false)} />
@@ -212,12 +284,17 @@ export default function WarRoom() {
                 <X className="w-5 h-5 text-mercury" />
               </button>
             </div>
-            <div className="p-3">
-              {renderGameCards()}
-            </div>
+            <div className="p-3">{renderGameCards()}</div>
           </div>
         </div>
       )}
+
+      {/* Bet Slip Modal */}
+      <BetSlip
+        isOpen={betSlipOpen}
+        onClose={() => setBetSlipOpen(false)}
+        prefill={betSlipPrefill}
+      />
 
       {/* Main Content */}
       <main className="max-w-[1800px] mx-auto px-2 sm:px-4 py-3 sm:py-4">
@@ -231,10 +308,8 @@ export default function WarRoom() {
           </div>
         ) : (
           <>
-            {/* Dashboard Tab */}
             {activeTab === "dashboard" && (
               <>
-                {/* Mobile: "View Games" button */}
                 <button
                   onClick={() => setMobileGamesOpen(true)}
                   className="lg:hidden w-full mb-3 flex items-center justify-center gap-2 py-2.5 rounded-xl glass glass-hover text-sm font-medium text-mercury"
@@ -245,7 +320,7 @@ export default function WarRoom() {
                 </button>
 
                 <div className="flex gap-4">
-                  {/* Left Sidebar — Desktop only */}
+                  {/* Left Sidebar — Desktop */}
                   <div className={`hidden lg:block transition-all duration-300 ${sidebarOpen ? "w-80" : "w-12"} flex-shrink-0`}>
                     <div className="sticky top-24">
                       <div className="flex items-center justify-between mb-3">
@@ -270,47 +345,72 @@ export default function WarRoom() {
                   <div className="flex-1 min-w-0 space-y-3 sm:space-y-4">
                     {allArbs.length > 0 && <ArbitrageAlert arbitrage={allArbs} />}
 
+                    {/* Selected Game Banner */}
+                    {selectedGameId && selectedScore && (
+                      <SelectedGameBanner
+                        game={selectedScore}
+                        onDeselect={() => selectGame(null)}
+                      />
+                    )}
+
                     <QuantVerdict
                       game={{
                         homeTeam: selectedOdds?.homeTeam ?? "Select a game",
                         awayTeam: selectedOdds?.awayTeam ?? "",
                       }}
                       analysis={buildVerdict()}
+                      onPlaceBet={selectedOdds ? () => {
+                        const verdict = buildVerdict();
+                        if (verdict) {
+                          openBetSlip({
+                            game: `${selectedOdds.awayTeam} @ ${selectedOdds.homeTeam}`,
+                            pick: verdict.pick,
+                            odds: verdict.marketOdds,
+                            bookmaker: verdict.bookmaker,
+                            market: "moneyline",
+                            evAtPlacement: verdict.evPercentage,
+                          });
+                        }
+                      } : undefined}
                     />
 
                     {selectedGameId && <OddsGrid gameId={selectedGameId} />}
 
-                    <EVBoard />
+                    <EVBoard onPlaceBet={(bet: any) => openBetSlip({
+                      game: bet.game,
+                      pick: bet.pick,
+                      odds: bet.odds,
+                      bookmaker: bet.bookmaker,
+                      market: bet.market,
+                      evAtPlacement: bet.evPercentage,
+                    })} />
 
-                    {/* Mobile: show parlay builder inline below EV board */}
                     <div className="xl:hidden">
                       <ParlayBuilder />
                     </div>
                   </div>
 
-                  {/* Right Sidebar — Desktop XL only */}
+                  {/* Right Sidebar — XL */}
                   <div className="hidden xl:block w-80 flex-shrink-0 space-y-4">
                     <div className="sticky top-24 space-y-4">
                       <ParlayBuilder />
-                      <LineMovement movements={[]} />
+                      <LineMovement movements={lineMovements} />
                     </div>
                   </div>
                 </div>
               </>
             )}
 
-            {/* Parlays Tab */}
             {activeTab === "parlays" && (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 max-w-5xl mx-auto">
                 <ParlayBuilder />
                 <div className="space-y-3 sm:space-y-4">
                   <EVBoard />
-                  <LineMovement movements={[]} />
+                  <LineMovement movements={lineMovements} />
                 </div>
               </div>
             )}
 
-            {/* Props Tab */}
             {activeTab === "props" && (
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4 max-w-6xl mx-auto">
                 <div className="lg:col-span-2">
@@ -322,14 +422,18 @@ export default function WarRoom() {
               </div>
             )}
 
-            {/* Bankroll Tab */}
             {activeTab === "bankroll" && (
-              <div className="max-w-2xl mx-auto">
+              <div className="max-w-2xl mx-auto space-y-4">
                 <BankrollTracker />
+                <button
+                  onClick={() => openBetSlip()}
+                  className="w-full py-3 rounded-xl bg-neon/15 text-neon border border-neon/30 font-semibold text-sm hover:bg-neon/25 transition-colors"
+                >
+                  + Log a Bet
+                </button>
               </div>
             )}
 
-            {/* War Room Tab */}
             {activeTab === "room" && (
               <div className="max-w-4xl mx-auto">
                 <div className="glass rounded-xl p-5 sm:p-8 text-center">
@@ -354,9 +458,7 @@ export default function WarRoom() {
                       </button>
                     </div>
                   </div>
-                  <p className="text-xs text-mercury/50 mt-4">
-                    Powered by Supabase Realtime
-                  </p>
+                  <p className="text-xs text-mercury/50 mt-4">Powered by Supabase Realtime</p>
                 </div>
               </div>
             )}
@@ -364,7 +466,6 @@ export default function WarRoom() {
         )}
       </main>
 
-      {/* Footer */}
       <footer className="border-t border-slate/20 mt-6 sm:mt-8 py-3 sm:py-4 text-center px-4">
         <p className="text-[10px] sm:text-xs text-mercury/40 font-mono">
           Diamond-Quant Live v1.0 — Odds via The Odds API. Stats via MLB Stats API.

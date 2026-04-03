@@ -17,7 +17,6 @@ const PROP_MARKETS = [
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
-  const eventId = searchParams.get("eventId");
   const market = searchParams.get("market") || "pitcher_strikeouts";
   const apiKey = process.env.THE_ODDS_API_KEY;
 
@@ -30,33 +29,57 @@ export async function GET(req: Request) {
   }
 
   try {
-    if (eventId) {
-      const data = await fetchPlayerProps(apiKey, eventId, market);
-      const props = parsePlayerProps(data);
+    // Fetch all MLB events first
+    const games = await fetchMLBOdds(apiKey);
 
-      // Group by player, find best lines
-      const grouped = groupByPlayer(props);
+    // Fetch props for today's games (limit to first 3 to conserve API calls)
+    const todayGames = games
+      .filter((g) => {
+        const gameTime = new Date(g.commence_time);
+        const now = new Date();
+        // Only games within next 12 hours
+        return gameTime.getTime() - now.getTime() < 12 * 60 * 60 * 1000 &&
+               gameTime.getTime() > now.getTime() - 4 * 60 * 60 * 1000;
+      })
+      .slice(0, 4);
 
-      return NextResponse.json({
-        props: grouped,
-        market,
-        eventId,
-      });
+    const allProps: any[] = [];
+
+    for (const game of todayGames) {
+      try {
+        const data = await fetchPlayerProps(apiKey, game.id, market);
+        const props = parsePlayerProps(data);
+        // Tag each prop with the game name
+        for (const prop of props) {
+          prop.team = `${game.away_team} @ ${game.home_team}`;
+        }
+        allProps.push(...props);
+      } catch {
+        // Some games may not have props yet
+      }
     }
 
-    // If no eventId, return list of available events
-    const games = await fetchMLBOdds(apiKey);
+    // Group by player, find best lines
+    const grouped = groupByPlayer(allProps);
+
     return NextResponse.json({
-      events: games.map((g) => ({
+      props: grouped.length > 0 ? grouped : getDemoProps(),
+      markets: PROP_MARKETS,
+      events: todayGames.map((g) => ({
         id: g.id,
         game: `${g.away_team} @ ${g.home_team}`,
         time: g.commence_time,
       })),
-      markets: PROP_MARKETS,
+      demo: grouped.length === 0,
     });
   } catch (error) {
     console.error("Props API error:", error);
-    return NextResponse.json({ error: "Failed to fetch props" }, { status: 500 });
+    return NextResponse.json({
+      props: getDemoProps(),
+      markets: PROP_MARKETS,
+      demo: true,
+      error: "Failed to fetch live props",
+    });
   }
 }
 
@@ -64,24 +87,28 @@ function groupByPlayer(props: ReturnType<typeof parsePlayerProps>) {
   const grouped = new Map<string, typeof props>();
 
   for (const prop of props) {
-    const existing = grouped.get(prop.playerName) || [];
+    const key = `${prop.playerName}-${prop.market}`;
+    const existing = grouped.get(key) || [];
     existing.push(prop);
-    grouped.set(prop.playerName, existing);
+    grouped.set(key, existing);
   }
 
-  return Array.from(grouped.entries()).map(([player, lines]) => {
-    // Find best over and under across books
+  return Array.from(grouped.entries()).map(([_key, lines]) => {
     const bestOver = lines.reduce((best, l) => l.overPrice > best.overPrice ? l : best, lines[0]);
     const bestUnder = lines.reduce((best, l) => l.underPrice > best.underPrice ? l : best, lines[0]);
 
-    // De-vig using best lines for fair probability
     const { prob1: fairOverProb } = devig(bestOver.overPrice, bestUnder.underPrice);
 
     return {
-      playerName: player,
+      playerName: lines[0].playerName,
       line: lines[0].line,
       market: lines[0].market,
-      books: lines,
+      team: lines[0].team,
+      books: lines.map((l) => ({
+        bookmaker: l.bookmaker,
+        overPrice: l.overPrice,
+        underPrice: l.underPrice,
+      })),
       bestOver: { bookmaker: bestOver.bookmaker, price: bestOver.overPrice },
       bestUnder: { bookmaker: bestUnder.bookmaker, price: bestUnder.underPrice },
       fairOverProb: Math.round(fairOverProb * 10000) / 100,
@@ -106,6 +133,7 @@ function getDemoProps() {
     playerName: p.name,
     line: p.line,
     market: p.market,
+    team: p.team,
     books: [
       { bookmaker: "DraftKings", overPrice: -115 + Math.floor(Math.random() * 20), underPrice: -105 + Math.floor(Math.random() * 15) },
       { bookmaker: "FanDuel", overPrice: -120 + Math.floor(Math.random() * 25), underPrice: -100 + Math.floor(Math.random() * 15) },

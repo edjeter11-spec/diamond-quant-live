@@ -19,9 +19,10 @@ interface QuantVerdictProps {
     reasoning: string[];
     bookmaker: string;
   } | null;
+  onPlaceBet?: () => void;
 }
 
-export default function QuantVerdict({ game, analysis }: QuantVerdictProps) {
+export default function QuantVerdict({ game, analysis, onPlaceBet }: QuantVerdictProps) {
   const [showReasoning, setShowReasoning] = useState(false);
 
   if (!analysis) {
@@ -139,6 +140,16 @@ export default function QuantVerdict({ game, analysis }: QuantVerdictProps) {
               </div>
             ))}
           </div>
+        )}
+
+        {/* Place Bet button */}
+        {onPlaceBet && analysis.evPercentage > 0 && (
+          <button
+            onClick={onPlaceBet}
+            className="w-full mt-4 py-2.5 rounded-lg bg-neon/15 border border-neon/30 text-neon font-semibold text-sm hover:bg-neon/25 active:scale-[0.98] transition-all"
+          >
+            Log This Bet
+          </button>
         )}
       </div>
     </div>

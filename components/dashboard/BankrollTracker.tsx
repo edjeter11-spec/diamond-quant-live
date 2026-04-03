@@ -1,11 +1,12 @@
 "use client";
 
 import { useStore } from "@/lib/store";
-import { Wallet, TrendingUp, TrendingDown, Trophy, Target, BarChart3 } from "lucide-react";
+import { Wallet, TrendingUp, TrendingDown, Check, XCircle, Minus } from "lucide-react";
 import { useState } from "react";
+import { americanToDecimal } from "@/lib/model/kelly";
 
 export default function BankrollTracker() {
-  const { bankroll, betHistory, setBankroll } = useStore();
+  const { bankroll, betHistory, setBankroll, settleBet } = useStore();
   const [editingBankroll, setEditingBankroll] = useState(false);
   const [inputValue, setInputValue] = useState(String(bankroll.startingBankroll));
 
@@ -17,12 +18,25 @@ export default function BankrollTracker() {
     }
   };
 
+  const handleSettle = (betId: string, result: "win" | "loss" | "push", odds: number, stake: number) => {
+    let payout = 0;
+    if (result === "win") {
+      payout = stake * americanToDecimal(odds);
+    } else if (result === "push") {
+      payout = stake;
+    }
+    settleBet(betId, result, payout);
+  };
+
   const profitLoss = bankroll.currentBankroll - bankroll.startingBankroll;
   const isProfit = profitLoss >= 0;
 
-  const winRate = bankroll.totalBets > 0
+  const winRate = bankroll.totalBets > 0 && (bankroll.wins + bankroll.losses) > 0
     ? ((bankroll.wins / (bankroll.wins + bankroll.losses)) * 100).toFixed(1)
     : "0.0";
+
+  const pendingBets = betHistory.filter((b) => b.result === "pending");
+  const settledBets = betHistory.filter((b) => b.result !== "pending");
 
   return (
     <div className="glass rounded-xl overflow-hidden">
@@ -99,27 +113,72 @@ export default function BankrollTracker() {
           </div>
         </div>
 
-        {/* Recent Bets */}
-        {betHistory.length > 0 && (
+        {/* Pending Bets — need settling */}
+        {pendingBets.length > 0 && (
           <div>
-            <p className="text-xs text-mercury uppercase tracking-wider mb-2">Recent Bets</p>
-            <div className="space-y-1.5 max-h-40 overflow-y-auto">
-              {betHistory.slice(-5).reverse().map((bet) => (
+            <p className="text-xs text-amber uppercase tracking-wider mb-2 font-semibold">
+              Pending ({pendingBets.length})
+            </p>
+            <div className="space-y-2">
+              {pendingBets.map((bet) => (
+                <div key={bet.id} className="px-3 py-2.5 rounded-lg bg-amber/5 border border-amber/15">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-silver truncate">{bet.pick}</p>
+                      <p className="text-[10px] text-mercury/60">
+                        {bet.game} • {bet.bookmaker} • ${bet.stake} @ {bet.odds > 0 ? "+" : ""}{bet.odds}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => handleSettle(bet.id, "win", bet.odds, bet.stake)}
+                      className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded bg-neon/10 border border-neon/20 text-neon text-[11px] font-semibold hover:bg-neon/20 transition-colors"
+                    >
+                      <Check className="w-3 h-3" /> Win
+                    </button>
+                    <button
+                      onClick={() => handleSettle(bet.id, "loss", bet.odds, bet.stake)}
+                      className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded bg-danger/10 border border-danger/20 text-danger text-[11px] font-semibold hover:bg-danger/20 transition-colors"
+                    >
+                      <XCircle className="w-3 h-3" /> Loss
+                    </button>
+                    <button
+                      onClick={() => handleSettle(bet.id, "push", bet.odds, bet.stake)}
+                      className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded bg-mercury/10 border border-mercury/20 text-mercury text-[11px] font-semibold hover:bg-mercury/15 transition-colors"
+                    >
+                      <Minus className="w-3 h-3" /> Push
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Settled Bets */}
+        {settledBets.length > 0 && (
+          <div>
+            <p className="text-xs text-mercury uppercase tracking-wider mb-2">History ({settledBets.length})</p>
+            <div className="space-y-1.5 max-h-48 overflow-y-auto">
+              {settledBets.slice(-8).reverse().map((bet) => (
                 <div key={bet.id} className="flex items-center justify-between px-2 py-1.5 rounded bg-gunmetal/30">
                   <div className="flex-1 min-w-0">
                     <p className="text-xs text-silver truncate">{bet.pick}</p>
-                    <p className="text-[10px] text-mercury/60">{bet.bookmaker}</p>
+                    <p className="text-[10px] text-mercury/60">{bet.bookmaker} • {bet.odds > 0 ? "+" : ""}{bet.odds}</p>
                   </div>
                   <div className="flex items-center gap-2 ml-2">
                     <span className="text-xs font-mono text-mercury">${bet.stake}</span>
                     <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded ${
                       bet.result === "win" ? "bg-neon/15 text-neon" :
                       bet.result === "loss" ? "bg-danger/15 text-danger" :
-                      bet.result === "push" ? "bg-mercury/15 text-mercury" :
-                      "bg-amber/15 text-amber"
+                      "bg-mercury/15 text-mercury"
                     }`}>
                       {bet.result}
                     </span>
+                    {bet.result === "win" && (
+                      <span className="text-[10px] font-mono text-neon">+${(bet.payout - bet.stake).toFixed(0)}</span>
+                    )}
                   </div>
                 </div>
               ))}

@@ -5,7 +5,7 @@ import { TrendingUp, Star, DollarSign, Shield, ChevronDown } from "lucide-react"
 import { useState } from "react";
 import type { EVBet } from "@/lib/model/types";
 
-export default function EVBoard() {
+export default function EVBoard({ onPlaceBet }: { onPlaceBet?: (bet: any) => void } = {}) {
   const { oddsData, addParlayLeg } = useStore();
   const [showAll, setShowAll] = useState(false);
 
@@ -100,11 +100,15 @@ export default function EVBoard() {
                   </p>
                 </div>
 
-                {/* Kelly — always visible on mobile */}
-                <div className="text-right flex-shrink-0 hidden sm:block sm:opacity-0 sm:group-hover:opacity-100 sm:transition-opacity">
-                  <p className="text-xs text-mercury">Kelly</p>
-                  <p className="text-xs font-mono text-gold">${bet.kellyStake.toFixed(0)}</p>
-                </div>
+                {/* Log bet button */}
+                {onPlaceBet && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onPlaceBet(bet); }}
+                    className="flex-shrink-0 px-2 py-1 rounded text-[10px] font-semibold bg-neon/10 text-neon border border-neon/20 hover:bg-neon/20 transition-colors hidden sm:block"
+                  >
+                    Log
+                  </button>
+                )}
               </button>
             ))}
           </div>

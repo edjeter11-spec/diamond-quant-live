@@ -1,11 +1,52 @@
 // ──────────────────────────────────────────────────────────
-// Global State Management — Zustand
+// Global State Management — Zustand + localStorage persistence
 // ──────────────────────────────────────────────────────────
 
 import { create } from "zustand";
-import type { ParlayLeg, ParlaySlip, BetRecord, BankrollState } from "./model/types";
+import type { ParlayLeg, ParlaySlip, BetRecord, BankrollState, OddsLine } from "./model/types";
 import { buildParlay } from "./model/parlay";
 import { americanToImpliedProb } from "./model/kelly";
+
+// localStorage helpers
+function loadFromStorage<T>(key: string, fallback: T): T {
+  if (typeof window === "undefined") return fallback;
+  try {
+    const stored = localStorage.getItem(key);
+    return stored ? JSON.parse(stored) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function saveToStorage(key: string, value: any) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {}
+}
+
+const DEFAULT_BANKROLL: BankrollState = {
+  startingBankroll: 1000,
+  currentBankroll: 1000,
+  totalBets: 0,
+  wins: 0,
+  losses: 0,
+  pushes: 0,
+  totalStaked: 0,
+  totalReturns: 0,
+  roi: 0,
+  clv: 0,
+  sharpScore: 0,
+  streak: 0,
+  bestBet: null,
+  worstBet: null,
+};
+
+// Odds snapshot for line movement
+interface OddsSnapshot {
+  timestamp: string;
+  lines: Record<string, OddsLine[]>; // gameId -> odds
+}
 
 interface AppState {
   // UI State
@@ -25,9 +66,12 @@ interface AppState {
   currentParlay: ParlaySlip | null;
   savedParlays: ParlaySlip[];
 
-  // Bankroll
+  // Bankroll (persisted)
   bankroll: BankrollState;
   betHistory: BetRecord[];
+
+  // Line Movement
+  oddsSnapshots: OddsSnapshot[];
 
   // Room
   roomId: string | null;
@@ -53,9 +97,16 @@ interface AppState {
   addBet: (bet: Omit<BetRecord, "id" | "timestamp">) => void;
   settleBet: (betId: string, result: BetRecord["result"], payout: number) => void;
 
+  // Line Movement
+  snapshotOdds: (oddsData: any[]) => void;
+  getLineMovements: (gameId: string) => Array<{ bookmaker: string; market: string; oldOdds: number; newOdds: number; movement: number; time: string }>;
+
   // Room Actions
   setRoomId: (id: string | null) => void;
   setRoomUsers: (users: AppState["roomUsers"]) => void;
+
+  // Hydrate persisted state
+  hydrate: () => void;
 }
 
 export const useStore = create<AppState>((set, get) => ({
@@ -74,28 +125,25 @@ export const useStore = create<AppState>((set, get) => ({
   currentParlay: null,
   savedParlays: [],
 
-  // Initial Bankroll
-  bankroll: {
-    startingBankroll: 1000,
-    currentBankroll: 1000,
-    totalBets: 0,
-    wins: 0,
-    losses: 0,
-    pushes: 0,
-    totalStaked: 0,
-    totalReturns: 0,
-    roi: 0,
-    clv: 0,
-    sharpScore: 0,
-    streak: 0,
-    bestBet: null,
-    worstBet: null,
-  },
+  // Initial Bankroll — will be hydrated from localStorage
+  bankroll: DEFAULT_BANKROLL,
   betHistory: [],
+
+  // Line Movement
+  oddsSnapshots: [],
 
   // Initial Room State
   roomId: null,
   roomUsers: [],
+
+  // Hydrate from localStorage on mount
+  hydrate: () => {
+    const bankroll = loadFromStorage("dq_bankroll", DEFAULT_BANKROLL);
+    const betHistory = loadFromStorage<BetRecord[]>("dq_betHistory", []);
+    const savedParlays = loadFromStorage<ParlaySlip[]>("dq_savedParlays", []);
+    const oddsSnapshots = loadFromStorage<OddsSnapshot[]>("dq_oddsSnapshots", []);
+    set({ bankroll, betHistory, savedParlays, oddsSnapshots });
+  },
 
   // UI Actions
   selectGame: (id) => set({ selectedGameId: id }),
@@ -132,59 +180,135 @@ export const useStore = create<AppState>((set, get) => ({
   saveParlay: () => {
     const { currentParlay, savedParlays } = get();
     if (currentParlay) {
-      set({ savedParlays: [...savedParlays, currentParlay], parlayLegs: [], currentParlay: null });
+      const updated = [...savedParlays, currentParlay];
+      saveToStorage("dq_savedParlays", updated);
+      set({ savedParlays: updated, parlayLegs: [], currentParlay: null });
     }
   },
 
-  // Bankroll Actions
-  setBankroll: (amount) =>
-    set((s) => ({
-      bankroll: { ...s.bankroll, startingBankroll: amount, currentBankroll: amount },
-    })),
+  // Bankroll Actions — all persist to localStorage
+  setBankroll: (amount) => {
+    set((s) => {
+      const bankroll = { ...s.bankroll, startingBankroll: amount, currentBankroll: amount };
+      saveToStorage("dq_bankroll", bankroll);
+      return { bankroll };
+    });
+  },
 
   addBet: (bet) => {
     const id = `bet-${Date.now()}`;
     const timestamp = new Date().toISOString();
     const record: BetRecord = { ...bet, id, timestamp };
 
-    set((s) => ({
-      betHistory: [...s.betHistory, record],
-      bankroll: {
+    set((s) => {
+      const betHistory = [...s.betHistory, record];
+      const bankroll = {
         ...s.bankroll,
         totalBets: s.bankroll.totalBets + 1,
         totalStaked: s.bankroll.totalStaked + bet.stake,
         currentBankroll: s.bankroll.currentBankroll - bet.stake,
-      },
-    }));
+      };
+      saveToStorage("dq_bankroll", bankroll);
+      saveToStorage("dq_betHistory", betHistory);
+      return { betHistory, bankroll };
+    });
   },
 
   settleBet: (betId, result, payout) => {
     set((s) => {
-      const history = s.betHistory.map((b) =>
+      const betHistory = s.betHistory.map((b) =>
         b.id === betId ? { ...b, result, payout } : b
       );
 
-      const wins = history.filter((b) => b.result === "win").length;
-      const losses = history.filter((b) => b.result === "loss").length;
-      const pushes = history.filter((b) => b.result === "push").length;
-      const totalReturns = history.reduce((sum, b) => sum + b.payout, 0);
-      const totalStaked = history.reduce((sum, b) => sum + b.stake, 0);
+      const wins = betHistory.filter((b) => b.result === "win").length;
+      const losses = betHistory.filter((b) => b.result === "loss").length;
+      const pushes = betHistory.filter((b) => b.result === "push").length;
+      const totalReturns = betHistory.reduce((sum, b) => sum + b.payout, 0);
+      const totalStaked = betHistory.reduce((sum, b) => sum + b.stake, 0);
       const currentBankroll = s.bankroll.startingBankroll + totalReturns - totalStaked;
       const roi = totalStaked > 0 ? ((totalReturns - totalStaked) / totalStaked) * 100 : 0;
 
-      return {
-        betHistory: history,
-        bankroll: {
-          ...s.bankroll,
-          wins,
-          losses,
-          pushes,
-          totalReturns,
-          currentBankroll,
-          roi,
-        },
+      const bankroll = {
+        ...s.bankroll,
+        wins, losses, pushes, totalReturns, currentBankroll, roi,
       };
+      saveToStorage("dq_bankroll", bankroll);
+      saveToStorage("dq_betHistory", betHistory);
+      return { betHistory, bankroll };
     });
+  },
+
+  // Line Movement — snapshot current odds for comparison
+  snapshotOdds: (oddsData) => {
+    const lines: Record<string, OddsLine[]> = {};
+    for (const game of oddsData) {
+      if (game.id && game.oddsLines) {
+        lines[game.id] = game.oddsLines;
+      }
+    }
+
+    set((s) => {
+      // Keep last 20 snapshots (~ 10 minutes at 30s intervals)
+      const snapshots = [...s.oddsSnapshots, { timestamp: new Date().toISOString(), lines }].slice(-20);
+      saveToStorage("dq_oddsSnapshots", snapshots);
+      return { oddsSnapshots: snapshots };
+    });
+  },
+
+  getLineMovements: (gameId) => {
+    const { oddsSnapshots } = get();
+    if (oddsSnapshots.length < 2) return [];
+
+    const latest = oddsSnapshots[oddsSnapshots.length - 1];
+    // Compare against snapshot from ~5 min ago if available
+    const compareIdx = Math.max(0, oddsSnapshots.length - 10);
+    const previous = oddsSnapshots[compareIdx];
+
+    const currentLines = latest.lines[gameId];
+    const prevLines = previous.lines[gameId];
+    if (!currentLines || !prevLines) return [];
+
+    const movements: Array<{ bookmaker: string; market: string; oldOdds: number; newOdds: number; movement: number; time: string }> = [];
+
+    for (const current of currentLines) {
+      const prev = prevLines.find((p: OddsLine) => p.bookmaker === current.bookmaker);
+      if (!prev) continue;
+
+      // Check ML movement
+      if (current.homeML !== prev.homeML && current.homeML !== 0 && prev.homeML !== 0) {
+        movements.push({
+          bookmaker: current.bookmaker,
+          market: "Home ML",
+          oldOdds: prev.homeML,
+          newOdds: current.homeML,
+          movement: current.homeML - prev.homeML,
+          time: new Date(latest.timestamp).toLocaleTimeString(),
+        });
+      }
+      if (current.awayML !== prev.awayML && current.awayML !== 0 && prev.awayML !== 0) {
+        movements.push({
+          bookmaker: current.bookmaker,
+          market: "Away ML",
+          oldOdds: prev.awayML,
+          newOdds: current.awayML,
+          movement: current.awayML - prev.awayML,
+          time: new Date(latest.timestamp).toLocaleTimeString(),
+        });
+      }
+      // Check total movement
+      if (current.total !== prev.total && current.total > 0 && prev.total > 0) {
+        movements.push({
+          bookmaker: current.bookmaker,
+          market: "Total",
+          oldOdds: prev.total,
+          newOdds: current.total,
+          movement: current.total - prev.total,
+          time: new Date(latest.timestamp).toLocaleTimeString(),
+        });
+      }
+    }
+
+    return movements;
   },
 
   // Room Actions
