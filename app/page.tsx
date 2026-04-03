@@ -20,6 +20,7 @@ import BotChallenge from "@/components/dashboard/BotChallenge";
 import ModelBrain from "@/components/dashboard/ModelBrain";
 import GhostBots from "@/components/dashboard/GhostBots";
 import TrainingPanel from "@/components/dashboard/TrainingPanel";
+import TopPropsOfDay from "@/components/dashboard/TopPropsOfDay";
 import { matchGames } from "@/lib/mlb/match-games";
 import { backupOddsToStorage, getOddsBackup } from "@/lib/odds/cache";
 import { sendDiscordAlert } from "@/lib/odds/sportsbooks";
@@ -553,12 +554,18 @@ export default function WarRoom() {
             )}
 
             {activeTab === "props" && (
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4 max-w-6xl mx-auto">
-                <div className="lg:col-span-2">
-                  <PlayerProps />
-                </div>
-                <div>
-                  <ParlayBuilder />
+              <div className="max-w-6xl mx-auto space-y-4">
+                {/* Top 5 AI Picks — always visible at top */}
+                <TopPropsOfDay />
+
+                {/* Search + browse props below */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
+                  <div className="lg:col-span-2">
+                    <PlayerProps />
+                  </div>
+                  <div>
+                    <ParlayBuilder />
+                  </div>
                 </div>
               </div>
             )}
