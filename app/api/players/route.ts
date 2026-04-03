@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
-import { fetchMLBOdds, fetchPlayerProps, parsePlayerProps } from "@/lib/odds/the-odds-api";
+import { fetchPlayerProps, parsePlayerProps } from "@/lib/odds/the-odds-api";
 import { devig } from "@/lib/model/kelly";
 import { getApiKey } from "@/lib/odds/api-keys";
+import { getCached, setCache, CACHE_TTL } from "@/lib/odds/server-cache";
 
-export const revalidate = 60;
+// Increased revalidate — props don't change as fast as MLs
+export const revalidate = 120;
 
 const PROP_MARKETS = [
   "pitcher_strikeouts",
@@ -19,75 +21,77 @@ const PROP_MARKETS = [
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const market = searchParams.get("market") || "pitcher_strikeouts";
-  const apiKey = getApiKey();
 
+  // Check server cache — keyed by market
+  const cacheKey = `props_${market}`;
+  const cached = getCached(cacheKey, CACHE_TTL.PROPS);
+  if (cached) {
+    return NextResponse.json(cached);
+  }
+
+  const apiKey = getApiKey();
   if (!apiKey) {
-    return NextResponse.json({
-      props: [],
-      markets: PROP_MARKETS,
-      error: "No API keys available",
-    });
+    return NextResponse.json({ props: [], markets: PROP_MARKETS, error: "No API keys available" });
   }
 
   try {
-    // Fetch all MLB events first
-    const games = await fetchMLBOdds(apiKey);
+    // Reuse cached event list from /api/odds instead of fetching again
+    const eventsCacheKey = "mlb_events";
+    let todayGames = getCached(eventsCacheKey, CACHE_TTL.EVENTS);
 
-    // Fetch props for today's games (limit to first 3 to conserve API calls)
-    const todayGames = games
-      .filter((g) => {
-        const gameTime = new Date(g.commence_time);
-        const now = new Date();
-        // Only games within next 12 hours
-        return gameTime.getTime() - now.getTime() < 12 * 60 * 60 * 1000 &&
-               gameTime.getTime() > now.getTime() - 4 * 60 * 60 * 1000;
-      })
-      .slice(0, 4);
+    if (!todayGames) {
+      // Only fetch events if not cached — this is 1 API call
+      const { fetchMLBOdds } = await import("@/lib/odds/the-odds-api");
+      const games = await fetchMLBOdds(apiKey);
+      todayGames = games
+        .filter((g) => {
+          const gameTime = new Date(g.commence_time);
+          const now = new Date();
+          return gameTime.getTime() - now.getTime() < 12 * 60 * 60 * 1000 &&
+                 gameTime.getTime() > now.getTime() - 4 * 60 * 60 * 1000;
+        })
+        .slice(0, 3) // Reduced from 4 to 3 to save calls
+        .map((g) => ({ id: g.id, away_team: g.away_team, home_team: g.home_team }));
+      setCache(eventsCacheKey, todayGames);
+    }
 
     const allProps: any[] = [];
-
+    // Fetch props — each game is 1 API call
     for (const game of todayGames) {
       try {
         const data = await fetchPlayerProps(apiKey, game.id, market);
         const props = parsePlayerProps(data);
-        // Tag each prop with the game name
         for (const prop of props) {
           prop.team = `${game.away_team} @ ${game.home_team}`;
         }
         allProps.push(...props);
       } catch {
-        // Some games may not have props yet
+        // Game may not have props for this market yet
       }
     }
 
-    // Group by player, find best lines
     const grouped = groupByPlayer(allProps);
 
-    return NextResponse.json({
+    const response = {
       props: grouped,
       markets: PROP_MARKETS,
-      events: todayGames.map((g) => ({
-        id: g.id,
-        game: `${g.away_team} @ ${g.home_team}`,
-        time: g.commence_time,
-      })),
-      demo: false,
-      message: grouped.length === 0 ? "No props available yet — books haven't posted lines for this market" : undefined,
-    });
+      events: todayGames.map((g: any) => ({ id: g.id, game: `${g.away_team} @ ${g.home_team}` })),
+      message: grouped.length === 0 ? "No props available yet for this market" : undefined,
+    };
+
+    setCache(cacheKey, response);
+    return NextResponse.json(response);
   } catch (error) {
     console.error("Props API error:", error);
-    return NextResponse.json({
-      props: [],
-      markets: PROP_MARKETS,
-      demo: false,
-      error: "Failed to fetch live props — try again in a moment",
-    });
+    // Return stale cache if available
+    const stale = getCached(cacheKey, CACHE_TTL.PROPS * 5);
+    if (stale) return NextResponse.json(stale);
+    return NextResponse.json({ props: [], markets: PROP_MARKETS, error: "Failed to fetch props" });
   }
 }
 
 function groupByPlayer(props: ReturnType<typeof parsePlayerProps>) {
   const grouped = new Map<string, typeof props>();
-
   for (const prop of props) {
     const key = `${prop.playerName}-${prop.market}`;
     const existing = grouped.get(key) || [];
@@ -98,7 +102,6 @@ function groupByPlayer(props: ReturnType<typeof parsePlayerProps>) {
   return Array.from(grouped.entries()).map(([_key, lines]) => {
     const bestOver = lines.reduce((best, l) => l.overPrice > best.overPrice ? l : best, lines[0]);
     const bestUnder = lines.reduce((best, l) => l.underPrice > best.underPrice ? l : best, lines[0]);
-
     const { prob1: fairOverProb } = devig(bestOver.overPrice, bestUnder.underPrice);
 
     return {
@@ -106,11 +109,7 @@ function groupByPlayer(props: ReturnType<typeof parsePlayerProps>) {
       line: lines[0].line,
       market: lines[0].market,
       team: lines[0].team,
-      books: lines.map((l) => ({
-        bookmaker: l.bookmaker,
-        overPrice: l.overPrice,
-        underPrice: l.underPrice,
-      })),
+      books: lines.map((l) => ({ bookmaker: l.bookmaker, overPrice: l.overPrice, underPrice: l.underPrice })),
       bestOver: { bookmaker: bestOver.bookmaker, price: bestOver.overPrice },
       bestUnder: { bookmaker: bestUnder.bookmaker, price: bestUnder.underPrice },
       fairOverProb: Math.round(fairOverProb * 10000) / 100,
@@ -118,4 +117,3 @@ function groupByPlayer(props: ReturnType<typeof parsePlayerProps>) {
     };
   });
 }
-

@@ -2,21 +2,25 @@ import { NextResponse } from "next/server";
 import { fetchMLBOdds, parseOddsLines, findBestLine } from "@/lib/odds/the-odds-api";
 import { findArbitrage, findEVBets } from "@/lib/odds/arbitrage";
 import { getApiKey, markKeyExhausted, getActiveKeyCount } from "@/lib/odds/api-keys";
+import { getCached, setCache, CACHE_TTL } from "@/lib/odds/server-cache";
 
-export const revalidate = 30;
+// Increased revalidate to reduce calls
+export const revalidate = 60;
+
+const CACHE_KEY = "mlb_odds";
 
 export async function GET() {
-  const apiKey = getApiKey();
-
-  if (!apiKey) {
-    return NextResponse.json({
-      games: [],
-      timestamp: new Date().toISOString(),
-      error: "No API keys configured",
-    });
+  // Check server cache first — avoids hitting API entirely
+  const cached = getCached(CACHE_KEY, CACHE_TTL.ODDS);
+  if (cached) {
+    return NextResponse.json(cached);
   }
 
-  // Try with current key, fall back to next if exhausted
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    return NextResponse.json({ games: [], error: "No API keys configured" });
+  }
+
   for (let attempt = 0; attempt < 3; attempt++) {
     const key = getApiKey();
     if (!key) break;
@@ -24,15 +28,15 @@ export async function GET() {
     try {
       const rawGames = await fetchMLBOdds(key);
 
-      // Check if we got real data (bookmakers present)
       const hasData = rawGames.some((g) => g.bookmakers.length > 0);
       if (!hasData && getActiveKeyCount() > 1) {
         markKeyExhausted(key);
-        continue; // try next key
+        continue;
       }
 
       const games = rawGames.map((game) => {
         const oddsLines = parseOddsLines(game);
+        // Arbitrage + EV computed here — no need for separate /api/arbitrage call
         const arbitrage = findArbitrage(oddsLines, `${game.away_team} @ ${game.home_team}`);
         const evBets = findEVBets(oddsLines, `${game.away_team} @ ${game.home_team}`);
 
@@ -53,19 +57,18 @@ export async function GET() {
         };
       });
 
-      return NextResponse.json({
-        games,
-        timestamp: new Date().toISOString(),
-      });
+      const response = { games, timestamp: new Date().toISOString() };
+      setCache(CACHE_KEY, response);
+      return NextResponse.json(response);
     } catch (error: any) {
-      console.error(`Odds API error (key ${attempt + 1}):`, error.message);
+      console.error(`Odds API error (attempt ${attempt + 1}):`, error.message);
       markKeyExhausted(key);
-      // Try next key
     }
   }
 
-  return NextResponse.json(
-    { error: "All API keys exhausted", games: [] },
-    { status: 503 }
-  );
+  // All keys failed — return cached if any (even stale)
+  const stale = getCached(CACHE_KEY, CACHE_TTL.ODDS * 10);
+  if (stale) return NextResponse.json({ ...stale, stale: true });
+
+  return NextResponse.json({ error: "All API keys exhausted", games: [] }, { status: 503 });
 }

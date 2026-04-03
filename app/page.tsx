@@ -115,7 +115,7 @@ export default function WarRoom() {
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 30000);
+    const interval = setInterval(fetchData, 90000); // 90s — conserves API calls
     return () => clearInterval(interval);
   }, [fetchData]);
 

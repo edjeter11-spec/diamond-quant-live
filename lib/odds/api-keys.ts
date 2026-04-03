@@ -7,6 +7,7 @@ const KEYS = [
   process.env.THE_ODDS_API_KEY,
   process.env.THE_ODDS_API_KEY_2,
   process.env.THE_ODDS_API_KEY_3,
+  process.env.THE_ODDS_API_KEY_4,
 ].filter(Boolean) as string[];
 
 let currentIndex = 0;

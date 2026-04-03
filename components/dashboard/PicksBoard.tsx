@@ -28,6 +28,29 @@ interface Pick {
 export default function PicksBoard() {
   const { oddsData, scores, addParlayLeg } = useStore();
   const [expandedPick, setExpandedPick] = useState<string | null>(null);
+  const [propsData, setPropsData] = useState<Record<string, any[]>>({});
+  const [propsLoading, setPropsLoading] = useState(true);
+
+  // Batch-fetch all 3 prop markets in one go on mount (3 API calls, not per-render)
+  useEffect(() => {
+    let cancelled = false;
+    setPropsLoading(true);
+    Promise.all([
+      fetch("/api/players?market=pitcher_strikeouts").then(r => r.json()).catch(() => ({ props: [] })),
+      fetch("/api/players?market=batter_hits").then(r => r.json()).catch(() => ({ props: [] })),
+      fetch("/api/players?market=batter_home_runs").then(r => r.json()).catch(() => ({ props: [] })),
+    ]).then(([ks, hits, hrs]) => {
+      if (!cancelled) {
+        setPropsData({
+          pitcher_strikeouts: ks.props ?? [],
+          batter_hits: hits.props ?? [],
+          batter_home_runs: hrs.props ?? [],
+        });
+        setPropsLoading(false);
+      }
+    });
+    return () => { cancelled = true; };
+  }, []); // Only on mount — not on every render
 
   // Get set of finished game names to exclude
   const finishedGames = useMemo(() => {
@@ -210,10 +233,10 @@ export default function PicksBoard() {
         </div>
       ))}
 
-      {/* ═══ PROP SECTIONS ═══ */}
-      <PropSection title="STRIKEOUTS" subtitle="Pitcher K props" icon={Flame} iconColor="text-danger" market="pitcher_strikeouts" expandedPick={expandedPick} setExpanded={setExpandedPick} addParlayLeg={addParlayLeg} />
-      <PropSection title="HITS" subtitle="Batter hit props" icon={CircleDot} iconColor="text-neon" market="batter_hits" expandedPick={expandedPick} setExpanded={setExpandedPick} addParlayLeg={addParlayLeg} />
-      <PropSection title="HOME RUNS" subtitle="HR props" icon={Star} iconColor="text-gold" market="batter_home_runs" expandedPick={expandedPick} setExpanded={setExpandedPick} addParlayLeg={addParlayLeg} />
+      {/* ═══ PROP SECTIONS (pre-fetched, no extra API calls) ═══ */}
+      <PropSection title="STRIKEOUTS" subtitle="Pitcher K props" icon={Flame} iconColor="text-danger" props={propsData.pitcher_strikeouts ?? []} loading={propsLoading} expandedPick={expandedPick} setExpanded={setExpandedPick} addParlayLeg={addParlayLeg} />
+      <PropSection title="HITS" subtitle="Batter hit props" icon={CircleDot} iconColor="text-neon" props={propsData.batter_hits ?? []} loading={propsLoading} expandedPick={expandedPick} setExpanded={setExpandedPick} addParlayLeg={addParlayLeg} />
+      <PropSection title="HOME RUNS" subtitle="HR props" icon={Star} iconColor="text-gold" props={propsData.batter_home_runs ?? []} loading={propsLoading} expandedPick={expandedPick} setExpanded={setExpandedPick} addParlayLeg={addParlayLeg} />
 
       {/* No data state */}
       {allEV.length === 0 && (
@@ -292,23 +315,12 @@ function PickCard({ pick, isExpanded, onToggle, onAddToParlay, formatOdds }: {
 }
 
 // ──────────────────────────────────────────────────────────
-function PropSection({ title, subtitle, icon: Icon, iconColor, market, expandedPick, setExpanded, addParlayLeg }: {
-  title: string; subtitle: string; icon: any; iconColor: string; market: string;
+function PropSection({ title, subtitle, icon: Icon, iconColor, props, loading, expandedPick, setExpanded, addParlayLeg }: {
+  title: string; subtitle: string; icon: any; iconColor: string;
+  props: any[]; loading: boolean;
   expandedPick: string | null; setExpanded: (id: string | null) => void; addParlayLeg: any;
 }) {
-  const [props, setProps] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let c = false;
-    setLoading(true);
-    fetch(`/api/players?market=${market}`)
-      .then((r) => r.json())
-      .then((d) => { if (!c) setProps(d.props ?? []); })
-      .catch(() => { if (!c) setProps([]); })
-      .finally(() => { if (!c) setLoading(false); });
-    return () => { c = true; };
-  }, [market]);
+  const market = title.toLowerCase().replace(/\s/g, "_");
 
   const fmt = (o: number) => (o > 0 ? `+${o}` : `${o}`);
 
