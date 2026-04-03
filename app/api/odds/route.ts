@@ -3,6 +3,7 @@ import { fetchMLBOdds, parseOddsLines, findBestLine } from "@/lib/odds/the-odds-
 import { findArbitrage, findEVBets } from "@/lib/odds/arbitrage";
 import { getApiKey, markKeyExhausted, getActiveKeyCount } from "@/lib/odds/api-keys";
 import { getCached, setCache, CACHE_TTL } from "@/lib/odds/server-cache";
+import { filterRealArbs, filterRealEV } from "@/lib/odds/sportsbooks";
 
 // Increased revalidate to reduce calls
 export const revalidate = 60;
@@ -37,8 +38,11 @@ export async function GET() {
       const games = rawGames.map((game) => {
         const oddsLines = parseOddsLines(game);
         // Arbitrage + EV computed here — no need for separate /api/arbitrage call
-        const arbitrage = findArbitrage(oddsLines, `${game.away_team} @ ${game.home_team}`);
-        const evBets = findEVBets(oddsLines, `${game.away_team} @ ${game.home_team}`);
+        const rawArbitrage = findArbitrage(oddsLines, `${game.away_team} @ ${game.home_team}`);
+        const rawEvBets = findEVBets(oddsLines, `${game.away_team} @ ${game.home_team}`);
+        // Filter out dead lines and suspicious edges
+        const arbitrage = filterRealArbs(rawArbitrage);
+        const evBets = filterRealEV(rawEvBets);
 
         return {
           id: game.id,

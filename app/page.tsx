@@ -19,6 +19,8 @@ import ModelTracker from "@/components/dashboard/ModelTracker";
 import BotChallenge from "@/components/dashboard/BotChallenge";
 import { matchGames } from "@/lib/mlb/match-games";
 import { backupOddsToStorage, getOddsBackup } from "@/lib/odds/cache";
+import { sendDiscordAlert } from "@/lib/odds/sportsbooks";
+import { getDiscordWebhook, setDiscordWebhook } from "@/lib/store";
 import {
   Diamond, BarChart3, Layers, User, Wallet, Users, RefreshCw,
   Radio, ChevronLeft, ChevronRight, X, HelpCircle, Volume2, VolumeX, AlertTriangle,
@@ -144,12 +146,43 @@ export default function WarRoom() {
       setArbFlash(true);
       if (soundEnabled) playAlertSound();
       sendNotification("Arbitrage Alert", `${currentArbCount - prevArbCount} new arbitrage opportunity found!`);
+
+      // Discord alert
+      const webhook = getDiscordWebhook();
+      if (webhook) {
+        const arbs = oddsData.flatMap((g: any) => g.arbitrage ?? []);
+        const newest = arbs[0];
+        if (newest) {
+          sendDiscordAlert(webhook, {
+            title: "GOLDEN ARBITRAGE",
+            description: `${newest.game}\n${newest.side1.pick} @ ${newest.side1.bookmaker} vs ${newest.side2.pick} @ ${newest.side2.bookmaker}`,
+            color: 0xffd700,
+            fields: [
+              { name: "Profit", value: `+${newest.profit.toFixed(2)}%`, inline: true },
+              { name: "Stakes", value: `$${newest.stake1.toFixed(0)} / $${newest.stake2.toFixed(0)}`, inline: true },
+            ],
+          });
+        }
+      }
       setTimeout(() => setArbFlash(false), 3000);
     }
-    // Also notify on big +EV picks
-    const bigEV = oddsData.flatMap((g: any) => g.evBets ?? []).filter((b: any) => b.evPercentage > 8);
+
+    // High EV Discord alert
+    const bigEV = oddsData.flatMap((g: any) => g.evBets ?? []).filter((b: any) => b.evPercentage > 6 && !b.isSuspicious);
     if (bigEV.length > 0 && prevArbCount === 0 && !isLoading) {
       sendNotification("High EV Alert", `${bigEV[0].pick} at ${bigEV[0].bookmaker} — +${bigEV[0].evPercentage.toFixed(1)}% edge`);
+      const webhook = getDiscordWebhook();
+      if (webhook) {
+        sendDiscordAlert(webhook, {
+          title: "TOP LOCK ALERT",
+          description: `${bigEV[0].pick}\n${bigEV[0].game} @ ${bigEV[0].bookmaker}`,
+          color: 0x00ff88,
+          fields: [
+            { name: "Odds", value: `${bigEV[0].odds > 0 ? "+" : ""}${bigEV[0].odds}`, inline: true },
+            { name: "EV Edge", value: `+${bigEV[0].evPercentage.toFixed(1)}%`, inline: true },
+          ],
+        });
+      }
     }
     setPrevArbCount(currentArbCount);
   }, [currentArbCount, prevArbCount, soundEnabled, oddsData, isLoading]);
@@ -538,7 +571,7 @@ export default function WarRoom() {
             )}
 
             {activeTab === "room" && (
-              <div className="max-w-4xl mx-auto">
+              <div className="max-w-4xl mx-auto space-y-4">
                 <div className="glass rounded-xl p-5 sm:p-8 text-center">
                   <Users className="w-10 h-10 sm:w-12 sm:h-12 text-electric/30 mx-auto mb-3 sm:mb-4" />
                   <h2 className="text-lg sm:text-xl font-bold text-silver mb-2">War Room</h2>
@@ -563,6 +596,9 @@ export default function WarRoom() {
                   </div>
                   <p className="text-xs text-mercury/50 mt-4">Powered by Supabase Realtime</p>
                 </div>
+
+                {/* Discord Integration */}
+                <DiscordSettings />
               </div>
             )}
           </>
@@ -577,6 +613,60 @@ export default function WarRoom() {
           For entertainment & educational purposes. Gamble responsibly.
         </p>
       </footer>
+    </div>
+  );
+}
+
+// Discord webhook settings component
+function DiscordSettings() {
+  const [webhook, setWebhook] = useState(getDiscordWebhook());
+  const [saved, setSaved] = useState(false);
+  const [testing, setTesting] = useState(false);
+
+  const handleSave = () => {
+    setDiscordWebhook(webhook);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
+
+  const handleTest = async () => {
+    if (!webhook) return;
+    setTesting(true);
+    await sendDiscordAlert(webhook, {
+      title: "Test Alert from Diamond-Quant Live",
+      description: "If you see this, Discord alerts are working!",
+      color: 0x00ff88,
+      fields: [{ name: "Status", value: "Connected", inline: true }],
+    });
+    setTesting(false);
+  };
+
+  return (
+    <div className="glass rounded-xl p-5">
+      <div className="flex items-center gap-2 mb-3">
+        <svg className="w-5 h-5 text-[#5865F2]" viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z"/></svg>
+        <h3 className="text-sm font-semibold text-silver">Discord Alerts</h3>
+      </div>
+      <p className="text-xs text-mercury mb-3">
+        Get arb and +EV alerts sent directly to your Discord server. Create a webhook in your channel settings and paste the URL below.
+      </p>
+      <div className="flex gap-2">
+        <input
+          type="url"
+          value={webhook}
+          onChange={(e) => setWebhook(e.target.value)}
+          placeholder="https://discord.com/api/webhooks/..."
+          className="flex-1 px-3 py-2 bg-gunmetal/50 border border-slate/30 rounded-lg text-sm text-silver placeholder:text-mercury/30 focus:outline-none focus:border-electric/30 font-mono text-xs"
+        />
+        <button onClick={handleSave} className={`px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${saved ? "bg-neon/20 text-neon" : "bg-electric/15 text-electric hover:bg-electric/25"}`}>
+          {saved ? "Saved!" : "Save"}
+        </button>
+        {webhook && (
+          <button onClick={handleTest} disabled={testing} className="px-3 py-2 bg-gunmetal/50 text-mercury text-xs rounded-lg hover:bg-gunmetal/70 transition-colors">
+            {testing ? "..." : "Test"}
+          </button>
+        )}
+      </div>
     </div>
   );
 }

@@ -1,6 +1,8 @@
 "use client";
 
 import { useStore } from "@/lib/store";
+import { getDeepLink } from "@/lib/odds/sportsbooks";
+import { ExternalLink } from "lucide-react";
 
 interface OddsGridProps {
   gameId: string;
@@ -90,7 +92,19 @@ export default function OddsGrid({ gameId }: OddsGridProps) {
             {oddsLines?.map((line: any, idx: number) => (
               <tr key={idx} className="border-b border-slate/10 hover:bg-gunmetal/50 transition-colors">
                 <td className="px-4 py-2.5">
-                  <span className="text-sm font-medium text-silver">{line.bookmaker}</span>
+                  {getDeepLink(line.bookmakerKey || line.bookmaker) ? (
+                    <a
+                      href={getDeepLink(line.bookmakerKey || line.bookmaker)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm font-medium text-silver hover:text-neon transition-colors inline-flex items-center gap-1 group"
+                    >
+                      {line.bookmaker}
+                      <ExternalLink className="w-3 h-3 text-mercury/30 group-hover:text-neon/50" />
+                    </a>
+                  ) : (
+                    <span className="text-sm font-medium text-silver">{line.bookmaker}</span>
+                  )}
                 </td>
                 <td className="px-1 py-1.5 text-center">
                   <button
@@ -220,6 +234,60 @@ export default function OddsGrid({ gameId }: OddsGridProps) {
           </div>
         ))}
       </div>
+
+      {/* Visual Odds Comparison — ML bar chart */}
+      {oddsLines && oddsLines.length >= 2 && (
+        <div className="px-3 sm:px-4 py-3 border-t border-slate/20">
+          <p className="text-[10px] text-mercury uppercase tracking-wider mb-2 font-semibold">ML Comparison Across Books</p>
+          <div className="space-y-1.5">
+            {/* Away ML bars */}
+            <div>
+              <p className="text-[9px] text-mercury/60 mb-1">{awayShort}</p>
+              <div className="flex items-center gap-1">
+                {oddsLines.map((line: any, i: number) => {
+                  const allAway = oddsLines.map((l: any) => l.awayML).filter((o: number) => o !== 0);
+                  const best = Math.max(...allAway);
+                  const worst = Math.min(...allAway);
+                  const range = Math.max(best - worst, 1);
+                  const pct = worst < 0 ? ((line.awayML - worst) / range) * 100 : ((line.awayML - worst) / range) * 100;
+                  const isBest = line.awayML === best;
+                  return (
+                    <div key={i} className="flex-1" title={`${line.bookmaker}: ${formatOdds(line.awayML)}`}>
+                      <div className={`h-5 rounded flex items-center justify-center text-[8px] font-mono font-bold ${
+                        isBest ? "bg-neon/30 text-neon" : "bg-gunmetal/50 text-mercury/70"
+                      }`}>
+                        {formatOdds(line.awayML)}
+                      </div>
+                      <p className="text-[7px] text-mercury/40 text-center mt-0.5 truncate">{line.bookmaker?.split(" ")[0]?.slice(0, 5)}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            {/* Home ML bars */}
+            <div>
+              <p className="text-[9px] text-mercury/60 mb-1">{homeShort}</p>
+              <div className="flex items-center gap-1">
+                {oddsLines.map((line: any, i: number) => {
+                  const allHome = oddsLines.map((l: any) => l.homeML).filter((o: number) => o !== 0);
+                  const best = Math.max(...allHome);
+                  const isBest = line.homeML === best;
+                  return (
+                    <div key={i} className="flex-1" title={`${line.bookmaker}: ${formatOdds(line.homeML)}`}>
+                      <div className={`h-5 rounded flex items-center justify-center text-[8px] font-mono font-bold ${
+                        isBest ? "bg-neon/30 text-neon" : "bg-gunmetal/50 text-mercury/70"
+                      }`}>
+                        {formatOdds(line.homeML)}
+                      </div>
+                      <p className="text-[7px] text-mercury/40 text-center mt-0.5 truncate">{line.bookmaker?.split(" ")[0]?.slice(0, 5)}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

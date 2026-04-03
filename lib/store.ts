@@ -315,3 +315,13 @@ export const useStore = create<AppState>((set, get) => ({
   setRoomId: (id) => set({ roomId: id }),
   setRoomUsers: (users) => set({ roomUsers: users }),
 }));
+
+// Discord webhook URL (persisted separately)
+export function getDiscordWebhook(): string {
+  if (typeof window === "undefined") return "";
+  return localStorage.getItem("dq_discord_webhook") ?? "";
+}
+export function setDiscordWebhook(url: string) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem("dq_discord_webhook", url);
+}
