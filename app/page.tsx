@@ -16,6 +16,7 @@ import SelectedGameBanner from "@/components/dashboard/SelectedGameBanner";
 import BetSlip from "@/components/dashboard/BetSlip";
 import PicksBoard from "@/components/dashboard/PicksBoard";
 import ModelTracker from "@/components/dashboard/ModelTracker";
+import BotChallenge from "@/components/dashboard/BotChallenge";
 import { matchGames } from "@/lib/mlb/match-games";
 import { backupOddsToStorage, getOddsBackup } from "@/lib/odds/cache";
 import {
@@ -204,6 +205,7 @@ export default function WarRoom() {
 
   const tabs = [
     { key: "dashboard" as const, icon: BarChart3, label: "Board" },
+    { key: "bot" as const, icon: Diamond, label: "Bot" },
     { key: "parlays" as const, icon: Layers, label: "Parlays" },
     { key: "props" as const, icon: User, label: "Props" },
     { key: "bankroll" as const, icon: Wallet, label: "Bank" },
@@ -513,6 +515,12 @@ export default function WarRoom() {
                 <div>
                   <ParlayBuilder />
                 </div>
+              </div>
+            )}
+
+            {activeTab === "bot" && (
+              <div className="max-w-3xl mx-auto">
+                <BotChallenge />
               </div>
             )}
 
