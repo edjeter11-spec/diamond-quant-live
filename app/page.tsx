@@ -119,11 +119,11 @@ export default function WarRoom() {
       });
       setGames(merged);
 
-      // Auto-select first live game (or first upcoming) if nothing selected
+      // Auto-select first live or upcoming game — never a final
       if (!selectedGameId && scoreGames.length > 0) {
         const liveGame = scoreGames.find((g: any) => g.status === "live");
         const upcoming = scoreGames.find((g: any) => g.status === "pre");
-        const pick = liveGame ?? upcoming ?? scoreGames[0];
+        const pick = liveGame ?? upcoming;
         if (pick) selectGame(pick.id);
       }
     } catch (e) {
@@ -245,14 +245,17 @@ export default function WarRoom() {
     { key: "room" as const, icon: Users, label: "Room" },
   ];
 
+  // Only show live + upcoming games — never finals
+  const activeGames = scores.filter((g: any) => g.status !== "final");
+
   const renderGameCards = () => (
     <div className="space-y-2">
-      {scores.length === 0 ? (
+      {activeGames.length === 0 ? (
         <div className="glass rounded-xl p-6 text-center">
-          <p className="text-sm text-mercury">No games scheduled today</p>
+          <p className="text-sm text-mercury">No live or upcoming games right now</p>
         </div>
       ) : (
-        scores.map((game: any) => {
+        activeGames.map((game: any) => {
           const odds = oddsData.find(
             (o: any) => o.homeTeam?.includes(game.homeAbbrev) || o.homeTeam === game.homeTeam
           );
@@ -407,7 +410,7 @@ export default function WarRoom() {
           <div className="absolute inset-y-0 left-0 w-[85vw] max-w-sm bg-bunker border-r border-slate/30 overflow-y-auto animate-slide-up">
             <div className="sticky top-0 bg-bunker/95 backdrop-blur-lg px-4 py-3 border-b border-slate/30 flex items-center justify-between z-10">
               <h2 className="text-sm font-semibold text-silver uppercase tracking-wider">
-                Today's Games ({scores.length})
+                Games ({activeGames.length})
               </h2>
               <button onClick={() => setMobileGamesOpen(false)} className="p-1.5 hover:bg-gunmetal/50 rounded-lg">
                 <X className="w-5 h-5 text-mercury" />
@@ -445,7 +448,7 @@ export default function WarRoom() {
                   className="lg:hidden w-full mb-3 flex items-center justify-center gap-2 py-2.5 rounded-xl glass glass-hover text-sm font-medium text-mercury"
                 >
                   <BarChart3 className="w-4 h-4" />
-                  Today's Games ({scores.length})
+                  Games ({activeGames.length})
                   <ChevronRight className="w-4 h-4" />
                 </button>
 
