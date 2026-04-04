@@ -17,7 +17,7 @@ import BetSlip from "@/components/dashboard/BetSlip";
 import PicksBoard from "@/components/dashboard/PicksBoard";
 import ModelTracker from "@/components/dashboard/ModelTracker";
 import BotChallenge from "@/components/dashboard/BotChallenge";
-import ModelBrain from "@/components/dashboard/ModelBrain";
+import ModelLogs from "@/components/dashboard/ModelLogs";
 import GhostBots from "@/components/dashboard/GhostBots";
 import TrainingPanel from "@/components/dashboard/TrainingPanel";
 import TopPropsOfDay from "@/components/dashboard/TopPropsOfDay";
@@ -572,10 +572,9 @@ export default function WarRoom() {
 
             {activeTab === "bot" && (
               <div className="max-w-3xl mx-auto space-y-4">
-                <ModelBrain />
+                <ModelLogs />
                 <BotChallenge />
                 <GhostBots />
-                <TrainingPanel />
               </div>
             )}
 

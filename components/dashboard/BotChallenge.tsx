@@ -11,7 +11,7 @@ import {
   loadBotState, saveBotState, hasTodaysPicks, generateDailyPicks,
   settlePicksFromScores, type BotState, type BotPick,
 } from "@/lib/bot/bot-picks";
-import { loadLearningState, learnFromBet, saveLearningState } from "@/lib/bot/learning";
+import { loadBrain, saveBrain, learnFromGame } from "@/lib/bot/brain";
 
 export default function BotChallenge() {
   const { oddsData, scores } = useStore();
@@ -19,25 +19,34 @@ export default function BotChallenge() {
   const [expandedPick, setExpandedPick] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
 
-  // Auto-settle pending picks + feed results to learning system
+  // Auto-settle pending picks + feed results to the Brain
   useEffect(() => {
     if (scores.length === 0) return;
     const updated = settlePicksFromScores(botState, scores);
     if (updated !== botState) {
-      // Find newly settled picks and feed to learning loop
-      let learningState = loadLearningState();
+      let brain = loadBrain();
       for (const pick of updated.picks) {
         const old = botState.picks.find((p) => p.id === pick.id);
         if (old?.result === "pending" && pick.result !== "pending" && pick.result !== "push") {
-          learningState = learnFromBet(learningState, {
-            market: pick.market,
-            fairProb: pick.fairProb / 100,
-            result: pick.result as "win" | "loss",
-            evAtPlacement: pick.evEdge,
-          });
+          // Find the score for this game
+          const score = scores.find((s: any) =>
+            pick.game.includes(s.homeTeam) || pick.game.includes(s.awayTeam) ||
+            pick.game.includes(s.homeAbbrev) || pick.game.includes(s.awayAbbrev)
+          );
+          if (score) {
+            brain = learnFromGame(brain, {
+              id: pick.id,
+              date: pick.date,
+              gameName: pick.game,
+              homeWon: score.homeScore > score.awayScore,
+              homeScore: score.homeScore,
+              awayScore: score.awayScore,
+              predictedHomeProb: pick.fairProb / 100,
+            });
+          }
         }
       }
-      saveLearningState(learningState);
+      saveBrain(brain);
       setBotState(updated);
     }
   }, [scores]); // eslint-disable-line react-hooks/exhaustive-deps
