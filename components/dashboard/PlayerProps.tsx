@@ -429,7 +429,7 @@ export default function PlayerProps() {
                     </div>
                     <p className="text-[11px] text-mercury/60">
                       {prop.gameTime && (
-                        <span className="text-mercury/80">{new Date(prop.gameTime).toLocaleString("en-US", { hour: "numeric", minute: "2-digit" })} — </span>
+                        <span className="text-mercury/80">{new Date(prop.gameTime!).toLocaleString("en-US", { hour: "numeric", minute: "2-digit" })} — </span>
                       )}
                       {MARKET_LABELS[prop.market] ?? prop.market}
                     </p>

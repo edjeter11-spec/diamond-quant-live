@@ -244,12 +244,12 @@ export default function TopPropsOfDay() {
                     </div>
                     <div className="text-center p-1.5 rounded bg-gunmetal/40">
                       <p className={`text-sm font-bold font-mono ${pick.evEdge > 3 ? "text-neon" : "text-silver"}`}>
-                        +{pick.evEdge.toFixed(1)}%
+                        +{(pick.evEdge ?? 0).toFixed(1)}%
                       </p>
                       <p className="text-[8px] text-mercury uppercase">EV Edge</p>
                     </div>
                     <div className="text-center p-1.5 rounded bg-gunmetal/40">
-                      <p className="text-sm font-bold font-mono text-electric">{pick.fairProb.toFixed(0)}%</p>
+                      <p className="text-sm font-bold font-mono text-electric">{(pick.fairProb ?? 50).toFixed(0)}%</p>
                       <p className="text-[8px] text-mercury uppercase">Fair Prob</p>
                     </div>
                   </div>
@@ -340,19 +340,22 @@ function scoreAndAnalyzeProp(prop: any, market: string): PropAnalysis | null {
   const bestBook = isOver ? prop.bestOver.bookmaker : prop.bestUnder.bookmaker;
   const fairProb = isOver ? overProb : underProb;
 
-  // EV edge
+  // EV edge — with safety for bad odds data
+  if (bestOdds === 0 || !isFinite(bestOdds)) return null;
   const impliedProb = bestOdds > 0 ? 100 / (bestOdds + 100) : Math.abs(bestOdds) / (Math.abs(bestOdds) + 100);
-  const evEdge = ((fairProb - impliedProb) / Math.max(impliedProb, 0.01)) * 100;
+  if (impliedProb <= 0 || impliedProb >= 1 || !isFinite(impliedProb)) return null;
+  const evEdge = ((fairProb - impliedProb) / impliedProb) * 100;
+  if (!isFinite(evEdge)) return null;
 
   // Confidence based on: edge size + number of books + how far from 50/50
   const bookCount = prop.books?.length ?? 1;
   const probDeviation = Math.abs(fairProb - 0.5) * 100;
   const confidence = Math.min(
-    Math.round(evEdge * 3 + probDeviation * 2 + bookCount * 5),
+    Math.max(Math.round(evEdge * 3 + probDeviation * 2 + bookCount * 5), 0),
     90
   );
 
-  if (confidence < 15) return null; // not worth showing
+  if (confidence < 15) return null;
 
   return {
     rank: 0,
