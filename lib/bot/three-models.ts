@@ -406,10 +406,11 @@ export async function analyzeAllGames(oddsData: any[], scores: any[]): Promise<G
   const now = Date.now();
   const analyses: GameAnalysis[] = [];
 
-  // Only analyze future games
+  // Analyze all games passed in (pre-filtered by the API route)
   const futureGames = oddsData.filter(g => {
+    if (!g.commenceTime) return true; // no time = include
     const start = new Date(g.commenceTime).getTime();
-    return start > now - 15 * 60 * 1000;
+    return start > now - 4 * 60 * 60 * 1000; // same 4hr window
   });
 
   for (const game of futureGames.slice(0, 10)) {

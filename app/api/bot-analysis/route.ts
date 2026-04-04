@@ -61,12 +61,15 @@ export async function GET() {
         };
       });
 
+    console.log(`[Bot Analysis] Odds games: ${oddsGames.length}, Scores: ${scores.length}`);
     const analyses = await analyzeAllGames(oddsGames, scores);
+    console.log(`[Bot Analysis] Produced ${analyses.length} analyses`);
 
     const response = {
       analyses,
       timestamp: new Date().toISOString(),
       gamesAnalyzed: analyses.length,
+      debug: { oddsGamesCount: oddsGames.length, scoresCount: scores.length },
       highConfidence: analyses.filter((a: any) => a.consensus.confidence === "HIGH").length,
       disagreements: analyses.filter((a: any) => !a.consensus.modelsAgree).length,
     };
