@@ -95,15 +95,23 @@ export default function PicksBoard() {
     return "pre";
   }, [gameStatusMap]);
 
-  // Collect ALL +EV bets — skip finals, tag live and tomorrow
+  // Collect ALL +EV bets — skip finished games by time, tag live and tomorrow
   const allEV: Pick[] = useMemo(() => {
     const picks: Pick[] = [];
+    const now = Date.now();
+
     for (const game of oddsData) {
       const gameName = game.awayTeam && game.homeTeam
         ? `${game.awayTeam} @ ${game.homeTeam}` : "";
 
+      // HARD FILTER: if the game started more than 4 hours ago, it's done — skip it
+      if (game.commenceTime) {
+        const gameStart = new Date(game.commenceTime).getTime();
+        if (gameStart < now - 4 * 60 * 60 * 1000) continue;
+      }
+
       const status = getGameStatus(gameName, game.commenceTime);
-      if (status === "final") continue; // never show final games
+      if (status === "final") continue;
 
       if ((game.oddsLines?.length ?? 0) < 2) continue;
 
@@ -170,8 +178,8 @@ export default function PicksBoard() {
   const hasPreGames = allEV.some((p) => p.gameStatus === "pre");
   const allTomorrow = allEV.length > 0 && !hasLiveGames && !hasPreGames;
 
-  // Parlay of the day: best uncorrelated ML picks (different games, not finals)
-  const parlayPool = allEV.filter((p) => p.market === "moneyline" && p.evPercentage > 1 && p.gameStatus !== undefined);
+  // Parlay of the day: best uncorrelated ML picks from upcoming/live games
+  const parlayPool = allEV.filter((p) => p.market === "moneyline" && p.evPercentage > 1);
   const parlayLegs: Pick[] = [];
   const parlayGames = new Set<string>();
   for (const p of parlayPool) {
