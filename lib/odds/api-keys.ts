@@ -3,11 +3,13 @@
 // Cycles through multiple keys when one hits quota limit
 // ──────────────────────────────────────────────────────────
 
-// Order keys with most quota first — keys 1,2,3,5 are burned for this month
-// Key 4 has ~196 remaining. Reorder monthly or add new keys at the top.
+// Fresh keys first, burned keys last
 const KEYS = [
-  process.env.THE_ODDS_API_KEY_4,  // ~196 remaining
-  process.env.THE_ODDS_API_KEY_5,  // burned but may reset
+  process.env.THE_ODDS_API_KEY_6,  // 500 fresh
+  process.env.THE_ODDS_API_KEY_7,  // 500 fresh
+  process.env.THE_ODDS_API_KEY_8,  // 500 fresh
+  process.env.THE_ODDS_API_KEY_4,
+  process.env.THE_ODDS_API_KEY_5,
   process.env.THE_ODDS_API_KEY_3,
   process.env.THE_ODDS_API_KEY_2,
   process.env.THE_ODDS_API_KEY,
