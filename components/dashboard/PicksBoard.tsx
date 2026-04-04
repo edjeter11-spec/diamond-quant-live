@@ -36,6 +36,37 @@ export default function PicksBoard() {
   const [expandedPick, setExpandedPick] = useState<string | null>(null);
   const [propsData, setPropsData] = useState<Record<string, any[]>>({});
   const [propsLoading, setPropsLoading] = useState(true);
+  const [modelPicks, setModelPicks] = useState<Pick[]>([]);
+
+  // Fetch 3-model analysis and convert to picks
+  useEffect(() => {
+    fetch("/api/bot-analysis").then(r => r.json()).then(data => {
+      const picks: Pick[] = [];
+      for (const game of data.analyses ?? []) {
+        if (!game.picks?.length) continue;
+        for (const p of game.picks) {
+          picks.push({
+            id: `model-${game.gameId}-${p.pick}`,
+            game: `${game.awayTeam} @ ${game.homeTeam}`,
+            pick: p.pick,
+            market: p.market,
+            odds: p.odds,
+            bookmaker: p.bookmaker,
+            evPercentage: p.evPercentage ?? 0,
+            fairProb: p.fairProb ?? 50,
+            confidence: game.consensus?.confidence === "HIGH" ? "HIGH" : game.consensus?.confidence === "MEDIUM" ? "MEDIUM" : "LOW",
+            kellyStake: p.kellyStake ?? 0,
+            reasoning: p.reasoning ?? [],
+            aiTip: `Pitcher: ${game.pitcherModel?.homeWinProb ? (game.pitcherModel.homeWinProb * 100).toFixed(0) : '?'}% | Market: ${game.marketModel?.homeWinProb ? (game.marketModel.homeWinProb * 100).toFixed(0) : '?'}% | Trend: ${game.trendModel?.homeWinProb ? (game.trendModel.homeWinProb * 100).toFixed(0) : '?'}% → ${game.consensus?.modelsAgree ? 'All agree' : 'Models disagree'}`,
+            history: game.homePitcher ? [`Home: ${game.homePitcher.name} (${game.homePitcher.era} ERA)`, `Away: ${game.awayPitcher?.name ?? 'TBD'} (${game.awayPitcher?.era ?? '?'} ERA)`] : [],
+            commenceTime: game.commenceTime,
+            gameStatus: undefined,
+          });
+        }
+      }
+      setModelPicks(picks);
+    }).catch(() => {});
+  }, []);
 
   // Batch-fetch all prop markets in one go on mount
   useEffect(() => {
@@ -251,7 +282,24 @@ export default function PicksBoard() {
     });
   }, [oddsData, getGameStatus]);
 
-  // Build all sections in one stable useMemo — prevents re-render flicker
+  // Merge 3-model picks with EV picks — model picks are primary
+  const combinedPicks = useMemo(() => {
+    const seen = new Set<string>();
+    const merged: Pick[] = [];
+    // Model picks first (they have real analysis behind them)
+    for (const p of modelPicks) {
+      const key = `${p.game}::${p.pick}`;
+      if (!seen.has(key)) { seen.add(key); merged.push(p); }
+    }
+    // Then EV picks that aren't duplicates
+    for (const p of allEV) {
+      const key = `${p.game}::${p.pick}`;
+      if (!seen.has(key)) { seen.add(key); merged.push(p); }
+    }
+    return merged;
+  }, [modelPicks, allEV]);
+
+  // Build all sections in one stable useMemo
   const { topLocks, longshots, moneylines, runLines, overs, unders } = useMemo(() => {
     const usedIds = new Set<string>();
     function takeUnique(pool: Pick[], count: number, extraFilter?: (p: Pick) => boolean): Pick[] {
@@ -267,22 +315,22 @@ export default function PicksBoard() {
       return result;
     }
     return {
-      topLocks: takeUnique(allEV, 4, (p) => p.confidence === "HIGH" || p.evPercentage > 5),
-      longshots: takeUnique(allEV, 4, (p) => p.odds > 120),
-      moneylines: takeUnique(allEV, 5, (p) => p.market === "moneyline"),
-      runLines: takeUnique(allEV, 5, (p) => p.market === "spread"),
-      overs: takeUnique(allEV, 5, (p) => p.market === "total" && p.pick.toLowerCase().includes("over")),
-      unders: takeUnique(allEV, 5, (p) => p.market === "total" && p.pick.toLowerCase().includes("under")),
+      topLocks: takeUnique(combinedPicks, 4, (p) => p.confidence === "HIGH" || p.confidence === "MEDIUM" || p.evPercentage > 3),
+      longshots: takeUnique(combinedPicks, 4, (p) => p.odds > 120),
+      moneylines: takeUnique(combinedPicks, 5, (p) => p.market === "moneyline"),
+      runLines: takeUnique(combinedPicks, 5, (p) => p.market === "spread"),
+      overs: takeUnique(combinedPicks, 5, (p) => p.market === "total" && p.pick.toLowerCase().includes("over")),
+      unders: takeUnique(combinedPicks, 5, (p) => p.market === "total" && p.pick.toLowerCase().includes("under")),
     };
-  }, [allEV]);
+  }, [combinedPicks]);
 
   // Check if all picks are tomorrow (show banner)
-  const hasLiveGames = allEV.some((p) => p.gameStatus === "live");
-  const hasPreGames = allEV.some((p) => p.gameStatus === "pre");
-  const allTomorrow = allEV.length > 0 && !hasLiveGames && !hasPreGames;
+  const hasLiveGames = combinedPicks.some((p) => p.gameStatus === "live");
+  const hasPreGames = combinedPicks.some((p) => p.gameStatus === "pre");
+  const allTomorrow = combinedPicks.length > 0 && !hasLiveGames && !hasPreGames;
 
-  // Parlay of the day: best uncorrelated ML picks from upcoming/live games
-  const parlayPool = allEV.filter((p) => p.market === "moneyline" && p.evPercentage > 1);
+  // Parlay of the day: best ML picks from 3-model + EV analysis
+  const parlayPool = combinedPicks.filter((p) => p.market === "moneyline" && (p.confidence === "HIGH" || p.confidence === "MEDIUM" || p.evPercentage > 1));
   const parlayLegs: Pick[] = [];
   const parlayGames = new Set<string>();
   for (const p of parlayPool) {
@@ -312,7 +360,7 @@ export default function PicksBoard() {
   return (
     <div className="space-y-3 sm:space-y-4">
       {/* Limited data disclaimer */}
-      {allEV.length > 0 && allEV.filter(p => p.evPercentage > 0).length < 3 && (
+      {combinedPicks.length > 0 && combinedPicks.length < 5 && (
         <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-amber/5 border border-amber/15">
           <AlertTriangle className="w-3.5 h-3.5 text-amber flex-shrink-0 mt-0.5" />
           <div>
@@ -423,7 +471,7 @@ export default function PicksBoard() {
       <PropSection title="PITCHER OUTS" subtitle="Outs recorded — correlated with low-scoring games" icon={Target} iconColor="text-purple" props={propsData.pitcher_outs ?? []} loading={propsLoading} expandedPick={expandedPick} setExpanded={setExpandedPick} addParlayLeg={addParlayLeg} />
 
       {/* No data state */}
-      {allEV.length === 0 && (
+      {combinedPicks.length === 0 && allEV.length === 0 && (
         <div className="glass rounded-xl p-8 text-center">
           <Activity className="w-8 h-8 text-mercury/20 mx-auto mb-3" />
           <p className="text-sm text-mercury">Waiting for odds data...</p>
