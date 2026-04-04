@@ -35,7 +35,14 @@ export async function GET() {
         continue;
       }
 
-      const games = rawGames.map((game) => {
+      // HARD FILTER: remove games that started more than 4 hours ago (yesterday's leftovers)
+      const now = Date.now();
+      const freshGames = rawGames.filter((g) => {
+        const gameStart = new Date(g.commence_time).getTime();
+        return gameStart > now - 4 * 60 * 60 * 1000;
+      });
+
+      const games = freshGames.map((game) => {
         const oddsLines = parseOddsLines(game);
         // Arbitrage + EV computed here — no need for separate /api/arbitrage call
         const rawArbitrage = findArbitrage(oddsLines, `${game.away_team} @ ${game.home_team}`);
