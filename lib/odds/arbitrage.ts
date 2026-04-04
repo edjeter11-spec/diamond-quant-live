@@ -20,6 +20,9 @@ export function findArbitrage(
   gameName: string
 ): ArbitrageOpportunity[] {
   const arbs: ArbitrageOpportunity[] = [];
+  const parts = gameName.split(" @ ");
+  const awayTeam = parts[0] ?? "Away";
+  const homeTeam = parts[1] ?? "Home";
 
   // Check moneyline arbs
   for (let i = 0; i < oddsLines.length; i++) {
@@ -28,7 +31,7 @@ export function findArbitrage(
       checkArb(
         oddsLines[i], oddsLines[j],
         oddsLines[i].homeML, oddsLines[j].awayML,
-        "moneyline", gameName, "Home", "Away",
+        "moneyline", gameName, `${homeTeam} ML`, `${awayTeam} ML`,
         arbs
       );
 
@@ -36,7 +39,7 @@ export function findArbitrage(
       checkArb(
         oddsLines[i], oddsLines[j],
         oddsLines[i].awayML, oddsLines[j].homeML,
-        "moneyline", gameName, "Away", "Home",
+        "moneyline", gameName, `${awayTeam} ML`, `${homeTeam} ML`,
         arbs
       );
 
@@ -111,17 +114,22 @@ export function findEVBets(
   const homeProb = modelProb ?? fairHomeProb;
   const awayProb = 1 - homeProb;
 
+  // Parse team names from gameName ("Away Team @ Home Team")
+  const parts = gameName.split(" @ ");
+  const awayTeam = parts[0] ?? "Away";
+  const homeTeam = parts[1] ?? "Home";
+
   // Check each book for +EV against fair line
   for (const line of oddsLines) {
-    // Home ML
-    checkEV(line, line.homeML, homeProb, "moneyline", "Home ML", gameName, bankroll, evBets);
-    // Away ML
-    checkEV(line, line.awayML, awayProb, "moneyline", "Away ML", gameName, bankroll, evBets);
-    // Over
+    // Home ML — use actual team name
+    checkEV(line, line.homeML, homeProb, "moneyline", `${homeTeam} ML`, gameName, bankroll, evBets);
+    // Away ML — use actual team name
+    checkEV(line, line.awayML, awayProb, "moneyline", `${awayTeam} ML`, gameName, bankroll, evBets);
+    // Over/Under — include game name for clarity
     if (line.total > 0) {
       const { overProb } = getTotalConsensus(oddsLines);
-      checkEV(line, line.overPrice, overProb, "total", `Over ${line.total}`, gameName, bankroll, evBets);
-      checkEV(line, line.underPrice, 1 - overProb, "total", `Under ${line.total}`, gameName, bankroll, evBets);
+      checkEV(line, line.overPrice, overProb, "total", `${awayTeam}/${homeTeam} Over ${line.total}`, gameName, bankroll, evBets);
+      checkEV(line, line.underPrice, 1 - overProb, "total", `${awayTeam}/${homeTeam} Under ${line.total}`, gameName, bankroll, evBets);
     }
   }
 
