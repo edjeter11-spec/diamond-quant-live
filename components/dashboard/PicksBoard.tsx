@@ -127,7 +127,7 @@ export default function PicksBoard() {
             isSuspicious: bet.isSuspicious ?? false,
             warning: bet.warning,
             edgeAge: bet.edgeAge ?? 0,
-            gameStatus: status === "final" ? undefined : status,
+            gameStatus: status as Pick["gameStatus"],
           });
         }
       }
