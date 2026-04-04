@@ -27,7 +27,8 @@ interface Pick {
   commenceTime?: string;
   isSuspicious?: boolean;
   warning?: string;
-  edgeAge?: number; // seconds since first spotted
+  edgeAge?: number;
+  gameStatus?: "live" | "pre" | "tomorrow";
 }
 
 export default function PicksBoard() {
@@ -61,38 +62,49 @@ export default function PicksBoard() {
     return () => { cancelled = true; };
   }, []);
 
-  // Get set of finished game names to exclude
-  const finishedGames = useMemo(() => {
-    const finished = new Set<string>();
+  // Build lookup: team name → game status from scores
+  const gameStatusMap = useMemo(() => {
+    const map = new Map<string, "live" | "pre" | "final">();
     for (const s of scores) {
-      if (s.status === "final") {
-        finished.add(s.homeTeam);
-        finished.add(s.awayTeam);
-        finished.add(s.homeAbbrev);
-        finished.add(s.awayAbbrev);
-      }
+      const status = s.status as "live" | "pre" | "final";
+      map.set(s.homeTeam?.toLowerCase(), status);
+      map.set(s.awayTeam?.toLowerCase(), status);
+      map.set(s.homeAbbrev?.toLowerCase(), status);
+      map.set(s.awayAbbrev?.toLowerCase(), status);
     }
-    return finished;
+    return map;
   }, [scores]);
 
-  const isGameFinished = useCallback((gameName: string) => {
-    if (!gameName) return false;
-    for (const name of finishedGames) {
-      if (gameName.toLowerCase().includes(name.toLowerCase())) return true;
+  const getGameStatus = useCallback((gameName: string, commenceTime?: string): "live" | "pre" | "tomorrow" | "final" => {
+    // Check scores for live/final status
+    const lower = gameName.toLowerCase();
+    for (const [name, status] of gameStatusMap) {
+      if (lower.includes(name)) {
+        if (status === "final") return "final";
+        if (status === "live") return "live";
+      }
     }
-    return false;
-  }, [finishedGames]);
+    // Check commence time for tomorrow
+    if (commenceTime) {
+      const gameDate = new Date(commenceTime);
+      const today = new Date();
+      if (gameDate.getDate() !== today.getDate() || gameDate.getMonth() !== today.getMonth()) {
+        return "tomorrow";
+      }
+    }
+    return "pre";
+  }, [gameStatusMap]);
 
-  // Collect ALL +EV bets, filter out finished games
+  // Collect ALL +EV bets — skip finals, tag live and tomorrow
   const allEV: Pick[] = useMemo(() => {
     const picks: Pick[] = [];
     for (const game of oddsData) {
       const gameName = game.awayTeam && game.homeTeam
-        ? `${game.awayTeam} @ ${game.homeTeam}`
-        : "";
-      if (isGameFinished(gameName)) continue;
+        ? `${game.awayTeam} @ ${game.homeTeam}` : "";
 
-      // Skip games with only 1 bookmaker (not enough data for real EV)
+      const status = getGameStatus(gameName, game.commenceTime);
+      if (status === "final") continue; // never show final games
+
       if ((game.oddsLines?.length ?? 0) < 2) continue;
 
       if (game.evBets) {
@@ -115,12 +127,20 @@ export default function PicksBoard() {
             isSuspicious: bet.isSuspicious ?? false,
             warning: bet.warning,
             edgeAge: bet.edgeAge ?? 0,
+            gameStatus: status === "final" ? undefined : status,
           });
         }
       }
     }
-    return picks.sort((a, b) => b.evPercentage - a.evPercentage);
-  }, [oddsData, isGameFinished]);
+    // Sort: live games first, then pre-game, then tomorrow. Within each: by EV
+    return picks.sort((a, b) => {
+      const statusOrder = { live: 0, pre: 1, tomorrow: 2 };
+      const aOrder = statusOrder[a.gameStatus ?? "pre"] ?? 1;
+      const bOrder = statusOrder[b.gameStatus ?? "pre"] ?? 1;
+      if (aOrder !== bOrder) return aOrder - bOrder;
+      return b.evPercentage - a.evPercentage;
+    });
+  }, [oddsData, getGameStatus]);
 
   // Deduplication: track used game+pick combos so sections don't repeat
   const usedIds = new Set<string>();
@@ -145,8 +165,13 @@ export default function PicksBoard() {
   const overs = takeUnique(allEV, 5, (p) => p.market === "total" && p.pick.toLowerCase().includes("over"));
   const unders = takeUnique(allEV, 5, (p) => p.market === "total" && p.pick.toLowerCase().includes("under"));
 
-  // Parlay of the day: best uncorrelated ML picks (different games)
-  const parlayPool = allEV.filter((p) => p.market === "moneyline" && p.evPercentage > 1 && !isGameFinished(p.game));
+  // Check if all picks are tomorrow (show banner)
+  const hasLiveGames = allEV.some((p) => p.gameStatus === "live");
+  const hasPreGames = allEV.some((p) => p.gameStatus === "pre");
+  const allTomorrow = allEV.length > 0 && !hasLiveGames && !hasPreGames;
+
+  // Parlay of the day: best uncorrelated ML picks (different games, not finals)
+  const parlayPool = allEV.filter((p) => p.market === "moneyline" && p.evPercentage > 1 && p.gameStatus !== undefined);
   const parlayLegs: Pick[] = [];
   const parlayGames = new Set<string>();
   for (const p of parlayPool) {
@@ -175,6 +200,20 @@ export default function PicksBoard() {
 
   return (
     <div className="space-y-3 sm:space-y-4">
+      {/* Day status banner */}
+      {hasLiveGames && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-danger/5 border border-danger/15">
+          <span className="relative flex h-2 w-2"><span className="animate-ping absolute h-full w-full rounded-full bg-danger opacity-75" /><span className="relative rounded-full h-2 w-2 bg-danger" /></span>
+          <span className="text-xs text-danger font-semibold">Live games in progress — odds updating in real time</span>
+        </div>
+      )}
+      {allTomorrow && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-electric/5 border border-electric/15">
+          <Clock className="w-3.5 h-3.5 text-electric" />
+          <span className="text-xs text-electric font-semibold">Today's games are done — showing tomorrow's picks</span>
+        </div>
+      )}
+
       {/* ═══ PARLAY OF THE DAY ═══ */}
       {parlayLegs.length >= 2 && (
         <div className="glass rounded-xl overflow-hidden border border-purple/20">
@@ -284,7 +323,18 @@ function PickCard({ pick, isExpanded, onToggle, onAddToParlay, formatOdds }: {
       <button onClick={onToggle} className="w-full px-3 sm:px-4 py-2.5 flex items-center gap-2 hover:bg-gunmetal/20 active:bg-gunmetal/30 transition-colors text-left">
         <div className={`w-2 h-2 rounded-full flex-shrink-0 ${confDot[pick.confidence] ?? confDot.LOW}`} />
         <div className="flex-1 min-w-0">
-          <p className="text-xs sm:text-sm font-medium text-silver truncate">{pick.pick}</p>
+          <div className="flex items-center gap-1.5">
+            {pick.gameStatus === "live" && (
+              <span className="flex items-center gap-1 px-1 py-0.5 rounded bg-danger/15 flex-shrink-0">
+                <span className="relative flex h-1.5 w-1.5"><span className="animate-ping absolute h-full w-full rounded-full bg-danger opacity-75" /><span className="relative rounded-full h-1.5 w-1.5 bg-danger" /></span>
+                <span className="text-[8px] font-bold text-danger uppercase">Live</span>
+              </span>
+            )}
+            {pick.gameStatus === "tomorrow" && (
+              <span className="px-1 py-0.5 rounded bg-electric/10 text-[8px] font-bold text-electric uppercase flex-shrink-0">Tomorrow</span>
+            )}
+            <p className="text-xs sm:text-sm font-medium text-silver truncate">{pick.pick}</p>
+          </div>
           <p className="text-[9px] sm:text-[10px] text-mercury/60 truncate">
             {pick.commenceTime && (
               <span className="text-mercury/80">
