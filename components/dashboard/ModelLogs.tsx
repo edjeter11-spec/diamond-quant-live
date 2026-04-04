@@ -10,6 +10,7 @@ import {
   loadBrain, saveBrain, preTrainBrain, getBrainSummary,
   type BrainState, type ModelLog,
 } from "@/lib/bot/brain";
+import { deepTrain, type LearnedPatterns } from "@/lib/bot/deep-trainer";
 
 export default function ModelLogs() {
   const [brain, setBrain] = useState<BrainState | null>(null);
@@ -30,25 +31,12 @@ export default function ModelLogs() {
 
   async function autoTrain(b: BrainState) {
     setTraining(true);
-    setTrainProgress("Fetching 2024 season data...");
-
     try {
-      let updated = await preTrainBrain(b, [2024]);
-      setBrain({ ...updated });
-      setTrainProgress("Fetching 2025 season data...");
-
-      updated = await preTrainBrain(updated, [2025]);
-      setBrain({ ...updated });
-      setTrainProgress("Training complete!");
-
-      // Also train on 2026 if we're in 2026
-      if (new Date().getFullYear() >= 2026) {
-        setTrainProgress("Fetching 2026 season data...");
-        updated = await preTrainBrain(updated, [2026]);
-        setBrain({ ...updated });
-      }
-
-      saveBrain(updated);
+      const seasons = new Date().getFullYear() >= 2026 ? [2024, 2025, 2026] : [2024, 2025];
+      const result = await deepTrain(b, seasons, (msg) => setTrainProgress(msg));
+      setBrain(result.finalState);
+      saveBrain(result.finalState);
+      setTrainProgress(`Deep training complete: ${result.gamesProcessed} games, ${result.pitcherGamesAnalyzed} with pitcher matchups`);
     } catch (err) {
       setTrainProgress("Training failed — will retry on next load");
     }
@@ -58,17 +46,14 @@ export default function ModelLogs() {
   async function manualRetrain() {
     if (!brain) return;
     setTraining(true);
-    setTrainProgress("Retraining from scratch...");
-    // Reset seasons so it re-processes
+    setTrainProgress("Deep retraining from scratch...");
     const fresh = { ...brain, trainedSeasons: [], totalGamesProcessed: 0 };
     try {
-      let updated = await preTrainBrain(fresh, [2024, 2025]);
-      if (new Date().getFullYear() >= 2026) {
-        updated = await preTrainBrain(updated, [2026]);
-      }
-      saveBrain(updated);
-      setBrain(updated);
-      setTrainProgress("Retrain complete!");
+      const seasons = new Date().getFullYear() >= 2026 ? [2024, 2025, 2026] : [2024, 2025];
+      const result = await deepTrain(fresh, seasons, (msg) => setTrainProgress(msg));
+      saveBrain(result.finalState);
+      setBrain(result.finalState);
+      setTrainProgress(`Done: ${result.gamesProcessed} games, ${result.pitcherGamesAnalyzed} pitcher matchups analyzed`);
     } catch {
       setTrainProgress("Retrain failed");
     }
