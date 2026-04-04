@@ -5,6 +5,7 @@
 
 // Fresh keys first, burned keys last
 const KEYS = [
+  process.env.THE_ODDS_API_KEY_9,  // 500 fresh
   process.env.THE_ODDS_API_KEY_6,  // 500 fresh
   process.env.THE_ODDS_API_KEY_7,  // 500 fresh
   process.env.THE_ODDS_API_KEY_8,  // 500 fresh
