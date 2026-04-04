@@ -11,20 +11,21 @@ const KEYS = [
   process.env.THE_ODDS_API_KEY_5,
 ].filter(Boolean) as string[];
 
-let currentIndex = 0;
+// Start from the END of the list (newest keys have quota)
+let currentIndex = KEYS.length - 1;
 const exhaustedKeys = new Set<string>();
 
 export function getApiKey(): string | null {
-  // Try keys in order, skip exhausted ones
+  // Try keys from newest to oldest (newest are most likely to have quota)
   for (let i = 0; i < KEYS.length; i++) {
-    const idx = (currentIndex + i) % KEYS.length;
+    const idx = (currentIndex - i + KEYS.length) % KEYS.length;
     const key = KEYS[idx];
     if (!exhaustedKeys.has(key)) {
       return key;
     }
   }
-  // All exhausted — try the first one anyway (might have reset)
-  return KEYS[0] ?? null;
+  // All exhausted — try the last one anyway
+  return KEYS[KEYS.length - 1] ?? null;
 }
 
 export function markKeyExhausted(key: string) {
