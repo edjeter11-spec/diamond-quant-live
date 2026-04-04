@@ -7,7 +7,7 @@ import type { ParlayLeg, ParlaySlip, BetRecord, BankrollState, OddsLine } from "
 import { buildParlay } from "./model/parlay";
 import { americanToImpliedProb } from "./model/kelly";
 
-// localStorage helpers
+// localStorage helpers + cloud sync
 function loadFromStorage<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;
   try {
@@ -22,6 +22,15 @@ function saveToStorage(key: string, value: any) {
   if (typeof window === "undefined") return;
   try {
     localStorage.setItem(key, JSON.stringify(value));
+  } catch {}
+  // Background cloud sync
+  syncToCloud(key, value);
+}
+
+async function syncToCloud(key: string, value: any) {
+  try {
+    const { cloudSet } = await import("@/lib/supabase/client");
+    await cloudSet(key.replace("dq_", ""), value);
   } catch {}
 }
 
@@ -109,6 +118,23 @@ interface AppState {
   hydrate: () => void;
 }
 
+// Cloud hydration helper
+async function hydrateFromCloud(set: any) {
+  try {
+    const { cloudGet } = await import("@/lib/supabase/client");
+    const [bankroll, betHistory, savedParlays] = await Promise.all([
+      cloudGet("bankroll", null),
+      cloudGet("betHistory", null),
+      cloudGet("savedParlays", null),
+    ]);
+    const updates: any = {};
+    if (bankroll) updates.bankroll = bankroll;
+    if (betHistory) updates.betHistory = betHistory;
+    if (savedParlays) updates.savedParlays = savedParlays;
+    if (Object.keys(updates).length > 0) set(updates);
+  } catch {}
+}
+
 export const useStore = create<AppState>((set, get) => ({
   // Initial UI State
   selectedGameId: null,
@@ -138,11 +164,15 @@ export const useStore = create<AppState>((set, get) => ({
 
   // Hydrate from localStorage on mount
   hydrate: () => {
+    // Load from localStorage first (instant)
     const bankroll = loadFromStorage("dq_bankroll", DEFAULT_BANKROLL);
     const betHistory = loadFromStorage<BetRecord[]>("dq_betHistory", []);
     const savedParlays = loadFromStorage<ParlaySlip[]>("dq_savedParlays", []);
     const oddsSnapshots = loadFromStorage<OddsSnapshot[]>("dq_oddsSnapshots", []);
     set({ bankroll, betHistory, savedParlays, oddsSnapshots });
+
+    // Then try cloud (async, may override with newer data)
+    hydrateFromCloud(set);
   },
 
   // UI Actions

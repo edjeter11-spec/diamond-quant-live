@@ -7,7 +7,7 @@ import {
   Eye, AlertTriangle, Terminal,
 } from "lucide-react";
 import {
-  loadBrain, saveBrain, preTrainBrain, getBrainSummary,
+  loadBrain, loadBrainFromCloud, saveBrain, preTrainBrain, getBrainSummary,
   type BrainState, type ModelLog,
 } from "@/lib/bot/brain";
 import { deepTrain, type LearnedPatterns } from "@/lib/bot/deep-trainer";
@@ -20,13 +20,17 @@ export default function ModelLogs() {
   const logsEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const b = loadBrain();
-    setBrain(b);
+    async function init() {
+      // Try cloud first, then localStorage
+      const b = await loadBrainFromCloud();
+      setBrain(b);
 
-    // Auto pre-train if not yet trained
-    if (!b.isPreTrained) {
-      autoTrain(b);
+      // Auto pre-train if not yet trained
+      if (!b.isPreTrained) {
+        autoTrain(b);
+      }
     }
+    init();
   }, []);
 
   async function autoTrain(b: BrainState) {

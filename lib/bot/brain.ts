@@ -104,6 +104,7 @@ function createFreshBrain(): BrainState {
 
 // ── Load / Save ──
 
+// Load: try cloud first, then localStorage, then fresh
 export function loadBrain(): BrainState {
   if (typeof window === "undefined") return createFreshBrain();
   try {
@@ -113,13 +114,41 @@ export function loadBrain(): BrainState {
   return createFreshBrain();
 }
 
-export function saveBrain(brain: BrainState) {
-  if (typeof window === "undefined") return;
+// Async load from cloud (call this on mount for latest data)
+export async function loadBrainFromCloud(): Promise<BrainState> {
   try {
-    // Trim logs and games to prevent localStorage bloat
-    brain.logs = brain.logs.slice(-200);
-    brain.recentGames = brain.recentGames.slice(-100);
-    localStorage.setItem("dq_brain", JSON.stringify(brain));
+    const { cloudGet } = await import("@/lib/supabase/client");
+    const cloud = await cloudGet<BrainState>("brain", createFreshBrain());
+    if (cloud && cloud.epoch > 0) {
+      // Save to localStorage as cache
+      if (typeof window !== "undefined") {
+        try { localStorage.setItem("dq_brain", JSON.stringify(cloud)); } catch {}
+      }
+      return cloud;
+    }
+  } catch {}
+  return loadBrain();
+}
+
+// Save: write to both localStorage and cloud
+export function saveBrain(brain: BrainState) {
+  // Trim to prevent bloat
+  brain.logs = brain.logs.slice(-200);
+  brain.recentGames = brain.recentGames.slice(-100);
+
+  // localStorage (sync, instant)
+  if (typeof window !== "undefined") {
+    try { localStorage.setItem("dq_brain", JSON.stringify(brain)); } catch {}
+  }
+
+  // Cloud (async, background)
+  saveBrainToCloud(brain);
+}
+
+async function saveBrainToCloud(brain: BrainState) {
+  try {
+    const { cloudSet } = await import("@/lib/supabase/client");
+    await cloudSet("brain", brain);
   } catch {}
 }
 
