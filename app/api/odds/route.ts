@@ -35,11 +35,11 @@ export async function GET() {
         continue;
       }
 
-      // HARD FILTER: only games that haven't started yet, or started within 15 min (for live odds)
+      // Filter: future games + games in progress (up to 4hrs for live display)
       const now = Date.now();
       const freshGames = rawGames.filter((g) => {
         const gameStart = new Date(g.commence_time).getTime();
-        return gameStart > now - 15 * 60 * 1000; // only future + just-started
+        return gameStart > now - 4 * 60 * 60 * 1000;
       });
 
       const games = freshGames.map((game) => {

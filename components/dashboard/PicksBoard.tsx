@@ -104,10 +104,10 @@ export default function PicksBoard() {
       const gameName = game.awayTeam && game.homeTeam
         ? `${game.awayTeam} @ ${game.homeTeam}` : "";
 
-      // Skip games that have already started (only show upcoming + just-started)
+      // Skip games that started 4+ hours ago (definitely over)
       if (game.commenceTime) {
         const gameStart = new Date(game.commenceTime).getTime();
-        if (gameStart < now - 15 * 60 * 1000) continue; // 15 min grace for live
+        if (gameStart < now - 4 * 60 * 60 * 1000) continue;
       }
 
       const status = getGameStatus(gameName, game.commenceTime);
@@ -447,7 +447,7 @@ function PickCard({ pick, isExpanded, onToggle, onAddToParlay, formatOdds }: {
             {pick.gameStatus === "live" && (
               <span className="flex items-center gap-1 px-1 py-0.5 rounded bg-danger/15 flex-shrink-0">
                 <span className="relative flex h-1.5 w-1.5"><span className="animate-ping absolute h-full w-full rounded-full bg-danger opacity-75" /><span className="relative rounded-full h-1.5 w-1.5 bg-danger" /></span>
-                <span className="text-[8px] font-bold text-danger uppercase">Live</span>
+                <span className="text-[8px] font-bold text-danger uppercase">Live — Pre-game line</span>
               </span>
             )}
             {pick.gameStatus === "tomorrow" && (
@@ -514,6 +514,14 @@ function PickCard({ pick, isExpanded, onToggle, onAddToParlay, formatOdds }: {
               {pick.history.map((h, i) => <p key={i} className="text-[11px] text-mercury/70 mb-0.5">{h}</p>)}
             </div>
           )}
+          {/* Live game warning */}
+          {pick.gameStatus === "live" && (
+            <div className="flex items-start gap-2 p-2 rounded-lg bg-danger/5 border border-danger/15">
+              <span className="relative flex h-1.5 w-1.5 mt-1 flex-shrink-0"><span className="animate-ping absolute h-full w-full rounded-full bg-danger opacity-75" /><span className="relative rounded-full h-1.5 w-1.5 bg-danger" /></span>
+              <p className="text-[11px] text-danger/90">This game is in progress. Odds shown are from before first pitch — live in-game odds require a paid data feed. Check the sportsbook directly for current lines.</p>
+            </div>
+          )}
+
           {/* Suspicious edge warning */}
           {pick.isSuspicious && (
             <div className="flex items-start gap-2 p-2 rounded-lg bg-amber/5 border border-amber/20">
