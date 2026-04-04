@@ -145,10 +145,26 @@ export default function WarRoom() {
   }, [setScores, setOddsData, setGames, setLoading, snapshotOdds, selectedGameId, selectGame]);
 
   useEffect(() => {
+    // Smart polling: pause 2 AM - 7 AM ET to save API calls
+    function shouldPoll(): boolean {
+      const now = new Date();
+      const etHour = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" })).getHours();
+      return etHour >= 7 || etHour < 2; // Active 7 AM - 2 AM ET
+    }
+
+    // Also poll less frequently when no games are live (every 3 min vs 90s)
+    function getInterval(): number {
+      if (!shouldPoll()) return 300000; // 5 min checks during dead hours (just in case)
+      const hasLive = scores.some((s: any) => s.status === "live");
+      return hasLive ? 60000 : 90000; // 60s during live games, 90s otherwise
+    }
+
     fetchData();
-    const interval = setInterval(fetchData, 90000); // 90s — conserves API calls
+    const interval = setInterval(() => {
+      if (shouldPoll()) fetchData();
+    }, getInterval());
     return () => clearInterval(interval);
-  }, [fetchData]);
+  }, [fetchData, scores]);
 
   // Arb alert: flash + sound when new arbs appear
   const currentArbCount = oddsData.reduce((sum: number, g: any) => sum + (g.arbitrage?.length ?? 0), 0);
