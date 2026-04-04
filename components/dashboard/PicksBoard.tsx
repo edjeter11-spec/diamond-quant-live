@@ -635,8 +635,17 @@ function PropSection({ title, subtitle, icon: Icon, iconColor, props, loading, e
               <div key={i}>
                 <button onClick={() => setExpanded(open ? null : pid)} className="w-full px-3 sm:px-4 py-2.5 flex items-center gap-2 hover:bg-gunmetal/20 text-left">
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs sm:text-sm font-medium text-silver truncate">{p.playerName}</p>
-                    <p className="text-[9px] text-mercury/60 truncate">{p.team}</p>
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-xs sm:text-sm font-medium text-silver truncate">{p.playerName}</p>
+                      {p.team && (
+                        <span className="text-[9px] px-1 py-0.5 rounded bg-gunmetal text-mercury flex-shrink-0">
+                          {p.team.split(" @ ").map((t: string) => t.split(" ").pop()).join(" @ ")}
+                        </span>
+                      )}
+                    </div>
+                    {p.gameTime && (
+                      <p className="text-[8px] text-mercury/50">{new Date(p.gameTime).toLocaleString("en-US", { hour: "numeric", minute: "2-digit" })}</p>
+                    )}
                   </div>
                   <span className="text-sm font-bold font-mono text-electric flex-shrink-0">{p.line}</span>
                   <span className="text-[10px] font-mono text-neon bg-neon/10 px-1 py-0.5 rounded">O{fmt(p.bestOver?.price ?? 0)}</span>
