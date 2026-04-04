@@ -191,7 +191,12 @@ export default function PicksBoard() {
                 <span className="w-4 h-4 rounded-full bg-purple/20 text-purple text-[9px] font-bold flex items-center justify-center flex-shrink-0">{i + 1}</span>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs sm:text-sm font-medium text-silver truncate">{leg.pick}</p>
-                  <p className="text-[9px] text-mercury/60 truncate">{leg.game} • {leg.bookmaker}</p>
+                  <p className="text-[9px] text-mercury/60 truncate">
+                    {leg.commenceTime && (
+                      <span className="text-mercury/80">{new Date(leg.commenceTime).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} — </span>
+                    )}
+                    {leg.game} • {leg.bookmaker}
+                  </p>
                 </div>
                 <div className="text-right flex-shrink-0">
                   <p className="text-xs font-mono font-semibold text-silver">{formatOdds(leg.odds)}</p>
@@ -280,7 +285,15 @@ function PickCard({ pick, isExpanded, onToggle, onAddToParlay, formatOdds }: {
         <div className={`w-2 h-2 rounded-full flex-shrink-0 ${confDot[pick.confidence] ?? confDot.LOW}`} />
         <div className="flex-1 min-w-0">
           <p className="text-xs sm:text-sm font-medium text-silver truncate">{pick.pick}</p>
-          <p className="text-[9px] sm:text-[10px] text-mercury/60 truncate">{pick.game} • {pick.bookmaker}</p>
+          <p className="text-[9px] sm:text-[10px] text-mercury/60 truncate">
+            {pick.commenceTime && (
+              <span className="text-mercury/80">
+                {new Date(pick.commenceTime).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                {" — "}
+              </span>
+            )}
+            {pick.game} • {pick.bookmaker}
+          </p>
         </div>
         <div className="text-right flex-shrink-0">
           <p className="text-xs sm:text-sm font-mono font-bold text-silver">{formatOdds(pick.odds)}</p>
