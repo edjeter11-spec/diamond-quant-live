@@ -254,15 +254,11 @@ export default function ModelLogs() {
             ))}
           </div>
 
-          {/* Retrain button */}
-          <button
-            onClick={manualRetrain}
-            disabled={training}
-            className="w-full mt-2 py-2 rounded-lg bg-purple/10 border border-purple/20 text-purple text-xs font-semibold hover:bg-purple/20 transition-all disabled:opacity-50 flex items-center justify-center gap-1.5"
-          >
-            {training ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Database className="w-3 h-3" />}
-            {training ? "Retraining..." : "Retrain from Scratch (2024+2025+2026)"}
-          </button>
+          {/* Auto-training status */}
+          <div className="mt-2 px-3 py-2 rounded-lg bg-gunmetal/20 flex items-center gap-2">
+            <CheckCircle className="w-3 h-3 text-neon flex-shrink-0" />
+            <p className="text-[10px] text-mercury">Model auto-trains on historical data and learns from every settled game. No manual intervention needed.</p>
+          </div>
         </div>
       )}
     </div>
