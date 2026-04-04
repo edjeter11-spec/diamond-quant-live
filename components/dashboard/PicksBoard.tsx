@@ -251,28 +251,30 @@ export default function PicksBoard() {
     });
   }, [oddsData, getGameStatus]);
 
-  // Deduplication: track used game+pick combos so sections don't repeat
-  const usedIds = new Set<string>();
-  function takeUnique(pool: Pick[], count: number, extraFilter?: (p: Pick) => boolean): Pick[] {
-    const result: Pick[] = [];
-    for (const p of pool) {
-      const key = `${p.game}::${p.pick}`;
-      if (usedIds.has(key)) continue;
-      if (extraFilter && !extraFilter(p)) continue;
-      usedIds.add(key);
-      result.push(p);
-      if (result.length >= count) break;
+  // Build all sections in one stable useMemo — prevents re-render flicker
+  const { topLocks, longshots, moneylines, runLines, overs, unders } = useMemo(() => {
+    const usedIds = new Set<string>();
+    function takeUnique(pool: Pick[], count: number, extraFilter?: (p: Pick) => boolean): Pick[] {
+      const result: Pick[] = [];
+      for (const p of pool) {
+        const key = `${p.game}::${p.pick}`;
+        if (usedIds.has(key)) continue;
+        if (extraFilter && !extraFilter(p)) continue;
+        usedIds.add(key);
+        result.push(p);
+        if (result.length >= count) break;
+      }
+      return result;
     }
-    return result;
-  }
-
-  // Build sections with unique picks — each pick only appears ONCE across all sections
-  const topLocks = takeUnique(allEV, 4, (p) => p.confidence === "HIGH" || p.evPercentage > 5);
-  const longshots = takeUnique(allEV, 4, (p) => p.odds > 120);
-  const moneylines = takeUnique(allEV, 5, (p) => p.market === "moneyline");
-  const runLines = takeUnique(allEV, 5, (p) => p.market === "spread");
-  const overs = takeUnique(allEV, 5, (p) => p.market === "total" && p.pick.toLowerCase().includes("over"));
-  const unders = takeUnique(allEV, 5, (p) => p.market === "total" && p.pick.toLowerCase().includes("under"));
+    return {
+      topLocks: takeUnique(allEV, 4, (p) => p.confidence === "HIGH" || p.evPercentage > 5),
+      longshots: takeUnique(allEV, 4, (p) => p.odds > 120),
+      moneylines: takeUnique(allEV, 5, (p) => p.market === "moneyline"),
+      runLines: takeUnique(allEV, 5, (p) => p.market === "spread"),
+      overs: takeUnique(allEV, 5, (p) => p.market === "total" && p.pick.toLowerCase().includes("over")),
+      unders: takeUnique(allEV, 5, (p) => p.market === "total" && p.pick.toLowerCase().includes("under")),
+    };
+  }, [allEV]);
 
   // Check if all picks are tomorrow (show banner)
   const hasLiveGames = allEV.some((p) => p.gameStatus === "live");

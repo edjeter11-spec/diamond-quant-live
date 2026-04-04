@@ -54,9 +54,13 @@ export default function TopPropsOfDay() {
   const [loading, setLoading] = useState(true);
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
 
+  const [hasLoaded, setHasLoaded] = useState(false);
+
   useEffect(() => {
-    buildTopProps();
-  }, [oddsData]);
+    if (!hasLoaded) {
+      buildTopProps();
+    }
+  }, []); // Only run ONCE on mount, not on every oddsData change
 
   async function buildTopProps() {
     setLoading(true);
@@ -131,9 +135,11 @@ export default function TopPropsOfDay() {
       console.error("Top props error:", err);
     }
     setLoading(false);
+    setHasLoaded(true);
   }
 
-  if (loading) {
+  // Only show loading spinner on first load, not on refreshes
+  if (loading && topProps.length === 0 && !hasLoaded) {
     return (
       <div className="glass rounded-xl p-6 text-center">
         <RefreshCw className="w-5 h-5 text-gold/30 animate-spin mx-auto mb-2" />
@@ -142,7 +148,8 @@ export default function TopPropsOfDay() {
     );
   }
 
-  if (topProps.length === 0) {
+  // Only show empty state after we've actually tried loading
+  if (topProps.length === 0 && hasLoaded) {
     return (
       <div className="glass rounded-xl p-6 text-center">
         <Trophy className="w-6 h-6 text-mercury/20 mx-auto mb-2" />
@@ -151,6 +158,8 @@ export default function TopPropsOfDay() {
       </div>
     );
   }
+
+  if (topProps.length === 0) return null; // Still loading first time, show nothing
 
   const formatOdds = (odds: number) => (odds > 0 ? `+${odds}` : `${odds}`);
 
