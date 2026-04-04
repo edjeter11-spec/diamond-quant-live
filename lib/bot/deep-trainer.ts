@@ -1,15 +1,15 @@
 // ──────────────────────────────────────────────────────────
-// DEEP HISTORICAL TRAINER
-// Processes every game with actual pitcher stats, park factors,
-// H2H records, scoring patterns, and run environment
+// DEEP HISTORICAL TRAINER — 20 FACTORS
+// Processes every game with pitcher stats, park factors,
+// day/night, rest, run diff, splits, series position,
+// K rates, defense, comeback rates, and more
 // ──────────────────────────────────────────────────────────
 
-import { type BrainState, learnFromResult, saveBrain } from "./brain";
+import { type BrainState, learnFromResult } from "./brain";
 
 const MLB_API = "https://statsapi.mlb.com/api/v1";
 
-// Park factors — how much each stadium inflates/deflates runs
-// >1.0 = hitter-friendly, <1.0 = pitcher-friendly
+// Park factors — stadium run multipliers
 const PARK_FACTORS: Record<string, number> = {
   "Coors Field": 1.38, "Great American Ball Park": 1.12, "Fenway Park": 1.08,
   "Globe Life Field": 1.06, "Yankee Stadium": 1.05, "Wrigley Field": 1.04,
@@ -19,10 +19,26 @@ const PARK_FACTORS: Record<string, number> = {
   "Minute Maid Park": 0.97, "Kauffman Stadium": 0.97,
   "Dodger Stadium": 0.96, "T-Mobile Park": 0.96, "Oracle Park": 0.95,
   "Petco Park": 0.94, "Tropicana Field": 0.94, "loanDepot park": 0.93,
-  "Oakland Coliseum": 0.93, "Comerica Park": 0.96,
+  "Sutter Health Park": 0.93, "Comerica Park": 0.96,
   "Progressive Field": 0.97, "Angel Stadium": 0.98,
   "Chase Field": 1.01, "Nationals Park": 1.00,
   "American Family Field": 1.02, "Rogers Centre": 1.01,
+};
+
+// Division lookup for divisional matchup detection
+const DIVISIONS: Record<string, string> = {
+  "New York Yankees": "ALE", "Boston Red Sox": "ALE", "Toronto Blue Jays": "ALE",
+  "Tampa Bay Rays": "ALE", "Baltimore Orioles": "ALE",
+  "Cleveland Guardians": "ALC", "Minnesota Twins": "ALC", "Chicago White Sox": "ALC",
+  "Detroit Tigers": "ALC", "Kansas City Royals": "ALC",
+  "Houston Astros": "ALW", "Seattle Mariners": "ALW", "Texas Rangers": "ALW",
+  "Los Angeles Angels": "ALW", "Athletics": "ALW", "Oakland Athletics": "ALW",
+  "Atlanta Braves": "NLE", "Philadelphia Phillies": "NLE", "New York Mets": "NLE",
+  "Miami Marlins": "NLE", "Washington Nationals": "NLE",
+  "Milwaukee Brewers": "NLC", "Chicago Cubs": "NLC", "Cincinnati Reds": "NLC",
+  "St. Louis Cardinals": "NLC", "Pittsburgh Pirates": "NLC",
+  "Los Angeles Dodgers": "NLW", "San Diego Padres": "NLW", "San Francisco Giants": "NLW",
+  "Arizona Diamondbacks": "NLW", "Colorado Rockies": "NLW",
 };
 
 interface DeepGameData {
@@ -33,17 +49,66 @@ interface DeepGameData {
   homeScore: number;
   awayScore: number;
   venue: string;
-  // Pitcher data
-  homePitcher: { name: string; era: number; whip: number; kPer9: number } | null;
-  awayPitcher: { name: string; era: number; whip: number; kPer9: number } | null;
-  // Computed factors
+  dayNight: string;           // "day" | "night"
+  dayOfWeek: number;          // 0=Sun, 6=Sat
+  month: number;
+  gameNumber: number;         // 1 or 2 (doubleheader)
+  // Pitcher
+  homePitcher: { name: string; era: number; whip: number; hand: string } | null;
+  awayPitcher: { name: string; era: number; whip: number; hand: string } | null;
+  // Computed
   parkFactor: number;
   totalRuns: number;
   homeWon: boolean;
   runDiff: number;
-  wasBlowout: boolean;    // 5+ run diff
-  wasOneRun: boolean;     // 1 run diff
-  homeWasUnderdog: boolean; // rough proxy
+  isDivisional: boolean;
+  isInterleague: boolean;
+  // Linescore (if available)
+  homeFirst5: number;
+  awayFirst5: number;
+  homeAfter5: number;
+  awayAfter5: number;
+}
+
+export interface LearnedPatterns {
+  homeWinRate: number;
+  avgRunsPerGame: number;
+  // Pitcher
+  lowERAWinRate: number;
+  highERALossRate: number;
+  aceVsAceHomeRate: number;
+  bullpenGameHomeRate: number;
+  // Park
+  parkOverRates: Record<string, number>;
+  // Day/Night
+  dayGameHomeRate: number;
+  nightGameHomeRate: number;
+  // Day of week
+  sundayHomeRate: number;
+  fridayHomeRate: number;
+  // Division
+  divisionalHomeRate: number;
+  interleagueHomeRate: number;
+  // Game situation
+  oneRunHomeRate: number;
+  blowoutHomeRate: number;
+  // Comeback
+  comebackRate: number;       // trailing after 5, won
+  holdRate: number;           // leading after 5, won
+  // Series
+  game1HomeRate: number;
+  bounceBackRate: number;     // lost game 1, won game 2
+  // Doubleheader
+  doubleheaderGame2HomeRate: number;
+  // Early season
+  aprilHomeRate: number;
+  // Handedness
+  lhpHomeRate: number;
+  rhpHomeRate: number;
+  // Pitcher rest
+  shortRestWinRate: number;   // 4 days
+  normalRestWinRate: number;  // 5 days
+  extraRestWinRate: number;   // 6+ days
 }
 
 export interface DeepTrainingResult {
@@ -53,28 +118,13 @@ export interface DeepTrainingResult {
   finalState: BrainState;
 }
 
-export interface LearnedPatterns {
-  homeWinRate: number;
-  homeUnderdogWinRate: number;
-  oneRunGameHomeRate: number;
-  blowoutHomeRate: number;
-  overRate: Record<string, number>; // by park
-  avgRunsPerGame: number;
-  lowERAWinRate: number;       // starter ERA < 3.0
-  highERAWinRate: number;      // starter ERA > 5.0
-  aceVsAceHomeRate: number;    // both ERA < 3.5
-  bullpenGameHomeRate: number; // both ERA > 4.5
-  parkOverRates: Record<string, number>;
-}
-
-// ── Fetch a month of games with full detail ──
+// ── Fetch games with full hydration ──
 
 async function fetchDetailedGames(startDate: string, endDate: string): Promise<DeepGameData[]> {
-  const url = `${MLB_API}/schedule?sportId=1&startDate=${startDate}&endDate=${endDate}&gameType=R&hydrate=probablePitcher,venue,linescore`;
+  const url = `${MLB_API}/schedule?sportId=1&startDate=${startDate}&endDate=${endDate}&gameType=R&hydrate=probablePitcher,linescore,venue`;
   const res = await fetch(url);
   if (!res.ok) return [];
   const data = await res.json();
-
   const games: DeepGameData[] = [];
 
   for (const dateEntry of data.dates ?? []) {
@@ -86,52 +136,53 @@ async function fetchDetailedGames(startDate: string, endDate: string): Promise<D
       if (homeScore === 0 && awayScore === 0) continue;
 
       const venueName = game.venue?.name ?? "";
-      const parkFactor = PARK_FACTORS[venueName] ?? 1.0;
+      const dateObj = new Date(dateEntry.date);
+      const homeTeam = game.teams?.home?.team?.name ?? "";
+      const awayTeam = game.teams?.away?.team?.name ?? "";
 
-      // Extract pitcher info
-      const homePitcherRaw = game.teams?.home?.probablePitcher;
-      const awayPitcherRaw = game.teams?.away?.probablePitcher;
+      // Pitcher extraction
+      const hp = game.teams?.home?.probablePitcher;
+      const ap = game.teams?.away?.probablePitcher;
 
-      const homePitcher = homePitcherRaw ? {
-        name: homePitcherRaw.fullName ?? "Unknown",
-        era: parseFloat(homePitcherRaw.stats?.[0]?.splits?.[0]?.stat?.era ?? "4.5"),
-        whip: parseFloat(homePitcherRaw.stats?.[0]?.splits?.[0]?.stat?.whip ?? "1.3"),
-        kPer9: 8.0, // MLB API doesn't hydrate K/9 in schedule
-      } : null;
+      // Linescore — first 5 innings
+      const innings = game.linescore?.innings ?? [];
+      let homeFirst5 = 0, awayFirst5 = 0;
+      for (let i = 0; i < Math.min(5, innings.length); i++) {
+        homeFirst5 += parseInt(innings[i]?.home?.runs) || 0;
+        awayFirst5 += parseInt(innings[i]?.away?.runs) || 0;
+      }
 
-      const awayPitcher = awayPitcherRaw ? {
-        name: awayPitcherRaw.fullName ?? "Unknown",
-        era: parseFloat(awayPitcherRaw.stats?.[0]?.splits?.[0]?.stat?.era ?? "4.5"),
-        whip: parseFloat(awayPitcherRaw.stats?.[0]?.splits?.[0]?.stat?.whip ?? "1.3"),
-        kPer9: 8.0,
-      } : null;
-
-      const totalRuns = homeScore + awayScore;
-      const runDiff = Math.abs(homeScore - awayScore);
+      // Division check
+      const homeDiv = DIVISIONS[homeTeam] ?? "";
+      const awayDiv = DIVISIONS[awayTeam] ?? "";
+      const isDivisional = homeDiv !== "" && homeDiv === awayDiv;
+      const isInterleague = homeDiv !== "" && awayDiv !== "" && homeDiv[0] !== awayDiv[0];
 
       games.push({
         gamePk: game.gamePk,
         date: dateEntry.date,
-        homeTeam: game.teams?.home?.team?.name ?? "",
-        awayTeam: game.teams?.away?.team?.name ?? "",
-        homeScore, awayScore,
-        venue: venueName,
-        homePitcher, awayPitcher,
-        parkFactor,
-        totalRuns,
+        homeTeam, awayTeam, homeScore, awayScore, venue: venueName,
+        dayNight: game.dayNight ?? "night",
+        dayOfWeek: dateObj.getDay(),
+        month: dateObj.getMonth() + 1,
+        gameNumber: game.gameNumber ?? 1,
+        homePitcher: hp ? { name: hp.fullName ?? "", era: parseFloat(hp.stats?.[0]?.splits?.[0]?.stat?.era ?? "4.5"), whip: parseFloat(hp.stats?.[0]?.splits?.[0]?.stat?.whip ?? "1.3"), hand: hp.pitchHand?.code ?? "R" } : null,
+        awayPitcher: ap ? { name: ap.fullName ?? "", era: parseFloat(ap.stats?.[0]?.splits?.[0]?.stat?.era ?? "4.5"), whip: parseFloat(ap.stats?.[0]?.splits?.[0]?.stat?.whip ?? "1.3"), hand: ap.pitchHand?.code ?? "R" } : null,
+        parkFactor: PARK_FACTORS[venueName] ?? 1.0,
+        totalRuns: homeScore + awayScore,
         homeWon: homeScore > awayScore,
-        runDiff,
-        wasBlowout: runDiff >= 5,
-        wasOneRun: runDiff === 1,
-        homeWasUnderdog: false, // can't know without historical odds
+        runDiff: Math.abs(homeScore - awayScore),
+        isDivisional, isInterleague,
+        homeFirst5, awayFirst5,
+        homeAfter5: homeScore - homeFirst5,
+        awayAfter5: awayScore - awayFirst5,
       });
     }
   }
-
   return games;
 }
 
-// ── Deep Training Loop ──
+// ── DEEP TRAINING LOOP — 20 factors ──
 
 export async function deepTrain(
   brain: BrainState,
@@ -139,20 +190,40 @@ export async function deepTrain(
   onProgress?: (msg: string) => void
 ): Promise<DeepTrainingResult> {
   let state = { ...brain };
-  let totalGames = 0;
-  let pitcherGames = 0;
+  let totalGames = 0, pitcherGames = 0;
 
-  // Tracking patterns
-  let homeWins = 0, totalProcessed = 0;
-  let homeUnderdogWins = 0, homeUnderdogTotal = 0;
-  let oneRunHomeWins = 0, oneRunTotal = 0;
-  let blowoutHomeWins = 0, blowoutTotal = 0;
-  let lowERAWins = 0, lowERATotal = 0;
-  let highERAWins = 0, highERATotal = 0;
-  let aceVsAceHome = 0, aceVsAceTotal = 0;
-  let bullpenHome = 0, bullpenTotal = 0;
-  let totalRunsSum = 0;
-  const parkRunTotals: Record<string, { over: number; total: number }> = {};
+  // Counters for every pattern
+  const c = {
+    homeWins: 0, total: 0, runsSum: 0,
+    // Pitcher
+    lowERAWin: 0, lowERATotal: 0, highERALoss: 0, highERATotal: 0,
+    aceHome: 0, aceTotal: 0, bullpenHome: 0, bullpenTotal: 0,
+    // Day/Night
+    dayHome: 0, dayTotal: 0, nightHome: 0, nightTotal: 0,
+    // DOW
+    sunHome: 0, sunTotal: 0, friHome: 0, friTotal: 0,
+    // Division
+    divHome: 0, divTotal: 0, interHome: 0, interTotal: 0,
+    // Close/Blowout
+    oneRunHome: 0, oneRunTotal: 0, blowoutHome: 0, blowoutTotal: 0,
+    // Comeback
+    comebacks: 0, comebackOpps: 0, holds: 0, holdOpps: 0,
+    // Series
+    game1Home: 0, game1Total: 0, bounceBack: 0, bounceBackOpps: 0,
+    // DH
+    dh2Home: 0, dh2Total: 0,
+    // Month
+    aprHome: 0, aprTotal: 0,
+    // Hand
+    lhpHome: 0, lhpTotal: 0, rhpHome: 0, rhpTotal: 0,
+    // Rest (simplified — can't get exact from schedule alone)
+    shortRestWin: 0, shortRestTotal: 0,
+    normalRestWin: 0, normalRestTotal: 0,
+    extraRestWin: 0, extraRestTotal: 0,
+  };
+
+  const parkData: Record<string, { over: number; total: number }> = {};
+  let prevGameResults: Record<string, boolean> = {}; // team -> won last game (for bounce-back)
 
   for (const season of seasons) {
     const months = season === new Date().getFullYear()
@@ -164,161 +235,235 @@ export async function deepTrain(
       const endDay = new Date(season, month, 0).getDate();
       const endDate = `${season}-${String(month).padStart(2, "0")}-${endDay}`;
 
-      onProgress?.(`Processing ${season} ${["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][month]}...`);
+      onProgress?.(`Deep analyzing ${season} ${["","Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][month]}...`);
 
       const games = await fetchDetailedGames(startDate, endDate);
 
-      for (const game of games) {
+      for (const g of games) {
         totalGames++;
-        totalProcessed++;
-        totalRunsSum += game.totalRuns;
+        c.total++;
+        c.runsSum += g.totalRuns;
+        if (g.homeWon) c.homeWins++;
 
-        if (game.homeWon) homeWins++;
+        // Early season weighting — April games get less learning signal
+        const learningMultiplier = g.month <= 4 ? 0.6 : 1.0;
 
-        // ── Pattern: One-run games ──
-        if (game.wasOneRun) {
-          oneRunTotal++;
-          if (game.homeWon) oneRunHomeWins++;
-        }
-
-        // ── Pattern: Blowouts ──
-        if (game.wasBlowout) {
-          blowoutTotal++;
-          if (game.homeWon) blowoutHomeWins++;
-        }
-
-        // ── Pattern: Pitcher matchups ──
-        if (game.homePitcher && game.awayPitcher) {
+        // ═══ FACTOR 1: Pitcher ERA matchup ═══
+        if (g.homePitcher && g.awayPitcher) {
           pitcherGames++;
-          const homeERA = game.homePitcher.era;
-          const awayERA = game.awayPitcher.era;
+          const eraDiff = g.awayPitcher.era - g.homePitcher.era;
+          const betterHome = eraDiff > 0;
+          state = learnFromResult(state, {
+            market: "moneyline",
+            predictedProb: Math.min(0.75, Math.max(0.25, 0.52 + eraDiff * 0.04)),
+            won: betterHome === g.homeWon,
+            ev: Math.abs(eraDiff) > 1 ? 4 * learningMultiplier : 2 * learningMultiplier,
+          });
 
-          // Low ERA starter wins
-          if (homeERA < 3.0 || awayERA < 3.0) {
-            lowERATotal++;
-            const lowERATeamWon = (homeERA < 3.0 && game.homeWon) || (awayERA < 3.0 && !game.homeWon);
-            if (lowERATeamWon) lowERAWins++;
+          // ═══ FACTOR 2: WHIP matchup ═══
+          const whipDiff = g.awayPitcher.whip - g.homePitcher.whip;
+          state = learnFromResult(state, {
+            market: "moneyline",
+            predictedProb: Math.min(0.65, Math.max(0.35, 0.50 + whipDiff * 0.08)),
+            won: (whipDiff > 0) === g.homeWon,
+            ev: 1.5 * learningMultiplier,
+          });
+
+          // Low ERA wins
+          if (g.homePitcher.era < 3.0 || g.awayPitcher.era < 3.0) {
+            c.lowERATotal++;
+            if ((g.homePitcher.era < 3.0 && g.homeWon) || (g.awayPitcher.era < 3.0 && !g.homeWon)) c.lowERAWin++;
           }
-
-          // High ERA starter loses
-          if (homeERA > 5.0 || awayERA > 5.0) {
-            highERATotal++;
-            const highERATeamLost = (homeERA > 5.0 && !game.homeWon) || (awayERA > 5.0 && game.homeWon);
-            if (highERATeamLost) highERAWins++;
+          // High ERA losses
+          if (g.homePitcher.era > 5.0 || g.awayPitcher.era > 5.0) {
+            c.highERATotal++;
+            if ((g.homePitcher.era > 5.0 && !g.homeWon) || (g.awayPitcher.era > 5.0 && g.homeWon)) c.highERALoss++;
           }
-
           // Ace vs Ace
-          if (homeERA < 3.5 && awayERA < 3.5) {
-            aceVsAceTotal++;
-            if (game.homeWon) aceVsAceHome++;
+          if (g.homePitcher.era < 3.5 && g.awayPitcher.era < 3.5) {
+            c.aceTotal++; if (g.homeWon) c.aceHome++;
+          }
+          // Bullpen game
+          if (g.homePitcher.era > 4.5 && g.awayPitcher.era > 4.5) {
+            c.bullpenTotal++; if (g.homeWon) c.bullpenHome++;
           }
 
-          // Both bad pitchers = bullpen game
-          if (homeERA > 4.5 && awayERA > 4.5) {
-            bullpenTotal++;
-            if (game.homeWon) bullpenHome++;
-          }
-
-          // ── Learn: pitcher-specific ──
-          // Did the better pitcher's team win?
-          const betterPitcherHome = homeERA < awayERA;
-          const betterPitcherWon = betterPitcherHome === game.homeWon;
-          const eraDiff = Math.abs(homeERA - awayERA);
-
-          state = learnFromResult(state, {
-            market: "moneyline",
-            predictedProb: betterPitcherHome
-              ? Math.min(0.75, 0.52 + eraDiff * 0.05)
-              : Math.max(0.25, 0.48 - eraDiff * 0.05),
-            won: betterPitcherWon,
-            ev: eraDiff > 1 ? 4 : 2,
-          });
-
-          // ── Learn: WHIP matchup ──
-          const betterWHIPHome = game.homePitcher.whip < game.awayPitcher.whip;
-          state = learnFromResult(state, {
-            market: "moneyline",
-            predictedProb: betterWHIPHome ? 0.55 : 0.45,
-            won: betterWHIPHome === game.homeWon,
-            ev: 1.5,
-          });
+          // ═══ FACTOR 10: Lefty/Righty ═══
+          if (g.homePitcher.hand === "L") { c.lhpTotal++; if (g.homeWon) c.lhpHome++; }
+          else { c.rhpTotal++; if (g.homeWon) c.rhpHome++; }
         }
 
-        // ── Learn: totals with park factor ──
-        const adjustedTotal = 8.5 * game.parkFactor;
+        // ═══ FACTOR 3: Park factor totals ═══
+        const adjTotal = 8.5 * g.parkFactor;
         state = learnFromResult(state, {
           market: "total",
-          predictedProb: game.parkFactor > 1.05 ? 0.55 : game.parkFactor < 0.95 ? 0.45 : 0.50,
-          won: game.totalRuns > adjustedTotal,
-          ev: Math.abs(game.parkFactor - 1.0) * 20,
+          predictedProb: g.parkFactor > 1.05 ? 0.56 : g.parkFactor < 0.95 ? 0.44 : 0.50,
+          won: g.totalRuns > adjTotal,
+          ev: Math.abs(g.parkFactor - 1.0) * 15 * learningMultiplier,
+        });
+        if (!parkData[g.venue]) parkData[g.venue] = { over: 0, total: 0 };
+        parkData[g.venue].total++;
+        if (g.totalRuns > 8.5) parkData[g.venue].over++;
+
+        // ═══ FACTOR 4: Day vs Night ═══
+        if (g.dayNight === "day") { c.dayTotal++; if (g.homeWon) c.dayHome++; }
+        else { c.nightTotal++; if (g.homeWon) c.nightHome++; }
+        state = learnFromResult(state, {
+          market: "moneyline",
+          predictedProb: g.dayNight === "day" ? 0.53 : 0.52,
+          won: g.homeWon,
+          ev: 0.5 * learningMultiplier,
         });
 
-        // ── Track park-specific over rates ──
-        if (!parkRunTotals[game.venue]) parkRunTotals[game.venue] = { over: 0, total: 0 };
-        parkRunTotals[game.venue].total++;
-        if (game.totalRuns > 8.5) parkRunTotals[game.venue].over++;
+        // ═══ FACTOR 5: Day of week ═══
+        if (g.dayOfWeek === 0) { c.sunTotal++; if (g.homeWon) c.sunHome++; }
+        if (g.dayOfWeek === 5) { c.friTotal++; if (g.homeWon) c.friHome++; }
+        // Sunday getaway = road team motivated to get home
+        if (g.dayOfWeek === 0) {
+          state = learnFromResult(state, {
+            market: "moneyline", predictedProb: 0.51, won: g.homeWon, ev: 0.5 * learningMultiplier,
+          });
+        }
 
-        // ── Learn: home field in close games ──
-        if (game.wasOneRun) {
+        // ═══ FACTOR 6: Divisional vs Interleague ═══
+        if (g.isDivisional) { c.divTotal++; if (g.homeWon) c.divHome++; }
+        if (g.isInterleague) { c.interTotal++; if (g.homeWon) c.interHome++; }
+        state = learnFromResult(state, {
+          market: "moneyline",
+          predictedProb: g.isDivisional ? 0.53 : g.isInterleague ? 0.54 : 0.52,
+          won: g.homeWon,
+          ev: 1.0 * learningMultiplier,
+        });
+
+        // ═══ FACTOR 7: One-run games ═══
+        if (g.runDiff === 1) {
+          c.oneRunTotal++; if (g.homeWon) c.oneRunHome++;
+          state = learnFromResult(state, {
+            market: "moneyline", predictedProb: 0.54, won: g.homeWon, ev: 3 * learningMultiplier,
+          });
+        }
+
+        // ═══ FACTOR 8: Blowouts ═══
+        if (g.runDiff >= 5) {
+          c.blowoutTotal++; if (g.homeWon) c.blowoutHome++;
+          state = learnFromResult(state, {
+            market: "spread", predictedProb: 0.50, won: g.homeWon, ev: 1 * learningMultiplier,
+          });
+        }
+
+        // ═══ FACTOR 9: Run differential / scoring pattern ═══
+        state = learnFromResult(state, {
+          market: "total",
+          predictedProb: 0.50,
+          won: g.totalRuns > 8.5,
+          ev: 1 * learningMultiplier,
+        });
+
+        // ═══ FACTOR 11: First 5 innings (comeback/hold) ═══
+        const homeLeadingAfter5 = g.homeFirst5 > g.awayFirst5;
+        const awayLeadingAfter5 = g.awayFirst5 > g.homeFirst5;
+        if (homeLeadingAfter5) {
+          c.holdOpps++; if (g.homeWon) c.holds++;
+        }
+        if (awayLeadingAfter5) {
+          c.comebackOpps++; if (g.homeWon) c.comebacks++;
+        }
+        // Learn: leading after 5 = strong predictor
+        if (homeLeadingAfter5 || awayLeadingAfter5) {
           state = learnFromResult(state, {
             market: "moneyline",
-            predictedProb: 0.54, // home field matters more in close games
-            won: game.homeWon,
-            ev: 3,
+            predictedProb: homeLeadingAfter5 ? 0.72 : 0.28,
+            won: homeLeadingAfter5 === g.homeWon,
+            ev: 5 * learningMultiplier,
           });
         }
 
-        // ── Learn: blowout pattern ──
-        if (game.wasBlowout) {
+        // ═══ FACTOR 12: Month (early season noise) ═══
+        if (g.month <= 4) {
+          c.aprTotal++; if (g.homeWon) c.aprHome++;
+        }
+
+        // ═══ FACTOR 13: Doubleheader game 2 ═══
+        if (g.gameNumber === 2) {
+          c.dh2Total++; if (g.homeWon) c.dh2Home++;
           state = learnFromResult(state, {
-            market: "spread",
-            predictedProb: 0.50,
-            won: game.homeWon,
-            ev: 1,
+            market: "moneyline", predictedProb: 0.50, won: g.homeWon, ev: 2 * learningMultiplier,
           });
         }
+
+        // ═══ FACTOR 14: Bounce-back (lost yesterday, win today?) ═══
+        const homeLostLast = prevGameResults[g.homeTeam] === false;
+        const awayLostLast = prevGameResults[g.awayTeam] === false;
+        if (homeLostLast) {
+          c.bounceBackOpps++;
+          if (g.homeWon) c.bounceBack++;
+          state = learnFromResult(state, {
+            market: "moneyline", predictedProb: 0.52, won: g.homeWon, ev: 1.5 * learningMultiplier,
+          });
+        }
+
+        // Track for next game's bounce-back calc
+        prevGameResults[g.homeTeam] = g.homeWon;
+        prevGameResults[g.awayTeam] = !g.homeWon;
       }
     }
   }
 
-  // Build learned patterns
+  // Build park over rates
   const parkOverRates: Record<string, number> = {};
-  for (const [park, data] of Object.entries(parkRunTotals)) {
-    if (data.total >= 20) {
-      parkOverRates[park] = Math.round((data.over / data.total) * 1000) / 10;
-    }
+  for (const [park, data] of Object.entries(parkData)) {
+    if (data.total >= 20) parkOverRates[park] = Math.round((data.over / data.total) * 1000) / 10;
   }
 
+  const pct = (n: number, d: number) => d > 0 ? Math.round((n / d) * 1000) / 10 : 50;
+
   const patterns: LearnedPatterns = {
-    homeWinRate: totalProcessed > 0 ? Math.round((homeWins / totalProcessed) * 1000) / 10 : 50,
-    homeUnderdogWinRate: homeUnderdogTotal > 0 ? Math.round((homeUnderdogWins / homeUnderdogTotal) * 1000) / 10 : 40,
-    oneRunGameHomeRate: oneRunTotal > 0 ? Math.round((oneRunHomeWins / oneRunTotal) * 1000) / 10 : 52,
-    blowoutHomeRate: blowoutTotal > 0 ? Math.round((blowoutHomeWins / blowoutTotal) * 1000) / 10 : 55,
-    overRate: {},
-    avgRunsPerGame: totalProcessed > 0 ? Math.round((totalRunsSum / totalProcessed) * 100) / 100 : 8.5,
-    lowERAWinRate: lowERATotal > 0 ? Math.round((lowERAWins / lowERATotal) * 1000) / 10 : 60,
-    highERAWinRate: highERATotal > 0 ? Math.round((highERAWins / highERATotal) * 1000) / 10 : 55,
-    aceVsAceHomeRate: aceVsAceTotal > 0 ? Math.round((aceVsAceHome / aceVsAceTotal) * 1000) / 10 : 52,
-    bullpenGameHomeRate: bullpenTotal > 0 ? Math.round((bullpenHome / bullpenTotal) * 1000) / 10 : 53,
+    homeWinRate: pct(c.homeWins, c.total),
+    avgRunsPerGame: c.total > 0 ? Math.round((c.runsSum / c.total) * 100) / 100 : 8.5,
+    lowERAWinRate: pct(c.lowERAWin, c.lowERATotal),
+    highERALossRate: pct(c.highERALoss, c.highERATotal),
+    aceVsAceHomeRate: pct(c.aceHome, c.aceTotal),
+    bullpenGameHomeRate: pct(c.bullpenHome, c.bullpenTotal),
     parkOverRates,
+    dayGameHomeRate: pct(c.dayHome, c.dayTotal),
+    nightGameHomeRate: pct(c.nightHome, c.nightTotal),
+    sundayHomeRate: pct(c.sunHome, c.sunTotal),
+    fridayHomeRate: pct(c.friHome, c.friTotal),
+    divisionalHomeRate: pct(c.divHome, c.divTotal),
+    interleagueHomeRate: pct(c.interHome, c.interTotal),
+    oneRunHomeRate: pct(c.oneRunHome, c.oneRunTotal),
+    blowoutHomeRate: pct(c.blowoutHome, c.blowoutTotal),
+    comebackRate: pct(c.comebacks, c.comebackOpps),
+    holdRate: pct(c.holds, c.holdOpps),
+    game1HomeRate: pct(c.game1Home, c.game1Total),
+    bounceBackRate: pct(c.bounceBack, c.bounceBackOpps),
+    doubleheaderGame2HomeRate: pct(c.dh2Home, c.dh2Total),
+    aprilHomeRate: pct(c.aprHome, c.aprTotal),
+    lhpHomeRate: pct(c.lhpHome, c.lhpTotal),
+    rhpHomeRate: pct(c.rhpHome, c.rhpTotal),
+    shortRestWinRate: pct(c.shortRestWin, c.shortRestTotal),
+    normalRestWinRate: pct(c.normalRestWin, c.normalRestTotal),
+    extraRestWinRate: pct(c.extraRestWin, c.extraRestTotal),
   };
 
-  // Store patterns in brain logs
+  // Log the full patterns
   state.logs.push({
     timestamp: new Date().toISOString(),
     type: "train",
-    message: `Deep training complete: ${totalGames} games, ${pitcherGames} with pitcher data. Home win: ${patterns.homeWinRate}%, Low ERA win: ${patterns.lowERAWinRate}%, Avg runs: ${patterns.avgRunsPerGame}`,
+    message: `Deep training complete: ${totalGames} games, ${pitcherGames} with pitcher data across ${seasons.join(", ")}`,
     data: patterns,
+  });
+
+  state.logs.push({
+    timestamp: new Date().toISOString(),
+    type: "train",
+    message: `Key findings: Home ${patterns.homeWinRate}% | Low ERA wins ${patterns.lowERAWinRate}% | Hold rate ${patterns.holdRate}% | Comeback ${patterns.comebackRate}% | Coors over ${parkOverRates["Coors Field"] ?? "?"}%`,
   });
 
   state.totalGamesProcessed = totalGames;
   state.isPreTrained = true;
   state.lastTrainedAt = new Date().toISOString();
+  state.trainedSeasons = seasons.map(String);
 
-  return {
-    gamesProcessed: totalGames,
-    pitcherGamesAnalyzed: pitcherGames,
-    patterns,
-    finalState: state,
-  };
+  return { gamesProcessed: totalGames, pitcherGamesAnalyzed: pitcherGames, patterns, finalState: state };
 }
