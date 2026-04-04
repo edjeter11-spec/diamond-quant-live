@@ -29,6 +29,12 @@ export default function GhostBots() {
   const { oddsData, scores } = useStore();
   const [system, setSystem] = useState<GhostSystemState>(loadGhostSystem);
   const [expandedGhost, setExpandedGhost] = useState<string | null>(null);
+  const [analyses, setAnalyses] = useState<any[]>([]);
+
+  // Fetch 3-model analysis for ghost bots
+  useEffect(() => {
+    fetch("/api/bot-analysis").then(r => r.json()).then(d => setAnalyses(d.analyses ?? [])).catch(() => {});
+  }, []);
 
   // Auto-generate picks for all ghosts when odds load
   useEffect(() => {
