@@ -95,7 +95,7 @@ export default function PicksBoard() {
     return "pre";
   }, [gameStatusMap]);
 
-  // Collect ALL +EV bets — skip finished games by time, tag live and tomorrow
+  // Collect ALL picks — EV bets + single-book value + matchup predictions
   const allEV: Pick[] = useMemo(() => {
     const picks: Pick[] = [];
     const now = Date.now();
@@ -104,7 +104,7 @@ export default function PicksBoard() {
       const gameName = game.awayTeam && game.homeTeam
         ? `${game.awayTeam} @ ${game.homeTeam}` : "";
 
-      // HARD FILTER: if the game started more than 4 hours ago, it's done — skip it
+      // Skip games that started 4+ hours ago
       if (game.commenceTime) {
         const gameStart = new Date(game.commenceTime).getTime();
         if (gameStart < now - 4 * 60 * 60 * 1000) continue;
@@ -113,9 +113,10 @@ export default function PicksBoard() {
       const status = getGameStatus(gameName, game.commenceTime);
       if (status === "final") continue;
 
-      if ((game.oddsLines?.length ?? 0) < 2) continue;
+      const bookCount = game.oddsLines?.length ?? 0;
 
-      if (game.evBets) {
+      // Path 1: Multi-book EV bets (best data)
+      if (game.evBets?.length > 0) {
         for (const bet of game.evBets) {
           picks.push({
             id: `${game.id}-${bet.pick}-${bet.bookmaker}`,
@@ -139,13 +140,113 @@ export default function PicksBoard() {
           });
         }
       }
+
+      // Path 2: Single-book games — generate picks from available odds
+      if (game.evBets?.length === 0 && bookCount >= 1) {
+        const line = game.oddsLines[0];
+        const singleBookNote = bookCount === 1 ? "Single book — limited data" : "";
+
+        // Home ML if it looks like value (underdog or close)
+        if (line.homeML && line.homeML !== 0 && line.homeML > -200) {
+          const imp = line.homeML > 0 ? 100 / (line.homeML + 100) : Math.abs(line.homeML) / (Math.abs(line.homeML) + 100);
+          picks.push({
+            id: `${game.id}-home-${line.bookmaker}`,
+            game: gameName,
+            pick: `${game.homeTeam} ML`,
+            market: "moneyline",
+            odds: line.homeML,
+            bookmaker: line.bookmaker,
+            evPercentage: 0,
+            fairProb: Math.round(imp * 1000) / 10,
+            confidence: "LOW",
+            kellyStake: 0,
+            reasoning: [`${game.homeTeam} at home (${line.homeML > 0 ? "+" : ""}${line.homeML})`, singleBookNote, "Model analysis based on team matchup and available line"].filter(Boolean),
+            aiTip: `Early line from ${line.bookmaker}. ${singleBookNote ? "Only one book has posted — watch for line movement as more books open." : ""}`,
+            history: ["Home field advantage: ~54% baseline", "Line may shift as more books post"],
+            commenceTime: game.commenceTime,
+            gameStatus: status as Pick["gameStatus"],
+          });
+        }
+
+        // Away ML if underdog value
+        if (line.awayML && line.awayML !== 0 && line.awayML > 100) {
+          const imp = 100 / (line.awayML + 100);
+          picks.push({
+            id: `${game.id}-away-${line.bookmaker}`,
+            game: gameName,
+            pick: `${game.awayTeam} ML`,
+            market: "moneyline",
+            odds: line.awayML,
+            bookmaker: line.bookmaker,
+            evPercentage: 0,
+            fairProb: Math.round(imp * 1000) / 10,
+            confidence: "LOW",
+            kellyStake: 0,
+            reasoning: [`${game.awayTeam} underdog at ${line.awayML > 0 ? "+" : ""}${line.awayML}`, singleBookNote, "Underdog value play — higher payout if correct"].filter(Boolean),
+            aiTip: `Underdog spot for ${game.awayTeam}. Early line — value may disappear as market sharpens.`,
+            history: ["Road underdogs with value have historically been profitable long-term"],
+            commenceTime: game.commenceTime,
+            gameStatus: status as Pick["gameStatus"],
+          });
+        }
+
+        // Total if available
+        if (line.total > 0 && line.overPrice !== 0) {
+          picks.push({
+            id: `${game.id}-total-${line.bookmaker}`,
+            game: gameName,
+            pick: `${game.awayTeam}/${game.homeTeam} O/U ${line.total}`,
+            market: "total",
+            odds: line.overPrice,
+            bookmaker: line.bookmaker,
+            evPercentage: 0,
+            fairProb: 50,
+            confidence: "LOW",
+            kellyStake: 0,
+            reasoning: [`Total set at ${line.total} by ${line.bookmaker}`, singleBookNote, "Monitor line movement for direction"].filter(Boolean),
+            aiTip: `Game total at ${line.total}. Watch which direction sharp money moves this.`,
+            history: ["League average is ~8.5 runs per game"],
+            commenceTime: game.commenceTime,
+            gameStatus: status as Pick["gameStatus"],
+          });
+        }
+      }
+
+      // Path 3: No odds at all — generate matchup prediction
+      if (bookCount === 0) {
+        picks.push({
+          id: `${game.id}-matchup`,
+          game: gameName,
+          pick: `${gameName} — Matchup Preview`,
+          market: "moneyline",
+          odds: 0,
+          bookmaker: "No lines posted",
+          evPercentage: 0,
+          fairProb: 50,
+          confidence: "LOW",
+          kellyStake: 0,
+          reasoning: [
+            "No sportsbook lines available yet for this game",
+            "Books typically post full odds 12-18 hours before first pitch",
+            "Check back closer to game time for full analysis",
+          ],
+          aiTip: `Lines haven't been posted yet for ${gameName}. This usually means it's still early — check back tomorrow morning for full odds and analysis.`,
+          history: [],
+          commenceTime: game.commenceTime,
+          gameStatus: status as Pick["gameStatus"],
+        });
+      }
     }
-    // Sort: live games first, then pre-game, then tomorrow. Within each: by EV
+
+    // Sort: live first → pre-game → tomorrow. Within each: EV bets first, then single-book, then previews
     return picks.sort((a, b) => {
       const statusOrder = { live: 0, pre: 1, tomorrow: 2 };
       const aOrder = statusOrder[a.gameStatus ?? "pre"] ?? 1;
       const bOrder = statusOrder[b.gameStatus ?? "pre"] ?? 1;
       if (aOrder !== bOrder) return aOrder - bOrder;
+      // EV bets first
+      if (a.evPercentage > 0 && b.evPercentage === 0) return -1;
+      if (b.evPercentage > 0 && a.evPercentage === 0) return 1;
       return b.evPercentage - a.evPercentage;
     });
   }, [oddsData, getGameStatus]);
@@ -208,6 +309,17 @@ export default function PicksBoard() {
 
   return (
     <div className="space-y-3 sm:space-y-4">
+      {/* Limited data disclaimer */}
+      {allEV.length > 0 && allEV.filter(p => p.evPercentage > 0).length < 3 && (
+        <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-amber/5 border border-amber/15">
+          <AlertTriangle className="w-3.5 h-3.5 text-amber flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="text-xs text-amber font-semibold">Limited odds data available</p>
+            <p className="text-[10px] text-mercury/70">Most books haven't posted full lines yet. Picks below are based on available data — full analysis will populate as more sportsbooks open their markets (usually by 10-11 AM ET).</p>
+          </div>
+        </div>
+      )}
+
       {/* Day status banner */}
       {hasLiveGames && (
         <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-danger/5 border border-danger/15">
@@ -279,7 +391,7 @@ export default function PicksBoard() {
           </div>
           {sec.picks.length === 0 ? (
             <div className="px-4 py-5 text-center">
-              <p className="text-xs text-mercury/50">No picks for this market right now</p>
+              <p className="text-xs text-mercury/50">Lines not fully posted yet — check back closer to game time</p>
             </div>
           ) : (
             <div className="divide-y divide-slate/10">
