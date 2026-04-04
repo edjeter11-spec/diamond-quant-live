@@ -104,10 +104,10 @@ export default function PicksBoard() {
       const gameName = game.awayTeam && game.homeTeam
         ? `${game.awayTeam} @ ${game.homeTeam}` : "";
 
-      // Skip games that started 4+ hours ago
+      // Skip games that have already started (only show upcoming + just-started)
       if (game.commenceTime) {
         const gameStart = new Date(game.commenceTime).getTime();
-        if (gameStart < now - 4 * 60 * 60 * 1000) continue;
+        if (gameStart < now - 15 * 60 * 1000) continue; // 15 min grace for live
       }
 
       const status = getGameStatus(gameName, game.commenceTime);
