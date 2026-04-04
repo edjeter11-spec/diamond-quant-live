@@ -18,13 +18,20 @@ function loadFromStorage<T>(key: string, fallback: T): T {
   }
 }
 
+// Throttle cloud sync to max 1 write per key per 2 minutes
+const lastSyncTimes: Record<string, number> = {};
+
 function saveToStorage(key: string, value: any) {
   if (typeof window === "undefined") return;
   try {
     localStorage.setItem(key, JSON.stringify(value));
   } catch {}
-  // Background cloud sync
-  syncToCloud(key, value);
+  // Throttled cloud sync
+  const now = Date.now();
+  if (!lastSyncTimes[key] || now - lastSyncTimes[key] > 120000) {
+    lastSyncTimes[key] = now;
+    syncToCloud(key, value);
+  }
 }
 
 async function syncToCloud(key: string, value: any) {

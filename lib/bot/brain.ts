@@ -130,25 +130,38 @@ export async function loadBrainFromCloud(): Promise<BrainState> {
   return loadBrain();
 }
 
-// Save: write to both localStorage and cloud
+// Save: write to localStorage + cloud (throttled)
+let lastCloudSave = 0;
+const CLOUD_SAVE_INTERVAL = 60000; // max 1 cloud save per minute
+
 export function saveBrain(brain: BrainState) {
-  // Trim to prevent bloat
-  brain.logs = brain.logs.slice(-200);
-  brain.recentGames = brain.recentGames.slice(-100);
+  // Trim aggressively to reduce data size
+  brain.logs = brain.logs.slice(-50);
+  brain.recentGames = brain.recentGames.slice(-20);
 
   // localStorage (sync, instant)
   if (typeof window !== "undefined") {
     try { localStorage.setItem("dq_brain", JSON.stringify(brain)); } catch {}
   }
 
-  // Cloud (async, background)
-  saveBrainToCloud(brain);
+  // Cloud (throttled — max 1 write per minute to save Supabase IO)
+  const now = Date.now();
+  if (now - lastCloudSave > CLOUD_SAVE_INTERVAL) {
+    lastCloudSave = now;
+    saveBrainToCloud(brain);
+  }
 }
 
 async function saveBrainToCloud(brain: BrainState) {
   try {
+    // Save slim version to cloud (no logs, fewer games)
+    const slim = {
+      ...brain,
+      logs: brain.logs.slice(-10),
+      recentGames: brain.recentGames.slice(-10),
+    };
     const { cloudSet } = await import("@/lib/supabase/client");
-    await cloudSet("brain", brain);
+    await cloudSet("brain", slim);
   } catch {}
 }
 
