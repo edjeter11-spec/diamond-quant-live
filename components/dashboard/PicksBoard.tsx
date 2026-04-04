@@ -609,6 +609,34 @@ function PropSection({ title, subtitle, icon: Icon, iconColor, props, loading, e
   expandedPick: string | null; setExpanded: (id: string | null) => void; addParlayLeg: any;
 }) {
   const market = title.toLowerCase().replace(/\s/g, "_");
+  const { scores } = useStore();
+
+  // Build player → team lookup from scores (pitchers are listed per team)
+  const playerTeamMap = useMemo(() => {
+    const map = new Map<string, { team: string; abbrev: string }>();
+    for (const s of scores) {
+      if (s.homePitcher && s.homePitcher !== "TBD") {
+        map.set(s.homePitcher.toLowerCase(), { team: s.homeTeam, abbrev: s.homeAbbrev });
+      }
+      if (s.awayPitcher && s.awayPitcher !== "TBD") {
+        map.set(s.awayPitcher.toLowerCase(), { team: s.awayTeam, abbrev: s.awayAbbrev });
+      }
+    }
+    return map;
+  }, [scores]);
+
+  function getPlayerTeam(playerName: string, gameStr: string): { playerTeam: string; opponent: string } {
+    // Try pitcher lookup first
+    const found = playerTeamMap.get(playerName.toLowerCase());
+    if (found) {
+      const teams = gameStr.split(" @ ");
+      const opponent = teams.find(t => !t.includes(found.team.split(" ").pop() ?? "???")) ?? teams[1] ?? "";
+      return { playerTeam: found.abbrev, opponent: opponent.split(" ").pop() ?? "" };
+    }
+    // Fallback: can't determine — show both teams
+    const parts = gameStr.split(" @ ");
+    return { playerTeam: "?", opponent: parts.map(t => t.split(" ").pop()).join(" vs ") };
+  }
 
   const fmt = (o: number) => (o > 0 ? `+${o}` : `${o}`);
 
@@ -635,17 +663,21 @@ function PropSection({ title, subtitle, icon: Icon, iconColor, props, loading, e
               <div key={i}>
                 <button onClick={() => setExpanded(open ? null : pid)} className="w-full px-3 sm:px-4 py-2.5 flex items-center gap-2 hover:bg-gunmetal/20 text-left">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <p className="text-xs sm:text-sm font-medium text-silver truncate">{p.playerName}</p>
-                      {p.team && (
-                        <span className="text-[9px] px-1 py-0.5 rounded bg-gunmetal text-mercury flex-shrink-0">
-                          {p.team.split(" @ ").map((t: string) => t.split(" ").pop()).join(" @ ")}
-                        </span>
-                      )}
-                    </div>
-                    {p.gameTime && (
-                      <p className="text-[8px] text-mercury/50">{new Date(p.gameTime).toLocaleString("en-US", { hour: "numeric", minute: "2-digit" })}</p>
-                    )}
+                    {(() => {
+                      const { playerTeam, opponent } = getPlayerTeam(p.playerName, p.team ?? "");
+                      return (
+                        <>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-electric/15 text-electric font-bold flex-shrink-0">{playerTeam}</span>
+                            <p className="text-xs sm:text-sm font-medium text-silver truncate">{p.playerName}</p>
+                          </div>
+                          <p className="text-[9px] text-mercury/50">
+                            {p.gameTime && <>{new Date(p.gameTime).toLocaleString("en-US", { hour: "numeric", minute: "2-digit" })} — </>}
+                            vs {opponent}
+                          </p>
+                        </>
+                      );
+                    })()}
                   </div>
                   <span className="text-sm font-bold font-mono text-electric flex-shrink-0">{p.line}</span>
                   <span className="text-[10px] font-mono text-neon bg-neon/10 px-1 py-0.5 rounded">O{fmt(p.bestOver?.price ?? 0)}</span>
