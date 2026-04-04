@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { fetchTodayGames, getGameStatus, getTeamAbbrev } from "@/lib/mlb/stats-api";
 import { buildTeamStats, buildGameState } from "@/lib/mlb/team-ratings";
 import { calculateLiveEdge, generateReasoning } from "@/lib/model/engine";
+import { getGameWeather, getTeamFatigue } from "@/lib/mlb/weather-fatigue";
 
 export const revalidate = 60;
 
@@ -31,10 +32,15 @@ export async function GET() {
         const homeId = TEAM_IDS[homeName];
         const awayId = TEAM_IDS[awayName];
 
-        // Build team stats from real MLB data
-        const [homeStats, awayStats] = await Promise.all([
+        const homeAbbrev = getTeamAbbrev(homeName);
+
+        // Build team stats, weather, and fatigue in parallel
+        const [homeStats, awayStats, weather, homeFatigue, awayFatigue] = await Promise.all([
           buildTeamStats(homeName, homeId),
           buildTeamStats(awayName, awayId),
+          getGameWeather(homeAbbrev).catch(() => null),
+          getTeamFatigue(homeName).catch(() => null),
+          getTeamFatigue(awayName).catch(() => null),
         ]);
 
         // Build game state
@@ -55,14 +61,22 @@ export async function GET() {
         const homeWinProb = calculateLiveEdge(homeStats, awayStats, gameState);
         const reasoning = generateReasoning(homeStats, awayStats, gameState);
 
+        // Add weather + fatigue reasoning
+        if (weather) reasoning.push(weather.summary);
+        if (homeFatigue && homeFatigue.fatigueScore > 25) reasoning.push(homeFatigue.summary);
+        if (awayFatigue && awayFatigue.fatigueScore > 25) reasoning.push(awayFatigue.summary);
+
         return {
           gameId: String(game.gamePk),
           homeTeam: homeName,
           awayTeam: awayName,
-          homeAbbrev: getTeamAbbrev(homeName),
+          homeAbbrev,
           awayAbbrev: getTeamAbbrev(awayName),
           homeWinProb: Math.round(homeWinProb * 1000) / 10,
           awayWinProb: Math.round((1 - homeWinProb) * 1000) / 10,
+          weather: weather ?? undefined,
+          homeFatigue: homeFatigue ?? undefined,
+          awayFatigue: awayFatigue ?? undefined,
           homeStats: {
             pitching: homeStats.pitching,
             hitting: homeStats.hitting,
