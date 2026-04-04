@@ -78,6 +78,7 @@ export async function GET(req: Request) {
         const props = parsePlayerProps(data);
         for (const prop of props) {
           prop.team = `${game.away_team} @ ${game.home_team}`;
+          (prop as any).gameTime = game.commence_time;
         }
         allProps.push(...props);
       } catch {
@@ -127,6 +128,7 @@ function groupByPlayer(props: ReturnType<typeof parsePlayerProps>) {
       line: lines[0].line,
       market: lines[0].market,
       team: lines[0].team,
+      gameTime: (lines[0] as any).gameTime ?? null,
       books: lines.map((l) => ({ bookmaker: l.bookmaker, overPrice: l.overPrice, underPrice: l.underPrice })),
       bestOver: { bookmaker: bestOver.bookmaker, price: bestOver.overPrice },
       bestUnder: { bookmaker: bestUnder.bookmaker, price: bestUnder.underPrice },

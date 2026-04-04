@@ -14,6 +14,7 @@ interface PropLine {
   line: number;
   market: string;
   team: string;
+  gameTime?: string | null;
   books: Array<{ bookmaker: string; overPrice: number; underPrice: number }>;
   bestOver: { bookmaker: string; price: number };
   bestUnder: { bookmaker: string; price: number };
@@ -426,7 +427,12 @@ export default function PlayerProps() {
                         </span>
                       )}
                     </div>
-                    <p className="text-[11px] text-mercury/60">{MARKET_LABELS[prop.market] ?? prop.market}</p>
+                    <p className="text-[11px] text-mercury/60">
+                      {prop.gameTime && (
+                        <span className="text-mercury/80">{new Date(prop.gameTime).toLocaleString("en-US", { hour: "numeric", minute: "2-digit" })} — </span>
+                      )}
+                      {MARKET_LABELS[prop.market] ?? prop.market}
+                    </p>
                   </div>
 
                   {/* Line */}

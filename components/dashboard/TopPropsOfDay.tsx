@@ -12,6 +12,7 @@ interface PropAnalysis {
   rank: number;
   playerName: string;
   team: string;
+  gameTime: string | null;
   market: string;
   line: number;
   recommendation: "OVER" | "UNDER";
@@ -196,6 +197,10 @@ export default function TopPropsOfDay() {
                     <span className="text-[9px] px-1 py-0.5 rounded bg-gunmetal text-mercury flex-shrink-0">{pick.team}</span>
                   </div>
                   <p className="text-[9px] sm:text-[10px] text-mercury/60">
+                    {pick.gameTime && (
+                      <span className="text-mercury/80">
+                        {new Date(pick.gameTime).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} — </span>
+                    )}
                     {MARKET_LABELS[pick.market] ?? pick.market} — {pick.recommendation} {pick.line}
                   </p>
                 </div>
@@ -353,6 +358,7 @@ function scoreAndAnalyzeProp(prop: any, market: string): PropAnalysis | null {
     rank: 0,
     playerName: prop.playerName,
     team: prop.team ?? "",
+    gameTime: prop.gameTime ?? null,
     market,
     line: prop.line,
     recommendation: side,
