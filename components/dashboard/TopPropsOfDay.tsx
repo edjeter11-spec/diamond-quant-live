@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useStore } from "@/lib/store";
+import { useMemo } from "react";
 import {
   Trophy, Brain, Target, ChevronDown, ArrowUpRight, ArrowDownRight,
   Star, Flame, CircleDot, TrendingUp, Clock, RefreshCw, Zap,
@@ -49,7 +50,25 @@ const MARKET_ICONS: Record<string, any> = {
 };
 
 export default function TopPropsOfDay() {
-  const { oddsData } = useStore();
+  const { oddsData, scores } = useStore();
+
+  // Build player → team lookup from scores
+  const playerTeamMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const s of scores) {
+      if (s.homePitcher && s.homePitcher !== "TBD") map.set(s.homePitcher.toLowerCase(), s.homeAbbrev);
+      if (s.awayPitcher && s.awayPitcher !== "TBD") map.set(s.awayPitcher.toLowerCase(), s.awayAbbrev);
+    }
+    return map;
+  }, [scores]);
+
+  function getTeamAbbrev(playerName: string, gameStr: string): string {
+    const found = playerTeamMap.get(playerName.toLowerCase());
+    if (found) return found;
+    // Fallback: show first team abbreviation from game
+    const parts = (gameStr ?? "").split(" @ ");
+    return parts.map(t => t.split(" ").pop()?.slice(0, 3).toUpperCase()).join("/") || "?";
+  }
   const [topProps, setTopProps] = useState<PropAnalysis[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
@@ -202,8 +221,8 @@ export default function TopPropsOfDay() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5">
                     <MarketIcon className={`w-3 h-3 ${isOver ? "text-neon" : "text-purple"} flex-shrink-0`} />
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-electric/15 text-electric font-bold flex-shrink-0">{getTeamAbbrev(pick.playerName, pick.team)}</span>
                     <p className="text-xs sm:text-sm font-semibold text-silver truncate">{pick.playerName}</p>
-                    <span className="text-[9px] px-1 py-0.5 rounded bg-gunmetal text-mercury flex-shrink-0">{pick.team}</span>
                   </div>
                   <p className="text-[9px] sm:text-[10px] text-mercury/60">
                     {pick.gameTime && (

@@ -1,15 +1,35 @@
 "use client";
 
 import { useStore } from "@/lib/store";
-import { Layers, X, Sparkles, Save, Trash2, TrendingUp, AlertTriangle, ChevronDown } from "lucide-react";
-import { useState } from "react";
+import { Layers, X, Sparkles, Save, Trash2, TrendingUp, AlertTriangle, ChevronDown, Zap } from "lucide-react";
+import { useState, useEffect } from "react";
 import type { ParlaySlip } from "@/lib/model/types";
 
 export default function ParlayBuilder() {
   const {
     parlayLegs, currentParlay, savedParlays,
-    removeParlayLeg, clearParlay, saveParlay,
+    removeParlayLeg, clearParlay, saveParlay, addParlayLeg,
   } = useStore();
+  const [topPicks, setTopPicks] = useState<any[]>([]);
+
+  // Fetch top picks for quick-add
+  useEffect(() => {
+    fetch("/api/bot-analysis").then(r => r.json()).then(data => {
+      const picks = (data.analyses ?? [])
+        .filter((a: any) => a.consensus?.confidence === "HIGH" || a.consensus?.confidence === "MEDIUM")
+        .slice(0, 5)
+        .map((a: any) => ({
+          game: `${a.awayTeam} @ ${a.homeTeam}`,
+          pick: a.picks?.[0]?.pick ?? `${a.homeTeam} ML`,
+          odds: a.picks?.[0]?.odds ?? a.bestHomeML,
+          bookmaker: a.picks?.[0]?.bookmaker ?? a.bestHomeBook,
+          fairProb: (a.consensus?.homeWinProb ?? 0.5),
+          market: a.picks?.[0]?.market ?? "moneyline",
+          confidence: a.consensus?.confidence,
+        }));
+      setTopPicks(picks);
+    }).catch(() => {});
+  }, []);
 
   const formatOdds = (odds: number) => (odds > 0 ? `+${odds}` : `${odds}`);
 
@@ -38,10 +58,56 @@ export default function ParlayBuilder() {
       </div>
 
       {parlayLegs.length === 0 ? (
-        <div className="p-6 text-center">
-          <Sparkles className="w-8 h-8 text-purple/30 mx-auto mb-2" />
-          <p className="text-sm text-mercury">Click odds in the grid to build a parlay</p>
-          <p className="text-xs text-mercury/60 mt-1">Supports ML, spreads, totals, and player props</p>
+        <div className="p-4">
+          <p className="text-sm text-mercury text-center mb-3">Click any odds to add, or quick-add top picks:</p>
+
+          {topPicks.length > 0 ? (
+            <div className="space-y-1.5 mb-3">
+              {topPicks.map((pick, i) => (
+                <button
+                  key={i}
+                  onClick={() => addParlayLeg({
+                    game: pick.game,
+                    market: pick.market,
+                    pick: pick.pick,
+                    odds: pick.odds,
+                    fairProb: pick.fairProb,
+                    bookmaker: pick.bookmaker,
+                  })}
+                  className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-gunmetal/30 hover:bg-purple/10 hover:border-purple/20 border border-transparent transition-all text-left"
+                >
+                  <span className={`text-[8px] px-1 py-0.5 rounded font-bold flex-shrink-0 ${
+                    pick.confidence === "HIGH" ? "bg-neon/15 text-neon" : "bg-electric/15 text-electric"
+                  }`}>{pick.confidence}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-silver truncate">{pick.pick}</p>
+                    <p className="text-[9px] text-mercury/50 truncate">{pick.game}</p>
+                  </div>
+                  <span className="text-xs font-mono text-silver flex-shrink-0">{formatOdds(pick.odds)}</span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center mb-3">
+              <Sparkles className="w-6 h-6 text-purple/30 mx-auto mb-1" />
+              <p className="text-xs text-mercury/60">Supports ML, spreads, totals, and player props</p>
+            </div>
+          )}
+
+          {topPicks.length >= 3 && (
+            <button
+              onClick={() => {
+                topPicks.slice(0, 3).forEach(pick => addParlayLeg({
+                  game: pick.game, market: pick.market, pick: pick.pick,
+                  odds: pick.odds, fairProb: pick.fairProb, bookmaker: pick.bookmaker,
+                }));
+              }}
+              className="w-full py-2.5 rounded-lg bg-purple/15 border border-purple/25 text-purple text-xs font-bold hover:bg-purple/25 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5"
+            >
+              <Zap className="w-3.5 h-3.5" />
+              Quick-Add Top 3 Picks as Parlay
+            </button>
+          )}
         </div>
       ) : (
         <div className="p-3 space-y-2">
