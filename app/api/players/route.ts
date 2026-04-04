@@ -56,12 +56,8 @@ export async function GET(req: Request) {
           return gameTime > now - 2 * 60 * 60 * 1000 && gameTime < now + 36 * 60 * 60 * 1000;
         })
         .sort((a: any, b: any) => {
-          const aTime = new Date(a.commence_time).getTime();
-          const bTime = new Date(b.commence_time).getTime();
-          // Prefer games starting 2-18 hours from now (sweet spot for props being posted)
-          const aScore = Math.abs(aTime - now - 8 * 60 * 60 * 1000);
-          const bScore = Math.abs(bTime - now - 8 * 60 * 60 * 1000);
-          return aScore - bScore;
+          // Soonest games first — they're most likely to have props posted
+          return new Date(a.commence_time).getTime() - new Date(b.commence_time).getTime();
         })
         .slice(0, 5)
         .map((e: any) => ({ id: e.id, away_team: e.away_team, home_team: e.home_team, commence_time: e.commence_time }));
