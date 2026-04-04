@@ -22,6 +22,7 @@ import ModelLogs from "@/components/dashboard/ModelLogs";
 import GhostBots from "@/components/dashboard/GhostBots";
 import TrainingPanel from "@/components/dashboard/TrainingPanel";
 import TopPropsOfDay from "@/components/dashboard/TopPropsOfDay";
+import SnapSync from "@/components/dashboard/SnapSync";
 import { matchGames } from "@/lib/mlb/match-games";
 import { backupOddsToStorage, getOddsBackup } from "@/lib/odds/cache";
 import { sendDiscordAlert } from "@/lib/odds/sportsbooks";
@@ -598,6 +599,7 @@ export default function WarRoom() {
 
             {activeTab === "bankroll" && (
               <div className="max-w-2xl mx-auto space-y-4">
+                <SnapSync />
                 <ModelTracker />
                 <BankrollTracker />
                 <button
