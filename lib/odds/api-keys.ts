@@ -3,16 +3,17 @@
 // Cycles through multiple keys when one hits quota limit
 // ──────────────────────────────────────────────────────────
 
+// Order keys with most quota first — keys 1,2,3,5 are burned for this month
+// Key 4 has ~196 remaining. Reorder monthly or add new keys at the top.
 const KEYS = [
-  process.env.THE_ODDS_API_KEY,
-  process.env.THE_ODDS_API_KEY_2,
+  process.env.THE_ODDS_API_KEY_4,  // ~196 remaining
+  process.env.THE_ODDS_API_KEY_5,  // burned but may reset
   process.env.THE_ODDS_API_KEY_3,
-  process.env.THE_ODDS_API_KEY_4,
-  process.env.THE_ODDS_API_KEY_5,
+  process.env.THE_ODDS_API_KEY_2,
+  process.env.THE_ODDS_API_KEY,
 ].filter(Boolean) as string[];
 
-// Start from the END of the list (newest keys have quota)
-let currentIndex = KEYS.length - 1;
+let currentIndex = 0; // start from first (highest quota)
 const exhaustedKeys = new Set<string>();
 
 export function getApiKey(): string | null {
