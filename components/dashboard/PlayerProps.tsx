@@ -100,21 +100,32 @@ export default function PlayerProps() {
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState("");
 
+  const [currentMarket, setCurrentMarket] = useState(selectedMarket);
+
   useEffect(() => {
+    // Only fetch if market actually changed
+    if (currentMarket !== selectedMarket) {
+      setCurrentMarket(selectedMarket);
+      setExpandedPlayer(null);
+      setPlayerAnalyses({});
+    }
     fetchProps();
-    setExpandedPlayer(null);
-    setPlayerAnalyses({});
-  }, [selectedMarket]);
+  }, [selectedMarket]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function fetchProps() {
+    // DON'T clear existing props while loading — show stale data until new arrives
     setLoading(true);
     try {
       const res = await fetch(`/api/players?market=${selectedMarket}`);
       const data = await res.json();
-      setProps(data.props ?? []);
+      const newProps = data.props ?? [];
+      // Only update if we actually got data (don't replace good data with empty)
+      if (newProps.length > 0 || props.length === 0) {
+        setProps(newProps);
+      }
       setIsDemo(data.demo === true);
     } catch {
-      setProps([]);
+      // Don't clear existing props on error
     }
     setLoading(false);
   }
@@ -397,12 +408,12 @@ export default function PlayerProps() {
 
       {/* Props List */}
       <div className="divide-y divide-slate/15">
-        {loading ? (
+        {loading && props.length === 0 ? (
           <div className="p-8 text-center">
             <RefreshCw className="w-6 h-6 text-mercury/30 animate-spin mx-auto mb-2" />
             <p className="text-sm text-mercury">Loading props...</p>
           </div>
-        ) : props.length === 0 ? (
+        ) : !loading && props.length === 0 ? (
           <div className="p-8 text-center text-mercury text-sm">No props available for this market</div>
         ) : (
           props.map((prop, i) => {
