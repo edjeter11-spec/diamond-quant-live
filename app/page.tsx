@@ -343,9 +343,9 @@ export default function WarRoom() {
           </nav>
 
           <div className="flex items-center gap-1.5 sm:gap-2">
-            {isDemo && (
+            {isDemo && oddsData.length === 0 && (
               <span className="hidden sm:flex items-center gap-1 px-2 py-1 rounded bg-amber/10 border border-amber/20 text-[10px] text-amber font-semibold">
-                <AlertTriangle className="w-3 h-3" /> DEMO
+                <AlertTriangle className="w-3 h-3" /> NO ODDS
               </span>
             )}
             <button

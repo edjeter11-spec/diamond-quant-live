@@ -25,8 +25,10 @@ export default function ModelLogs() {
       const b = await loadBrainFromCloud();
       setBrain(b);
 
-      // Auto pre-train if not yet trained
-      if (!b.isPreTrained) {
+      // Auto pre-train if not yet trained, or if we added new seasons
+      const targetSeasons = new Date().getFullYear() >= 2026 ? ["2023","2024","2025","2026"] : ["2023","2024","2025"];
+      const needsRetrain = !b.isPreTrained || targetSeasons.some(s => !b.trainedSeasons?.includes(s));
+      if (needsRetrain) {
         autoTrain(b);
       }
     }
