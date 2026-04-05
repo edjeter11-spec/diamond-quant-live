@@ -36,7 +36,7 @@ export default function ModelLogs() {
   async function autoTrain(b: BrainState) {
     setTraining(true);
     try {
-      const seasons = new Date().getFullYear() >= 2026 ? [2024, 2025, 2026] : [2024, 2025];
+      const seasons = new Date().getFullYear() >= 2026 ? [2023, 2024, 2025, 2026] : [2023, 2024, 2025];
       const result = await deepTrain(b, seasons, (msg) => setTrainProgress(msg));
       setBrain(result.finalState);
       saveBrain(result.finalState);
@@ -53,7 +53,7 @@ export default function ModelLogs() {
     setTrainProgress("Deep retraining from scratch...");
     const fresh = { ...brain, trainedSeasons: [], totalGamesProcessed: 0 };
     try {
-      const seasons = new Date().getFullYear() >= 2026 ? [2024, 2025, 2026] : [2024, 2025];
+      const seasons = new Date().getFullYear() >= 2026 ? [2023, 2024, 2025, 2026] : [2023, 2024, 2025];
       const result = await deepTrain(fresh, seasons, (msg) => setTrainProgress(msg));
       saveBrain(result.finalState);
       setBrain(result.finalState);

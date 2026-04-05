@@ -67,9 +67,31 @@ export interface BrainState {
   recentGames: GameMemory[];  // last 100 games
   logs: ModelLog[];           // last 200 log entries
 
+  // Pitcher-specific memory
+  pitcherMemory: Record<string, PitcherMemory>;
+
+  // Park-specific memory
+  parkMemory: Record<string, { games: number; homeWins: number; avgRuns: number; nrfiRate: number }>;
+
+  // Matchup memory (team vs team)
+  matchupMemory: Record<string, { games: number; homeWins: number }>;
+
   // Learning config
   learningRate: number;
   isPreTrained: boolean;
+}
+
+export interface PitcherMemory {
+  name: string;
+  gamesTracked: number;
+  wins: number;
+  losses: number;
+  winRate: number;
+  avgERAWhenWin: number;
+  avgERAWhenLoss: number;
+  nrfiCount: number;
+  nrfiRate: number;
+  vsTeams: Record<string, { games: number; wins: number }>; // opponent -> record
 }
 
 // Default untrained state
@@ -97,6 +119,9 @@ function createFreshBrain(): BrainState {
     },
     recentGames: [],
     logs: [],
+    pitcherMemory: {},
+    parkMemory: {},
+    matchupMemory: {},
     learningRate: 0.02,
     isPreTrained: false,
   };
@@ -343,6 +368,9 @@ export function learnFromGame(
     homeScore: number;
     awayScore: number;
     predictedHomeProb: number;
+    homePitcher?: string;
+    awayPitcher?: string;
+    venue?: string;
   }
 ): BrainState {
   let updated = { ...brain };
@@ -393,6 +421,76 @@ export function learnFromGame(
     lessonsLearned: lessons,
   });
 
+  // ── Pitcher-specific memory ──
+  if (!updated.pitcherMemory) updated.pitcherMemory = {};
+  const totalRuns2 = totalRuns; // alias for NRFI calc
+  const firstInningClean = totalRuns2 < 2; // rough NRFI proxy (low-scoring = likely clean 1st)
+
+  for (const pitcherName of [game.homePitcher, game.awayPitcher]) {
+    if (!pitcherName || pitcherName === "TBD") continue;
+    const key = pitcherName.toLowerCase();
+    if (!updated.pitcherMemory[key]) {
+      updated.pitcherMemory[key] = {
+        name: pitcherName, gamesTracked: 0, wins: 0, losses: 0, winRate: 0,
+        avgERAWhenWin: 0, avgERAWhenLoss: 0, nrfiCount: 0, nrfiRate: 0, vsTeams: {},
+      };
+    }
+    const pm = updated.pitcherMemory[key];
+    pm.gamesTracked++;
+    const pitcherWon = (pitcherName === game.homePitcher && game.homeWon) || (pitcherName === game.awayPitcher && !game.homeWon);
+    if (pitcherWon) pm.wins++;
+    else pm.losses++;
+    pm.winRate = pm.gamesTracked > 0 ? Math.round((pm.wins / pm.gamesTracked) * 1000) / 10 : 50;
+    if (firstInningClean) pm.nrfiCount++;
+    pm.nrfiRate = pm.gamesTracked > 0 ? Math.round((pm.nrfiCount / pm.gamesTracked) * 1000) / 10 : 65;
+
+    // vs-team tracking
+    const opponent = pitcherName === game.homePitcher
+      ? game.gameName.split(" @ ")[0] ?? ""
+      : game.gameName.split(" @ ")[1] ?? "";
+    if (opponent) {
+      const oppKey = opponent.toLowerCase().trim();
+      if (!pm.vsTeams[oppKey]) pm.vsTeams[oppKey] = { games: 0, wins: 0 };
+      pm.vsTeams[oppKey].games++;
+      if (pitcherWon) pm.vsTeams[oppKey].wins++;
+    }
+  }
+
+  // Keep pitcher memory from bloating (max 200 pitchers)
+  const pitcherKeys = Object.keys(updated.pitcherMemory);
+  if (pitcherKeys.length > 200) {
+    const sorted = pitcherKeys.sort((a, b) => (updated.pitcherMemory[b]?.gamesTracked ?? 0) - (updated.pitcherMemory[a]?.gamesTracked ?? 0));
+    const keep = new Set(sorted.slice(0, 150));
+    for (const k of pitcherKeys) { if (!keep.has(k)) delete updated.pitcherMemory[k]; }
+  }
+
+  // ── Park memory ──
+  if (!updated.parkMemory) updated.parkMemory = {};
+  if (game.venue) {
+    if (!updated.parkMemory[game.venue]) {
+      updated.parkMemory[game.venue] = { games: 0, homeWins: 0, avgRuns: 8.5, nrfiRate: 70 };
+    }
+    const pk = updated.parkMemory[game.venue];
+    const alpha = Math.min(0.05, 1 / (pk.games + 1));
+    pk.games++;
+    if (game.homeWon) pk.homeWins++;
+    pk.avgRuns = pk.avgRuns * (1 - alpha) + totalRuns * alpha;
+    if (firstInningClean) pk.nrfiRate = pk.nrfiRate * (1 - alpha) + 100 * alpha;
+    else pk.nrfiRate = pk.nrfiRate * (1 - alpha);
+  }
+
+  // ── Matchup memory (team vs team) ──
+  if (!updated.matchupMemory) updated.matchupMemory = {};
+  const teams = game.gameName.split(" @ ");
+  if (teams.length === 2) {
+    const matchupKey = `${teams[0].trim().toLowerCase()}::${teams[1].trim().toLowerCase()}`;
+    if (!updated.matchupMemory[matchupKey]) {
+      updated.matchupMemory[matchupKey] = { games: 0, homeWins: 0 };
+    }
+    updated.matchupMemory[matchupKey].games++;
+    if (game.homeWon) updated.matchupMemory[matchupKey].homeWins++;
+  }
+
   addLog(updated, "learn",
     `${game.gameName}: ${game.homeWon ? "Home" : "Away"} won ${game.homeScore}-${game.awayScore}. ` +
     `Model predicted ${(game.predictedHomeProb * 100).toFixed(0)}% home. ${wasRight ? "CORRECT" : "WRONG"}.`,
@@ -432,5 +530,13 @@ export function getBrainSummary(brain: BrainState) {
     recentLogs: brain.logs.slice(-20),
     recentGames: brain.recentGames.slice(-10),
     lastTrainedAt: brain.lastTrainedAt,
+    pitchersKnown: Object.keys(brain.pitcherMemory ?? {}).length,
+    parksKnown: Object.keys(brain.parkMemory ?? {}).length,
+    matchupsKnown: Object.keys(brain.matchupMemory ?? {}).length,
+    topPitchers: Object.values(brain.pitcherMemory ?? {})
+      .filter((p: any) => p.gamesTracked >= 10)
+      .sort((a: any, b: any) => b.winRate - a.winRate)
+      .slice(0, 5)
+      .map((p: any) => ({ name: p.name, winRate: p.winRate, games: p.gamesTracked, nrfiRate: p.nrfiRate })),
   };
 }

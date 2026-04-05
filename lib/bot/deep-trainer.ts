@@ -405,7 +405,56 @@ export async function deepTrain(
         // Track for next game's bounce-back calc
         prevGameResults[g.homeTeam] = g.homeWon;
         prevGameResults[g.awayTeam] = !g.homeWon;
+
+        // ═══ PITCHER MEMORY ═══
+        if (!state.pitcherMemory) state.pitcherMemory = {};
+        const firstInningClean = g.totalRuns < 2;
+        for (const pitcher of [g.homePitcher, g.awayPitcher]) {
+          if (!pitcher) continue;
+          const pk = pitcher.name.toLowerCase();
+          if (!state.pitcherMemory[pk]) {
+            state.pitcherMemory[pk] = { name: pitcher.name, gamesTracked: 0, wins: 0, losses: 0, winRate: 0, avgERAWhenWin: 0, avgERAWhenLoss: 0, nrfiCount: 0, nrfiRate: 0, vsTeams: {} };
+          }
+          const pm = state.pitcherMemory[pk];
+          pm.gamesTracked++;
+          const pWon = (pitcher === g.homePitcher && g.homeWon) || (pitcher === g.awayPitcher && !g.homeWon);
+          if (pWon) pm.wins++; else pm.losses++;
+          pm.winRate = pm.gamesTracked > 0 ? Math.round((pm.wins / pm.gamesTracked) * 1000) / 10 : 50;
+          if (firstInningClean) pm.nrfiCount++;
+          pm.nrfiRate = pm.gamesTracked > 0 ? Math.round((pm.nrfiCount / pm.gamesTracked) * 1000) / 10 : 65;
+        }
+
+        // ═══ PARK MEMORY ═══
+        if (!state.parkMemory) state.parkMemory = {};
+        if (g.venue && !state.parkMemory[g.venue]) {
+          state.parkMemory[g.venue] = { games: 0, homeWins: 0, avgRuns: 8.5, nrfiRate: 70 };
+        }
+        if (g.venue) {
+          const pm = state.parkMemory[g.venue];
+          const a = Math.min(0.02, 1 / (pm.games + 1));
+          pm.games++;
+          if (g.homeWon) pm.homeWins++;
+          pm.avgRuns = pm.avgRuns * (1 - a) + g.totalRuns * a;
+          pm.nrfiRate = pm.nrfiRate * (1 - a) + (firstInningClean ? 100 : 0) * a;
+        }
+
+        // ═══ MATCHUP MEMORY ═══
+        if (!state.matchupMemory) state.matchupMemory = {};
+        const mKey = `${g.awayTeam.toLowerCase()}::${g.homeTeam.toLowerCase()}`;
+        if (!state.matchupMemory[mKey]) state.matchupMemory[mKey] = { games: 0, homeWins: 0 };
+        state.matchupMemory[mKey].games++;
+        if (g.homeWon) state.matchupMemory[mKey].homeWins++;
       }
+    }
+  }
+
+  // Trim pitcher memory to top 300
+  if (state.pitcherMemory) {
+    const keys = Object.keys(state.pitcherMemory);
+    if (keys.length > 300) {
+      const sorted = keys.sort((a, b) => (state.pitcherMemory[b]?.gamesTracked ?? 0) - (state.pitcherMemory[a]?.gamesTracked ?? 0));
+      const keep = new Set(sorted.slice(0, 250));
+      for (const k of keys) { if (!keep.has(k)) delete state.pitcherMemory[k]; }
     }
   }
 
