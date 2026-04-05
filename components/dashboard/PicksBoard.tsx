@@ -271,18 +271,25 @@ export default function PicksBoard() {
     });
   }, [oddsData, getGameStatus]);
 
-  // Merge 3-model picks with EV picks — model picks are primary
+  // Merge 3-model picks with EV picks — strict dedup by normalized pick text
   const combinedPicks = useMemo(() => {
     const seen = new Set<string>();
     const merged: Pick[] = [];
-    // Model picks first (they have real analysis behind them)
+
+    function normalizeKey(p: Pick): string {
+      // Normalize: strip whitespace, lowercase, remove "ML" variations
+      const team = p.pick.toLowerCase().replace(/\s+ml$/, "").replace(/\s+/g, " ").trim();
+      return team;
+    }
+
+    // Model picks first (they have real analysis)
     for (const p of modelPicks) {
-      const key = `${p.game}::${p.pick}`;
+      const key = normalizeKey(p);
       if (!seen.has(key)) { seen.add(key); merged.push(p); }
     }
     // Then EV picks that aren't duplicates
     for (const p of allEV) {
-      const key = `${p.game}::${p.pick}`;
+      const key = normalizeKey(p);
       if (!seen.has(key)) { seen.add(key); merged.push(p); }
     }
     return merged;
@@ -294,7 +301,8 @@ export default function PicksBoard() {
     function takeUnique(pool: Pick[], count: number, extraFilter?: (p: Pick) => boolean): Pick[] {
       const result: Pick[] = [];
       for (const p of pool) {
-        const key = `${p.game}::${p.pick}`;
+        // Normalize key to catch duplicates with slight text differences
+        const key = p.pick.toLowerCase().replace(/\s+/g, " ").trim();
         if (usedIds.has(key)) continue;
         if (extraFilter && !extraFilter(p)) continue;
         usedIds.add(key);
