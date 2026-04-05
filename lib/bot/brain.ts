@@ -179,14 +179,15 @@ export function saveBrain(brain: BrainState) {
 
 async function saveBrainToCloud(brain: BrainState) {
   try {
-    // Save slim version to cloud (no logs, fewer games)
-    const slim = {
+    // Save full brain to cloud — trim only logs and recent games (not pitcher/park/matchup memory)
+    const cloudVersion = {
       ...brain,
-      logs: brain.logs.slice(-10),
-      recentGames: brain.recentGames.slice(-10),
+      logs: brain.logs.slice(-20),
+      recentGames: brain.recentGames.slice(-15),
+      // Keep ALL pitcher memory, park memory, matchup memory — this is the valuable trained data
     };
     const { cloudSet } = await import("@/lib/supabase/client");
-    await cloudSet("brain", slim);
+    await cloudSet("brain", cloudVersion);
   } catch {}
 }
 

@@ -20,6 +20,7 @@ import BotChallenge from "@/components/dashboard/BotChallenge";
 import ThreeModelBot from "@/components/dashboard/ThreeModelBot";
 import ModelLogs from "@/components/dashboard/ModelLogs";
 import GhostBots from "@/components/dashboard/GhostBots";
+import BrainViz from "@/components/dashboard/BrainViz";
 import TrainingPanel from "@/components/dashboard/TrainingPanel";
 import TopPropsOfDay from "@/components/dashboard/TopPropsOfDay";
 import SnapSync from "@/components/dashboard/SnapSync";
@@ -589,9 +590,10 @@ export default function WarRoom() {
             {activeTab === "bot" && (
               <div className="max-w-3xl mx-auto space-y-4">
                 <ThreeModelBot />
-                <ModelLogs />
+                <BrainViz />
                 <BotChallenge />
                 <GhostBots />
+                <ModelLogs />
               </div>
             )}
 
