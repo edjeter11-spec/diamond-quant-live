@@ -68,28 +68,17 @@ export default function PicksBoard() {
     }).catch(() => {});
   }, []);
 
-  // Batch-fetch all prop markets in one go on mount
+  // Fetch only strikeouts for the main board (saves 4 API calls)
+  // Full prop markets are on the Props tab
   useEffect(() => {
     let cancelled = false;
     setPropsLoading(true);
-    Promise.all([
-      fetch("/api/players?market=pitcher_strikeouts").then(r => r.json()).catch(() => ({ props: [] })),
-      fetch("/api/players?market=batter_hits").then(r => r.json()).catch(() => ({ props: [] })),
-      fetch("/api/players?market=batter_home_runs").then(r => r.json()).catch(() => ({ props: [] })),
-      fetch("/api/players?market=batter_total_bases").then(r => r.json()).catch(() => ({ props: [] })),
-      fetch("/api/players?market=pitcher_outs").then(r => r.json()).catch(() => ({ props: [] })),
-    ]).then(([ks, hits, hrs, tb, outs]) => {
+    fetch("/api/players?market=pitcher_strikeouts").then(r => r.json()).then(ks => {
       if (!cancelled) {
-        setPropsData({
-          pitcher_strikeouts: ks.props ?? [],
-          batter_hits: hits.props ?? [],
-          batter_home_runs: hrs.props ?? [],
-          batter_total_bases: tb.props ?? [],
-          pitcher_outs: outs.props ?? [],
-        });
+        setPropsData({ pitcher_strikeouts: ks.props ?? [] });
         setPropsLoading(false);
       }
-    });
+    }).catch(() => { if (!cancelled) setPropsLoading(false); });
     return () => { cancelled = true; };
   }, []);
 
@@ -440,8 +429,17 @@ export default function PicksBoard() {
             )}
           </div>
           {sec.picks.length === 0 ? (
-            <div className="px-4 py-5 text-center">
-              <p className="text-xs text-mercury/50">Lines not fully posted yet — check back closer to game time</p>
+            <div className="px-3 py-3">
+              <p className="text-[10px] text-amber/70 mb-2">Best available — model still refining full analysis</p>
+              {/* Show fallback picks from combined pool regardless of section filter */}
+              {combinedPicks.slice(0, 2).map((pick, fi) => (
+                <div key={fi} className="flex items-center gap-2 px-2 py-1.5 rounded bg-gunmetal/20 mb-1">
+                  <div className="w-1.5 h-1.5 rounded-full bg-amber flex-shrink-0" />
+                  <p className="text-[11px] text-mercury truncate flex-1">{pick.pick}</p>
+                  <span className="text-[10px] font-mono text-silver">{formatOdds(pick.odds)}</span>
+                </div>
+              ))}
+              {combinedPicks.length === 0 && <p className="text-xs text-mercury/40 text-center">Waiting for odds data</p>}
             </div>
           ) : (
             <div className="divide-y divide-slate/10">
@@ -463,12 +461,8 @@ export default function PicksBoard() {
         </div>
       ))}
 
-      {/* ═══ PROP SECTIONS ═══ */}
-      <PropSection title="STRIKEOUTS" subtitle="Pitcher K props — correlated: high K games often go Under on total" icon={Flame} iconColor="text-danger" props={propsData.pitcher_strikeouts ?? []} loading={propsLoading} expandedPick={expandedPick} setExpanded={setExpandedPick} addParlayLeg={addParlayLeg} />
-      <PropSection title="HITS" subtitle="Batter hits — correlated: pitcher Over K = opposing hitters Under hits" icon={CircleDot} iconColor="text-neon" props={propsData.batter_hits ?? []} loading={propsLoading} expandedPick={expandedPick} setExpanded={setExpandedPick} addParlayLeg={addParlayLeg} />
-      <PropSection title="HOME RUNS" subtitle="HR props — high risk, high reward" icon={Star} iconColor="text-gold" props={propsData.batter_home_runs ?? []} loading={propsLoading} expandedPick={expandedPick} setExpanded={setExpandedPick} addParlayLeg={addParlayLeg} />
-      <PropSection title="TOTAL BASES" subtitle="TB props — correlated with team runs and game total Over" icon={TrendingUp} iconColor="text-electric" props={propsData.batter_total_bases ?? []} loading={propsLoading} expandedPick={expandedPick} setExpanded={setExpandedPick} addParlayLeg={addParlayLeg} />
-      <PropSection title="PITCHER OUTS" subtitle="Outs recorded — correlated with low-scoring games" icon={Target} iconColor="text-purple" props={propsData.pitcher_outs ?? []} loading={propsLoading} expandedPick={expandedPick} setExpanded={setExpandedPick} addParlayLeg={addParlayLeg} />
+      {/* ═══ STRIKEOUT PROPS (only K's on main board — full props on Props tab) ═══ */}
+      <PropSection title="STRIKEOUTS" subtitle="Pitcher K props with live odds" icon={Flame} iconColor="text-danger" props={propsData.pitcher_strikeouts ?? []} loading={propsLoading} expandedPick={expandedPick} setExpanded={setExpandedPick} addParlayLeg={addParlayLeg} />
 
       {/* No data state */}
       {combinedPicks.length === 0 && allEV.length === 0 && (
@@ -580,20 +574,25 @@ function PickCard({ pick, isExpanded, onToggle, onAddToParlay, formatOdds }: {
             </div>
           )}
 
-          {/* Deep link + Add to Parlay */}
-          <div className="flex gap-2">
+          {/* Action buttons */}
+          <div className="flex gap-1.5">
             {getDeepLink(pick.bookmaker) && (
-              <a
-                href={getDeepLink(pick.bookmaker)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex-1 py-2 rounded-lg bg-electric/10 border border-electric/20 text-electric text-xs font-semibold hover:bg-electric/20 transition-all flex items-center justify-center gap-1"
-              >
-                <ExternalLink className="w-3 h-3" /> Open {pick.bookmaker.split(" ")[0]}
+              <a href={getDeepLink(pick.bookmaker)} target="_blank" rel="noopener noreferrer"
+                className="flex-1 py-2 rounded-lg bg-electric/10 border border-electric/20 text-electric text-[11px] font-semibold hover:bg-electric/20 transition-all flex items-center justify-center gap-1">
+                <ExternalLink className="w-3 h-3" /> {pick.bookmaker.split(" ")[0]}
               </a>
             )}
-            <button onClick={(e) => { e.stopPropagation(); onAddToParlay(); }} className={`${getDeepLink(pick.bookmaker) ? "flex-1" : "w-full"} py-2 rounded-lg bg-neon/10 border border-neon/20 text-neon text-xs font-semibold hover:bg-neon/20 active:scale-[0.98] transition-all`}>
-              + Add to Parlay
+            <button onClick={(e) => { e.stopPropagation(); onAddToParlay(); }}
+              className="flex-1 py-2 rounded-lg bg-neon/10 border border-neon/20 text-neon text-[11px] font-semibold hover:bg-neon/20 active:scale-[0.98] transition-all">
+              + Parlay
+            </button>
+            <button onClick={(e) => {
+              e.stopPropagation();
+              const { addBet } = useStore.getState();
+              addBet({ game: pick.game, market: pick.market, pick: pick.pick, bookmaker: pick.bookmaker, odds: pick.odds, stake: 100, result: "pending", payout: 0, isParlay: false, evAtPlacement: pick.evPercentage });
+            }}
+              className="py-2 px-3 rounded-lg bg-gold/10 border border-gold/20 text-gold text-[11px] font-semibold hover:bg-gold/20 transition-all flex-shrink-0">
+              Log $100
             </button>
           </div>
         </div>
