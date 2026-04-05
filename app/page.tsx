@@ -147,24 +147,18 @@ export default function WarRoom() {
   }, [setScores, setOddsData, setGames, setLoading, snapshotOdds, selectedGameId, selectGame]);
 
   useEffect(() => {
-    // Smart polling: pause 2 AM - 7 AM ET to save API calls
+    // Smart polling: dead overnight, fast during games, slow otherwise
     function shouldPoll(): boolean {
       const now = new Date();
       const etHour = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" })).getHours();
-      return etHour >= 7 || etHour < 2; // Active 7 AM - 2 AM ET
-    }
-
-    // Also poll less frequently when no games are live (every 3 min vs 90s)
-    function getInterval(): number {
-      if (!shouldPoll()) return 300000; // 5 min checks during dead hours (just in case)
-      const hasLive = scores.some((s: any) => s.status === "live");
-      return hasLive ? 60000 : 90000; // 60s during live games, 90s otherwise
+      return etHour >= 9 || etHour < 2; // Active 9 AM - 2 AM ET
     }
 
     fetchData();
+    const hasLive = scores.some((s: any) => s.status === "live");
     const interval = setInterval(() => {
       if (shouldPoll()) fetchData();
-    }, getInterval());
+    }, hasLive ? 90000 : 180000); // 90s during live games, 3 min otherwise
     return () => clearInterval(interval);
   }, [fetchData, scores]);
 

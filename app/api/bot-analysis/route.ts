@@ -9,7 +9,7 @@ import { fetchTodayGames, getGameStatus, getTeamAbbrev } from "@/lib/mlb/stats-a
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const cached = getCached("bot_analysis", 120_000);
+  const cached = getCached("bot_analysis", 600_000); // 10 min cache
   if (cached) return NextResponse.json(cached);
 
   try {
