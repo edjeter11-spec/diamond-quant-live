@@ -31,14 +31,17 @@ export default function NRFITab() {
   const [loading, setLoading] = useState(true);
   const [expandedGame, setExpandedGame] = useState<string | null>(null);
 
+  const [hasLoaded, setHasLoaded] = useState(false);
+
   useEffect(() => {
-    if (scores.length === 0) return;
+    if (scores.length === 0 || hasLoaded) return;
     setLoading(true);
     analyzeNRFI(scores).then(results => {
       setGames(results);
       setLoading(false);
-    }).catch(() => setLoading(false));
-  }, [scores]);
+      setHasLoaded(true);
+    }).catch(() => { setLoading(false); setHasLoaded(true); });
+  }, [scores, hasLoaded]);
 
   // Separate upcoming from live/settled
   const upcoming = games.filter(g => g.status === "pre");
