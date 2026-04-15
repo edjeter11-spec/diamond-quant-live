@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useStore } from "@/lib/store";
 import { useSport } from "@/lib/sport-context";
 import { BOOK_DISPLAY } from "@/lib/odds/the-odds-api";
+import PlayerAvatar from "@/components/ui/PlayerAvatar";
 import {
   User, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight,
   RefreshCw, ChevronDown, ChevronUp, Target, BarChart3, Clock,
@@ -281,14 +282,7 @@ export default function PlayerProps() {
           <div className="flex gap-3 mb-3">
             {/* Headshot */}
             {searchResult.player.photo && (
-              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden bg-gunmetal/50 flex-shrink-0 border border-slate/30">
-                <img
-                  src={searchResult.player.photo}
-                  alt={searchResult.player.name}
-                  className="w-full h-full object-cover"
-                  onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-                />
-              </div>
+              <PlayerAvatar name={searchResult.player.name} photo={searchResult.player.photo} size={64} className="sm:!w-20 sm:!h-20 !rounded-xl" />
             )}
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
@@ -440,6 +434,12 @@ export default function PlayerProps() {
                   onClick={() => togglePlayer(prop.playerName, prop.line, prop.team)}
                   className="w-full px-3 sm:px-4 py-3 flex items-center gap-3 hover:bg-gunmetal/30 active:bg-gunmetal/40 transition-colors text-left"
                 >
+                  {/* Player Avatar */}
+                  <PlayerAvatar
+                    name={prop.playerName}
+                    photo={analysis?.player?.photo}
+                    size={28}
+                  />
                   {/* Player Info */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
@@ -641,9 +641,7 @@ export default function PlayerProps() {
                             {(analysis.player as any)?.ppg !== undefined && (
                               <div className="rounded-lg bg-gunmetal/30 p-3">
                                 <div className="flex items-center gap-3 mb-2">
-                                  {(analysis.player as any).photo && (
-                                    <img src={(analysis.player as any).photo} alt={analysis.player.name} className="w-12 h-12 rounded-lg object-cover bg-gunmetal/50" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
-                                  )}
+                                  <PlayerAvatar name={analysis.player.name} photo={(analysis.player as any).photo} size={48} className="!rounded-lg" />
                                   <div>
                                     <p className="text-xs font-semibold text-silver">{analysis.player.name}</p>
                                     <p className="text-[10px] text-mercury">{(analysis.player as any).teamAbbrev} • {analysis.player.position} • #{(analysis.player as any).number}</p>

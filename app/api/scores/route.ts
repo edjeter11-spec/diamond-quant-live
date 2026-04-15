@@ -23,6 +23,8 @@ export async function GET() {
       venue: game.venue.name,
       homePitcher: game.teams.home.probablePitcher?.fullName ?? "TBD",
       awayPitcher: game.teams.away.probablePitcher?.fullName ?? "TBD",
+      homePitcherId: game.teams.home.probablePitcher?.id ?? null,
+      awayPitcherId: game.teams.away.probablePitcher?.id ?? null,
       weather: game.weather ?? null,
       detailedStatus: game.status.detailedState,
     }));

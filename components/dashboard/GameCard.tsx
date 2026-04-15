@@ -4,6 +4,7 @@ import { useStore } from "@/lib/store";
 import { useSport } from "@/lib/sport-context";
 import { Clock, MapPin, Cloud, ChevronRight, TrendingUp, Zap } from "lucide-react";
 import TeamLogo from "@/components/ui/TeamLogo";
+import PlayerAvatar from "@/components/ui/PlayerAvatar";
 import { getFullTeamName } from "@/lib/logos";
 
 interface GameCardProps {
@@ -37,7 +38,7 @@ interface GameCardProps {
   };
 }
 
-// Pitcher headshot — tries MLB CDN, falls back gracefully
+// Pitcher headshot — uses PlayerAvatar with MLB CDN photo or initials fallback
 function PitcherFace({ name, pitcherId }: { name: string; pitcherId?: number }) {
   if (!name || name === "TBD") {
     return <span className="text-[9px] sm:text-[10px] text-mercury/40 italic truncate">TBD</span>;
@@ -45,18 +46,11 @@ function PitcherFace({ name, pitcherId }: { name: string; pitcherId?: number }) 
 
   const photoUrl = pitcherId
     ? `https://img.mlbstatic.com/mlb-photos/image/upload/d_people:generic:headshot:67:current.png/w_40,q_auto:best/v1/people/${pitcherId}/headshot/67/current`
-    : null;
+    : undefined;
 
   return (
     <div className="flex items-center gap-1 min-w-0">
-      {photoUrl && (
-        <img
-          src={photoUrl}
-          alt={name}
-          className="w-4 h-4 sm:w-5 sm:h-5 rounded-full object-cover flex-shrink-0 bg-gunmetal/30"
-          onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-        />
-      )}
+      <PlayerAvatar name={name} photo={photoUrl} size={18} className="sm:!w-5 sm:!h-5" />
       <span className="text-[9px] sm:text-[10px] text-mercury/70 truncate">{name}</span>
     </div>
   );

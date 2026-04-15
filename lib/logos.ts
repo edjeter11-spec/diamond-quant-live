@@ -45,35 +45,68 @@ export function getTeamLogoByName(teamName: string, sport: "mlb" | "nba" = "mlb"
 
 // Convert full team name to abbreviation
 function teamNameToAbbrev(name: string, sport: "mlb" | "nba"): string {
-  const lower = name.toLowerCase();
+  const upper = name.toUpperCase().trim();
+  // If already a valid abbreviation, return it
+  if (sport === "nba" && NBA_TEAM_IDS[upper]) return upper;
+  if (sport === "mlb" && MLB_TEAM_IDS[upper]) return upper;
+
+  const lower = name.toLowerCase().trim();
   const lookup = sport === "nba" ? NBA_NAME_TO_ABBREV : MLB_NAME_TO_ABBREV;
-  for (const [key, abbrev] of Object.entries(lookup)) {
+  // Sort by key length descending so "los angeles clippers" matches before "los angeles"
+  const entries = Object.entries(lookup).sort((a, b) => b[0].length - a[0].length);
+  for (const [key, abbrev] of entries) {
     if (lower.includes(key)) return abbrev;
   }
-  // Fallback: last word
-  return name.split(" ").pop()?.slice(0, 3).toUpperCase() ?? "";
+  // Return empty — caller renders fallback icon instead of garbage abbreviation
+  return "";
 }
 
 const MLB_NAME_TO_ABBREV: Record<string, string> = {
-  "diamondbacks": "ARI", "braves": "ATL", "orioles": "BAL", "red sox": "BOS",
-  "cubs": "CHC", "white sox": "CWS", "reds": "CIN", "guardians": "CLE",
-  "rockies": "COL", "tigers": "DET", "astros": "HOU", "royals": "KC",
-  "angels": "LAA", "dodgers": "LAD", "marlins": "MIA", "brewers": "MIL",
-  "twins": "MIN", "mets": "NYM", "yankees": "NYY", "athletics": "OAK",
-  "phillies": "PHI", "pirates": "PIT", "padres": "SD", "giants": "SF",
-  "mariners": "SEA", "cardinals": "STL", "rays": "TB", "rangers": "TEX",
-  "blue jays": "TOR", "nationals": "WSH",
+  // Nicknames
+  "diamondbacks": "ARI", "d-backs": "ARI", "braves": "ATL", "orioles": "BAL",
+  "red sox": "BOS", "cubs": "CHC", "white sox": "CWS", "reds": "CIN",
+  "guardians": "CLE", "rockies": "COL", "tigers": "DET", "astros": "HOU",
+  "royals": "KC", "angels": "LAA", "dodgers": "LAD", "marlins": "MIA",
+  "brewers": "MIL", "twins": "MIN", "mets": "NYM", "yankees": "NYY",
+  "athletics": "OAK", "phillies": "PHI", "pirates": "PIT", "padres": "SD",
+  "giants": "SF", "mariners": "SEA", "cardinals": "STL", "rays": "TB",
+  "rangers": "TEX", "blue jays": "TOR", "nationals": "WSH",
+  // City names (longer keys first for disambiguation)
+  "los angeles a": "LAA", "los angeles d": "LAD",
+  "new york m": "NYM", "new york y": "NYY",
+  "san francisco": "SF", "san diego": "SD",
+  "st. louis": "STL", "st louis": "STL",
+  "kansas city": "KC", "tampa bay": "TB",
+  "arizona": "ARI", "atlanta": "ATL", "baltimore": "BAL", "boston": "BOS",
+  "chicago c": "CHC", "chicago w": "CWS",
+  "cincinnati": "CIN", "cleveland": "CLE", "colorado": "COL", "detroit": "DET",
+  "houston": "HOU", "miami": "MIA", "milwaukee": "MIL", "minnesota": "MIN",
+  "oakland": "OAK", "philadelphia": "PHI", "pittsburgh": "PIT",
+  "seattle": "SEA", "texas": "TEX", "toronto": "TOR", "washington": "WSH",
 };
 
 const NBA_NAME_TO_ABBREV: Record<string, string> = {
+  // Nicknames
   "hawks": "ATL", "celtics": "BOS", "nets": "BKN", "hornets": "CHA",
-  "bulls": "CHI", "cavaliers": "CLE", "mavericks": "DAL", "nuggets": "DEN",
-  "pistons": "DET", "warriors": "GSW", "rockets": "HOU", "pacers": "IND",
-  "clippers": "LAC", "lakers": "LAL", "grizzlies": "MEM", "heat": "MIA",
-  "bucks": "MIL", "timberwolves": "MIN", "pelicans": "NOP", "knicks": "NYK",
-  "thunder": "OKC", "magic": "ORL", "76ers": "PHI", "suns": "PHX",
+  "bulls": "CHI", "cavaliers": "CLE", "cavs": "CLE", "mavericks": "DAL", "mavs": "DAL",
+  "nuggets": "DEN", "pistons": "DET", "warriors": "GSW", "rockets": "HOU",
+  "pacers": "IND", "clippers": "LAC", "lakers": "LAL", "grizzlies": "MEM",
+  "heat": "MIA", "bucks": "MIL", "timberwolves": "MIN", "wolves": "MIN",
+  "pelicans": "NOP", "knicks": "NYK", "thunder": "OKC", "magic": "ORL",
+  "76ers": "PHI", "sixers": "PHI", "suns": "PHX",
   "trail blazers": "POR", "blazers": "POR", "kings": "SAC", "spurs": "SAS",
   "raptors": "TOR", "jazz": "UTA", "wizards": "WAS",
+  // City names (longer keys first for disambiguation)
+  "los angeles c": "LAC", "los angeles l": "LAL",
+  "golden state": "GSW", "oklahoma city": "OKC",
+  "new york": "NYK", "new orleans": "NOP", "san antonio": "SAS",
+  "atlanta": "ATL", "boston": "BOS", "brooklyn": "BKN", "charlotte": "CHA",
+  "chicago": "CHI", "cleveland": "CLE", "dallas": "DAL", "denver": "DEN",
+  "detroit": "DET", "houston": "HOU", "indiana": "IND",
+  "memphis": "MEM", "miami": "MIA", "milwaukee": "MIL", "minnesota": "MIN",
+  "oklahoma": "OKC", "orlando": "ORL", "philadelphia": "PHI", "phoenix": "PHX",
+  "portland": "POR", "sacramento": "SAC", "toronto": "TOR", "utah": "UTA",
+  "washington": "WAS",
 };
 
 // Player headshot URLs
