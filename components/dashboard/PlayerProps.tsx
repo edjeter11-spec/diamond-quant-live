@@ -566,6 +566,14 @@ export default function PlayerProps() {
                                 </span>
                               </div>
                               <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                                {analysis.player.ppg !== undefined && (
+                                  <>
+                                    <StatBox label="PPG" value={analysis.player.ppg?.toFixed(1) ?? "—"} />
+                                    <StatBox label="RPG" value={analysis.player.rpg?.toFixed(1) ?? "—"} />
+                                    <StatBox label="APG" value={analysis.player.apg?.toFixed(1) ?? "—"} />
+                                    <StatBox label="HIT%" value={`${analysis.player.hitRates?.[selectedMarket]?.rate ?? 50}%`} />
+                                  </>
+                                )}
                                 {analysis.player.era !== undefined && (
                                   <>
                                     <StatBox label="ERA" value={analysis.player.era.toFixed(2)} />
@@ -586,15 +594,16 @@ export default function PlayerProps() {
                             </div>
 
                             {/* Last 10 Games Sparkline */}
+                            {(analysis.last10Games?.length ?? 0) > 0 && (
                             <div className="rounded-lg bg-gunmetal/30 p-3">
                               <div className="flex items-center gap-2 mb-2">
                                 <Clock className="w-3.5 h-3.5 text-amber" />
                                 <p className="text-[11px] text-mercury uppercase tracking-wider font-semibold">
-                                  Last {analysis.last10Games.length} Games
+                                  Last {analysis.last10Games?.length ?? 0} Games
                                 </p>
-                                {analysis.vsOpponent.games > 0 && (
+                                {(analysis.vsOpponent?.games ?? 0) > 0 && (
                                   <span className="text-[10px] text-amber ml-auto">
-                                    vs Opp: {analysis.vsOpponent.avgStat.toFixed(1)} avg ({analysis.vsOpponent.games}g)
+                                    vs Opp: {analysis.vsOpponent.avgStat?.toFixed(1) ?? "?"} avg ({analysis.vsOpponent.games}g)
                                   </span>
                                 )}
                               </div>
@@ -622,15 +631,38 @@ export default function PlayerProps() {
                               {/* Line marker */}
                               <div className="relative h-0 -mt-8">
                                 <div className="absolute w-full border-t border-dashed border-electric/40" style={{
-                                  bottom: `${(prop.line / Math.max(...analysis.last10Games.map((g: any) => (g as any)[MARKET_STAT_KEY[selectedMarket] || "strikeouts"] ?? 0), prop.line + 2)) * 64}px`
+                                  bottom: `${(prop.line / Math.max(...(analysis.last10Games ?? []).map((g: any) => (g as any)[MARKET_STAT_KEY[selectedMarket] || "strikeouts"] ?? 0), prop.line + 2)) * 64}px`
                                 }} />
                               </div>
                             </div>
+                            )}
+
+                            {/* NBA-specific stats display */}
+                            {analysis.player?.ppg !== undefined && (
+                              <div className="rounded-lg bg-gunmetal/30 p-3">
+                                <div className="flex items-center gap-3 mb-2">
+                                  {analysis.player.photo && (
+                                    <img src={analysis.player.photo} alt={analysis.player.name} className="w-12 h-12 rounded-lg object-cover bg-gunmetal/50" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                                  )}
+                                  <div>
+                                    <p className="text-xs font-semibold text-silver">{analysis.player.name}</p>
+                                    <p className="text-[10px] text-mercury">{analysis.player.teamAbbrev} • {analysis.player.position} • #{analysis.player.number}</p>
+                                  </div>
+                                </div>
+                                <div className="grid grid-cols-4 gap-1.5">
+                                  <StatBox label="PPG" value={analysis.player.ppg?.toFixed(1) ?? "—"} />
+                                  <StatBox label="RPG" value={analysis.player.rpg?.toFixed(1) ?? "—"} />
+                                  <StatBox label="APG" value={analysis.player.apg?.toFixed(1) ?? "—"} />
+                                  <StatBox label="HIT%" value={`${analysis.player.hitRates?.[selectedMarket]?.rate ?? 50}%`} />
+                                </div>
+                              </div>
+                            )}
 
                             {/* Recommendation */}
+                            {analysis.recommendation && (
                             <div className={`rounded-lg p-3 border ${
-                              analysis.recommendation.side.includes("over") ? "bg-neon/5 border-neon/20" :
-                              analysis.recommendation.side.includes("under") ? "bg-purple/5 border-purple/20" :
+                              analysis.recommendation.side?.includes("over") ? "bg-neon/5 border-neon/20" :
+                              analysis.recommendation.side?.includes("under") ? "bg-purple/5 border-purple/20" :
                               "bg-gunmetal/30 border-slate/20"
                             }`}>
                               <div className="flex items-center gap-2 mb-2">
@@ -653,7 +685,7 @@ export default function PlayerProps() {
                                 </div>
                               </div>
                               <div className="space-y-1">
-                                {analysis.recommendation.reasons.map((reason, ri) => (
+                                {(analysis.recommendation.reasons ?? []).map((reason: string, ri: number) => (
                                   <div key={ri} className="flex items-start gap-1.5">
                                     <span className="text-electric text-[10px] mt-0.5">{'>'}</span>
                                     <p className="text-xs text-mercury">{reason}</p>
@@ -661,6 +693,7 @@ export default function PlayerProps() {
                                 ))}
                               </div>
                             </div>
+                            )}
                           </>
                         )}
 
