@@ -17,7 +17,11 @@ import {
   type CLVRecord,
 } from "@/lib/bot/clv-tracker";
 import { loadEloState, saveEloState, updateElo } from "@/lib/bot/elo";
+import { loadNbaPropBrain, type NbaPropBrainState } from "@/lib/bot/nba-prop-brain";
+import { projectProp } from "@/lib/bot/nba-prop-projector";
 import type { GameAnalysis } from "@/lib/bot/three-models";
+import TeamLogo from "@/components/ui/TeamLogo";
+import PlayerAvatar from "@/components/ui/PlayerAvatar";
 
 export default function BotChallenge() {
   const { scores } = useStore();
@@ -46,6 +50,47 @@ export default function BotChallenge() {
   });
 
   const clvSummary = useMemo(() => getCLVSummary(clvRecords), [clvRecords]);
+
+  // NBA Prop Brain picks (prop parlay of the day)
+  const [propParlayPicks, setPropParlayPicks] = useState<Array<{
+    playerName: string; propType: string; line: number; side: string;
+    probability: number; projectedValue: number;
+  }>>([]);
+
+  useEffect(() => {
+    if (!isNBA) { setPropParlayPicks([]); return; }
+    // Generate prop parlay from Brain projections on today's props
+    async function generatePropParlay() {
+      try {
+        const brain = loadNbaPropBrain();
+        const propsRes = await fetch("/api/players?sport=basketball_nba&market=player_points");
+        if (!propsRes.ok) return;
+        const propsData = await propsRes.json();
+        const props = propsData.props ?? [];
+
+        const projections: typeof propParlayPicks = [];
+        for (const prop of props.slice(0, 20)) {
+          const stats = { ppg: prop.line, rpg: 5, apg: 3 };
+          const ctx = { isHome: false, isB2B: false, leagueAvgTotal: 224 };
+          const proj = projectProp(stats, "player_points", prop.line, brain.weights, ctx);
+          if (proj.confidence >= 15) {
+            projections.push({
+              playerName: prop.playerName,
+              propType: "Points",
+              line: prop.line,
+              side: proj.side,
+              probability: proj.probability,
+              projectedValue: proj.projectedValue,
+            });
+          }
+        }
+        // Sort by confidence, take top 4
+        projections.sort((a, b) => Math.abs(b.probability - 0.5) - Math.abs(a.probability - 0.5));
+        setPropParlayPicks(projections.slice(0, 4));
+      } catch {}
+    }
+    generatePropParlay();
+  }, [isNBA]);
 
   // Reload bot state + CLV when sport changes
   useEffect(() => {
@@ -89,7 +134,7 @@ export default function BotChallenge() {
         picks: [...botState.picks, ...newPicks],
         bankroll: botState.bankroll - newPicks.reduce((s, p) => s + p.stake, 0),
       };
-      saveSmartBot(updated);
+      saveSmartBot(updated, currentSport);
       setBotState(updated);
 
       // Track new picks in CLV (opening odds = bet odds)
@@ -107,7 +152,7 @@ export default function BotChallenge() {
   // Auto-settle + learn + update CLV + update Elo when scores arrive
   useEffect(() => {
     if (scores.length === 0) return;
-    const { botState: updated, accuracy: newAcc } = settleAndLearn(botState, scores);
+    const { botState: updated, accuracy: newAcc } = settleAndLearn(botState, scores, currentSport);
     if (updated !== botState) {
       setBotState(updated);
       setAccuracy(newAcc);
@@ -295,6 +340,38 @@ export default function BotChallenge() {
                 onToggle={() => setExpandedPick(expandedPick === pick.id ? null : pick.id)}
                 formatOdds={formatOdds}
               />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* NBA Prop Parlay of the Day — Brain's best player prop picks */}
+      {isNBA && propParlayPicks.length > 0 && (
+        <div className="glass rounded-xl overflow-hidden border border-purple/20">
+          <div className="px-4 py-2.5 bg-gradient-to-r from-purple/10 to-neon/5 border-b border-purple/15 flex items-center gap-2">
+            <Brain className="w-4 h-4 text-purple" />
+            <div className="flex-1">
+              <h3 className="text-xs font-bold text-silver uppercase tracking-wider">Prop Parlay of the Day</h3>
+              <p className="text-[9px] text-mercury/50">Brain's top 4 player prop projections</p>
+            </div>
+            <span className="text-xs font-bold font-mono text-purple">{propParlayPicks.length} legs</span>
+          </div>
+          <div className="divide-y divide-slate/10">
+            {propParlayPicks.map((prop, i) => (
+              <div key={i} className="px-4 py-2.5 flex items-center gap-2.5">
+                <span className="w-5 h-5 rounded-full bg-purple/20 text-purple text-[9px] font-bold flex items-center justify-center flex-shrink-0">{i + 1}</span>
+                <PlayerAvatar name={prop.playerName} size={22} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold text-silver truncate">{prop.playerName}</p>
+                  <p className="text-[9px] text-mercury/50">{prop.propType} • Proj: {prop.projectedValue}</p>
+                </div>
+                <div className="text-right flex-shrink-0">
+                  <span className={`text-xs font-bold font-mono ${prop.side === "over" ? "text-neon" : "text-purple"}`}>
+                    {prop.side === "over" ? "O" : "U"} {prop.line}
+                  </span>
+                  <p className="text-[8px] text-mercury/50">{(prop.probability * 100).toFixed(0)}%</p>
+                </div>
+              </div>
             ))}
           </div>
         </div>

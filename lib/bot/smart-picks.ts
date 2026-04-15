@@ -88,26 +88,30 @@ export interface SmartBotState {
 
 const STARTING_BANKROLL = 5000;
 
-export function loadSmartBot(): SmartBotState {
+// Sport-aware load/save — MLB and NBA have separate bot states
+export function loadSmartBot(sport: string = "mlb"): SmartBotState {
   if (typeof window === "undefined") return { bankroll: STARTING_BANKROLL, picks: [], dailyPnL: {} };
+  const key = sport === "nba" ? "dq_smart_bot_nba" : "dq_smart_bot";
   try {
-    const stored = localStorage.getItem("dq_smart_bot");
+    const stored = localStorage.getItem(key);
     if (stored) return JSON.parse(stored);
   } catch {}
   return { bankroll: STARTING_BANKROLL, picks: [], dailyPnL: {} };
 }
 
-export function saveSmartBot(state: SmartBotState) {
+export function saveSmartBot(state: SmartBotState, sport: string = "mlb") {
   if (typeof window !== "undefined") {
-    try { localStorage.setItem("dq_smart_bot", JSON.stringify(state)); } catch {}
+    const key = sport === "nba" ? "dq_smart_bot_nba" : "dq_smart_bot";
+    try { localStorage.setItem(key, JSON.stringify(state)); } catch {}
   }
-  syncSmartBotToCloud(state);
+  syncSmartBotToCloud(state, sport);
 }
 
-async function syncSmartBotToCloud(state: SmartBotState) {
+async function syncSmartBotToCloud(state: SmartBotState, sport: string = "mlb") {
   try {
     const { cloudSet } = await import("@/lib/supabase/client");
-    await cloudSet("smart_bot", state);
+    const cloudKey = sport === "nba" ? "smart_bot_nba" : "smart_bot";
+    await cloudSet(cloudKey, state);
   } catch {}
 }
 
@@ -190,7 +194,8 @@ export function generateSmartPicks(
 
 export function settleAndLearn(
   botState: SmartBotState,
-  scores: any[]
+  scores: any[],
+  sport: string = "mlb"
 ): { botState: SmartBotState; accuracy: ModelAccuracy } {
   let accuracy = loadModelAccuracy();
   let changed = false;
@@ -299,7 +304,7 @@ export function settleAndLearn(
     dailyPnL,
   };
 
-  saveSmartBot(newState);
+  saveSmartBot(newState, sport);
   saveModelAccuracy(accuracy);
 
   return { botState: newState, accuracy };
