@@ -400,6 +400,7 @@ export default function PicksBoard() {
             {parlayLegs.map((leg, i) => (
               <div key={i} className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-gunmetal/30 text-left">
                 <span className="w-4 h-4 rounded-full bg-purple/20 text-purple text-[9px] font-bold flex items-center justify-center flex-shrink-0">{i + 1}</span>
+                <TeamLogo team={leg.pick.split(" ML")[0].split(" Over")[0].split(" Under")[0].split("/")[0].trim()} size={18} />
                 <div className="flex-1 min-w-0">
                   <p className="text-xs sm:text-sm font-medium text-silver truncate">{leg.pick}</p>
                   <p className="text-[9px] text-mercury/60 truncate">

@@ -26,6 +26,7 @@ import TrainingPanel from "@/components/dashboard/TrainingPanel";
 import TopPropsOfDay from "@/components/dashboard/TopPropsOfDay";
 import SnapSync from "@/components/dashboard/SnapSync";
 import NRFITab from "@/components/dashboard/NRFITab";
+import { teamNameToAbbrev } from "@/lib/logos";
 import AuthButton from "@/components/auth/AuthButton";
 import UserProfile from "@/components/auth/UserProfile";
 import MigrationBanner from "@/components/auth/MigrationBanner";
@@ -304,8 +305,8 @@ export default function WarRoom() {
         id: g.id,
         homeTeam: g.homeTeam,
         awayTeam: g.awayTeam,
-        homeAbbrev: g.homeTeam?.split(" ").pop()?.slice(0, 3).toUpperCase() ?? "",
-        awayAbbrev: g.awayTeam?.split(" ").pop()?.slice(0, 3).toUpperCase() ?? "",
+        homeAbbrev: teamNameToAbbrev(g.homeTeam ?? "", currentSport as "mlb" | "nba") || (g.homeTeam?.split(" ").pop()?.slice(0, 3).toUpperCase() ?? ""),
+        awayAbbrev: teamNameToAbbrev(g.awayTeam ?? "", currentSport as "mlb" | "nba") || (g.awayTeam?.split(" ").pop()?.slice(0, 3).toUpperCase() ?? ""),
         homeScore: 0, awayScore: 0,
         status: "pre",
         startTime: g.commenceTime,

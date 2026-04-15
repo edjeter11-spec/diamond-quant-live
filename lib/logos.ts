@@ -44,7 +44,7 @@ export function getTeamLogoByName(teamName: string, sport: "mlb" | "nba" = "mlb"
 }
 
 // Convert full team name to abbreviation
-function teamNameToAbbrev(name: string, sport: "mlb" | "nba"): string {
+export function teamNameToAbbrev(name: string, sport: "mlb" | "nba"): string {
   const upper = name.toUpperCase().trim();
   // If already a valid abbreviation, return it
   if (sport === "nba" && NBA_TEAM_IDS[upper]) return upper;
