@@ -7,7 +7,7 @@ import {
   Trophy, Zap, Layers, TrendingUp, Target, ChevronDown,
   Star, DollarSign, ArrowUpRight, ArrowDownRight, BarChart3,
   Flame, Brain, Clock, Swords, Activity, CircleDot, ArrowUp, ArrowDown, Shield,
-  AlertTriangle, ExternalLink,
+  AlertTriangle, ExternalLink, Sparkles, RefreshCw,
 } from "lucide-react";
 import { getDeepLink } from "@/lib/odds/sportsbooks";
 import TeamLogo from "@/components/ui/TeamLogo";
@@ -62,7 +62,7 @@ export default function PicksBoard() {
             confidence: game.consensus?.confidence === "HIGH" ? "HIGH" : game.consensus?.confidence === "MEDIUM" ? "MEDIUM" : "LOW",
             kellyStake: p.kellyStake ?? 0,
             reasoning: p.reasoning ?? [],
-            aiTip: `Pitcher: ${game.pitcherModel?.homeWinProb ? (game.pitcherModel.homeWinProb * 100).toFixed(0) : '?'}% | Market: ${game.marketModel?.homeWinProb ? (game.marketModel.homeWinProb * 100).toFixed(0) : '?'}% | Trend: ${game.trendModel?.homeWinProb ? (game.trendModel.homeWinProb * 100).toFixed(0) : '?'}% → ${game.consensus?.modelsAgree ? 'All agree' : 'Models disagree'}`,
+            aiTip: `${config.model1Label}: ${game.pitcherModel?.homeWinProb ? (game.pitcherModel.homeWinProb * 100).toFixed(0) : '?'}% | Market: ${game.marketModel?.homeWinProb ? (game.marketModel.homeWinProb * 100).toFixed(0) : '?'}% | ${config.model3Label}: ${game.trendModel?.homeWinProb ? (game.trendModel.homeWinProb * 100).toFixed(0) : '?'}% → ${game.consensus?.modelsAgree ? 'All agree' : 'Models disagree'}`,
             history: game.homePitcher ? [`Home: ${game.homePitcher.name} (${game.homePitcher.era} ERA)`, `Away: ${game.awayPitcher?.name ?? 'TBD'} (${game.awayPitcher?.era ?? '?'} ERA)`] : [],
             commenceTime: game.commenceTime,
             gameStatus: undefined,
@@ -495,6 +495,44 @@ export default function PicksBoard() {
 function PickCard({ pick, isExpanded, onToggle, onAddToParlay, formatOdds }: {
   pick: Pick; isExpanded: boolean; onToggle: () => void; onAddToParlay: () => void; formatOdds: (n: number) => string;
 }) {
+  const [showAISummary, setShowAISummary] = useState(false);
+  const [aiSummary, setAiSummary] = useState<string | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+
+  // Fetch AI summary when user opens it; use localStorage cache keyed by pick.id + date
+  useEffect(() => {
+    if (!showAISummary || aiSummary !== null) return;
+    const today = new Date().toISOString().split("T")[0];
+    const cacheKey = `dq_gsum_${pick.id.replace(/[^a-z0-9]/gi, "_").slice(0, 50)}_${today}`;
+    try {
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) { setAiSummary(cached); return; }
+    } catch {}
+
+    setSummaryLoading(true);
+    fetch("/api/game-summary-ai", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        game: pick.game,
+        reasoning: pick.reasoning,
+        history: pick.history,
+        aiTip: pick.aiTip,
+        gameId: pick.id,
+      }),
+    })
+      .then(r => r.json())
+      .then(data => {
+        const text = data.summary ?? null;
+        setAiSummary(text ?? "");
+        if (text) {
+          try { localStorage.setItem(cacheKey, text); } catch {}
+        }
+      })
+      .catch(() => setAiSummary(""))
+      .finally(() => setSummaryLoading(false));
+  }, [showAISummary]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const confDot: Record<string, string> = { HIGH: "bg-neon", MEDIUM: "bg-electric", LOW: "bg-amber", NO_EDGE: "bg-mercury/40" };
 
   return (
@@ -595,6 +633,30 @@ function PickCard({ pick, isExpanded, onToggle, onAddToParlay, formatOdds }: {
               <p className="text-[11px] text-amber/90">{pick.warning || "Large edge — verify this line is still live before betting"}</p>
             </div>
           )}
+
+          {/* AI Game Summary — collapsible Gemini preview */}
+          <div>
+            <button
+              onClick={(e) => { e.stopPropagation(); setShowAISummary(v => !v); }}
+              className="w-full flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-purple/5 border border-purple/15 hover:bg-purple/10 transition-colors text-left"
+            >
+              <Sparkles className="w-3 h-3 text-purple flex-shrink-0" />
+              <span className="text-[10px] font-semibold text-purple flex-1">AI Game Preview</span>
+              {summaryLoading && <RefreshCw className="w-3 h-3 text-purple/50 animate-spin flex-shrink-0" />}
+              <ChevronDown className={`w-3 h-3 text-purple/50 flex-shrink-0 transition-transform ${showAISummary ? "rotate-180" : ""}`} />
+            </button>
+            {showAISummary && (
+              <div className="mt-1 px-2.5 py-2 rounded-lg bg-purple/5 border border-purple/10">
+                {summaryLoading ? (
+                  <p className="text-[11px] text-mercury/50 italic">Generating preview...</p>
+                ) : aiSummary ? (
+                  <p className="text-[11px] text-silver leading-relaxed">{aiSummary}</p>
+                ) : (
+                  <p className="text-[11px] text-mercury/40 italic">Preview unavailable</p>
+                )}
+              </div>
+            )}
+          </div>
 
           {/* Action buttons */}
           <div className="flex gap-1.5">
