@@ -1,17 +1,17 @@
 import { NextResponse } from "next/server";
-import { fetchMLBOdds, parseOddsLines, findBestLine } from "@/lib/odds/the-odds-api";
+import { fetchOdds, parseOddsLines, findBestLine } from "@/lib/odds/the-odds-api";
 import { findArbitrage, findEVBets } from "@/lib/odds/arbitrage";
 import { getApiKey, markKeyExhausted, getActiveKeyCount } from "@/lib/odds/api-keys";
 import { getCached, setCache, CACHE_TTL, stampEdge, getEdgeAge, cleanEdges } from "@/lib/odds/server-cache";
 import { filterRealArbs, filterRealEV } from "@/lib/odds/sportsbooks";
 
-// Increased revalidate to reduce calls
 export const revalidate = 60;
 
-const CACHE_KEY = "mlb_odds";
+export async function GET(req: Request) {
+  const { searchParams } = new URL(req.url);
+  const sport = searchParams.get("sport") || "baseball_mlb";
+  const CACHE_KEY = `odds_${sport}`;
 
-export async function GET() {
-  // Check server cache first — avoids hitting API entirely
   const cached = getCached(CACHE_KEY, CACHE_TTL.ODDS);
   if (cached) {
     return NextResponse.json(cached);
@@ -27,7 +27,7 @@ export async function GET() {
     if (!key) break;
 
     try {
-      const rawGames = await fetchMLBOdds(key);
+      const rawGames = await fetchOdds(key, sport);
 
       const hasData = rawGames.some((g) => g.bookmakers.length > 0);
       if (!hasData && getActiveKeyCount() > 1) {

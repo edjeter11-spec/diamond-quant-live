@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useStore } from "@/lib/store";
+import { useSport, SPORT_CONFIGS, type Sport } from "@/lib/sport-context";
 import LiveTicker from "@/components/dashboard/LiveTicker";
 import GameCard from "@/components/dashboard/GameCard";
 import OddsGrid from "@/components/dashboard/OddsGrid";
@@ -79,6 +80,7 @@ export default function WarRoom() {
     setGames, setOddsData, setScores, setLoading, lastUpdate,
     selectGame, snapshotOdds, getLineMovements, hydrate,
   } = useStore();
+  const { currentSport, config, setSport } = useSport();
 
   const [refreshing, setRefreshing] = useState(false);
   const [mobileGamesOpen, setMobileGamesOpen] = useState(false);
@@ -101,7 +103,7 @@ export default function WarRoom() {
     try {
       const [scoresRes, oddsRes, analysisRes] = await Promise.all([
         fetch("/api/scores").then((r) => r.json()).catch(() => ({ games: [] })),
-        fetch("/api/odds").then((r) => r.json()).catch(() => ({ games: [], demo: true })),
+        fetch(`/api/odds?sport=${config.oddsApiKey}`).then((r) => r.json()).catch(() => ({ games: [], demo: true })),
         fetch("/api/analysis").then((r) => r.json()).catch(() => ({ analyses: [] })),
       ]);
 
@@ -309,14 +311,34 @@ export default function WarRoom() {
       <header className="border-b border-slate/30 bg-bunker/80 backdrop-blur-lg sticky top-0 z-40">
         <div className="max-w-[1800px] mx-auto px-3 sm:px-4 py-2.5 sm:py-3 flex items-center justify-between">
           <div className="flex items-center gap-2 sm:gap-3">
-            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-gradient-to-br from-neon/20 to-electric/20 flex items-center justify-center border border-neon/20 flex-shrink-0">
-              <Diamond className="w-4 h-4 sm:w-5 sm:h-5 text-neon" />
+            <div className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center border flex-shrink-0 ${
+              currentSport === "nba" ? "bg-gradient-to-br from-orange-500/20 to-amber-500/20 border-orange-500/20" : "bg-gradient-to-br from-neon/20 to-electric/20 border-neon/20"
+            }`}>
+              <Diamond className={`w-4 h-4 sm:w-5 sm:h-5 ${currentSport === "nba" ? "text-orange-500" : "text-neon"}`} />
             </div>
             <div>
               <h1 className="text-base sm:text-lg font-bold text-silver tracking-tight leading-tight">
-                DQ <span className="text-neon hidden sm:inline">Live</span><span className="text-neon sm:hidden">L</span>
+                DQ <span className={`hidden sm:inline ${currentSport === "nba" ? "text-orange-500" : "text-neon"}`}>Live</span>
+                <span className={`sm:hidden ${currentSport === "nba" ? "text-orange-500" : "text-neon"}`}>L</span>
               </h1>
-              <p className="text-[9px] sm:text-[10px] text-mercury/60 -mt-0.5 font-mono hidden sm:block">MLB BETTING INTELLIGENCE</p>
+              <p className="text-[9px] sm:text-[10px] text-mercury/60 -mt-0.5 font-mono hidden sm:block">
+                {currentSport === "nba" ? "NBA" : "MLB"} BETTING INTELLIGENCE
+              </p>
+            </div>
+            {/* Sport Switcher */}
+            <div className="flex items-center bg-gunmetal/50 rounded-lg p-0.5 ml-1">
+              <button
+                onClick={() => { setSport("mlb"); selectGame(null); }}
+                className={`px-2 py-1 rounded text-[10px] font-bold transition-all ${
+                  currentSport === "mlb" ? "bg-neon/20 text-neon" : "text-mercury/50 hover:text-mercury"
+                }`}
+              >MLB</button>
+              <button
+                onClick={() => { setSport("nba"); selectGame(null); }}
+                className={`px-2 py-1 rounded text-[10px] font-bold transition-all ${
+                  currentSport === "nba" ? "bg-orange-500/20 text-orange-500" : "text-mercury/50 hover:text-mercury"
+                }`}
+              >NBA</button>
             </div>
           </div>
 
