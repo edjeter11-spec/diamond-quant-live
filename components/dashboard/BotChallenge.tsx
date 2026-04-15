@@ -110,7 +110,7 @@ export default function BotChallenge() {
           <Bot className="w-5 h-5 text-electric" />
           <div className="flex-1">
             <h2 className="text-sm font-bold text-silver">Bot Challenge — 3-Model Powered</h2>
-            <p className="text-[10px] text-mercury/60">$5K sim • 4 picks/day • Pitcher + Market + Trend consensus</p>
+            <p className="text-[10px] text-mercury/60">$5K sim • 4 picks/day • {config.model1Label} + Market + {config.model3Label} consensus</p>
           </div>
           <div className="text-right">
             <p className={`text-lg font-bold font-mono ${botState.bankroll >= 5000 ? "text-neon" : "text-danger"}`}>
@@ -132,7 +132,7 @@ export default function BotChallenge() {
           <div className="px-4 py-2 border-t border-slate/10">
             <p className="text-[9px] text-mercury uppercase tracking-wider mb-1.5 font-semibold">Model Accuracy (live tracking)</p>
             <div className="grid grid-cols-4 gap-2">
-              <ModelAccStat name="Pitcher" icon={Brain} color="text-purple" acc={accuracy.pitcher} />
+              <ModelAccStat name={config.model1Label} icon={Brain} color="text-purple" acc={accuracy.pitcher} />
               <ModelAccStat name="Market" icon={BarChart3} color="text-electric" acc={accuracy.market} />
               <ModelAccStat name="Trend" icon={TrendingUp} color="text-neon" acc={accuracy.trend} />
               <ModelAccStat name="Consensus" icon={Target} color="text-gold" acc={accuracy.consensus} />
@@ -209,6 +209,7 @@ function PickRow({ pick, isExpanded, onToggle, formatOdds, compact }: {
   pick: SmartBotPick; isExpanded: boolean; onToggle: () => void;
   formatOdds: (n: number) => string; compact?: boolean;
 }) {
+  const { config } = useSport();
   const resultStyles: Record<string, string> = {
     win: "bg-neon/15 text-neon", loss: "bg-danger/15 text-danger",
     push: "bg-mercury/15 text-mercury", pending: "bg-amber/15 text-amber",
@@ -251,7 +252,7 @@ function PickRow({ pick, isExpanded, onToggle, formatOdds, compact }: {
             <div className="text-center p-1.5 rounded bg-purple/10">
               <Brain className="w-3 h-3 text-purple mx-auto mb-0.5" />
               <p className="text-sm font-bold font-mono text-purple">{pick.pitcherScore}%</p>
-              <p className="text-[8px] text-mercury">Pitcher</p>
+              <p className="text-[8px] text-mercury">{config.model1Label}</p>
               {pick.pitcherCorrect !== undefined && (
                 <p className={`text-[8px] font-bold ${pick.pitcherCorrect ? "text-neon" : "text-danger"}`}>
                   {pick.pitcherCorrect ? "RIGHT" : "WRONG"}

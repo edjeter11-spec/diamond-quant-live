@@ -22,9 +22,10 @@ const BASE_URL = "https://api.the-odds-api.com/v4";
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const market = searchParams.get("market") || "pitcher_strikeouts";
+  const sport = searchParams.get("sport") || "baseball_mlb";
 
-  // Check server cache
-  const cacheKey = `props_${market}`;
+  // Check server cache (keyed by sport + market)
+  const cacheKey = `props_${sport}_${market}`;
   const cached = getCached(cacheKey, CACHE_TTL.PROPS);
   if (cached) return NextResponse.json(cached);
 
@@ -34,13 +35,13 @@ export async function GET(req: Request) {
   }
 
   try {
-    // Fetch event list directly from the events endpoint (cheaper than full odds)
-    const eventsCacheKey = "mlb_events_props";
+    // Fetch event list for the right sport
+    const eventsCacheKey = `${sport}_events_props`;
     let events = getCached(eventsCacheKey, CACHE_TTL.EVENTS);
 
     if (!events) {
       const eventsRes = await fetch(
-        `${BASE_URL}/sports/baseball_mlb/events?apiKey=${apiKey}`,
+        `${BASE_URL}/sports/${sport}/events?apiKey=${apiKey}`,
         { next: { revalidate: 300 } }
       );
       if (!eventsRes.ok) throw new Error(`Events API error: ${eventsRes.status}`);

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useStore } from "@/lib/store";
+import { useSport } from "@/lib/sport-context";
 import { BOOK_DISPLAY } from "@/lib/odds/the-odds-api";
 import {
   User, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight,
@@ -86,8 +87,15 @@ function getBookShort(name: string): string {
 
 export default function PlayerProps() {
   const { addParlayLeg } = useStore();
+  const { currentSport, config } = useSport();
   const [props, setProps] = useState<PropLine[]>([]);
-  const [selectedMarket, setSelectedMarket] = useState("pitcher_strikeouts");
+  const [selectedMarket, setSelectedMarket] = useState(config.propMarkets[0]?.key ?? "pitcher_strikeouts");
+
+  // Reset market when sport changes
+  useEffect(() => {
+    setSelectedMarket(config.propMarkets[0]?.key ?? "pitcher_strikeouts");
+    setProps([]);
+  }, [currentSport, config]);
   const [loading, setLoading] = useState(true);
   const [isDemo, setIsDemo] = useState(false);
   const [expandedPlayer, setExpandedPlayer] = useState<string | null>(null);
@@ -116,7 +124,7 @@ export default function PlayerProps() {
     // DON'T clear existing props while loading — show stale data until new arrives
     setLoading(true);
     try {
-      const res = await fetch(`/api/players?market=${selectedMarket}`);
+      const res = await fetch(`/api/players?market=${selectedMarket}&sport=${config.oddsApiKey}`);
       const data = await res.json();
       const newProps = data.props ?? [];
       // Only update if we actually got data (don't replace good data with empty)
@@ -240,7 +248,7 @@ export default function PlayerProps() {
 
         {/* Market Filter */}
         <div className="flex gap-1.5 overflow-x-auto scrollbar-hide pb-0.5">
-          {Object.entries(MARKET_LABELS).map(([key, label]) => (
+          {config.propMarkets.map(({ key, label }) => (
             <button
               key={key}
               onClick={() => setSelectedMarket(key)}

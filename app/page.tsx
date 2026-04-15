@@ -293,7 +293,21 @@ export default function WarRoom() {
   ];
 
   // Only show live + upcoming games — never finals
-  const activeGames = scores.filter((g: any) => g.status !== "final");
+  // For NBA: if scores are empty, build game list from odds data
+  const activeGames = scores.length > 0
+    ? scores.filter((g: any) => g.status !== "final")
+    : oddsData.map((g: any) => ({
+        id: g.id,
+        homeTeam: g.homeTeam,
+        awayTeam: g.awayTeam,
+        homeAbbrev: g.homeTeam?.split(" ").pop()?.slice(0, 3).toUpperCase() ?? "",
+        awayAbbrev: g.awayTeam?.split(" ").pop()?.slice(0, 3).toUpperCase() ?? "",
+        homeScore: 0, awayScore: 0,
+        status: "pre",
+        startTime: g.commenceTime,
+        venue: "", homePitcher: "", awayPitcher: "",
+        detailedStatus: "Scheduled",
+      }));
 
   const renderGameCards = () => (
     <div className="space-y-2">
@@ -768,7 +782,7 @@ export default function WarRoom() {
 
       <footer className="border-t border-slate/20 mt-6 sm:mt-8 py-3 sm:py-4 text-center px-4">
         <p className="text-[10px] sm:text-xs text-mercury/40 font-mono">
-          Diamond-Quant Live v1.0 — Odds via The Odds API. Stats via MLB Stats API.
+          Diamond-Quant Live v1.0 — Odds via The Odds API. Stats via {currentSport === "nba" ? "NBA Stats API" : "MLB Stats API"}.
         </p>
         <p className="text-[9px] sm:text-[10px] text-mercury/30 mt-1">
           For entertainment & educational purposes. Gamble responsibly.
