@@ -109,6 +109,20 @@ export default function PlayerProps() {
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState("");
 
+  // Brain accuracy badges (NBA only)
+  const [brainAccuracy, setBrainAccuracy] = useState<Record<string, { total: number; hits: number; winRate: number }>>({});
+
+  // Fetch brain accuracy when props load (NBA only)
+  useEffect(() => {
+    if (currentSport !== "nba" || props.length === 0) return;
+    const playerNames = [...new Set(props.map(p => p.playerName))].slice(0, 20);
+    if (playerNames.length === 0) return;
+    fetch(`/api/nba-prop-accuracy?players=${encodeURIComponent(playerNames.join(","))}`)
+      .then(r => r.json())
+      .then(data => { if (data.accuracy) setBrainAccuracy(data.accuracy); })
+      .catch(() => {});
+  }, [props, currentSport]);
+
   const [currentMarket, setCurrentMarket] = useState(selectedMarket);
 
   useEffect(() => {
@@ -434,27 +448,30 @@ export default function PlayerProps() {
                   onClick={() => togglePlayer(prop.playerName, prop.line, prop.team)}
                   className="w-full px-3 sm:px-4 py-3 flex items-center gap-3 hover:bg-gunmetal/30 active:bg-gunmetal/40 transition-colors text-left"
                 >
-                  {/* Player Avatar */}
-                  <PlayerAvatar
-                    name={prop.playerName}
-                    photo={analysis?.player?.photo}
-                    size={28}
-                  />
-                  {/* Player Info */}
+                  {/* Player Info — name always visible */}
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <PlayerAvatar
+                        name={prop.playerName}
+                        photo={analysis?.player?.photo}
+                        size={22}
+                      />
                       <p className="text-sm font-semibold text-silver truncate">{prop.playerName}</p>
-                      {prop.team && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-gunmetal text-mercury flex-shrink-0">
-                          {prop.team}
+                      {brainAccuracy[prop.playerName] && brainAccuracy[prop.playerName].total >= 3 && (
+                        <span className={`text-[9px] px-1 py-0.5 rounded font-mono flex-shrink-0 ${
+                          brainAccuracy[prop.playerName].winRate >= 60 ? "bg-neon/15 text-neon" :
+                          brainAccuracy[prop.playerName].winRate >= 50 ? "bg-amber/15 text-amber" :
+                          "bg-danger/15 text-danger"
+                        }`}>
+                          {brainAccuracy[prop.playerName].hits}-{brainAccuracy[prop.playerName].total - brainAccuracy[prop.playerName].hits}
                         </span>
                       )}
                     </div>
-                    <p className="text-[11px] text-mercury/60">
+                    <p className="text-[10px] text-mercury/60 truncate">
                       {prop.gameTime && (
                         <span className="text-mercury/80">{new Date(prop.gameTime!).toLocaleString("en-US", { hour: "numeric", minute: "2-digit" })} — </span>
                       )}
-                      {MARKET_LABELS[prop.market] ?? prop.market}
+                      {prop.team ? `${prop.team} • ` : ""}{MARKET_LABELS[prop.market] ?? prop.market}
                     </p>
                   </div>
 

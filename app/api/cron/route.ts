@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { fetchTodayGames, getGameStatus, getTeamAbbrev } from "@/lib/mlb/stats-api";
+import { loadNbaPropBrainFromCloud, saveNbaPropBrainToCloud } from "@/lib/bot/nba-prop-brain";
+import { auditCompletedGames } from "@/lib/bot/nba-prop-audit";
 
 // This endpoint is called by Vercel Cron every 30 min
 // It checks for finished games and logs results
@@ -32,11 +34,22 @@ export async function GET(req: Request) {
         awayPitcher: g.teams?.away?.probablePitcher?.fullName ?? "TBD",
       }));
 
+    // ── NBA Prop Brain: Post-Game Audit ──
+    let nbaAudit = { graded: 0, hits: 0, misses: 0 };
+    try {
+      const nbaBrain = await loadNbaPropBrainFromCloud();
+      const { updatedBrain, graded, hits, misses } = await auditCompletedGames(nbaBrain);
+      if (graded > 0) {
+        await saveNbaPropBrainToCloud(updatedBrain);
+        nbaAudit = { graded, hits, misses };
+      }
+    } catch {}
+
     return NextResponse.json({
       ok: true,
       timestamp: new Date().toISOString(),
-      games: { total: games.length, live, final, pre },
-      completedToday: completedGames.length,
+      mlb: { total: games.length, live, final, pre, completedToday: completedGames.length },
+      nbaProps: nbaAudit,
     });
   } catch (error: any) {
     return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
