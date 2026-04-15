@@ -71,7 +71,7 @@ export async function GET(req: Request) {
     // Fetch props for each game — stop early if we already have enough
     for (const game of events) {
       try {
-        const data = await fetchPlayerProps(apiKey, game.id, market);
+        const data = await fetchPlayerProps(apiKey, game.id, market, sport);
         const props = parsePlayerProps(data);
         for (const prop of props) {
           prop.team = `${game.away_team} @ ${game.home_team}`;

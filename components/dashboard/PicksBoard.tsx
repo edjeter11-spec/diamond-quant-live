@@ -512,6 +512,7 @@ function PickCard({ pick, isExpanded, onToggle, onAddToParlay, formatOdds }: {
             {pick.gameStatus === "tomorrow" && (
               <span className="px-1 py-0.5 rounded bg-electric/10 text-[8px] font-bold text-electric uppercase flex-shrink-0">Tomorrow</span>
             )}
+            <TeamLogo team={pick.pick.split(" ML")[0].split(" Over")[0].split(" Under")[0].split("/")[0]} size={14} />
             <p className="text-xs sm:text-sm font-medium text-silver truncate">{pick.pick}</p>
           </div>
           <p className="text-[9px] sm:text-[10px] text-mercury/60 truncate flex items-center gap-1">

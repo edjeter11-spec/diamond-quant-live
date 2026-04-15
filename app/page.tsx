@@ -626,23 +626,15 @@ export default function WarRoom() {
 
             {activeTab === "props" && (
               currentSport === "nba" ? (
-                <div className="max-w-4xl mx-auto space-y-4">
-                  <div className="glass rounded-xl p-6 border border-orange-500/15">
-                    <div className="flex items-center gap-2 mb-3">
-                      <User className="w-5 h-5 text-orange-500" />
-                      <h2 className="text-sm font-bold text-silver uppercase">NBA Player Props</h2>
+                <div className="max-w-6xl mx-auto space-y-4">
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
+                    <div className="lg:col-span-2">
+                      <PlayerProps />
                     </div>
-                    <p className="text-xs text-mercury mb-4">Points, Rebounds, Assists, 3-Pointers, and PRA props from all major sportsbooks.</p>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                      {["Points", "Rebounds", "Assists", "3-Pointers", "Pts+Reb+Ast"].map(m => (
-                        <div key={m} className="px-3 py-2 rounded-lg bg-gunmetal/30 text-center">
-                          <p className="text-xs text-orange-500 font-semibold">{m}</p>
-                          <p className="text-[9px] text-mercury/50">Coming soon</p>
-                        </div>
-                      ))}
+                    <div>
+                      <ParlayBuilder />
                     </div>
                   </div>
-                  <ParlayBuilder />
                 </div>
               ) : (
                 <div className="max-w-6xl mx-auto space-y-4">

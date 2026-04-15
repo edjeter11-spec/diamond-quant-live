@@ -84,9 +84,10 @@ export async function fetchMLBOdds(apiKey: string): Promise<OddsAPIGame[]> {
 export async function fetchPlayerProps(
   apiKey: string,
   eventId: string,
-  market: string = "pitcher_strikeouts"
+  market: string = "pitcher_strikeouts",
+  sportKey: string = SPORT
 ): Promise<OddsAPIGame> {
-  const url = `${BASE_URL}/sports/${SPORT}/events/${eventId}/odds?apiKey=${apiKey}&regions=us&markets=${market}&oddsFormat=american&bookmakers=${BOOKMAKERS.join(",")}`;
+  const url = `${BASE_URL}/sports/${sportKey}/events/${eventId}/odds?apiKey=${apiKey}&regions=us&markets=${market}&oddsFormat=american&bookmakers=${BOOKMAKERS.join(",")}`;
 
   const res = await fetch(url, { next: { revalidate: 60 } });
   if (!res.ok) {
