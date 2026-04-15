@@ -51,12 +51,21 @@ const PROP_TO_STAT: Record<string, string> = {
 };
 
 // ── Main Projection Function ──
+export interface RecentFormData {
+  last5Avg: number;    // average of last 5 games for this stat
+  last10Avg: number;   // average of last 10 games
+  seasonAvg: number;   // full season average
+  gamesPlayed: number; // total games so far
+  variance: number;    // standard deviation of last 10 games (consistency)
+}
+
 export function projectProp(
   playerStats: { ppg?: number; rpg?: number; apg?: number; tpm?: number },
   propType: string,
   line: number,
   weights: NbaPropWeights,
-  context: ProjectionContext
+  context: ProjectionContext,
+  recentForm?: RecentFormData
 ): PropProjection {
   const statKey = PROP_TO_STAT[propType] ?? "ppg";
   let avg: number;
@@ -69,8 +78,10 @@ export function projectProp(
 
   if (avg <= 0) avg = line; // fallback to line if no data
 
-  // Standard deviation ~ 30% of average (empirical NBA variance)
-  const stdDev = Math.max(avg * 0.30, 1.0);
+  // Standard deviation: use real variance if available, else ~30% of average
+  const stdDev = recentForm?.variance && recentForm.variance > 0
+    ? recentForm.variance
+    : Math.max(avg * 0.30, 1.0);
   const factors: ProjectionFactor[] = [];
 
   // ── Factor 1: Season Average ──
@@ -78,8 +89,17 @@ export function projectProp(
   factors.push({ name: "seasonAverage", signal: avgSignal, contribution: avgSignal * weights.seasonAverage });
 
   // ── Factor 2: Recent Form ──
-  // Without game log, approximate: if avg is well above line, form is likely positive
-  const formSignal = avgSignal * 0.7; // correlated but dampened
+  let formSignal: number;
+  if (recentForm && recentForm.gamesPlayed >= 5) {
+    // Real data: compare last 5 games to season average
+    formSignal = Math.max(-1, Math.min(1, (recentForm.last5Avg - recentForm.seasonAvg) / stdDev));
+    // Bonus: if last 5 is trending way above season avg, strong over signal
+    if (recentForm.last5Avg > recentForm.seasonAvg * 1.15) formSignal = Math.min(1, formSignal + 0.2);
+    if (recentForm.last5Avg < recentForm.seasonAvg * 0.85) formSignal = Math.max(-1, formSignal - 0.2);
+  } else {
+    // No game log: approximate from season average vs line
+    formSignal = avgSignal * 0.7;
+  }
   factors.push({ name: "recentForm", signal: formSignal, contribution: formSignal * weights.recentForm });
 
   // ── Factor 3: Matchup Defense ──

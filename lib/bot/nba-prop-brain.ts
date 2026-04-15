@@ -86,6 +86,11 @@ export interface NbaPropBrainState {
   recentAudits: AuditResult[];
   totalPredictions: number;
   totalHits: number;
+  // Training metadata
+  isPreTrained: boolean;
+  trainedSeasons: string[];
+  totalGamesProcessed: number;
+  lastTrainedAt: string;
 }
 
 // ── Load / Save ──
@@ -175,6 +180,10 @@ function createDefaultBrain(): NbaPropBrainState {
     recentAudits: [],
     totalPredictions: 0,
     totalHits: 0,
+    isPreTrained: false,
+    trainedSeasons: [],
+    totalGamesProcessed: 0,
+    lastTrainedAt: "",
   };
 }
 

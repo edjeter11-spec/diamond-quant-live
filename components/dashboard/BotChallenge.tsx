@@ -57,6 +57,40 @@ export default function BotChallenge() {
     probability: number; projectedValue: number;
   }>>([]);
 
+  // Training state
+  const [training, setTraining] = useState(false);
+  const [trainingProgress, setTrainingProgress] = useState<any>(null);
+
+  const startTraining = async () => {
+    setTraining(true);
+    setTrainingProgress({ status: "running", message: "Starting..." });
+    try {
+      const res = await fetch("/api/nba-prop-train?reset=true&seasons=2022,2023,2024");
+      const data = await res.json();
+      setTrainingProgress({ status: "complete", ...data });
+    } catch (err: any) {
+      setTrainingProgress({ status: "error", error: err.message });
+    }
+    setTraining(false);
+  };
+
+  // Poll training progress
+  useEffect(() => {
+    if (!training) return;
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch("/api/nba-prop-train-status");
+        const data = await res.json();
+        setTrainingProgress(data);
+        if (data.status === "complete" || data.status === "error") {
+          setTraining(false);
+          clearInterval(interval);
+        }
+      } catch {}
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [training]);
+
   useEffect(() => {
     if (!isNBA) { setPropParlayPicks([]); return; }
     // Generate prop parlay from Brain projections on today's props
@@ -304,6 +338,67 @@ export default function BotChallenge() {
           </div>
         )}
       </div>
+
+      {/* NBA Brain Training */}
+      {isNBA && (
+        <div className="glass rounded-xl overflow-hidden border border-purple/15">
+          <div className="px-4 py-3 bg-gradient-to-r from-purple/10 to-electric/5 border-b border-purple/15 flex items-center gap-2">
+            <Brain className="w-4 h-4 text-purple" />
+            <div className="flex-1">
+              <h3 className="text-xs font-bold text-silver uppercase tracking-wider">NBA Prop Brain</h3>
+              <p className="text-[9px] text-mercury/50">
+                {trainingProgress?.status === "complete"
+                  ? `Trained on ${trainingProgress.gamesProcessed?.toLocaleString()} games — ${trainingProgress.propEventsTotal?.toLocaleString()} props quizzed`
+                  : "Self-quiz on 3 seasons of real NBA data (2022-2025)"}
+              </p>
+            </div>
+            {!training && (
+              <button
+                onClick={startTraining}
+                className="px-3 py-1.5 rounded-lg bg-purple/15 border border-purple/25 text-purple text-[10px] font-semibold hover:bg-purple/25 transition-all flex items-center gap-1"
+              >
+                <Brain className="w-3 h-3" />
+                {trainingProgress?.status === "complete" ? "Retrain" : "Train Brain"}
+              </button>
+            )}
+          </div>
+          {/* Training progress */}
+          {training && trainingProgress && (
+            <div className="px-4 py-3 space-y-2">
+              <div className="flex items-center gap-2">
+                <RefreshCw className="w-3.5 h-3.5 text-purple animate-spin" />
+                <p className="text-xs text-mercury">{trainingProgress.message ?? "Training in progress..."}</p>
+              </div>
+              {trainingProgress.gamesProcessed > 0 && (
+                <div className="w-full bg-gunmetal/50 rounded-full h-1.5">
+                  <div
+                    className="bg-purple h-1.5 rounded-full transition-all"
+                    style={{ width: `${Math.min(100, (trainingProgress.gamesProcessed / Math.max(trainingProgress.totalGames, 1)) * 100)}%` }}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+          {/* Training results */}
+          {trainingProgress?.status === "complete" && trainingProgress.accuracy && (
+            <div className="px-4 py-2.5 border-t border-slate/10">
+              <div className="grid grid-cols-3 gap-2">
+                {Object.entries(trainingProgress.accuracy as Record<string, any>).map(([key, val]: [string, any]) => (
+                  <div key={key} className="text-center">
+                    <p className={`text-sm font-bold font-mono ${val.winRate > 52 ? "text-neon" : val.winRate > 48 ? "text-electric" : "text-danger"}`}>
+                      {val.winRate}%
+                    </p>
+                    <p className="text-[7px] text-mercury/50 uppercase">{key.replace("player_", "")}</p>
+                  </div>
+                ))}
+              </div>
+              {trainingProgress.playersTracked && (
+                <p className="text-[9px] text-mercury/40 text-center mt-1">{trainingProgress.playersTracked} players tracked • {trainingProgress.durationMs ? `${Math.round(trainingProgress.durationMs / 1000)}s` : ""}</p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Today's Picks Status */}
       {loading ? (
