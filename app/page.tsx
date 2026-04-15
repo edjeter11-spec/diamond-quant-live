@@ -156,7 +156,7 @@ export default function WarRoom() {
     }
     setLoading(false);
     setRefreshing(false);
-  }, [setScores, setOddsData, setGames, setLoading, snapshotOdds, selectedGameId, selectGame]);
+  }, [setScores, setOddsData, setGames, setLoading, snapshotOdds, selectedGameId, selectGame, currentSport, config]);
 
   useEffect(() => {
     // Smart polling: dead overnight, fast during games, slow otherwise
@@ -166,18 +166,22 @@ export default function WarRoom() {
       return etHour >= 9 || etHour < 2; // Active 9 AM - 2 AM ET
     }
 
-    // Clear old data when sport switches
+    fetchData();
+    const interval = setInterval(() => {
+      if (shouldPoll()) fetchData();
+    }, 180000); // 3 min polling
+    return () => clearInterval(interval);
+  }, [fetchData]);
+
+  // Clear data when sport switches
+  useEffect(() => {
     setOddsData([]);
     setScores([]);
     setGames([]);
     selectGame(null);
+    setLoading(true);
     fetchData();
-    const hasLive = scores.some((s: any) => s.status === "live");
-    const interval = setInterval(() => {
-      if (shouldPoll()) fetchData();
-    }, hasLive ? 90000 : 180000);
-    return () => clearInterval(interval);
-  }, [fetchData, scores, currentSport]); // re-fetch on sport change
+  }, [currentSport]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Arb alert: flash + sound when new arbs appear
   const currentArbCount = oddsData.reduce((sum: number, g: any) => sum + (g.arbitrage?.length ?? 0), 0);
