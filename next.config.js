@@ -4,6 +4,7 @@ const nextConfig = {
     remotePatterns: [
       { protocol: "https", hostname: "midfield.mlbstatic.com" },
       { protocol: "https", hostname: "img.mlbstatic.com" },
+      { protocol: "https", hostname: "cdn.nba.com" },
     ],
   },
 };

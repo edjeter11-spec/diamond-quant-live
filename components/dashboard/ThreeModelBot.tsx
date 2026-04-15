@@ -9,6 +9,7 @@ import {
   Zap, Shield, Activity, Clock, ExternalLink, Crown,
 } from "lucide-react";
 import { getDeepLink } from "@/lib/odds/sportsbooks";
+import TeamLogo from "@/components/ui/TeamLogo";
 import type { GameAnalysis, GamePick } from "@/lib/bot/three-models";
 
 export default function ThreeModelBot() {
@@ -131,7 +132,9 @@ export default function ThreeModelBot() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5">
                   <p className="text-xs sm:text-sm font-semibold text-silver truncate">
+                    <TeamLogo team={game.awayTeam} size={16} />
                     {game.awayTeam} @ {game.homeTeam}
+                    <TeamLogo team={game.homeTeam} size={16} />
                   </p>
                   {game.consensus.confidence === "HIGH" && <Crown className="w-3 h-3 text-gold flex-shrink-0" />}
                   {!game.consensus.modelsAgree && (

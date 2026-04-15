@@ -1,6 +1,7 @@
 "use client";
 
 import { X, MapPin } from "lucide-react";
+import TeamLogo from "@/components/ui/TeamLogo";
 
 interface SelectedGameBannerProps {
   game: {
@@ -48,7 +49,7 @@ export default function SelectedGameBanner({ game, onDeselect }: SelectedGameBan
       {/* Matchup */}
       <div className="flex items-center gap-2 min-w-0">
         <span className="text-base sm:text-lg font-bold font-mono text-silver whitespace-nowrap">
-          {game.awayAbbrev} @ {game.homeAbbrev}
+          <TeamLogo team={game.awayAbbrev} size={20} /> {game.awayAbbrev} @ {game.homeAbbrev} <TeamLogo team={game.homeAbbrev} size={20} />
         </span>
         {showScore && (
           <span className="text-sm sm:text-base font-mono font-semibold text-neon flex-shrink-0">

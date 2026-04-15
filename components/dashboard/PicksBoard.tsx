@@ -10,6 +10,7 @@ import {
   AlertTriangle, ExternalLink,
 } from "lucide-react";
 import { getDeepLink } from "@/lib/odds/sportsbooks";
+import TeamLogo from "@/components/ui/TeamLogo";
 
 interface Pick {
   id: string;
@@ -513,12 +514,18 @@ function PickCard({ pick, isExpanded, onToggle, onAddToParlay, formatOdds }: {
             )}
             <p className="text-xs sm:text-sm font-medium text-silver truncate">{pick.pick}</p>
           </div>
-          <p className="text-[9px] sm:text-[10px] text-mercury/60 truncate">
+          <p className="text-[9px] sm:text-[10px] text-mercury/60 truncate flex items-center gap-1">
             {pick.commenceTime && (
               <span className="text-mercury/80">
                 {new Date(pick.commenceTime).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
                 {" — "}
               </span>
+            )}
+            {pick.game?.includes(" @ ") && (
+              <>
+                <TeamLogo team={pick.game.split(" @ ")[0]} size={12} />
+                <TeamLogo team={pick.game.split(" @ ")[1]} size={12} />
+              </>
             )}
             {pick.game} • {pick.bookmaker}
           </p>

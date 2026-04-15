@@ -2,6 +2,7 @@
 
 import { useStore } from "@/lib/store";
 import { Clock, MapPin, Cloud, ChevronRight, TrendingUp, Zap } from "lucide-react";
+import TeamLogo from "@/components/ui/TeamLogo";
 
 interface GameCardProps {
   game: {
@@ -95,6 +96,7 @@ export default function GameCard({ game, oddsInfo }: GameCardProps) {
         {/* Away Team */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <TeamLogo team={game.awayAbbrev} size={18} />
             <span className="text-base sm:text-lg font-bold font-mono text-silver w-9 sm:w-10 flex-shrink-0">{game.awayAbbrev}</span>
             <span className="text-xs sm:text-sm text-mercury truncate">{game.awayPitcher}</span>
           </div>
@@ -119,6 +121,7 @@ export default function GameCard({ game, oddsInfo }: GameCardProps) {
         {/* Home Team */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <TeamLogo team={game.homeAbbrev} size={18} />
             <span className="text-base sm:text-lg font-bold font-mono text-silver w-9 sm:w-10 flex-shrink-0">{game.homeAbbrev}</span>
             <span className="text-xs sm:text-sm text-mercury truncate">{game.homePitcher}</span>
           </div>
