@@ -566,12 +566,12 @@ export default function PlayerProps() {
                                 </span>
                               </div>
                               <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                                {analysis.player.ppg !== undefined && (
+                                {(analysis.player as any).ppg !== undefined && (
                                   <>
-                                    <StatBox label="PPG" value={analysis.player.ppg?.toFixed(1) ?? "—"} />
-                                    <StatBox label="RPG" value={analysis.player.rpg?.toFixed(1) ?? "—"} />
-                                    <StatBox label="APG" value={analysis.player.apg?.toFixed(1) ?? "—"} />
-                                    <StatBox label="HIT%" value={`${analysis.player.hitRates?.[selectedMarket]?.rate ?? 50}%`} />
+                                    <StatBox label="PPG" value={(analysis.player as any).ppg?.toFixed(1) ?? "—"} />
+                                    <StatBox label="RPG" value={(analysis.player as any).rpg?.toFixed(1) ?? "—"} />
+                                    <StatBox label="APG" value={(analysis.player as any).apg?.toFixed(1) ?? "—"} />
+                                    <StatBox label="HIT%" value={`${(analysis.player as any).hitRates?.[selectedMarket]?.rate ?? 50}%`} />
                                   </>
                                 )}
                                 {analysis.player.era !== undefined && (
@@ -638,22 +638,22 @@ export default function PlayerProps() {
                             )}
 
                             {/* NBA-specific stats display */}
-                            {analysis.player?.ppg !== undefined && (
+                            {(analysis.player as any)?.ppg !== undefined && (
                               <div className="rounded-lg bg-gunmetal/30 p-3">
                                 <div className="flex items-center gap-3 mb-2">
-                                  {analysis.player.photo && (
-                                    <img src={analysis.player.photo} alt={analysis.player.name} className="w-12 h-12 rounded-lg object-cover bg-gunmetal/50" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                                  {(analysis.player as any).photo && (
+                                    <img src={(analysis.player as any).photo} alt={analysis.player.name} className="w-12 h-12 rounded-lg object-cover bg-gunmetal/50" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
                                   )}
                                   <div>
                                     <p className="text-xs font-semibold text-silver">{analysis.player.name}</p>
-                                    <p className="text-[10px] text-mercury">{analysis.player.teamAbbrev} • {analysis.player.position} • #{analysis.player.number}</p>
+                                    <p className="text-[10px] text-mercury">{(analysis.player as any).teamAbbrev} • {analysis.player.position} • #{(analysis.player as any).number}</p>
                                   </div>
                                 </div>
                                 <div className="grid grid-cols-4 gap-1.5">
-                                  <StatBox label="PPG" value={analysis.player.ppg?.toFixed(1) ?? "—"} />
-                                  <StatBox label="RPG" value={analysis.player.rpg?.toFixed(1) ?? "—"} />
-                                  <StatBox label="APG" value={analysis.player.apg?.toFixed(1) ?? "—"} />
-                                  <StatBox label="HIT%" value={`${analysis.player.hitRates?.[selectedMarket]?.rate ?? 50}%`} />
+                                  <StatBox label="PPG" value={(analysis.player as any).ppg?.toFixed(1) ?? "—"} />
+                                  <StatBox label="RPG" value={(analysis.player as any).rpg?.toFixed(1) ?? "—"} />
+                                  <StatBox label="APG" value={(analysis.player as any).apg?.toFixed(1) ?? "—"} />
+                                  <StatBox label="HIT%" value={`${(analysis.player as any).hitRates?.[selectedMarket]?.rate ?? 50}%`} />
                                 </div>
                               </div>
                             )}
