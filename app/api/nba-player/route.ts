@@ -80,12 +80,18 @@ export async function GET(req: Request) {
 
     setCache(cacheKey, response);
 
-    // Also save to Supabase player cache
+    // Save to Supabase — cached for future Brain use + instant loading
     try {
       const { cloudSet } = await import("@/lib/supabase/client");
       await cloudSet(`player_nba_${profile.id}`, {
-        ...profile,
-        gameLog: profile.gameLog.slice(0, 10), // trim for storage
+        name: profile.name,
+        team: profile.teamAbbrev,
+        ppg: profile.ppg,
+        rpg: profile.rpg,
+        apg: profile.apg,
+        position: profile.position,
+        photo: profile.photo,
+        hitRates: profile.hitRates,
         cachedAt: new Date().toISOString(),
       });
     } catch {}
