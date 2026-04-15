@@ -149,7 +149,8 @@ export default function PlayerProps() {
         market: selectedMarket,
         line: "0",
       });
-      const res = await fetch(`/api/player-analysis?${params}`);
+      const endpoint = currentSport === "nba" ? "/api/nba-player" : "/api/player-analysis";
+      const res = await fetch(`${endpoint}?${params}`);
       if (res.ok) {
         const data = await res.json();
         setSearchResult(data);
@@ -163,16 +164,19 @@ export default function PlayerProps() {
   }
 
   async function fetchAnalysis(playerName: string, line: number, team: string) {
-    if (playerAnalyses[playerName]) return; // already fetched
+    if (playerAnalyses[playerName]) return;
     setLoadingAnalysis(playerName);
     try {
+      // Use sport-specific endpoint
+      const isNBA = currentSport === "nba";
+      const endpoint = isNBA ? "/api/nba-player" : "/api/player-analysis";
       const params = new URLSearchParams({
         name: playerName,
         market: selectedMarket,
         line: String(line),
-        ...(team ? { opponent: team } : {}),
+        ...(team && !isNBA ? { opponent: team } : {}),
       });
-      const res = await fetch(`/api/player-analysis?${params}`);
+      const res = await fetch(`${endpoint}?${params}`);
       if (res.ok) {
         const data = await res.json();
         setPlayerAnalyses((prev) => ({ ...prev, [playerName]: data }));
@@ -699,9 +703,24 @@ function StatBox({ label, value }: { label: string; value: string }) {
   );
 }
 
-function SeasonStatsGrid({ stats }: { stats: Partial<StatBlock> }) {
+function SeasonStatsGrid({ stats }: { stats: any }) {
+  // NBA player
+  if (stats.ppg !== undefined) {
+    return (
+      <>
+        <StatBox label="PPG" value={stats.ppg?.toFixed(1) ?? "—"} />
+        <StatBox label="RPG" value={stats.rpg?.toFixed(1) ?? "—"} />
+        <StatBox label="APG" value={stats.apg?.toFixed(1) ?? "—"} />
+        <StatBox label="FG%" value={stats.fgPct?.toFixed(1) ?? "—"} />
+        <StatBox label="3P%" value={stats.threePct?.toFixed(1) ?? "—"} />
+        <StatBox label="FT%" value={stats.ftPct?.toFixed(1) ?? "—"} />
+        <StatBox label="MPG" value={stats.mpg?.toFixed(1) ?? "—"} />
+        <StatBox label="GP" value={String(stats.gamesPlayed ?? 0)} />
+      </>
+    );
+  }
+  // MLB Pitcher
   if (stats.era !== undefined) {
-    // Pitcher
     return (
       <>
         <StatBox label="ERA" value={stats.era?.toFixed(2) ?? "—"} />
@@ -715,8 +734,8 @@ function SeasonStatsGrid({ stats }: { stats: Partial<StatBlock> }) {
       </>
     );
   }
+  // MLB Batter
   if (stats.avg !== undefined) {
-    // Batter
     return (
       <>
         <StatBox label="AVG" value={stats.avg?.toFixed(3) ?? "—"} />
