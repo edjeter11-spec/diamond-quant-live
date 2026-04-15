@@ -1,6 +1,7 @@
 "use client";
 
 import { useStore } from "@/lib/store";
+import { useSport } from "@/lib/sport-context";
 import { Layers, X, Sparkles, Save, Trash2, TrendingUp, AlertTriangle, ChevronDown, Zap } from "lucide-react";
 import { useState, useEffect } from "react";
 import type { ParlaySlip } from "@/lib/model/types";
@@ -12,9 +13,13 @@ export default function ParlayBuilder() {
   } = useStore();
   const [topPicks, setTopPicks] = useState<any[]>([]);
 
-  // Fetch top picks for quick-add
+  const { currentSport } = useSport();
+  const isNBA = currentSport === "nba";
+
+  // Fetch sport-specific top picks for quick-add
   useEffect(() => {
-    fetch("/api/bot-analysis").then(r => r.json()).then(data => {
+    const url = isNBA ? "/api/nba-analysis" : "/api/bot-analysis";
+    fetch(url).then(r => r.json()).then(data => {
       const picks = (data.analyses ?? [])
         .filter((a: any) => a.consensus?.confidence === "HIGH" || a.consensus?.confidence === "MEDIUM")
         .slice(0, 5)
@@ -28,8 +33,8 @@ export default function ParlayBuilder() {
           confidence: a.consensus?.confidence,
         }));
       setTopPicks(picks);
-    }).catch(() => {});
-  }, []);
+    }).catch(() => { setTopPicks([]); });
+  }, [currentSport, isNBA]);
 
   const formatOdds = (odds: number) => (odds > 0 ? `+${odds}` : `${odds}`);
 

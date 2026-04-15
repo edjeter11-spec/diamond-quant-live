@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useStore } from "@/lib/store";
+import { useSport } from "@/lib/sport-context";
 import {
   Bot, Brain, TrendingUp, TrendingDown, BarChart3, Target,
   ChevronDown, RefreshCw, CheckCircle, XCircle, Minus, Clock,
@@ -15,17 +16,41 @@ import type { GameAnalysis } from "@/lib/bot/three-models";
 
 export default function BotChallenge() {
   const { scores } = useStore();
-  const [botState, setBotState] = useState<SmartBotState>(loadSmartBot);
+  const { currentSport, config } = useSport();
+  const isNBA = currentSport === "nba";
+
+  // Sport-specific storage keys
+  const storageKey = isNBA ? "dq_smart_bot_nba" : "dq_smart_bot";
+  const [botState, setBotState] = useState<SmartBotState>(() => {
+    if (typeof window === "undefined") return { bankroll: 5000, picks: [], dailyPnL: {} };
+    try {
+      const stored = localStorage.getItem(storageKey);
+      if (stored) return JSON.parse(stored);
+    } catch {}
+    return { bankroll: 5000, picks: [], dailyPnL: {} };
+  });
   const [accuracy, setAccuracy] = useState<ModelAccuracy>(loadModelAccuracy);
   const [analyses, setAnalyses] = useState<GameAnalysis[]>([]);
   const [expandedPick, setExpandedPick] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Fetch 3-model analysis on mount
+  // Reload bot state when sport changes
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(storageKey);
+      if (stored) setBotState(JSON.parse(stored));
+      else setBotState({ bankroll: 5000, picks: [], dailyPnL: {} });
+    } catch {
+      setBotState({ bankroll: 5000, picks: [], dailyPnL: {} });
+    }
+  }, [currentSport, storageKey]);
+
+  // Fetch sport-specific analysis
   useEffect(() => {
     async function init() {
       try {
-        const res = await fetch("/api/bot-analysis");
+        const url = isNBA ? "/api/nba-analysis" : "/api/bot-analysis";
+        const res = await fetch(url);
         if (res.ok) {
           const data = await res.json();
           setAnalyses(data.analyses ?? []);
@@ -34,7 +59,7 @@ export default function BotChallenge() {
       setLoading(false);
     }
     init();
-  }, []);
+  }, [currentSport, isNBA]);
 
   // Auto-generate picks when analyses arrive and we don't have today's
   useEffect(() => {

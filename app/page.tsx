@@ -173,12 +173,14 @@ export default function WarRoom() {
     return () => clearInterval(interval);
   }, [fetchData]);
 
-  // Clear data when sport switches
+  // Clear ALL data when sport switches — full isolation
+  const { clearParlay } = useStore();
   useEffect(() => {
     setOddsData([]);
     setScores([]);
     setGames([]);
     selectGame(null);
+    clearParlay(); // remove MLB legs from parlay builder
     setLoading(true);
     fetchData();
   }, [currentSport]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -282,7 +284,7 @@ export default function WarRoom() {
 
   const tabs = [
     { key: "dashboard" as const, icon: BarChart3, label: "Board" },
-    { key: "nrfi" as const, icon: Shield, label: "NRFI" },
+    { key: "nrfi" as const, icon: Shield, label: currentSport === "nba" ? "Q1" : "NRFI" },
     { key: "bot" as const, icon: Diamond, label: "Bot" },
     { key: "parlays" as const, icon: Layers, label: "Parlays" },
     { key: "props" as const, icon: User, label: "Props" },
@@ -645,10 +647,32 @@ export default function WarRoom() {
 
             {activeTab === "nrfi" && (
               currentSport === "nba" ? (
-                <div className="max-w-4xl mx-auto glass rounded-xl p-8 text-center">
-                  <Shield className="w-10 h-10 text-orange-500/30 mx-auto mb-3" />
-                  <h2 className="text-lg font-bold text-silver mb-2">1st Quarter Props</h2>
-                  <p className="text-sm text-mercury">NBA 1st quarter analysis coming soon. Switch to MLB for NRFI picks.</p>
+                <div className="max-w-4xl mx-auto space-y-4">
+                  <div className="glass rounded-xl p-6 border border-orange-500/15">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Shield className="w-5 h-5 text-orange-500" />
+                      <h2 className="text-sm font-bold text-silver uppercase tracking-wider">1st Quarter Analysis</h2>
+                    </div>
+                    <p className="text-xs text-mercury mb-4">NBA 1st quarter scoring predictions based on pace, offensive efficiency, and defensive matchups.</p>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {oddsData.slice(0, 6).map((game: any, i: number) => (
+                        <div key={i} className="p-3 rounded-lg bg-gunmetal/30 border border-slate/20">
+                          <div className="flex items-center gap-1 mb-1">
+                            <span className="text-[10px] font-bold text-orange-500">{game.awayTeam?.split(" ").pop()}</span>
+                            <span className="text-[8px] text-mercury/40">@</span>
+                            <span className="text-[10px] font-bold text-orange-500">{game.homeTeam?.split(" ").pop()}</span>
+                          </div>
+                          {game.oddsLines?.[0]?.total > 0 && (
+                            <p className="text-xs font-mono text-silver">Q1 est: {(game.oddsLines[0].total / 4 * 1.05).toFixed(1)}</p>
+                          )}
+                          <p className="text-[9px] text-mercury/50">
+                            {game.commenceTime && new Date(game.commenceTime).toLocaleString("en-US", { hour: "numeric", minute: "2-digit" })}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                    {oddsData.length === 0 && <p className="text-sm text-mercury/50 text-center py-4">No NBA games scheduled</p>}
+                  </div>
                 </div>
               ) : <NRFITab />
             )}

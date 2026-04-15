@@ -69,8 +69,8 @@ export default function PicksBoard() {
         }
       }
       setModelPicks(picks);
-    }).catch(() => {});
-  }, []);
+    }).catch(() => { setModelPicks([]); });
+  }, [isNBA]); // re-fetch when sport changes
 
   // Fetch props — MLB gets strikeouts, NBA skips (props on Props tab)
   useEffect(() => {
