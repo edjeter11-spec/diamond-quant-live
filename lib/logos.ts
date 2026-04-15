@@ -76,7 +76,55 @@ const NBA_NAME_TO_ABBREV: Record<string, string> = {
   "raptors": "TOR", "jazz": "UTA", "wizards": "WAS",
 };
 
-// TeamLogo component helper — returns the image URL or empty string
+// Player headshot URLs
 export function getMLBPlayerPhoto(playerId: number): string {
   return `https://img.mlbstatic.com/mlb-photos/image/upload/d_people:generic:headshot:67:current.png/w_80,q_auto:best/v1/people/${playerId}/headshot/67/current`;
+}
+
+export function getNBAPlayerPhoto(playerId: number): string {
+  return `https://cdn.nba.com/headshots/nba/latest/260x190/${playerId}.png`;
+}
+
+// Abbreviation → Full team name
+const MLB_ABBREV_TO_FULL: Record<string, string> = {
+  "ARI": "Arizona Diamondbacks", "ATL": "Atlanta Braves", "BAL": "Baltimore Orioles",
+  "BOS": "Boston Red Sox", "CHC": "Chicago Cubs", "CWS": "Chicago White Sox",
+  "CIN": "Cincinnati Reds", "CLE": "Cleveland Guardians", "COL": "Colorado Rockies",
+  "DET": "Detroit Tigers", "HOU": "Houston Astros", "KC": "Kansas City Royals",
+  "LAA": "Los Angeles Angels", "LAD": "Los Angeles Dodgers", "MIA": "Miami Marlins",
+  "MIL": "Milwaukee Brewers", "MIN": "Minnesota Twins", "NYM": "New York Mets",
+  "NYY": "New York Yankees", "OAK": "Oakland Athletics", "PHI": "Philadelphia Phillies",
+  "PIT": "Pittsburgh Pirates", "SD": "San Diego Padres", "SF": "San Francisco Giants",
+  "SEA": "Seattle Mariners", "STL": "St. Louis Cardinals", "TB": "Tampa Bay Rays",
+  "TEX": "Texas Rangers", "TOR": "Toronto Blue Jays", "WSH": "Washington Nationals",
+};
+
+const NBA_ABBREV_TO_FULL: Record<string, string> = {
+  "ATL": "Atlanta Hawks", "BOS": "Boston Celtics", "BKN": "Brooklyn Nets",
+  "CHA": "Charlotte Hornets", "CHI": "Chicago Bulls", "CLE": "Cleveland Cavaliers",
+  "DAL": "Dallas Mavericks", "DEN": "Denver Nuggets", "DET": "Detroit Pistons",
+  "GSW": "Golden State Warriors", "HOU": "Houston Rockets", "IND": "Indiana Pacers",
+  "LAC": "Los Angeles Clippers", "LAL": "Los Angeles Lakers", "MEM": "Memphis Grizzlies",
+  "MIA": "Miami Heat", "MIL": "Milwaukee Bucks", "MIN": "Minnesota Timberwolves",
+  "NOP": "New Orleans Pelicans", "NYK": "New York Knicks", "OKC": "Oklahoma City Thunder",
+  "ORL": "Orlando Magic", "PHI": "Philadelphia 76ers", "PHX": "Phoenix Suns",
+  "POR": "Portland Trail Blazers", "SAC": "Sacramento Kings", "SAS": "San Antonio Spurs",
+  "TOR": "Toronto Raptors", "UTA": "Utah Jazz", "WAS": "Washington Wizards",
+};
+
+export function getFullTeamName(abbrev: string, sport: "mlb" | "nba" = "mlb"): string {
+  if (sport === "nba") return NBA_ABBREV_TO_FULL[abbrev] ?? abbrev;
+  return MLB_ABBREV_TO_FULL[abbrev] ?? abbrev;
+}
+
+// Get just the mascot/nickname from abbreviation (e.g. "NYY" → "Yankees")
+export function getTeamNickname(abbrev: string, sport: "mlb" | "nba" = "mlb"): string {
+  const full = getFullTeamName(abbrev, sport);
+  if (full === abbrev) return abbrev;
+  // Last word, or last two for "Red Sox", "White Sox", "Blue Jays", "Trail Blazers"
+  const twoWord = ["Red Sox", "White Sox", "Blue Jays", "Trail Blazers"];
+  for (const tw of twoWord) {
+    if (full.endsWith(tw)) return tw;
+  }
+  return full.split(" ").pop() ?? abbrev;
 }

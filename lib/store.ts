@@ -67,7 +67,7 @@ interface OddsSnapshot {
 interface AppState {
   // UI State
   selectedGameId: string | null;
-  activeTab: "dashboard" | "nrfi" | "bot" | "parlays" | "props" | "bankroll" | "room";
+  activeTab: "dashboard" | "nrfi" | "bot" | "parlays" | "props" | "bankroll" | "room" | "profile";
   sidebarOpen: boolean;
 
   // Live Data
@@ -125,9 +125,18 @@ interface AppState {
   hydrate: () => void;
 }
 
-// Cloud hydration helper
+// Cloud hydration helper — tries user-scoped first, falls back to global
 async function hydrateFromCloud(set: any) {
   try {
+    const { userGetAll } = await import("@/lib/supabase/user-sync");
+    const userData = await userGetAll();
+    if (Object.keys(userData).length > 0) {
+      const updates: any = {};
+      if (userData.bankroll) updates.bankroll = userData.bankroll;
+      if (userData.betHistory) updates.betHistory = userData.betHistory;
+      if (userData.savedParlays) updates.savedParlays = userData.savedParlays;
+      if (Object.keys(updates).length > 0) { set(updates); return; }
+    }
     const { cloudGet } = await import("@/lib/supabase/client");
     const [bankroll, betHistory, savedParlays] = await Promise.all([
       cloudGet("bankroll", null),

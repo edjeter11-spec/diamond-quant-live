@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Diamond, Trophy, TrendingUp, TrendingDown, BarChart3, Target, CheckCircle, XCircle, Brain } from "lucide-react";
+import { Diamond, Trophy, TrendingUp, TrendingDown, BarChart3, Target, CheckCircle, XCircle, Brain, Zap, Crown, Shield } from "lucide-react";
 
 export default function ResultsPage() {
   const [data, setData] = useState<any>(null);
@@ -10,7 +10,7 @@ export default function ResultsPage() {
     // Load from Supabase (public data)
     async function load() {
       try {
-        const res = await fetch("https://grbswzfizblkekrzhadw.supabase.co/rest/v1/app_state?select=key,value&key=in.(smart_bot,model_accuracy,brain)", {
+        const res = await fetch("https://grbswzfizblkekrzhadw.supabase.co/rest/v1/app_state?select=key,value&key=in.(smart_bot,model_accuracy,brain,clv_mlb,clv_nba,elo_mlb,elo_nba)", {
           headers: {
             "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdyYnN3emZpemJsa2VrcnpoYWR3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUyNzI4MjUsImV4cCI6MjA5MDg0ODgyNX0.z-QDBxdxVaFCrNbyHChh9wC0lrwh9aE91-LJ_Fq5G9k",
           },
@@ -29,6 +29,22 @@ export default function ResultsPage() {
   const bot = data?.smart_bot;
   const accuracy = data?.model_accuracy;
   const brain = data?.brain;
+  const clvRecords = data?.clv_mlb ?? [];
+  const eloState = data?.elo_mlb;
+
+  // CLV summary
+  const clvWithClosing = clvRecords.filter((r: any) => r.closingOdds !== 0);
+  const clvBeatCount = clvWithClosing.filter((r: any) => r.beatClosing).length;
+  const clvBeatRate = clvWithClosing.length > 0 ? (clvBeatCount / clvWithClosing.length) * 100 : 0;
+  const avgCLV = clvWithClosing.length > 0
+    ? clvWithClosing.reduce((s: number, r: any) => s + (r.clvPercent ?? 0), 0) / clvWithClosing.length : 0;
+  const isSharp = clvWithClosing.length >= 10 && clvBeatRate > 55;
+
+  // Elo top teams
+  const eloTeams = eloState?.teams ? Object.values(eloState.teams)
+    .filter((t: any) => t.gamesPlayed >= 5)
+    .sort((a: any, b: any) => b.rating - a.rating)
+    .slice(0, 10) : [];
 
   const settled = bot?.picks?.filter((p: any) => p.result !== "pending") ?? [];
   const wins = settled.filter((p: any) => p.result === "win").length;
@@ -78,6 +94,63 @@ export default function ResultsPage() {
               <ModelStat name="Market" rate={accuracy.market?.winRate ?? 0} total={accuracy.market?.total ?? 0} />
               <ModelStat name="Trend" rate={accuracy.trend?.winRate ?? 0} total={accuracy.trend?.total ?? 0} />
               <ModelStat name="Consensus" rate={accuracy.consensus?.winRate ?? 0} total={accuracy.consensus?.total ?? 0} />
+            </div>
+          </div>
+        )}
+
+        {/* CLV Edge Proof */}
+        {clvWithClosing.length > 0 && (
+          <div className="rounded-xl bg-[#0f1117] border border-[#2a2d3e]/50 p-4 mb-6">
+            <div className="flex items-center gap-2 mb-3">
+              <Zap className="w-4 h-4 text-[#a855f7]" />
+              <h2 className="text-sm font-bold text-white uppercase tracking-wider">Closing Line Value</h2>
+              {isSharp && (
+                <span className="px-1.5 py-0.5 rounded bg-[#00ff88]/10 text-[#00ff88] text-[9px] font-bold">SHARP</span>
+              )}
+            </div>
+            <p className="text-xs text-[#8b8fa3] mb-3">
+              CLV measures if we get better odds than the market closing line. Beating the close consistently = proven edge.
+            </p>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="text-center">
+                <p className={`text-lg font-bold font-mono ${clvBeatRate > 55 ? "text-[#00ff88]" : "text-[#c4c8d8]"}`}>
+                  {clvBeatRate.toFixed(1)}%
+                </p>
+                <p className="text-[8px] text-[#8b8fa3]">Beat Rate ({clvWithClosing.length} bets)</p>
+              </div>
+              <div className="text-center">
+                <p className={`text-lg font-bold font-mono ${avgCLV > 0 ? "text-[#00ff88]" : "text-[#ff3b5c]"}`}>
+                  {avgCLV > 0 ? "+" : ""}{avgCLV.toFixed(2)}%
+                </p>
+                <p className="text-[8px] text-[#8b8fa3]">Avg CLV</p>
+              </div>
+              <div className="text-center">
+                <p className="text-lg font-bold font-mono text-[#c4c8d8]">{clvRecords.length}</p>
+                <p className="text-[8px] text-[#8b8fa3]">Total Tracked</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Elo Power Rankings */}
+        {eloTeams.length > 0 && (
+          <div className="rounded-xl bg-[#0f1117] border border-[#2a2d3e]/50 p-4 mb-6">
+            <div className="flex items-center gap-2 mb-3">
+              <Crown className="w-4 h-4 text-[#f59e0b]" />
+              <h2 className="text-sm font-bold text-white uppercase tracking-wider">Power Rankings (Elo)</h2>
+              <span className="text-[9px] text-[#8b8fa3] ml-auto">{eloState?.totalGamesProcessed ?? 0} games processed</span>
+            </div>
+            <div className="space-y-1">
+              {eloTeams.map((team: any, i: number) => (
+                <div key={team.team} className="flex items-center gap-2 px-2 py-1.5 rounded bg-[#1a1d2e]/50">
+                  <span className={`text-[10px] font-bold w-5 text-center ${i === 0 ? "text-[#f59e0b]" : i < 3 ? "text-[#00ff88]" : "text-[#8b8fa3]"}`}>
+                    {i + 1}
+                  </span>
+                  <p className="text-xs text-white flex-1 font-medium">{team.team}</p>
+                  <p className="text-xs font-mono text-[#00d4ff] font-bold">{team.rating}</p>
+                  <p className="text-[9px] text-[#8b8fa3] w-14 text-right">{team.wins}W-{team.losses}L</p>
+                </div>
+              ))}
             </div>
           </div>
         )}

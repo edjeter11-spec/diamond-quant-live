@@ -26,12 +26,15 @@ import TrainingPanel from "@/components/dashboard/TrainingPanel";
 import TopPropsOfDay from "@/components/dashboard/TopPropsOfDay";
 import SnapSync from "@/components/dashboard/SnapSync";
 import NRFITab from "@/components/dashboard/NRFITab";
+import AuthButton from "@/components/auth/AuthButton";
+import UserProfile from "@/components/auth/UserProfile";
+import MigrationBanner from "@/components/auth/MigrationBanner";
 import { matchGames } from "@/lib/mlb/match-games";
 import { backupOddsToStorage, getOddsBackup } from "@/lib/odds/cache";
 import { sendDiscordAlert } from "@/lib/odds/sportsbooks";
 import { getDiscordWebhook, setDiscordWebhook } from "@/lib/store";
 import {
-  Diamond, BarChart3, Layers, User, Wallet, Users, RefreshCw, Shield,
+  Diamond, BarChart3, Layers, User, UserCircle, Wallet, Users, RefreshCw, Shield,
   Radio, ChevronLeft, ChevronRight, X, HelpCircle, Volume2, VolumeX, AlertTriangle,
 } from "lucide-react";
 
@@ -290,6 +293,7 @@ export default function WarRoom() {
     { key: "props" as const, icon: User, label: "Props" },
     { key: "bankroll" as const, icon: Wallet, label: "Bank" },
     { key: "room" as const, icon: Users, label: "Room" },
+    { key: "profile" as const, icon: UserCircle, label: "Profile" },
   ];
 
   // Only show live + upcoming games — never finals
@@ -394,6 +398,7 @@ export default function WarRoom() {
           </nav>
 
           <div className="flex items-center gap-1.5 sm:gap-2">
+            <AuthButton />
             {isDemo && oddsData.length === 0 && (
               <span className="hidden sm:flex items-center gap-1 px-2 py-1 rounded bg-amber/10 border border-amber/20 text-[10px] text-amber font-semibold">
                 <AlertTriangle className="w-3 h-3" /> NO ODDS
@@ -451,6 +456,8 @@ export default function WarRoom() {
           ))}
         </div>
       </header>
+
+      <MigrationBanner />
 
       {/* Help Panel */}
       {showHelp && (
@@ -766,6 +773,12 @@ export default function WarRoom() {
 
                 {/* Discord Integration */}
                 <DiscordSettings />
+              </div>
+            )}
+
+            {activeTab === "profile" && (
+              <div className="max-w-lg mx-auto">
+                <UserProfile />
               </div>
             )}
           </>

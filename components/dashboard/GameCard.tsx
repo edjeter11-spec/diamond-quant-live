@@ -1,8 +1,10 @@
 "use client";
 
 import { useStore } from "@/lib/store";
+import { useSport } from "@/lib/sport-context";
 import { Clock, MapPin, Cloud, ChevronRight, TrendingUp, Zap } from "lucide-react";
 import TeamLogo from "@/components/ui/TeamLogo";
+import { getFullTeamName } from "@/lib/logos";
 
 interface GameCardProps {
   game: {
@@ -23,6 +25,9 @@ interface GameCardProps {
     awayPitcher: string;
     weather: { temp?: string; wind?: string; condition?: string } | null;
     detailedStatus: string;
+    // Player IDs for headshots (optional, populated from scores API)
+    homePitcherId?: number;
+    awayPitcherId?: number;
   };
   oddsInfo?: {
     bestHomeML?: { bookmaker: string; odds: number };
@@ -32,8 +37,34 @@ interface GameCardProps {
   };
 }
 
+// Pitcher headshot — tries MLB CDN, falls back gracefully
+function PitcherFace({ name, pitcherId }: { name: string; pitcherId?: number }) {
+  if (!name || name === "TBD") {
+    return <span className="text-[9px] sm:text-[10px] text-mercury/40 italic truncate">TBD</span>;
+  }
+
+  const photoUrl = pitcherId
+    ? `https://img.mlbstatic.com/mlb-photos/image/upload/d_people:generic:headshot:67:current.png/w_40,q_auto:best/v1/people/${pitcherId}/headshot/67/current`
+    : null;
+
+  return (
+    <div className="flex items-center gap-1 min-w-0">
+      {photoUrl && (
+        <img
+          src={photoUrl}
+          alt={name}
+          className="w-4 h-4 sm:w-5 sm:h-5 rounded-full object-cover flex-shrink-0 bg-gunmetal/30"
+          onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+        />
+      )}
+      <span className="text-[9px] sm:text-[10px] text-mercury/70 truncate">{name}</span>
+    </div>
+  );
+}
+
 export default function GameCard({ game, oddsInfo }: GameCardProps) {
   const { selectedGameId, selectGame } = useStore();
+  const { currentSport } = useSport();
   const isSelected = selectedGameId === game.id;
 
   const formatTime = (iso: string) => {
@@ -41,6 +72,10 @@ export default function GameCard({ game, oddsInfo }: GameCardProps) {
   };
 
   const formatOdds = (odds: number) => (odds > 0 ? `+${odds}` : `${odds}`);
+
+  // Full names for desktop, abbreviations for mobile
+  const awayFull = getFullTeamName(game.awayAbbrev, currentSport);
+  const homeFull = getFullTeamName(game.homeAbbrev, currentSport);
 
   return (
     <button
@@ -52,7 +87,7 @@ export default function GameCard({ game, oddsInfo }: GameCardProps) {
       }`}
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-slate/30">
+      <div className="flex items-center justify-between px-3 sm:px-4 py-2 border-b border-slate/30">
         <div className="flex items-center gap-2">
           {game.status === "live" ? (
             <div className="flex items-center gap-1.5">
@@ -63,7 +98,7 @@ export default function GameCard({ game, oddsInfo }: GameCardProps) {
               <span className="text-xs font-semibold text-danger uppercase tracking-wider">
                 {game.inningHalf === "top" ? "▲" : "▼"} {game.inning}
               </span>
-              <span className="text-xs text-mercury">{game.outs} out{game.outs !== 1 ? "s" : ""}</span>
+              <span className="text-[10px] text-mercury">{game.outs} out{game.outs !== 1 ? "s" : ""}</span>
             </div>
           ) : game.status === "final" ? (
             <span className="text-xs font-semibold text-mercury uppercase tracking-wider">Final</span>
@@ -77,14 +112,12 @@ export default function GameCard({ game, oddsInfo }: GameCardProps) {
         <div className="flex items-center gap-2">
           {oddsInfo?.arbCount && oddsInfo.arbCount > 0 && (
             <span className="flex items-center gap-1 px-1.5 py-0.5 bg-gold/15 border border-gold/30 rounded text-gold text-[10px] font-bold">
-              <Zap className="w-2.5 h-2.5" />
-              ARB
+              <Zap className="w-2.5 h-2.5" /> ARB
             </span>
           )}
           {oddsInfo?.topEV && oddsInfo.topEV > 3 && (
             <span className="flex items-center gap-1 px-1.5 py-0.5 bg-neon/10 border border-neon/25 rounded text-neon text-[10px] font-bold">
-              <TrendingUp className="w-2.5 h-2.5" />
-              +EV
+              <TrendingUp className="w-2.5 h-2.5" /> +EV
             </span>
           )}
           <ChevronRight className={`w-4 h-4 text-mercury transition-transform ${isSelected ? "rotate-90" : ""}`} />
@@ -92,24 +125,30 @@ export default function GameCard({ game, oddsInfo }: GameCardProps) {
       </div>
 
       {/* Matchup */}
-      <div className="px-3 sm:px-4 py-2.5 sm:py-3 space-y-1.5 sm:space-y-2">
+      <div className="px-3 sm:px-4 py-2.5 sm:py-3 space-y-2 sm:space-y-2.5">
         {/* Away Team */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-            <TeamLogo team={game.awayAbbrev} size={18} />
-            <span className="text-base sm:text-lg font-bold font-mono text-silver w-9 sm:w-10 flex-shrink-0">{game.awayAbbrev}</span>
-            <span className="text-xs sm:text-sm text-mercury truncate">{game.awayPitcher}</span>
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 sm:gap-2.5 min-w-0 flex-1">
+            <TeamLogo team={game.awayAbbrev} size={24} className="sm:!w-7 sm:!h-7" />
+            <div className="min-w-0 flex-1">
+              {/* Full name on desktop, abbrev on mobile */}
+              <p className="text-sm sm:text-base font-bold text-silver leading-tight truncate">
+                <span className="sm:hidden">{game.awayAbbrev}</span>
+                <span className="hidden sm:inline">{awayFull}</span>
+              </p>
+              <PitcherFace name={game.awayPitcher} pitcherId={game.awayPitcherId} />
+            </div>
           </div>
-          <div className="flex items-center gap-3 sm:gap-4 flex-shrink-0 ml-2">
+          <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
             {oddsInfo?.bestAwayML && (
-              <span className={`text-xs sm:text-sm font-mono font-semibold ${
+              <span className={`text-[11px] sm:text-sm font-mono font-semibold ${
                 oddsInfo.bestAwayML.odds > 0 ? "text-neon" : "text-silver"
               }`}>
                 {formatOdds(oddsInfo.bestAwayML.odds)}
               </span>
             )}
             {game.status !== "pre" && (
-              <span className={`text-lg sm:text-xl font-bold font-mono w-7 sm:w-8 text-right ${
+              <span className={`text-lg sm:text-xl font-bold font-mono w-6 sm:w-8 text-right ${
                 game.awayScore > game.homeScore ? "text-neon" : "text-silver"
               }`}>
                 {game.awayScore}
@@ -118,23 +157,31 @@ export default function GameCard({ game, oddsInfo }: GameCardProps) {
           </div>
         </div>
 
+        {/* Divider */}
+        <div className="h-px bg-slate/15 mx-1" />
+
         {/* Home Team */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-            <TeamLogo team={game.homeAbbrev} size={18} />
-            <span className="text-base sm:text-lg font-bold font-mono text-silver w-9 sm:w-10 flex-shrink-0">{game.homeAbbrev}</span>
-            <span className="text-xs sm:text-sm text-mercury truncate">{game.homePitcher}</span>
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 sm:gap-2.5 min-w-0 flex-1">
+            <TeamLogo team={game.homeAbbrev} size={24} className="sm:!w-7 sm:!h-7" />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm sm:text-base font-bold text-silver leading-tight truncate">
+                <span className="sm:hidden">{game.homeAbbrev}</span>
+                <span className="hidden sm:inline">{homeFull}</span>
+              </p>
+              <PitcherFace name={game.homePitcher} pitcherId={game.homePitcherId} />
+            </div>
           </div>
-          <div className="flex items-center gap-3 sm:gap-4 flex-shrink-0 ml-2">
+          <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
             {oddsInfo?.bestHomeML && (
-              <span className={`text-xs sm:text-sm font-mono font-semibold ${
+              <span className={`text-[11px] sm:text-sm font-mono font-semibold ${
                 oddsInfo.bestHomeML.odds > 0 ? "text-neon" : "text-silver"
               }`}>
                 {formatOdds(oddsInfo.bestHomeML.odds)}
               </span>
             )}
             {game.status !== "pre" && (
-              <span className={`text-lg sm:text-xl font-bold font-mono w-7 sm:w-8 text-right ${
+              <span className={`text-lg sm:text-xl font-bold font-mono w-6 sm:w-8 text-right ${
                 game.homeScore > game.awayScore ? "text-neon" : "text-silver"
               }`}>
                 {game.homeScore}
@@ -145,13 +192,13 @@ export default function GameCard({ game, oddsInfo }: GameCardProps) {
       </div>
 
       {/* Footer */}
-      <div className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-1.5 sm:py-2 border-t border-slate/30 text-[10px] sm:text-[11px] text-mercury/70">
-        <div className="flex items-center gap-1">
-          <MapPin className="w-3 h-3" />
-          {game.venue}
+      <div className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-1.5 sm:py-2 border-t border-slate/30 text-[9px] sm:text-[11px] text-mercury/60">
+        <div className="flex items-center gap-1 truncate">
+          <MapPin className="w-3 h-3 flex-shrink-0" />
+          <span className="truncate">{game.venue}</span>
         </div>
         {game.weather && (
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 flex-shrink-0">
             <Cloud className="w-3 h-3" />
             {game.weather.temp}° {game.weather.wind}
           </div>

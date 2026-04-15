@@ -4,10 +4,17 @@ import { findArbitrage, findEVBets } from "@/lib/odds/arbitrage";
 import { getApiKey, markKeyExhausted, getActiveKeyCount } from "@/lib/odds/api-keys";
 import { getCached, setCache, CACHE_TTL, stampEdge, getEdgeAge, cleanEdges } from "@/lib/odds/server-cache";
 import { filterRealArbs, filterRealEV } from "@/lib/odds/sportsbooks";
+import { checkRateLimit, getUserIdFromRequest } from "@/lib/supabase/rate-limit";
 
 export const revalidate = 60;
 
 export async function GET(req: Request) {
+  const userId = getUserIdFromRequest(req);
+  const { allowed } = await checkRateLimit(userId);
+  if (!allowed) {
+    return NextResponse.json({ error: "Rate limit exceeded", remaining: 0 }, { status: 429 });
+  }
+
   const { searchParams } = new URL(req.url);
   const sport = searchParams.get("sport") || "baseball_mlb";
   const CACHE_KEY = `odds_${sport}`;
