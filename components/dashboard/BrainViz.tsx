@@ -6,14 +6,15 @@ import {
   Zap, Target, Shield, BookOpen, Eye, ChevronDown,
   BarChart3, Star, Clock, Flame, CheckCircle, AlertTriangle,
 } from "lucide-react";
-import { loadBrain, getBrainSummary, type BrainState } from "@/lib/bot/brain";
+import { loadBrain, loadBrainFromCloud, getBrainSummary, type BrainState } from "@/lib/bot/brain";
 
 export default function BrainViz() {
   const [brain, setBrain] = useState<BrainState | null>(null);
   const [activeView, setActiveView] = useState<"thoughts" | "pitchers" | "parks" | "matchups" | "timeline">("thoughts");
 
   useEffect(() => {
-    setBrain(loadBrain());
+    // Try cloud first (has full pitcher/park/matchup memory), fall back to local
+    loadBrainFromCloud().then(b => setBrain(b)).catch(() => setBrain(loadBrain()));
   }, []);
 
   if (!brain || !brain.isPreTrained) return null;

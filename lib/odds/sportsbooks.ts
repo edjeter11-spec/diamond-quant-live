@@ -84,8 +84,8 @@ export function validateEdge(
   bookmaker: string,
   allOddsForMarket: number[] // odds from all books for same side
 ): EdgeValidation {
-  // Rule 1: Any edge over 15% is almost certainly a dead line
-  if (evPercentage > 15) {
+  // Rule 1: Any edge over 12% is almost certainly a dead line
+  if (evPercentage > 12) {
     return {
       isValid: false,
       isSuspicious: true,
@@ -128,13 +128,13 @@ export function validateEdge(
   return { isValid: true, isSuspicious: false };
 }
 
-// Filter arb opportunities for real ones
+// Filter arb opportunities for real ones (anything over 5% is almost always a dead line)
 export function filterRealArbs(arbs: any[]): any[] {
   return arbs.filter((arb) => {
-    // Reject arbs with >15% profit (dead lines)
-    if (arb.profit > 15) return false;
+    // Reject arbs with >5% profit (almost always dead/stale lines)
+    if (arb.profit > 5) return false;
     // Reject arbs with extreme odds on either side
-    if (Math.abs(arb.side1.odds) > 5000 || Math.abs(arb.side2.odds) > 5000) return false;
+    if (Math.abs(arb.side1.odds) > 3000 || Math.abs(arb.side2.odds) > 3000) return false;
     return true;
   });
 }

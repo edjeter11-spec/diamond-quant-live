@@ -150,8 +150,9 @@ export function generateSmartPicks(
     if (pickOdds === -999 || pickOdds === 0) continue;
 
     const decOdds = americanToDecimal(pickOdds);
-    const rawKelly = kellyStake(fairProb, decOdds, bankroll, 0.25);
-    const stake = Math.max(Math.min(rawKelly, bankroll * 0.08), 25);
+    const rawKelly = kellyStake(fairProb, decOdds, bankroll, 0.15); // reduced from 0.25 to 0.15
+    // Cap: min $50, max $150 (prevents huge variance between bets)
+    const stake = Math.max(Math.min(rawKelly, 150), 50);
 
     const reasoning = [
       `Pitcher Model: ${(game.pitcherModel.homeWinProb * 100).toFixed(0)}% home — ${game.pitcherModel.factors[0] ?? ""}`,

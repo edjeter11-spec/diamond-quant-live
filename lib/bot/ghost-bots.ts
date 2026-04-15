@@ -251,7 +251,9 @@ function generateForStrategy(
 
   return selected.map((c, i) => {
     const dec = americanToDecimal(c.odds);
-    const stake = Math.max(kellyStake(c.fairProb, dec, bankroll, strategy.kellyFraction), 25);
+    const rawStake = kellyStake(c.fairProb, dec, bankroll, strategy.kellyFraction);
+    // Cap: min $50, max 5% of bankroll (prevents going broke on a few losses)
+    const stake = Math.max(Math.min(rawStake, bankroll * 0.05), 50);
     return {
       id: `ghost-${strategy.id}-${today}-${i}`,
       ghostId: strategy.id,
