@@ -311,6 +311,29 @@ async function runTrendModel(homeTeam: string, awayTeam: string): Promise<ModelP
   const factors: string[] = [];
   let homeEdge = 0;
 
+  // Helper: fuzzy team match (handles "Athletics" vs "Oakland Athletics" etc)
+  function teamMatch(name: string, target: string): boolean {
+    if (name === target) return true;
+    const nLast = name.split(" ").pop()?.toLowerCase() ?? "";
+    const tLast = target.split(" ").pop()?.toLowerCase() ?? "";
+    return nLast === tLast && nLast.length > 3;
+  }
+
+  // Use Brain's matchup memory if available
+  try {
+    const { loadBrain } = await import("@/lib/bot/brain");
+    const brain = loadBrain();
+    if (brain.matchupMemory) {
+      const mKey = `${awayTeam.toLowerCase()}::${homeTeam.toLowerCase()}`;
+      const matchup = brain.matchupMemory[mKey];
+      if (matchup && matchup.games >= 3) {
+        const homeRate = matchup.homeWins / matchup.games;
+        homeEdge += (homeRate - 0.5) * 15;
+        factors.push(`H2H: ${homeTeam.split(" ").pop()} is ${matchup.homeWins}-${matchup.games - matchup.homeWins} at home vs ${awayTeam.split(" ").pop()} (Brain memory)`);
+      }
+    }
+  } catch {}
+
   // Fetch recent records from standings
   try {
     const res = await fetch(`${MLB_API}/standings?leagueId=103,104`, { next: { revalidate: 3600 } });
@@ -327,8 +350,8 @@ async function runTrendModel(homeTeam: string, awayTeam: string): Promise<ModelP
           const pct = (w + l) > 0 ? w / (w + l) : 0.5;
           const last10 = `${team.records?.splitRecords?.find((r: any) => r.type === "lastTen")?.wins ?? 0}-${team.records?.splitRecords?.find((r: any) => r.type === "lastTen")?.losses ?? 0}`;
 
-          if (name === homeTeam) homeRecord = { w, l, pct, last10 };
-          if (name === awayTeam) awayRecord = { w, l, pct, last10 };
+          if (teamMatch(name, homeTeam)) homeRecord = { w, l, pct, last10 };
+          if (teamMatch(name, awayTeam)) awayRecord = { w, l, pct, last10 };
         }
       }
 

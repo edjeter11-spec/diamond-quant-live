@@ -134,22 +134,57 @@ export function loadBrain(): BrainState {
   if (typeof window === "undefined") return createFreshBrain();
   try {
     const stored = localStorage.getItem("dq_brain");
-    if (stored) return JSON.parse(stored);
+    if (stored) return repairWeights(JSON.parse(stored));
   } catch {}
   return createFreshBrain();
+}
+
+// Repair drifted weights — if any weight is below 4% or above 35%, reset to healthy defaults
+function repairWeights(brain: BrainState): BrainState {
+  const w = brain.weights;
+  const needsRepair = Object.values(w).some(v => v < 0.03 || v > 0.36);
+  if (!needsRepair) return brain;
+
+  // Reset to healthy baseline but keep some of the learned adjustments
+  const healthy: ModelWeights = {
+    pitching: 0.25, hitting: 0.20, bullpen: 0.14, defense: 0.08,
+    weather: 0.06, umpire: 0.06, momentum: 0.12, homeField: 0.09,
+  };
+
+  // Blend: 70% healthy + 30% current (clamped)
+  for (const key of Object.keys(healthy) as (keyof ModelWeights)[]) {
+    const clamped = Math.max(0.04, Math.min(0.35, w[key]));
+    healthy[key] = healthy[key] * 0.7 + clamped * 0.3;
+  }
+
+  // Normalize
+  const total = Object.values(healthy).reduce((a, b) => a + b, 0);
+  for (const key of Object.keys(healthy) as (keyof ModelWeights)[]) {
+    healthy[key] = healthy[key] / total;
+  }
+
+  brain.weights = healthy;
+  brain.logs.push({ timestamp: new Date().toISOString(), type: "adjust", message: "Weights repaired — detected extreme drift, blended back to healthy baseline" });
+  return brain;
 }
 
 // Async load from cloud (call this on mount for latest data)
 export async function loadBrainFromCloud(): Promise<BrainState> {
   try {
     const { cloudGet } = await import("@/lib/supabase/client");
-    const cloud = await cloudGet<BrainState>("brain", createFreshBrain());
+    let cloud = await cloudGet<BrainState>("brain", createFreshBrain());
     if (cloud && cloud.epoch > 0) {
+      // Repair any drifted weights
+      const repaired = repairWeights(cloud);
+      // If weights were repaired, save back to cloud immediately
+      if (repaired.weights !== cloud.weights) {
+        saveBrainToCloud(repaired);
+      }
       // Save to localStorage as cache
       if (typeof window !== "undefined") {
-        try { localStorage.setItem("dq_brain", JSON.stringify(cloud)); } catch {}
+        try { localStorage.setItem("dq_brain", JSON.stringify(repaired)); } catch {}
       }
-      return cloud;
+      return repaired;
     }
   } catch {}
   return loadBrain();
@@ -331,18 +366,23 @@ export function learnFromResult(
     }
   }
 
-  // Adjust weights
+  // Adjust weights — with GUARDRAILS to prevent drift to extremes
   const w = { ...updated.weights };
+  const FLOOR = 0.04;  // no weight below 4%
+  const CEIL = 0.35;   // no weight above 35%
+
   if (!result.won && predicted > 0.6) {
-    // Confident but wrong — reduce primary factors slightly
-    w.pitching = Math.max(0.05, w.pitching - lr * 0.3);
-    w.momentum = Math.max(0.02, w.momentum - lr * 0.2);
-    w.bullpen = Math.min(0.40, w.bullpen + lr * 0.2);
-    w.defense = Math.min(0.20, w.defense + lr * 0.1);
+    w.pitching = Math.max(FLOOR, w.pitching - lr * 0.1);
+    w.momentum = Math.max(FLOOR, w.momentum - lr * 0.05);
+    w.bullpen = Math.min(CEIL, w.bullpen + lr * 0.05);
   } else if (result.won && predicted < 0.45) {
-    // Upset we caught — reinforce hitting and momentum
-    w.hitting = Math.min(0.35, w.hitting + lr * 0.2);
-    w.momentum = Math.min(0.20, w.momentum + lr * 0.15);
+    w.hitting = Math.min(CEIL, w.hitting + lr * 0.1);
+    w.momentum = Math.min(CEIL, w.momentum + lr * 0.05);
+  }
+
+  // Enforce floor on ALL weights — nothing goes to 0
+  for (const key of Object.keys(w) as (keyof ModelWeights)[]) {
+    w[key] = Math.max(FLOOR, Math.min(CEIL, w[key]));
   }
 
   // Normalize

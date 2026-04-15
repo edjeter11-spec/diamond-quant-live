@@ -35,11 +35,11 @@ export async function GET() {
         continue;
       }
 
-      // Filter: future games + games in progress (up to 4hrs for live display)
+      // Filter: future games only + very recently started (30 min for live)
       const now = Date.now();
       const freshGames = rawGames.filter((g) => {
         const gameStart = new Date(g.commence_time).getTime();
-        return gameStart > now - 4 * 60 * 60 * 1000;
+        return gameStart > now - 30 * 60 * 1000; // only future + last 30 min
       });
 
       const games = freshGames.map((game) => {
