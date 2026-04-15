@@ -33,7 +33,7 @@ export const SPORT_CONFIGS: Record<Sport, SportConfig> = {
     oddsApiKey: "baseball_mlb",
     model1Label: "Pitcher",
     model2Label: "Market",
-    model3Label: "Trend",
+    model3Label: "Elo Power",
     brainKey: "brain",
     botKey: "smart_bot",
     propMarkets: [

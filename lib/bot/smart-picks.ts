@@ -157,7 +157,7 @@ export function generateSmartPicks(
     const reasoning = [
       `Pitcher Model: ${(game.pitcherModel.homeWinProb * 100).toFixed(0)}% home — ${game.pitcherModel.factors[0] ?? ""}`,
       `Market Model: ${(game.marketModel.homeWinProb * 100).toFixed(0)}% home — ${game.marketModel.factors[0] ?? ""}`,
-      `Trend Model: ${(game.trendModel.homeWinProb * 100).toFixed(0)}% home — ${game.trendModel.factors[0] ?? ""}`,
+      `Elo Power: ${(game.trendModel.homeWinProb * 100).toFixed(0)}% home — ${game.trendModel.factors[0] ?? ""}`,
       `Consensus: ${(game.consensus.homeWinProb * 100).toFixed(1)}% home | Models ${game.consensus.modelsAgree ? "AGREE" : "DISAGREE"}`,
       game.homePitcher ? `Home: ${game.homePitcher.name} (${game.homePitcher.era} ERA, ${game.homePitcher.whip} WHIP)` : "",
       game.awayPitcher ? `Away: ${game.awayPitcher.name} (${game.awayPitcher.era} ERA, ${game.awayPitcher.whip} WHIP)` : "",

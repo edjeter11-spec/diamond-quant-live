@@ -303,13 +303,16 @@ function runMarketModel(oddsLines: any[]): ModelPrediction {
 }
 
 // ══════════════════════════════════════════════════════════
-// MODEL C: TREND MODEL
-// Recent form, momentum, streaks
+// MODEL C: ELO POWER MODEL
+// Elo-driven power ratings as the primary predictive signal
+// Formula: P(home wins) = 1 / (1 + 10^((awayElo - (homeElo + 50)) / 400))
+// Ratings seeded from season win% when no historical Elo data available
 // ══════════════════════════════════════════════════════════
 
-async function runTrendModel(homeTeam: string, awayTeam: string): Promise<ModelPrediction> {
+async function runEloPowerModel(homeTeam: string, awayTeam: string): Promise<ModelPrediction> {
   const factors: string[] = [];
-  let homeEdge = 0;
+  let homeRating = 1500;
+  let awayRating = 1500;
 
   // Helper: fuzzy team match (handles "Athletics" vs "Oakland Athletics" etc)
   function teamMatch(name: string, target: string): boolean {
@@ -319,7 +322,43 @@ async function runTrendModel(homeTeam: string, awayTeam: string): Promise<ModelP
     return nLast === tLast && nLast.length > 3;
   }
 
-  // Use Brain's matchup memory if available
+  // Seed Elo ratings from current standings
+  // Formula: rating = 1500 + (winPct − 0.5) × 400
+  // → .600 team ≈ 1540, .500 team = 1500, .400 team ≈ 1460
+  try {
+    const res = await fetch(`${MLB_API}/standings?leagueId=103,104`, { next: { revalidate: 3600 } });
+    if (res.ok) {
+      const data = await res.json();
+      for (const rec of data.records ?? []) {
+        for (const team of rec.teamRecords ?? []) {
+          const name = team.team?.name ?? "";
+          const w = team.wins ?? 0;
+          const l = team.losses ?? 0;
+          if (w + l < 5) continue; // need enough games for meaningful ratings
+          const pct = w / (w + l);
+          const seedRating = Math.round(1500 + (pct - 0.5) * 400);
+          if (teamMatch(name, homeTeam)) {
+            homeRating = seedRating;
+            factors.push(`${homeTeam.split(" ").pop()}: ${w}-${l} record → Elo ${seedRating}`);
+          }
+          if (teamMatch(name, awayTeam)) {
+            awayRating = seedRating;
+            factors.push(`${awayTeam.split(" ").pop()}: ${w}-${l} record → Elo ${seedRating}`);
+          }
+        }
+      }
+    }
+  } catch {}
+
+  // PRIMARY SIGNAL: Elo win probability with home advantage (+50 Elo pts)
+  // Standard Elo formula: 1 / (1 + 10^((ratingB - ratingA) / 400))
+  const HOME_ELO_ADV = 50;
+  const eloHomeProb = 1 / (1 + Math.pow(10, (awayRating - (homeRating + HOME_ELO_ADV)) / 400));
+  factors.push(`Elo power: ${(eloHomeProb * 100).toFixed(1)}% home win (${homeRating} vs ${awayRating}, +${HOME_ELO_ADV} home)`);
+
+  let homeEdge = (eloHomeProb - 0.5) * 100;
+
+  // SECONDARY: Head-to-head history from Brain memory
   try {
     const { loadBrain } = await import("@/lib/bot/brain");
     const brain = loadBrain();
@@ -328,54 +367,16 @@ async function runTrendModel(homeTeam: string, awayTeam: string): Promise<ModelP
       const matchup = brain.matchupMemory[mKey];
       if (matchup && matchup.games >= 3) {
         const homeRate = matchup.homeWins / matchup.games;
-        homeEdge += (homeRate - 0.5) * 15;
-        factors.push(`H2H: ${homeTeam.split(" ").pop()} is ${matchup.homeWins}-${matchup.games - matchup.homeWins} at home vs ${awayTeam.split(" ").pop()} (Brain memory)`);
+        const h2hAdj = (homeRate - 0.5) * 10; // lighter weight than Elo
+        homeEdge += h2hAdj;
+        factors.push(`H2H: ${homeTeam.split(" ").pop()} ${matchup.homeWins}-${matchup.games - matchup.homeWins} at home (Brain memory)`);
       }
     }
   } catch {}
 
-  // Fetch recent records from standings
-  try {
-    const res = await fetch(`${MLB_API}/standings?leagueId=103,104`, { next: { revalidate: 3600 } });
-    if (res.ok) {
-      const data = await res.json();
-      let homeRecord: { w: number; l: number; pct: number; last10: string } | null = null;
-      let awayRecord: { w: number; l: number; pct: number; last10: string } | null = null;
-
-      for (const rec of data.records ?? []) {
-        for (const team of rec.teamRecords ?? []) {
-          const name = team.team?.name ?? "";
-          const w = team.wins ?? 0;
-          const l = team.losses ?? 0;
-          const pct = (w + l) > 0 ? w / (w + l) : 0.5;
-          const last10 = `${team.records?.splitRecords?.find((r: any) => r.type === "lastTen")?.wins ?? 0}-${team.records?.splitRecords?.find((r: any) => r.type === "lastTen")?.losses ?? 0}`;
-
-          if (teamMatch(name, homeTeam)) homeRecord = { w, l, pct, last10 };
-          if (teamMatch(name, awayTeam)) awayRecord = { w, l, pct, last10 };
-        }
-      }
-
-      if (homeRecord && awayRecord) {
-        const pctDiff = homeRecord.pct - awayRecord.pct;
-        homeEdge += pctDiff * 20;
-
-        factors.push(`${homeTeam}: ${homeRecord.w}-${homeRecord.l} (${(homeRecord.pct * 100).toFixed(0)}%) | Last 10: ${homeRecord.last10}`);
-        factors.push(`${awayTeam}: ${awayRecord.w}-${awayRecord.l} (${(awayRecord.pct * 100).toFixed(0)}%) | Last 10: ${awayRecord.last10}`);
-
-        if (homeRecord.pct > 0.600) { homeEdge += 3; factors.push(`${homeTeam} is a top team this season`); }
-        if (awayRecord.pct > 0.600) { homeEdge -= 3; factors.push(`${awayTeam} is a top team this season`); }
-        if (homeRecord.pct < 0.400) { homeEdge -= 3; factors.push(`${homeTeam} struggling this season`); }
-        if (awayRecord.pct < 0.400) { homeEdge += 3; factors.push(`${awayTeam} struggling this season`); }
-      }
-    }
-  } catch {}
-
-  // Home field baseline
-  homeEdge += 4;
-  factors.push("Home field: +4% baseline advantage");
-
-  const prob = Math.min(0.75, Math.max(0.25, 0.50 + homeEdge / 100));
-  const confidence = Math.min(60, Math.abs(homeEdge) * 2 + 15);
+  const prob = Math.min(0.80, Math.max(0.20, 0.50 + homeEdge / 100));
+  const ratingDiff = Math.abs(homeRating - awayRating);
+  const confidence = Math.min(65, ratingDiff / 4 + 20);
 
   return { homeWinProb: prob, totalProjection: 8.5, confidence, factors };
 }
@@ -458,7 +459,7 @@ export async function analyzeAllGames(oddsData: any[], scores: any[]): Promise<G
       // Run 3 models
       const pitcherModel = runPitcherModel(homePitcher, awayPitcher, homeTeam, awayTeam);
       const marketModel = runMarketModel(oddsLines);
-      const trendModel = await runTrendModel(homeTeam, awayTeam);
+      const trendModel = await runEloPowerModel(homeTeam, awayTeam);
 
       // Consensus
       const consensus = buildConsensus(pitcherModel, marketModel, trendModel);
