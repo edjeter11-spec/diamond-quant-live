@@ -101,31 +101,36 @@ export default function WarRoom() {
   const fetchData = useCallback(async () => {
     setRefreshing(true);
     try {
+      const isNBA = currentSport === "nba";
+      const sportKey = config.oddsApiKey;
+
       const [scoresRes, oddsRes, analysisRes] = await Promise.all([
-        fetch("/api/scores").then((r) => r.json()).catch(() => ({ games: [] })),
-        fetch(`/api/odds?sport=${config.oddsApiKey}`).then((r) => r.json()).catch(() => ({ games: [], demo: true })),
-        fetch("/api/analysis").then((r) => r.json()).catch(() => ({ analyses: [] })),
+        // Scores: MLB only (NBA scores need separate API — show empty for NBA)
+        isNBA ? Promise.resolve({ games: [] }) : fetch("/api/scores").then((r) => r.json()).catch(() => ({ games: [] })),
+        // Odds: sport-aware
+        fetch(`/api/odds?sport=${sportKey}`).then((r) => r.json()).catch(() => ({ games: [] })),
+        // Analysis: MLB only for now (NBA analysis uses odds directly)
+        isNBA ? Promise.resolve({ analyses: [] }) : fetch("/api/analysis").then((r) => r.json()).catch(() => ({ analyses: [] })),
       ]);
 
       const scoreGames = scoresRes.games ?? [];
       let oddsGames = oddsRes.games ?? [];
-      setIsDemo(oddsRes.demo === true);
+      setIsDemo(false);
 
-      // If odds API failed, try backup
-      if (oddsGames.length === 0) {
-        const backup = getOddsBackup();
-        if (backup && backup.age < 30) {
-          oddsGames = backup.data;
-          setIsDemo(true);
+      // Backup only for MLB
+      if (!isNBA) {
+        if (oddsGames.length === 0) {
+          const backup = getOddsBackup();
+          if (backup && backup.age < 30) { oddsGames = backup.data; }
+        } else {
+          backupOddsToStorage(oddsGames);
         }
-      } else {
-        backupOddsToStorage(oddsGames);
       }
 
       setScores(scoreGames);
       setOddsData(oddsGames);
       setAnalyses(analysisRes.analyses ?? []);
-      snapshotOdds(oddsGames);
+      if (!isNBA) snapshotOdds(oddsGames);
 
       // Robust game matching
       const matchMap = matchGames(scoreGames, oddsGames);
@@ -157,13 +162,18 @@ export default function WarRoom() {
       return etHour >= 9 || etHour < 2; // Active 9 AM - 2 AM ET
     }
 
+    // Clear old data when sport switches
+    setOddsData([]);
+    setScores([]);
+    setGames([]);
+    selectGame(null);
     fetchData();
     const hasLive = scores.some((s: any) => s.status === "live");
     const interval = setInterval(() => {
       if (shouldPoll()) fetchData();
-    }, hasLive ? 90000 : 180000); // 90s during live games, 3 min otherwise
+    }, hasLive ? 90000 : 180000);
     return () => clearInterval(interval);
-  }, [fetchData, scores]);
+  }, [fetchData, scores, currentSport]); // re-fetch on sport change
 
   // Arb alert: flash + sound when new arbs appear
   const currentArbCount = oddsData.reduce((sum: number, g: any) => sum + (g.arbitrage?.length ?? 0), 0);
@@ -591,31 +601,87 @@ export default function WarRoom() {
             )}
 
             {activeTab === "props" && (
-              <div className="max-w-6xl mx-auto space-y-4">
-                {/* Top 5 AI Picks — always visible at top */}
-                <TopPropsOfDay />
-
-                {/* Search + browse props below */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
-                  <div className="lg:col-span-2">
-                    <PlayerProps />
+              currentSport === "nba" ? (
+                <div className="max-w-4xl mx-auto space-y-4">
+                  <div className="glass rounded-xl p-6 border border-orange-500/15">
+                    <div className="flex items-center gap-2 mb-3">
+                      <User className="w-5 h-5 text-orange-500" />
+                      <h2 className="text-sm font-bold text-silver uppercase">NBA Player Props</h2>
+                    </div>
+                    <p className="text-xs text-mercury mb-4">Points, Rebounds, Assists, 3-Pointers, and PRA props from all major sportsbooks.</p>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {["Points", "Rebounds", "Assists", "3-Pointers", "Pts+Reb+Ast"].map(m => (
+                        <div key={m} className="px-3 py-2 rounded-lg bg-gunmetal/30 text-center">
+                          <p className="text-xs text-orange-500 font-semibold">{m}</p>
+                          <p className="text-[9px] text-mercury/50">Coming soon</p>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <div>
-                    <ParlayBuilder />
+                  <ParlayBuilder />
+                </div>
+              ) : (
+                <div className="max-w-6xl mx-auto space-y-4">
+                  <TopPropsOfDay />
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
+                    <div className="lg:col-span-2">
+                      <PlayerProps />
+                    </div>
+                    <div>
+                      <ParlayBuilder />
+                    </div>
                   </div>
                 </div>
-              </div>
+              )
             )}
 
-            {activeTab === "nrfi" && <NRFITab />}
+            {activeTab === "nrfi" && (
+              currentSport === "nba" ? (
+                <div className="max-w-4xl mx-auto glass rounded-xl p-8 text-center">
+                  <Shield className="w-10 h-10 text-orange-500/30 mx-auto mb-3" />
+                  <h2 className="text-lg font-bold text-silver mb-2">1st Quarter Props</h2>
+                  <p className="text-sm text-mercury">NBA 1st quarter analysis coming soon. Switch to MLB for NRFI picks.</p>
+                </div>
+              ) : <NRFITab />
+            )}
 
             {activeTab === "bot" && (
               <div className="max-w-3xl mx-auto space-y-4">
-                <ThreeModelBot />
-                <BrainViz />
-                <BotChallenge />
-                <GhostBots />
-                <ModelLogs />
+                {currentSport === "nba" ? (
+                  <>
+                    <div className="glass rounded-xl p-6 border border-orange-500/15 text-center">
+                      <div className="w-12 h-12 rounded-xl bg-orange-500/15 flex items-center justify-center mx-auto mb-3">
+                        <Diamond className="w-6 h-6 text-orange-500" />
+                      </div>
+                      <h2 className="text-lg font-bold text-silver mb-2">NBA Bot — Building Intelligence</h2>
+                      <p className="text-sm text-mercury mb-3">The NBA Brain is collecting data from live games. Analysis uses Net Rating, Home Court, Rest, Form, and Injury models.</p>
+                      <div className="grid grid-cols-3 gap-2 max-w-sm mx-auto">
+                        <div className="p-2 rounded bg-gunmetal/30 text-center">
+                          <p className="text-sm font-bold text-orange-500">30%</p>
+                          <p className="text-[8px] text-mercury">Net Rating</p>
+                        </div>
+                        <div className="p-2 rounded bg-gunmetal/30 text-center">
+                          <p className="text-sm font-bold text-orange-500">15%</p>
+                          <p className="text-[8px] text-mercury">Rest/B2B</p>
+                        </div>
+                        <div className="p-2 rounded bg-gunmetal/30 text-center">
+                          <p className="text-sm font-bold text-orange-500">15%</p>
+                          <p className="text-[8px] text-mercury">Injuries</p>
+                        </div>
+                      </div>
+                    </div>
+                    {/* Still show picks from NBA odds if available */}
+                    <BotChallenge />
+                  </>
+                ) : (
+                  <>
+                    <ThreeModelBot />
+                    <BrainViz />
+                    <BotChallenge />
+                    <GhostBots />
+                    <ModelLogs />
+                  </>
+                )}
               </div>
             )}
 

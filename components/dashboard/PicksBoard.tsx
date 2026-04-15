@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useStore } from "@/lib/store";
+import { useSport } from "@/lib/sport-context";
 import {
   Trophy, Zap, Layers, TrendingUp, Target, ChevronDown,
   Star, DollarSign, ArrowUpRight, ArrowDownRight, BarChart3,
@@ -33,6 +34,8 @@ interface Pick {
 
 export default function PicksBoard() {
   const { oddsData, scores, addParlayLeg } = useStore();
+  const { currentSport, config } = useSport();
+  const isNBA = currentSport === "nba";
   const [expandedPick, setExpandedPick] = useState<string | null>(null);
   const [propsData, setPropsData] = useState<Record<string, any[]>>({});
   const [propsLoading, setPropsLoading] = useState(true);
@@ -40,6 +43,8 @@ export default function PicksBoard() {
 
   // Fetch 3-model analysis and convert to picks
   useEffect(() => {
+    // Only fetch MLB bot analysis for MLB — NBA uses odds directly
+    if (isNBA) { setModelPicks([]); return; }
     fetch("/api/bot-analysis").then(r => r.json()).then(data => {
       const picks: Pick[] = [];
       for (const game of data.analyses ?? []) {
@@ -68,9 +73,9 @@ export default function PicksBoard() {
     }).catch(() => {});
   }, []);
 
-  // Fetch only strikeouts for the main board (saves 4 API calls)
-  // Full prop markets are on the Props tab
+  // Fetch props — MLB gets strikeouts, NBA skips (props on Props tab)
   useEffect(() => {
+    if (isNBA) { setPropsData({}); setPropsLoading(false); return; }
     let cancelled = false;
     setPropsLoading(true);
     fetch("/api/players?market=pitcher_strikeouts").then(r => r.json()).then(ks => {
@@ -80,7 +85,7 @@ export default function PicksBoard() {
       }
     }).catch(() => { if (!cancelled) setPropsLoading(false); });
     return () => { cancelled = true; };
-  }, []);
+  }, [isNBA]);
 
   // Build lookup: team name → game status from scores
   const gameStatusMap = useMemo(() => {
@@ -312,7 +317,7 @@ export default function PicksBoard() {
       return result;
     }
     return {
-      topLocks: takeUnique(combinedPicks, 4, (p) => p.confidence === "HIGH" || p.confidence === "MEDIUM" || p.evPercentage > 3),
+      topLocks: takeUnique(combinedPicks, 4, (p) => (p.confidence === "HIGH" || p.confidence === "MEDIUM" || p.evPercentage > 3) && p.evPercentage >= 0),
       longshots: takeUnique(combinedPicks, 4, (p) => p.odds > 120),
       moneylines: takeUnique(combinedPicks, 5, (p) => p.market === "moneyline"),
       runLines: takeUnique(combinedPicks, 5, (p) => p.market === "spread"),
@@ -469,8 +474,10 @@ export default function PicksBoard() {
         </div>
       ))}
 
-      {/* ═══ STRIKEOUT PROPS (only K's on main board — full props on Props tab) ═══ */}
-      <PropSection title="STRIKEOUTS" subtitle="Pitcher K props with live odds" icon={Flame} iconColor="text-danger" props={propsData.pitcher_strikeouts ?? []} loading={propsLoading} expandedPick={expandedPick} setExpanded={setExpandedPick} addParlayLeg={addParlayLeg} />
+      {/* ═══ PROPS (sport-specific) ═══ */}
+      {!isNBA && (
+        <PropSection title="STRIKEOUTS" subtitle="Pitcher K props with live odds" icon={Flame} iconColor="text-danger" props={propsData.pitcher_strikeouts ?? []} loading={propsLoading} expandedPick={expandedPick} setExpanded={setExpandedPick} addParlayLeg={addParlayLeg} />
+      )}
 
       {/* No data state */}
       {combinedPicks.length === 0 && allEV.length === 0 && (
@@ -640,9 +647,9 @@ function PropSection({ title, subtitle, icon: Icon, iconColor, props, loading, e
       const opponent = teams.find(t => !t.includes(found.team.split(" ").pop() ?? "???")) ?? teams[1] ?? "";
       return { playerTeam: found.abbrev, opponent: opponent.split(" ").pop() ?? "" };
     }
-    // Fallback: can't determine — show both teams
+    // Fallback: can't determine — show game matchup
     const parts = gameStr.split(" @ ");
-    return { playerTeam: "?", opponent: parts.map(t => t.split(" ").pop()).join(" vs ") };
+    return { playerTeam: parts[0]?.split(" ").pop()?.slice(0, 3).toUpperCase() ?? "?", opponent: parts[1]?.split(" ").pop() ?? "" };
   }
 
   const fmt = (o: number) => (o > 0 ? `+${o}` : `${o}`);
