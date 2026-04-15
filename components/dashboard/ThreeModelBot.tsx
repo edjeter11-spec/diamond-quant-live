@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useStore } from "@/lib/store";
+import { useSport } from "@/lib/sport-context";
 import {
   Bot, Brain, TrendingUp, BarChart3, Target, ChevronDown,
   RefreshCw, CheckCircle, XCircle, Minus, AlertTriangle,
@@ -11,6 +12,7 @@ import { getDeepLink } from "@/lib/odds/sportsbooks";
 import type { GameAnalysis, GamePick } from "@/lib/bot/three-models";
 
 export default function ThreeModelBot() {
+  const { currentSport, config } = useSport();
   const [analyses, setAnalyses] = useState<GameAnalysis[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedGame, setExpandedGame] = useState<string | null>(null);
@@ -18,13 +20,14 @@ export default function ThreeModelBot() {
 
   useEffect(() => {
     fetchAnalysis();
-  }, []);
+  }, [currentSport]);
 
   async function fetchAnalysis() {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch("/api/bot-analysis");
+      const url = currentSport === "nba" ? "/api/nba-analysis" : "/api/bot-analysis";
+      const res = await fetch(url);
       if (!res.ok) throw new Error("Analysis failed");
       const data = await res.json();
       setAnalyses(data.analyses ?? []);
@@ -74,7 +77,7 @@ export default function ThreeModelBot() {
         <div className="flex items-center gap-4 text-[10px]">
           <div className="flex items-center gap-1">
             <Brain className="w-3 h-3 text-purple" />
-            <span className="text-mercury">Pitcher Model</span>
+            <span className="text-mercury">{config.model1Label} Model</span>
           </div>
           <div className="flex items-center gap-1">
             <BarChart3 className="w-3 h-3 text-electric" />
@@ -82,7 +85,7 @@ export default function ThreeModelBot() {
           </div>
           <div className="flex items-center gap-1">
             <TrendingUp className="w-3 h-3 text-neon" />
-            <span className="text-mercury">Trend Model</span>
+            <span className="text-mercury">{config.model3Label} Model</span>
           </div>
         </div>
         <p className="text-[10px] text-mercury/50 mt-1">

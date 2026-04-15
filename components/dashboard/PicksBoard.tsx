@@ -43,9 +43,8 @@ export default function PicksBoard() {
 
   // Fetch 3-model analysis and convert to picks
   useEffect(() => {
-    // Only fetch MLB bot analysis for MLB — NBA uses odds directly
-    if (isNBA) { setModelPicks([]); return; }
-    fetch("/api/bot-analysis").then(r => r.json()).then(data => {
+    const analysisUrl = isNBA ? "/api/nba-analysis" : "/api/bot-analysis";
+    fetch(analysisUrl).then(r => r.json()).then(data => {
       const picks: Pick[] = [];
       for (const game of data.analyses ?? []) {
         if (!game.picks?.length) continue;

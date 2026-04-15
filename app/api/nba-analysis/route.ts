@@ -1,0 +1,136 @@
+import { NextResponse } from "next/server";
+import { fetchOdds, parseOddsLines, findBestLine } from "@/lib/odds/the-odds-api";
+import { getApiKey } from "@/lib/odds/api-keys";
+import { getCached, setCache } from "@/lib/odds/server-cache";
+import { devig } from "@/lib/model/kelly";
+import { runNetRatingModel, runFormModel, buildNBAConsensus } from "@/lib/bot/nba-engine";
+import { getNBATeamAbbrev } from "@/lib/nba/stats-api";
+
+export const dynamic = "force-dynamic";
+
+export async function GET() {
+  const cached = getCached("nba_analysis", 600_000);
+  if (cached) return NextResponse.json(cached);
+
+  const apiKey = getApiKey();
+  if (!apiKey) return NextResponse.json({ analyses: [], error: "No API key" });
+
+  try {
+    const rawGames = await fetchOdds(apiKey, "basketball_nba");
+    const now = Date.now();
+
+    // Filter to upcoming games only
+    const futureGames = rawGames.filter(g => new Date(g.commence_time).getTime() > now - 30 * 60 * 1000);
+
+    const analyses = futureGames.slice(0, 12).map(game => {
+      const oddsLines = parseOddsLines(game);
+      const homeTeam = game.home_team;
+      const awayTeam = game.away_team;
+
+      // Run 3 NBA models
+      const netRatingModel = runNetRatingModel(homeTeam, awayTeam, oddsLines);
+
+      // Market model from odds
+      const homeProbs: number[] = [];
+      for (const line of oddsLines) {
+        if (line.homeML !== 0 && line.awayML !== 0) {
+          const { prob1 } = devig(line.homeML, line.awayML);
+          homeProbs.push(prob1);
+        }
+      }
+      const marketProb = homeProbs.length > 0 ? homeProbs.reduce((a, b) => a + b, 0) / homeProbs.length : 0.5;
+      const marketModel = {
+        homeWinProb: marketProb,
+        spreadProjection: 0,
+        totalProjection: oddsLines[0]?.total || 224,
+        confidence: Math.min(75, homeProbs.length * 20),
+        factors: [`Market consensus from ${homeProbs.length} books: ${(marketProb * 100).toFixed(1)}% home`],
+      };
+
+      const formModel = runFormModel(homeTeam, awayTeam);
+
+      // Consensus
+      const consensus = buildNBAConsensus(netRatingModel, marketModel, formModel);
+
+      // Best odds
+      const bestHomeML = findBestLine(oddsLines, "home", "ml");
+      const bestAwayML = findBestLine(oddsLines, "away", "ml");
+      const bestOver = findBestLine(oddsLines, "home", "total_over");
+
+      // Generate picks
+      const picks: any[] = [];
+      if (consensus.confidence !== "NO_PLAY" && bestHomeML.odds !== -Infinity) {
+        const isHome = consensus.homeWinProb > 0.5;
+        const pickTeam = isHome ? homeTeam : awayTeam;
+        const pickOdds = isHome ? bestHomeML.odds : bestAwayML.odds;
+        const pickBook = isHome ? bestHomeML.bookmaker : bestAwayML.bookmaker;
+
+        picks.push({
+          pick: `${pickTeam} ML`,
+          market: "moneyline",
+          odds: pickOdds,
+          bookmaker: pickBook,
+          fairProb: Math.round((isHome ? consensus.homeWinProb : 1 - consensus.homeWinProb) * 1000) / 10,
+          confidence: consensus.confidence,
+          reasoning: [
+            ...netRatingModel.factors.slice(0, 2),
+            ...marketModel.factors.slice(0, 1),
+            ...formModel.factors.slice(0, 1),
+          ],
+        });
+      }
+
+      // Spread pick
+      if (oddsLines[0]?.homeSpread) {
+        picks.push({
+          pick: `${consensus.spreadProjection < 0 ? homeTeam : awayTeam} ${consensus.spreadProjection < 0 ? consensus.spreadProjection.toFixed(1) : "+" + (-consensus.spreadProjection).toFixed(1)}`,
+          market: "spread",
+          odds: oddsLines[0]?.spreadPrice ?? -110,
+          bookmaker: oddsLines[0]?.bookmaker ?? "",
+          fairProb: 50,
+          confidence: "LOW",
+          reasoning: ["Spread based on model consensus projection"],
+        });
+      }
+
+      return {
+        gameId: game.id,
+        homeTeam,
+        awayTeam,
+        homeAbbrev: getNBATeamAbbrev(homeTeam),
+        awayAbbrev: getNBATeamAbbrev(awayTeam),
+        commenceTime: game.commence_time,
+        pitcherModel: netRatingModel, // reusing the field name for component compatibility
+        marketModel,
+        trendModel: formModel,
+        consensus: {
+          homeWinProb: consensus.homeWinProb,
+          confidence: consensus.confidence,
+          modelsAgree: consensus.modelsAgree,
+          disagreementLevel: 0,
+        },
+        picks,
+        bestHomeML: bestHomeML.odds,
+        bestAwayML: bestAwayML.odds,
+        bestHomeBook: bestHomeML.bookmaker,
+        bestAwayBook: bestAwayML.bookmaker,
+        homePitcher: null, // N/A for NBA
+        awayPitcher: null,
+      };
+    });
+
+    const response = {
+      analyses,
+      timestamp: new Date().toISOString(),
+      gamesAnalyzed: analyses.length,
+      highConfidence: analyses.filter(a => a.consensus.confidence === "HIGH").length,
+      disagreements: analyses.filter(a => !a.consensus.modelsAgree).length,
+    };
+
+    setCache("nba_analysis", response);
+    return NextResponse.json(response);
+  } catch (error: any) {
+    console.error("NBA analysis error:", error);
+    return NextResponse.json({ analyses: [], error: error.message });
+  }
+}

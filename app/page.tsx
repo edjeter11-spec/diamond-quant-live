@@ -105,12 +105,16 @@ export default function WarRoom() {
       const sportKey = config.oddsApiKey;
 
       const [scoresRes, oddsRes, analysisRes] = await Promise.all([
-        // Scores: MLB only (NBA scores need separate API — show empty for NBA)
-        isNBA ? Promise.resolve({ games: [] }) : fetch("/api/scores").then((r) => r.json()).catch(() => ({ games: [] })),
+        // Scores: sport-specific
+        isNBA
+          ? fetch("/api/nba-scores").then((r) => r.json()).catch(() => ({ games: [] }))
+          : fetch("/api/scores").then((r) => r.json()).catch(() => ({ games: [] })),
         // Odds: sport-aware
         fetch(`/api/odds?sport=${sportKey}`).then((r) => r.json()).catch(() => ({ games: [] })),
-        // Analysis: MLB only for now (NBA analysis uses odds directly)
-        isNBA ? Promise.resolve({ analyses: [] }) : fetch("/api/analysis").then((r) => r.json()).catch(() => ({ analyses: [] })),
+        // Analysis: sport-specific
+        isNBA
+          ? fetch("/api/nba-analysis").then((r) => r.json()).catch(() => ({ analyses: [] }))
+          : fetch("/api/analysis").then((r) => r.json()).catch(() => ({ analyses: [] })),
       ]);
 
       const scoreGames = scoresRes.games ?? [];
