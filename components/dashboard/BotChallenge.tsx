@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useStore } from "@/lib/store";
 import { useSport } from "@/lib/sport-context";
 import {
-  Bot, Brain, TrendingUp, TrendingDown, BarChart3, Target,
+  Bot, Brain, TrendingUp, BarChart3, Target,
   ChevronDown, RefreshCw, CheckCircle, XCircle, Minus, Clock,
   Flame, Zap, DollarSign, Crown, Activity,
 } from "lucide-react";
@@ -12,6 +12,11 @@ import {
   loadSmartBot, saveSmartBot, generateSmartPicks, settleAndLearn,
   loadModelAccuracy, type SmartBotState, type SmartBotPick, type ModelAccuracy,
 } from "@/lib/bot/smart-picks";
+import {
+  loadCLVRecords, saveCLVRecords, trackBet, updateClosingOdds, getCLVSummary,
+  type CLVRecord,
+} from "@/lib/bot/clv-tracker";
+import { loadEloState, saveEloState, updateElo } from "@/lib/bot/elo";
 import type { GameAnalysis } from "@/lib/bot/three-models";
 
 export default function BotChallenge() {
@@ -34,7 +39,15 @@ export default function BotChallenge() {
   const [expandedPick, setExpandedPick] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Reload bot state when sport changes
+  // CLV tracking state
+  const [clvRecords, setClvRecords] = useState<CLVRecord[]>(() => {
+    if (typeof window === "undefined") return [];
+    return loadCLVRecords(currentSport);
+  });
+
+  const clvSummary = useMemo(() => getCLVSummary(clvRecords), [clvRecords]);
+
+  // Reload bot state + CLV when sport changes
   useEffect(() => {
     try {
       const stored = localStorage.getItem(storageKey);
@@ -43,6 +56,7 @@ export default function BotChallenge() {
     } catch {
       setBotState({ bankroll: 5000, picks: [], dailyPnL: {} });
     }
+    setClvRecords(loadCLVRecords(currentSport));
   }, [currentSport, storageKey]);
 
   // Fetch sport-specific analysis
@@ -77,16 +91,85 @@ export default function BotChallenge() {
       };
       saveSmartBot(updated);
       setBotState(updated);
+
+      // Track new picks in CLV (opening odds = bet odds)
+      const updatedCLV = newPicks.reduce((recs, pick) => {
+        return trackBet(recs, {
+          id: pick.id, date: pick.date, game: pick.game, pick: pick.pick,
+          bookmaker: pick.bookmaker, odds: pick.odds, sport: currentSport,
+        });
+      }, clvRecords);
+      saveCLVRecords(updatedCLV, currentSport);
+      setClvRecords(updatedCLV);
     }
   }, [analyses]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Auto-settle + learn when scores update
+  // Auto-settle + learn + update CLV + update Elo when scores arrive
   useEffect(() => {
     if (scores.length === 0) return;
     const { botState: updated, accuracy: newAcc } = settleAndLearn(botState, scores);
     if (updated !== botState) {
       setBotState(updated);
       setAccuracy(newAcc);
+
+      // Find picks that just transitioned from pending → settled
+      const newlySettled = updated.picks.filter(p =>
+        p.result !== "pending" &&
+        botState.picks.find(prev => prev.id === p.id)?.result === "pending"
+      );
+
+      if (newlySettled.length > 0) {
+        // --- Update Elo ratings from settled game results ---
+        let eloState = loadEloState(currentSport);
+        for (const pick of newlySettled) {
+          if (!pick.finalScore) continue;
+          const parts = pick.game.split(" @ ");
+          if (parts.length !== 2) continue;
+          const [awayTeam, homeTeam] = parts;
+          // finalScore format: "CHC 3 - NYY 7"
+          const scoreMatch = pick.finalScore.match(/\S+\s+(\d+)\s*-\s*\S+\s+(\d+)/);
+          if (!scoreMatch) continue;
+          const awayScore = parseInt(scoreMatch[1]);
+          const homeScore = parseInt(scoreMatch[2]);
+          if (isNaN(awayScore) || isNaN(homeScore)) continue;
+          eloState = updateElo(eloState, homeTeam, awayTeam, homeScore > awayScore, Math.abs(homeScore - awayScore));
+        }
+        saveEloState(eloState);
+
+        // --- Fetch closing odds and update CLV for settled picks ---
+        fetch("/api/odds")
+          .then(r => r.json())
+          .then((oddsGames: any[]) => {
+            // Build closing-odds map: "Team ML" → current odds
+            const allClosingOdds: Record<string, number> = {};
+            for (const game of oddsGames) {
+              if (!game.homeTeam || !game.awayTeam) continue;
+              let bestHome = 0, bestAway = 0;
+              for (const line of game.oddsLines ?? []) {
+                if (line.homeML !== 0 && (bestHome === 0 || Math.abs(line.homeML) < Math.abs(bestHome))) {
+                  bestHome = line.homeML;
+                }
+                if (line.awayML !== 0 && (bestAway === 0 || Math.abs(line.awayML) < Math.abs(bestAway))) {
+                  bestAway = line.awayML;
+                }
+              }
+              if (bestHome !== 0) allClosingOdds[`${game.homeTeam} ML`] = bestHome;
+              if (bestAway !== 0) allClosingOdds[`${game.awayTeam} ML`] = bestAway;
+            }
+
+            // Update CLV records: closing odds + result
+            let updatedCLV = clvRecords;
+            for (const pick of newlySettled) {
+              updatedCLV = updateClosingOdds(updatedCLV, pick.game, allClosingOdds);
+              updatedCLV = updatedCLV.map(r =>
+                r.id === pick.id ? { ...r, result: pick.result } : r
+              );
+            }
+            saveCLVRecords(updatedCLV, currentSport);
+            setClvRecords(updatedCLV);
+          })
+          .catch(() => {});
+      }
     }
   }, [scores]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -101,6 +184,13 @@ export default function BotChallenge() {
   const profit = totalReturns - totalStaked;
   const roi = totalStaked > 0 ? (profit / totalStaked) * 100 : 0;
   const pending = botState.picks.filter(p => p.result === "pending").length;
+
+  // Build CLV record map for quick lookup by pick ID
+  const clvMap = useMemo(() => {
+    const map = new Map<string, CLVRecord>();
+    for (const r of clvRecords) map.set(r.id, r);
+    return map;
+  }, [clvRecords]);
 
   return (
     <div className="space-y-3">
@@ -134,8 +224,37 @@ export default function BotChallenge() {
             <div className="grid grid-cols-4 gap-2">
               <ModelAccStat name={config.model1Label} icon={Brain} color="text-purple" acc={accuracy.pitcher} />
               <ModelAccStat name="Market" icon={BarChart3} color="text-electric" acc={accuracy.market} />
-              <ModelAccStat name="Trend" icon={TrendingUp} color="text-neon" acc={accuracy.trend} />
+              <ModelAccStat name={config.model3Label} icon={Activity} color="text-neon" acc={accuracy.trend} />
               <ModelAccStat name="Consensus" icon={Target} color="text-gold" acc={accuracy.consensus} />
+            </div>
+          </div>
+        )}
+
+        {/* CLV Summary — shown once we have closing-line data */}
+        {clvSummary.betsWithCLV > 0 && (
+          <div className="px-4 py-2 border-t border-slate/10">
+            <p className="text-[9px] text-mercury uppercase tracking-wider mb-1.5 font-semibold flex items-center gap-1">
+              <Activity className="w-3 h-3" /> Closing Line Value
+            </p>
+            <div className="grid grid-cols-3 gap-2">
+              <div className="text-center">
+                <p className={`text-xs font-bold font-mono ${clvSummary.beatClosingRate >= 55 ? "text-neon" : clvSummary.beatClosingRate >= 45 ? "text-electric" : "text-danger"}`}>
+                  {clvSummary.beatClosingRate}%
+                </p>
+                <p className="text-[7px] text-mercury/50">Beat-Close</p>
+              </div>
+              <div className="text-center">
+                <p className={`text-xs font-bold font-mono ${clvSummary.avgCLV >= 0 ? "text-neon" : "text-danger"}`}>
+                  {clvSummary.avgCLV >= 0 ? "+" : ""}{clvSummary.avgCLV}%
+                </p>
+                <p className="text-[7px] text-mercury/50">Avg CLV</p>
+              </div>
+              <div className="text-center">
+                <p className={`text-xs font-bold font-mono ${clvSummary.isSharp ? "text-gold" : "text-mercury/60"}`}>
+                  {clvSummary.isSharp ? "SHARP" : `${clvSummary.betsWithCLV} pts`}
+                </p>
+                <p className="text-[7px] text-mercury/50">{clvSummary.isSharp ? "Sharp Bettor" : "Sample Size"}</p>
+              </div>
             </div>
           </div>
         )}
@@ -171,6 +290,7 @@ export default function BotChallenge() {
               <PickRow
                 key={pick.id}
                 pick={pick}
+                clvRecord={clvMap.get(pick.id)}
                 isExpanded={expandedPick === pick.id}
                 onToggle={() => setExpandedPick(expandedPick === pick.id ? null : pick.id)}
                 formatOdds={formatOdds}
@@ -192,6 +312,7 @@ export default function BotChallenge() {
               <PickRow
                 key={pick.id}
                 pick={pick}
+                clvRecord={clvMap.get(pick.id)}
                 isExpanded={expandedPick === pick.id}
                 onToggle={() => setExpandedPick(expandedPick === pick.id ? null : pick.id)}
                 formatOdds={formatOdds}
@@ -205,8 +326,8 @@ export default function BotChallenge() {
   );
 }
 
-function PickRow({ pick, isExpanded, onToggle, formatOdds, compact }: {
-  pick: SmartBotPick; isExpanded: boolean; onToggle: () => void;
+function PickRow({ pick, clvRecord, isExpanded, onToggle, formatOdds, compact }: {
+  pick: SmartBotPick; clvRecord?: CLVRecord; isExpanded: boolean; onToggle: () => void;
   formatOdds: (n: number) => string; compact?: boolean;
 }) {
   const { config } = useSport();
@@ -228,6 +349,12 @@ function PickRow({ pick, isExpanded, onToggle, formatOdds, compact }: {
           <div className="flex items-center gap-1.5">
             {pick.confidence === "HIGH" && <Crown className="w-3 h-3 text-gold flex-shrink-0" />}
             <p className="text-xs sm:text-sm font-medium text-silver truncate">{pick.pick}</p>
+            {/* Inline CLV badge on settled picks */}
+            {clvRecord && clvRecord.closingOdds !== 0 && (
+              <span className={`text-[8px] font-bold px-1 py-0.5 rounded flex-shrink-0 ${clvRecord.beatClosing ? "bg-neon/15 text-neon" : "bg-danger/15 text-danger"}`}>
+                CLV {clvRecord.clvPercent > 0 ? "+" : ""}{clvRecord.clvPercent}%
+              </span>
+            )}
           </div>
           <p className="text-[9px] text-mercury/60 truncate">
             {pick.game} {pick.finalScore ? `• ${pick.finalScore}` : `• ${pick.bookmaker}`}
@@ -270,9 +397,9 @@ function PickRow({ pick, isExpanded, onToggle, formatOdds, compact }: {
               )}
             </div>
             <div className="text-center p-1.5 rounded bg-neon/10">
-              <TrendingUp className="w-3 h-3 text-neon mx-auto mb-0.5" />
+              <Activity className="w-3 h-3 text-neon mx-auto mb-0.5" />
               <p className="text-sm font-bold font-mono text-neon">{pick.trendScore}%</p>
-              <p className="text-[8px] text-mercury">Trend</p>
+              <p className="text-[8px] text-mercury">{config.model3Label}</p>
               {pick.trendCorrect !== undefined && (
                 <p className={`text-[8px] font-bold ${pick.trendCorrect ? "text-neon" : "text-danger"}`}>
                   {pick.trendCorrect ? "RIGHT" : "WRONG"}
@@ -280,6 +407,24 @@ function PickRow({ pick, isExpanded, onToggle, formatOdds, compact }: {
               )}
             </div>
           </div>
+
+          {/* CLV Detail — shown on settled picks that have closing odds */}
+          {pick.result !== "pending" && clvRecord && clvRecord.closingOdds !== 0 && (
+            <div className="rounded bg-gunmetal/20 p-2.5">
+              <p className="text-[9px] text-mercury uppercase tracking-wider mb-1.5 font-semibold">Closing Line Value</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className={`text-xs font-bold font-mono ${clvRecord.clvPercent > 0 ? "text-neon" : "text-danger"}`}>
+                  {clvRecord.clvPercent > 0 ? "+" : ""}{clvRecord.clvPercent}% CLV
+                </span>
+                <span className="text-[10px] text-mercury/50">
+                  Open {formatOdds(clvRecord.openingOdds)} → Close {formatOdds(clvRecord.closingOdds)}
+                </span>
+                <span className={`ml-auto text-[10px] font-bold ${clvRecord.beatClosing ? "text-neon" : "text-danger"}`}>
+                  {clvRecord.beatClosing ? "✓ Beat the close" : "✗ Closed worse"}
+                </span>
+              </div>
+            </div>
+          )}
 
           {/* Reasoning */}
           <div className="rounded bg-gunmetal/20 p-2.5">
