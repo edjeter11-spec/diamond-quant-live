@@ -166,7 +166,7 @@ export default function BotChallenge() {
       } catch {}
       setPropPicksLoading(false);
     }
-    fetchPropPicks(true); // force=true on first load so we always get fresh picks
+    fetchPropPicks(); // use cached picks (2hr TTL), only force on manual refresh
     // Auto-refresh every 90 minutes
     const interval = setInterval(() => fetchPropPicks(), 90 * 60 * 1000);
     return () => clearInterval(interval);

@@ -32,6 +32,7 @@ import MigrationBanner from "@/components/auth/MigrationBanner";
 import PlayerCompare from "@/components/dashboard/PlayerCompare";
 import ROIChart from "@/components/dashboard/ROIChart";
 import { matchGames } from "@/lib/mlb/match-games";
+import WarRoomPanel from "@/components/dashboard/WarRoom";
 import { backupOddsToStorage, getOddsBackup } from "@/lib/odds/cache";
 import { sendDiscordAlert } from "@/lib/odds/sportsbooks";
 import { getDiscordWebhook, setDiscordWebhook } from "@/lib/store";
@@ -726,31 +727,7 @@ export default function WarRoom() {
 
             {activeTab === "room" && (
               <div className="max-w-4xl mx-auto space-y-4">
-                <div className="glass rounded-xl p-5 sm:p-8 text-center">
-                  <Users className="w-10 h-10 sm:w-12 sm:h-12 text-electric/30 mx-auto mb-3 sm:mb-4" />
-                  <h2 className="text-lg sm:text-xl font-bold text-silver mb-2">War Room</h2>
-                  <p className="text-sm text-mercury mb-5 sm:mb-6 max-w-md mx-auto">
-                    Share a room with your crew. Everyone sees the same live data,
-                    odds, and alerts instantly.
-                  </p>
-                  <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-                    <button className="w-full sm:w-auto px-6 py-2.5 bg-neon/15 text-neon border border-neon/30 rounded-lg font-semibold text-sm hover:bg-neon/25 transition-colors">
-                      Create Room
-                    </button>
-                    <div className="flex items-center gap-2 w-full sm:w-auto">
-                      <input
-                        type="text"
-                        placeholder="Room code..."
-                        className="flex-1 sm:flex-none px-4 py-2.5 bg-gunmetal/50 border border-slate/30 rounded-lg text-sm text-silver focus:outline-none focus:border-electric/30 sm:w-40 font-mono"
-                      />
-                      <button className="px-4 py-2.5 bg-electric/15 text-electric border border-electric/30 rounded-lg font-semibold text-sm hover:bg-electric/25 transition-colors flex-shrink-0">
-                        Join
-                      </button>
-                    </div>
-                  </div>
-                  <p className="text-xs text-mercury/50 mt-4">Powered by Supabase Realtime</p>
-                </div>
-
+                <WarRoomPanel />
                 {/* Discord Integration */}
                 <DiscordSettings />
               </div>
