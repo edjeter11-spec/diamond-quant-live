@@ -19,6 +19,7 @@ import {
 import { loadEloState, saveEloState, updateElo } from "@/lib/bot/elo";
 import { loadNbaPropBrain, type NbaPropBrainState } from "@/lib/bot/nba-prop-brain";
 import { projectProp } from "@/lib/bot/nba-prop-projector";
+import { useAuth } from "@/lib/supabase/auth";
 import type { GameAnalysis } from "@/lib/bot/three-models";
 import TeamLogo from "@/components/ui/TeamLogo";
 import PlayerAvatar from "@/components/ui/PlayerAvatar";
@@ -26,6 +27,7 @@ import PlayerAvatar from "@/components/ui/PlayerAvatar";
 export default function BotChallenge() {
   const { scores } = useStore();
   const { currentSport, config } = useSport();
+  const { isAdmin } = useAuth();
   const isNBA = currentSport === "nba";
 
   // Sport-specific storage keys
@@ -72,6 +74,23 @@ export default function BotChallenge() {
       setTrainingProgress({ status: "error", error: err.message });
     }
     setTraining(false);
+  };
+
+  // Evolution state
+  const [evolving, setEvolving] = useState(false);
+  const [evolutionResult, setEvolutionResult] = useState<any>(null);
+
+  const startEvolution = async () => {
+    setEvolving(true);
+    setEvolutionResult(null);
+    try {
+      const res = await fetch("/api/nba-prop-evolve?generations=3");
+      const data = await res.json();
+      setEvolutionResult(data);
+    } catch (err: any) {
+      setEvolutionResult({ ok: false, error: err.message });
+    }
+    setEvolving(false);
   };
 
   // Poll training progress
@@ -339,7 +358,7 @@ export default function BotChallenge() {
         )}
       </div>
 
-      {/* NBA Brain Training */}
+      {/* NBA Brain — Public sees status, Admin sees controls */}
       {isNBA && (
         <div className="glass rounded-xl overflow-hidden border border-purple/15">
           <div className="px-4 py-3 bg-gradient-to-r from-purple/10 to-electric/5 border-b border-purple/15 flex items-center gap-2">
@@ -349,52 +368,77 @@ export default function BotChallenge() {
               <p className="text-[9px] text-mercury/50">
                 {trainingProgress?.status === "complete"
                   ? `Trained on ${trainingProgress.gamesProcessed?.toLocaleString()} games — ${trainingProgress.propEventsTotal?.toLocaleString()} props quizzed`
-                  : "Self-quiz on 3 seasons of real NBA data (2022-2025)"}
+                  : evolutionResult?.ok
+                  ? `Evolved ${evolutionResult.generations} generations — Best: ${evolutionResult.bestWinRate}%`
+                  : "AI-powered player prop predictions"}
               </p>
             </div>
-            {!training && (
-              <button
-                onClick={startTraining}
-                className="px-3 py-1.5 rounded-lg bg-purple/15 border border-purple/25 text-purple text-[10px] font-semibold hover:bg-purple/25 transition-all flex items-center gap-1"
-              >
-                <Brain className="w-3 h-3" />
-                {trainingProgress?.status === "complete" ? "Retrain" : "Train Brain"}
-              </button>
+            {/* Admin-only: Training + Evolution buttons */}
+            {isAdmin && !training && !evolving && (
+              <div className="flex gap-1">
+                <button onClick={startTraining} className="px-2 py-1 rounded-lg bg-purple/15 border border-purple/25 text-purple text-[9px] font-semibold hover:bg-purple/25 transition-all">
+                  Train
+                </button>
+                <button onClick={startEvolution} className="px-2 py-1 rounded-lg bg-neon/15 border border-neon/25 text-neon text-[9px] font-semibold hover:bg-neon/25 transition-all">
+                  Evolve
+                </button>
+              </div>
             )}
           </div>
-          {/* Training progress */}
+          {/* Training progress (admin only) */}
           {training && trainingProgress && (
             <div className="px-4 py-3 space-y-2">
               <div className="flex items-center gap-2">
                 <RefreshCw className="w-3.5 h-3.5 text-purple animate-spin" />
-                <p className="text-xs text-mercury">{trainingProgress.message ?? "Training in progress..."}</p>
+                <p className="text-xs text-mercury">{trainingProgress.message ?? "Training..."}</p>
               </div>
               {trainingProgress.gamesProcessed > 0 && (
                 <div className="w-full bg-gunmetal/50 rounded-full h-1.5">
-                  <div
-                    className="bg-purple h-1.5 rounded-full transition-all"
-                    style={{ width: `${Math.min(100, (trainingProgress.gamesProcessed / Math.max(trainingProgress.totalGames, 1)) * 100)}%` }}
-                  />
+                  <div className="bg-purple h-1.5 rounded-full transition-all" style={{ width: `${Math.min(100, (trainingProgress.gamesProcessed / Math.max(trainingProgress.totalGames, 1)) * 100)}%` }} />
                 </div>
               )}
             </div>
           )}
-          {/* Training results */}
-          {trainingProgress?.status === "complete" && trainingProgress.accuracy && (
+          {/* Evolution progress */}
+          {evolving && (
+            <div className="px-4 py-3 flex items-center gap-2">
+              <RefreshCw className="w-3.5 h-3.5 text-neon animate-spin" />
+              <p className="text-xs text-neon">Evolving — breeding variants, testing on held-out data...</p>
+            </div>
+          )}
+          {/* Training/Evolution results — visible to all */}
+          {(trainingProgress?.status === "complete" && trainingProgress.accuracy) && (
             <div className="px-4 py-2.5 border-t border-slate/10">
               <div className="grid grid-cols-3 gap-2">
                 {Object.entries(trainingProgress.accuracy as Record<string, any>).map(([key, val]: [string, any]) => (
                   <div key={key} className="text-center">
-                    <p className={`text-sm font-bold font-mono ${val.winRate > 52 ? "text-neon" : val.winRate > 48 ? "text-electric" : "text-danger"}`}>
-                      {val.winRate}%
-                    </p>
+                    <p className={`text-sm font-bold font-mono ${val.winRate > 52 ? "text-neon" : val.winRate > 48 ? "text-electric" : "text-danger"}`}>{val.winRate}%</p>
                     <p className="text-[7px] text-mercury/50 uppercase">{key.replace("player_", "")}</p>
                   </div>
                 ))}
               </div>
               {trainingProgress.playersTracked && (
-                <p className="text-[9px] text-mercury/40 text-center mt-1">{trainingProgress.playersTracked} players tracked • {trainingProgress.durationMs ? `${Math.round(trainingProgress.durationMs / 1000)}s` : ""}</p>
+                <p className="text-[9px] text-mercury/40 text-center mt-1">{trainingProgress.playersTracked} players tracked</p>
               )}
+            </div>
+          )}
+          {/* Evolution results */}
+          {evolutionResult?.ok && (
+            <div className="px-4 py-2.5 border-t border-slate/10 space-y-2">
+              <div className="flex items-center gap-2">
+                <Crown className="w-3.5 h-3.5 text-gold" />
+                <p className="text-xs text-silver font-semibold">
+                  Best: {evolutionResult.bestVariant} — <span className="text-neon font-mono">{evolutionResult.bestWinRate}%</span> test accuracy
+                </p>
+              </div>
+              {/* Generation history */}
+              {evolutionResult.history?.map((h: any, i: number) => (
+                <div key={i} className="flex items-center gap-2 text-[10px] text-mercury/60">
+                  <span className="w-12 text-mercury/40">Gen {h.generation}</span>
+                  <span className="flex-1 truncate">{h.winnerName}</span>
+                  <span className={`font-mono font-bold ${h.winRate > 50 ? "text-neon" : "text-amber"}`}>{h.winRate}%</span>
+                </div>
+              ))}
             </div>
           )}
         </div>
