@@ -4,6 +4,7 @@ import { loadNbaPropBrainFromCloud, saveNbaPropBrainToCloud } from "@/lib/bot/nb
 import { auditCompletedGames } from "@/lib/bot/nba-prop-audit";
 import { commitPropProjections } from "@/lib/bot/nba-prop-ghost";
 import { buildAndSendRecap } from "@/lib/bot/daily-recap";
+import { generateSmartPicks } from "@/lib/bot/smart-picks";
 import { cloudGet, cloudSet } from "@/lib/supabase/client";
 
 // This endpoint is called by Vercel Cron every 30 min
@@ -73,6 +74,56 @@ export async function GET(req: Request) {
         }
       } catch {}
     } catch {}
+
+    // ── Auto-generate today's smart picks for all users ──
+    // Runs in the morning hours (7-11 AM ET = 11-15 UTC) so picks are ready for the day
+    const utcHour = new Date().getUTCHours();
+    if (utcHour >= 11 && utcHour <= 15) {
+      try {
+        const today = new Date().toISOString().split("T")[0];
+
+        // MLB picks
+        const mlbTodayKey = `smart_bot_today_mlb_${today}`;
+        const existingMlb = await cloudGet(mlbTodayKey, null);
+        if (!existingMlb) {
+          const baseUrl = `https://${process.env.VERCEL_URL || "diamond-quant-live.vercel.app"}`;
+          const mlbRes = await fetch(`${baseUrl}/api/bot-analysis`);
+          if (mlbRes.ok) {
+            const mlbData = await mlbRes.json();
+            const mlbPicks = generateSmartPicks(mlbData.analyses ?? [], 5000);
+            if (mlbPicks.length > 0) {
+              await cloudSet(mlbTodayKey, { picks: mlbPicks, generatedAt: new Date().toISOString() });
+              // Also update the persistent smart bot state
+              const botState = await cloudGet("smart_bot", { bankroll: 5000, picks: [], dailyPnL: {} }) as any;
+              const existingToday = (botState.picks ?? []).filter((p: any) => p.date === today);
+              if (existingToday.length === 0) {
+                await cloudSet("smart_bot", { ...botState, picks: [...(botState.picks ?? []), ...mlbPicks] });
+              }
+            }
+          }
+        }
+
+        // NBA picks
+        const nbaTodayKey = `smart_bot_today_nba_${today}`;
+        const existingNba = await cloudGet(nbaTodayKey, null);
+        if (!existingNba) {
+          const baseUrl = `https://${process.env.VERCEL_URL || "diamond-quant-live.vercel.app"}`;
+          const nbaRes = await fetch(`${baseUrl}/api/nba-analysis`);
+          if (nbaRes.ok) {
+            const nbaData = await nbaRes.json();
+            const nbaPicks = generateSmartPicks(nbaData.analyses ?? [], 5000);
+            if (nbaPicks.length > 0) {
+              await cloudSet(nbaTodayKey, { picks: nbaPicks, generatedAt: new Date().toISOString() });
+              const nbaBotState = await cloudGet("smart_bot_nba", { bankroll: 5000, picks: [], dailyPnL: {} }) as any;
+              const existingNbaToday = (nbaBotState.picks ?? []).filter((p: any) => p.date === today);
+              if (existingNbaToday.length === 0) {
+                await cloudSet("smart_bot_nba", { ...nbaBotState, picks: [...(nbaBotState.picks ?? []), ...nbaPicks] });
+              }
+            }
+          }
+        }
+      } catch {}
+    }
 
     // ── Daily Discord Recap (send once when games are finishing) ──
     const hour = new Date().getUTCHours(); // UTC

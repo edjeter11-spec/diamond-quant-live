@@ -113,6 +113,20 @@ export default function PlayerProps() {
   // Brain accuracy badges (NBA only)
   const [brainAccuracy, setBrainAccuracy] = useState<Record<string, { total: number; hits: number; winRate: number }>>({});
 
+  // Line movement state — populated client-side only (avoids SSR hydration mismatch)
+  const [lineMovements, setLineMovements] = useState<Record<string, PropLineMovement | null>>({});
+
+  // Populate line movements client-side after mount (never during SSR)
+  useEffect(() => {
+    if (props.length === 0) return;
+    const movements: Record<string, PropLineMovement | null> = {};
+    for (const prop of props) {
+      const key = `${prop.playerName}::${prop.market ?? selectedMarket}`;
+      movements[key] = getPropLineMovement(prop.playerName, prop.market ?? selectedMarket);
+    }
+    setLineMovements(movements);
+  }, [props, selectedMarket]);
+
   // Fetch brain accuracy when props load (NBA only)
   useEffect(() => {
     if (currentSport !== "nba" || props.length === 0) return;
@@ -490,7 +504,7 @@ export default function PlayerProps() {
                   <div className="flex items-center gap-1 flex-shrink-0">
                     <span className="text-lg font-bold font-mono text-electric">{prop.line}</span>
                     {(() => {
-                      const mv = getPropLineMovement(prop.playerName, prop.market ?? selectedMarket);
+                      const mv = lineMovements[`${prop.playerName}::${prop.market ?? selectedMarket}`];
                       if (!mv || mv.direction === "stable") return null;
                       return (
                         <span className={`text-[8px] font-mono font-bold ${mv.direction === "sharp_over" ? "text-neon" : "text-purple"}`} title={`Opened at ${mv.openingLine}`}>
@@ -503,10 +517,10 @@ export default function PlayerProps() {
                   {/* Best Over/Under */}
                   <div className="flex gap-1.5 flex-shrink-0">
                     <span className="text-xs font-mono text-neon bg-neon/10 px-1.5 py-0.5 rounded">
-                      O {formatOdds(prop.bestOver.price)}
+                      O {formatOdds(prop.bestOver?.price ?? 0)}
                     </span>
                     <span className="text-xs font-mono text-purple bg-purple/10 px-1.5 py-0.5 rounded">
-                      U {formatOdds(prop.bestUnder.price)}
+                      U {formatOdds(prop.bestUnder?.price ?? 0)}
                     </span>
                   </div>
 

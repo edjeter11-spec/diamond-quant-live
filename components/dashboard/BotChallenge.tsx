@@ -147,7 +147,16 @@ export default function BotChallenge() {
     // Generate prop parlay from Brain projections on today's props
     async function generatePropParlay() {
       try {
-        const brain = loadNbaPropBrain();
+        // Try cloud brain first (pre-trained), fall back to localStorage
+        let brain: any;
+        try {
+          const { loadNbaPropBrainFromCloud } = await import("@/lib/bot/nba-prop-brain");
+          brain = await loadNbaPropBrainFromCloud();
+        } catch {
+          brain = loadNbaPropBrain();
+        }
+        // If no real brain data, skip
+        if (!brain?.weights || brain.totalGamesProcessed === 0) return;
         const propsRes = await fetch("/api/players?sport=basketball_nba&market=player_points");
         if (!propsRes.ok) return;
         const propsData = await propsRes.json();
@@ -189,10 +198,41 @@ export default function BotChallenge() {
     setClvRecords(loadCLVRecords(currentSport));
   }, [currentSport, storageKey]);
 
-  // Fetch sport-specific analysis
+  // Fetch sport-specific analysis + load pre-generated picks from Supabase
   useEffect(() => {
     async function init() {
       try {
+        const today = new Date().toISOString().split("T")[0];
+        const cloudKey = isNBA ? "smart_bot_nba" : "smart_bot";
+        const todayKey = isNBA ? `smart_bot_today_nba_${today}` : `smart_bot_today_mlb_${today}`;
+
+        // Try to load pre-generated picks from Supabase (set by cron for all users)
+        const { cloudGet } = await import("@/lib/supabase/client");
+        const [cloudBotState, todayPregen] = await Promise.all([
+          cloudGet(cloudKey, null) as Promise<SmartBotState | null>,
+          cloudGet(todayKey, null) as Promise<{ picks: any[]; generatedAt: string } | null>,
+        ]);
+
+        // Merge cloud state into local if user has no local picks for today
+        if (cloudBotState) {
+          setBotState(prev => {
+            const localToday = prev.picks.filter(p => p.date === today).length;
+            if (localToday === 0 && cloudBotState.picks.length > 0) {
+              return cloudBotState;
+            }
+            return prev;
+          });
+        } else if (todayPregen?.picks?.length) {
+          // Load pre-generated picks into local state
+          setBotState(prev => {
+            const localToday = prev.picks.filter(p => p.date === today).length;
+            if (localToday === 0) {
+              return { ...prev, picks: [...prev.picks, ...todayPregen.picks] };
+            }
+            return prev;
+          });
+        }
+
         const url = isNBA ? "/api/nba-analysis" : "/api/bot-analysis";
         const res = await fetch(url);
         if (res.ok) {
