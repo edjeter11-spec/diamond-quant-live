@@ -283,24 +283,66 @@ export async function preTrainBrain(brain: BrainState, seasons: number[]): Promi
 
             const homeWon = homeScore > awayScore;
             const totalRuns = homeScore + awayScore;
+            const homeTeam = game.teams?.home?.team?.name ?? "";
+            const awayTeam = game.teams?.away?.team?.name ?? "";
+            const venueName: string = game.venue?.name ?? "";
 
             seasonGames++;
             if (homeWon) seasonHomeWins++;
             if (totalRuns > 8.5) seasonTotalOver++;
 
-            // Feed moneyline result
+            // ── Compute real prediction using accumulated memory ──
+            // Early games use baseline 0.54; later games use real H2H + park data
+            let predictedHomeProb = 0.54;
+
+            const mKey = `${awayTeam.toLowerCase()}::${homeTeam.toLowerCase()}`;
+            const matchupMem = updated.matchupMemory[mKey];
+            if (matchupMem && matchupMem.games >= 3) {
+              const h2hRate = matchupMem.homeWins / matchupMem.games;
+              predictedHomeProb = predictedHomeProb * 0.65 + h2hRate * 0.35;
+            }
+
+            const parkMem = venueName ? updated.parkMemory[venueName] : null;
+            if (parkMem && parkMem.games >= 5) {
+              const parkRate = parkMem.homeWins / parkMem.games;
+              predictedHomeProb = predictedHomeProb * 0.80 + parkRate * 0.20;
+            }
+
+            predictedHomeProb = Math.max(0.38, Math.min(0.65, predictedHomeProb));
+
+            // ── Update matchup memory for future games ──
+            if (awayTeam && homeTeam) {
+              if (!updated.matchupMemory[mKey]) updated.matchupMemory[mKey] = { games: 0, homeWins: 0 };
+              updated.matchupMemory[mKey].games++;
+              if (homeWon) updated.matchupMemory[mKey].homeWins++;
+            }
+
+            // ── Update park memory for future games ──
+            if (venueName) {
+              if (!updated.parkMemory[venueName]) {
+                updated.parkMemory[venueName] = { games: 0, homeWins: 0, avgRuns: 8.5, nrfiRate: 70 };
+              }
+              const pk = updated.parkMemory[venueName];
+              const alpha = Math.min(0.05, 1 / (pk.games + 1));
+              pk.games++;
+              if (homeWon) pk.homeWins++;
+              pk.avgRuns = pk.avgRuns * (1 - alpha) + totalRuns * alpha;
+            }
+
+            // ── Feed real prediction to learning ──
             updated = learnFromResult(updated, {
               market: "moneyline",
-              predictedProb: 0.54, // baseline home advantage
+              predictedProb: predictedHomeProb,
               won: homeWon,
               ev: 2.0,
             });
 
-            // Feed total result
+            // Total: use park avg if known, else 8.5
+            const totalLine = (parkMem && parkMem.games >= 5) ? parkMem.avgRuns : 8.5;
             updated = learnFromResult(updated, {
               market: "total",
               predictedProb: 0.50,
-              won: totalRuns > 8.5,
+              won: totalRuns > totalLine,
               ev: 1.5,
             });
           }

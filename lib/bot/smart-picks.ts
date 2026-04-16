@@ -55,6 +55,7 @@ function defaultAccuracy(): ModelAccuracy {
 
 export interface SmartBotPick {
   id: string;
+  gameId?: string; // MLB gamePk — used for reliable settlement matching
   date: string;
   game: string;
   pick: string;
@@ -169,6 +170,7 @@ export function generateSmartPicks(
 
     picks.push({
       id: `smart-${today}-${picks.length}`,
+      gameId: game.gameId,
       date: today,
       game: gameName,
       pick: `${pickTeam} ML`,
@@ -205,8 +207,19 @@ export function settleAndLearn(
 
     const score = scores.find((s: any) => {
       if (s.status !== "final") return false;
-      return pick.game.includes(s.homeTeam) || pick.game.includes(s.awayTeam) ||
-        pick.game.includes(s.homeAbbrev) || pick.game.includes(s.awayAbbrev);
+      // Prefer exact gameId match (reliable, no ambiguity)
+      if (pick.gameId && s.id && pick.gameId === String(s.id)) return true;
+      // Fallback: require BOTH teams to appear in the game string (prevents false matches)
+      const [pickAway, pickHome] = pick.game.split(" @ ");
+      const awayMatch = pickAway && (
+        s.awayTeam?.includes(pickAway.trim()) || pickAway.trim().includes(s.awayTeam ?? "") ||
+        s.awayAbbrev === pickAway.trim()
+      );
+      const homeMatch = pickHome && (
+        s.homeTeam?.includes(pickHome.trim()) || pickHome.trim().includes(s.homeTeam ?? "") ||
+        s.homeAbbrev === pickHome.trim()
+      );
+      return !!(awayMatch && homeMatch);
     });
     if (!score) return pick;
 

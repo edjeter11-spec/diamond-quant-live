@@ -30,8 +30,11 @@ export async function GET(req: Request) {
       .filter((g: any) => getGameStatus(g) === "final")
       .map((g: any) => ({
         id: String(g.gamePk),
+        status: "final",
         homeTeam: g.teams?.home?.team?.name,
         awayTeam: g.teams?.away?.team?.name,
+        homeAbbrev: g.teams?.home?.team?.abbreviation ?? "",
+        awayAbbrev: g.teams?.away?.team?.abbreviation ?? "",
         homeScore: g.teams?.home?.score ?? 0,
         awayScore: g.teams?.away?.score ?? 0,
         homePitcher: g.teams?.home?.probablePitcher?.fullName ?? "TBD",
