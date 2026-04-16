@@ -274,7 +274,7 @@ async function runQuizOnData(
     for (const log of dayLogs) {
       if (log.minutes < 5) continue;
       const state = playerStates.get(log.playerId);
-      if (!state || state.gamesPlayed < 5) continue;
+      if (!state || state.gamesPlayed < 3) continue;
 
       const ppg = state.ptsSum / state.gamesPlayed;
       const rpg = state.rebSum / state.gamesPlayed;
@@ -350,8 +350,8 @@ export async function runTournament(
   allData: NbaPlayerGameLog[],
   onProgress?: (msg: string) => void
 ): Promise<{ variants: BrainVariant[]; winner: BrainVariant }> {
-  // Sample data for speed — use every 3rd game to fit within Vercel timeout
-  const sampled = allData.filter((_, i) => i % 3 === 0);
+  // Use all data — extra sampling made individual players not qualify (< 5 games seen)
+  const sampled = allData;
 
   // 80/20 train/test split
   const splitIdx = Math.floor(sampled.length * 0.8);
