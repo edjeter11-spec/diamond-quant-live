@@ -254,7 +254,7 @@ export default function PicksBoard() {
           kellyStake: 0,
           reasoning: [
             "No sportsbook lines available yet for this game",
-            "Books typically post full odds 12-18 hours before first pitch",
+            "Books typically post full odds 12-18 hours before game time",
             "Check back closer to game time for full analysis",
           ],
           aiTip: `Lines haven't been posted yet for ${gameName}. This usually means it's still early — check back tomorrow morning for full odds and analysis.`,
@@ -628,7 +628,7 @@ function PickCard({ pick, isExpanded, onToggle, onAddToParlay, formatOdds }: {
           {pick.gameStatus === "live" && (
             <div className="flex items-start gap-2 p-2 rounded-lg bg-danger/5 border border-danger/15">
               <span className="relative flex h-1.5 w-1.5 mt-1 flex-shrink-0"><span className="animate-ping absolute h-full w-full rounded-full bg-danger opacity-75" /><span className="relative rounded-full h-1.5 w-1.5 bg-danger" /></span>
-              <p className="text-[11px] text-danger/90">This game is in progress. Odds shown are from before first pitch — live in-game odds require a paid data feed. Check the sportsbook directly for current lines.</p>
+              <p className="text-[11px] text-danger/90">This game is in progress. Odds shown are from before tip-off — live in-game odds require a paid data feed. Check the sportsbook directly for current lines.</p>
             </div>
           )}
 

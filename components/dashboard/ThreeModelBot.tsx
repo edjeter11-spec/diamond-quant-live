@@ -59,7 +59,7 @@ export default function ThreeModelBot() {
           <TrendingUp className="w-5 h-5 text-neon animate-pulse" />
         </div>
         <p className="text-sm text-silver font-medium">Running 3 models on every game...</p>
-        <p className="text-[10px] text-mercury/60 mt-1">Pitcher analysis + Market consensus + Trend detection</p>
+        <p className="text-[10px] text-mercury/60 mt-1">Net Rating + Market consensus + Power ranking analysis</p>
       </div>
     );
   }
@@ -149,7 +149,7 @@ export default function ThreeModelBot() {
 
               {/* Model scores preview */}
               <div className="hidden sm:flex items-center gap-1 flex-shrink-0">
-                <span className="text-[9px] font-mono text-purple" title="Pitcher Model">{(game.pitcherModel.homeWinProb * 100).toFixed(0)}%</span>
+                <span className="text-[9px] font-mono text-purple" title={config.model1Label}>{(game.pitcherModel.homeWinProb * 100).toFixed(0)}%</span>
                 <span className="text-mercury/30">|</span>
                 <span className="text-[9px] font-mono text-electric" title="Market Model">{(game.marketModel.homeWinProb * 100).toFixed(0)}%</span>
                 <span className="text-mercury/30">|</span>

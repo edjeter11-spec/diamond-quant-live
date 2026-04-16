@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useStore } from "@/lib/store";
+import { useSport } from "@/lib/sport-context";
 import {
   Shield, ChevronDown, Target, Flame, CheckCircle, XCircle,
   TrendingUp, Clock, Brain, RefreshCw, Zap, ExternalLink,
@@ -27,8 +28,33 @@ const REC_LABELS: Record<string, { label: string; color: string }> = {
 
 export default function NRFITab() {
   const { scores, addParlayLeg } = useStore();
+  const { currentSport } = useSport();
+  const isNBA = currentSport === "nba";
   const [games, setGames] = useState<NRFIGame[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // NBA Q1 analysis — show placeholder until Q1 engine is built
+  if (isNBA) {
+    return (
+      <div className="space-y-3">
+        <div className="glass rounded-xl p-5 border border-orange-500/15">
+          <div className="flex items-center gap-2 mb-3">
+            <Shield className="w-5 h-5 text-orange-500" />
+            <h2 className="text-sm font-bold text-silver uppercase tracking-wider">Q1 Analysis</h2>
+          </div>
+          <p className="text-xs text-mercury mb-2">
+            First quarter scoring analysis for NBA games. Analyzes team pace, starters' scoring tendencies,
+            and historical Q1 performance to project first quarter totals.
+          </p>
+          <div className="rounded-lg bg-gunmetal/30 p-4 text-center">
+            <Brain className="w-8 h-8 text-orange-500/30 mx-auto mb-2" />
+            <p className="text-sm text-mercury">Q1 engine processing today's games...</p>
+            <p className="text-[10px] text-mercury/50 mt-1">NBA Q1 projections based on pace, starters, and defensive matchups</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
   const [expandedGame, setExpandedGame] = useState<string | null>(null);
 
   const [hasLoaded, setHasLoaded] = useState(false);

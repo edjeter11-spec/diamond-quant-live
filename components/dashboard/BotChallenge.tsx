@@ -313,11 +313,14 @@ export default function BotChallenge() {
   const totalStaked = settled.reduce((s, p) => s + p.stake, 0);
   const totalReturns = settled.reduce((s, p) => s + p.payout, 0);
   const pendingStaked = pendingPicks.reduce((s, p) => s + p.stake, 0);
-  const profit = totalReturns - totalStaked;
-  // ROI based on actual settled bets, not pending
-  const roi = totalStaked > 0 ? (profit / totalStaked) * 100 : 0;
-  // Real P&L = bankroll change from starting $5000
-  const realPL = botState.bankroll + pendingStaked - 5000 + profit;
+  const settledProfit = totalReturns - totalStaked;
+  // ROI from settled bets
+  const settledROI = totalStaked > 0 ? (settledProfit / totalStaked) * 100 : 0;
+  // Overall P&L = bankroll change from $5000 (includes pending exposure)
+  const overallPL = botState.bankroll - 5000;
+  // Display: use settled stats if available, otherwise show bankroll-based numbers
+  const displayROI = settled.length > 0 ? settledROI : (overallPL !== 0 ? (overallPL / 5000) * 100 : 0);
+  const displayPL = settled.length > 0 ? settledProfit : overallPL;
   const pending = pendingPicks.length;
 
   // Build CLV record map for quick lookup by pick ID
@@ -346,23 +349,42 @@ export default function BotChallenge() {
 
         {/* Stats */}
         <div className="grid grid-cols-4 gap-px bg-slate/10">
-          <MiniStat label="Record" value={settled.length > 0 ? `${wins}W-${losses}L` : `0-0`} color="text-silver" />
-          <MiniStat label="ROI" value={settled.length > 0 ? `${roi >= 0 ? "+" : ""}${roi.toFixed(1)}%` : "—"} color={roi >= 0 ? "text-neon" : "text-danger"} />
-          <MiniStat label="P/L" value={settled.length > 0 ? `${profit >= 0 ? "+" : ""}$${profit.toFixed(0)}` : "—"} color={profit >= 0 ? "text-neon" : "text-danger"} />
+          <MiniStat label="Record" value={`${wins}W-${losses}L`} color="text-silver" />
+          <MiniStat label="ROI" value={`${displayROI >= 0 ? "+" : ""}${displayROI.toFixed(1)}%`} color={displayROI >= 0 ? "text-neon" : "text-danger"} />
+          <MiniStat label="P/L" value={`${displayPL >= 0 ? "+" : ""}$${displayPL.toFixed(0)}`} color={displayPL >= 0 ? "text-neon" : "text-danger"} />
           <MiniStat label="In Play" value={pending > 0 ? `$${pendingStaked.toFixed(0)}` : "—"} color="text-amber" />
         </div>
 
-        {/* Per-Model Accuracy */}
-        {accuracy.consensus.total > 0 && (
-          <div className="px-4 py-2 border-t border-slate/10">
-            <p className="text-[9px] text-mercury uppercase tracking-wider mb-1.5 font-semibold">Model Accuracy (live tracking)</p>
-            <div className="grid grid-cols-4 gap-2">
-              <ModelAccStat name={config.model1Label} icon={Brain} color="text-purple" acc={accuracy.pitcher} />
-              <ModelAccStat name="Market" icon={BarChart3} color="text-electric" acc={accuracy.market} />
-              <ModelAccStat name={config.model3Label} icon={Activity} color="text-neon" acc={accuracy.trend} />
-              <ModelAccStat name="Consensus" icon={Target} color="text-gold" acc={accuracy.consensus} />
+        {/* Per-Model Accuracy — NBA shows Prop Brain accuracy, MLB shows 3-model accuracy */}
+        {isNBA ? (
+          trainingProgress?.accuracy && Object.keys(trainingProgress.accuracy).length > 0 && (
+            <div className="px-4 py-2 border-t border-slate/10">
+              <p className="text-[9px] text-mercury uppercase tracking-wider mb-1.5 font-semibold">Prop Brain Accuracy (trained)</p>
+              <div className="grid grid-cols-3 gap-2">
+                {Object.entries(trainingProgress.accuracy as Record<string, any>).map(([key, val]: [string, any]) => (
+                  <div key={key} className="text-center">
+                    <Brain className={`w-3 h-3 mx-auto mb-0.5 ${val.winRate > 50 ? "text-neon" : "text-amber"}`} />
+                    <p className={`text-xs font-bold font-mono ${val.winRate > 50 ? "text-neon" : val.winRate > 45 ? "text-electric" : "text-danger"}`}>
+                      {val.winRate}%
+                    </p>
+                    <p className="text-[7px] text-mercury/50 capitalize">{key.replace("player_", "")} ({val.total ?? 0})</p>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
+          )
+        ) : (
+          accuracy.consensus.total > 0 && (
+            <div className="px-4 py-2 border-t border-slate/10">
+              <p className="text-[9px] text-mercury uppercase tracking-wider mb-1.5 font-semibold">Model Accuracy (live tracking)</p>
+              <div className="grid grid-cols-4 gap-2">
+                <ModelAccStat name={config.model1Label} icon={Brain} color="text-purple" acc={accuracy.pitcher} />
+                <ModelAccStat name="Market" icon={BarChart3} color="text-electric" acc={accuracy.market} />
+                <ModelAccStat name={config.model3Label} icon={Activity} color="text-neon" acc={accuracy.trend} />
+                <ModelAccStat name="Consensus" icon={Target} color="text-gold" acc={accuracy.consensus} />
+              </div>
+            </div>
+          )
         )}
 
         {/* CLV Summary — shown once we have closing-line data */}
