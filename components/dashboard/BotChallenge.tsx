@@ -53,11 +53,21 @@ export default function BotChallenge() {
 
   const clvSummary = useMemo(() => getCLVSummary(clvRecords), [clvRecords]);
 
-  // NBA Prop Brain picks (prop parlay of the day)
+  // NBA Prop Brain picks (prop parlay of the day) — local fallback
   const [propParlayPicks, setPropParlayPicks] = useState<Array<{
     playerName: string; propType: string; line: number; side: string;
     probability: number; projectedValue: number;
   }>>([]);
+
+  // Today's server-generated prop picks (refreshed every 2 hrs)
+  const [todayPropPicks, setTodayPropPicks] = useState<Array<{
+    playerName: string; team: string; propType: string; market: string;
+    line: number; side: "over" | "under"; probability: number;
+    projectedValue: number; odds: number; bookmaker: string;
+    gameTime: string; brainConfidence: number;
+  }>>([]);
+  const [propPicksLoading, setPropPicksLoading] = useState(false);
+  const [propPicksUpdatedAt, setPropPicksUpdatedAt] = useState<string | null>(null);
 
   // Training state
   const [training, setTraining] = useState(false);
@@ -184,6 +194,29 @@ export default function BotChallenge() {
       } catch {}
     }
     generatePropParlay();
+  }, [isNBA]);
+
+  // Fetch server-generated prop picks (refreshed every 2 hrs by the API)
+  useEffect(() => {
+    if (!isNBA) { setTodayPropPicks([]); return; }
+    async function fetchPropPicks(force = false) {
+      setPropPicksLoading(true);
+      try {
+        const res = await fetch(`/api/prop-picks-today${force ? "?force=true" : ""}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.picks?.length > 0) {
+            setTodayPropPicks(data.picks);
+            setPropPicksUpdatedAt(data.updatedAt ?? data.generatedAt ?? null);
+          }
+        }
+      } catch {}
+      setPropPicksLoading(false);
+    }
+    fetchPropPicks();
+    // Auto-refresh every 90 minutes
+    const interval = setInterval(() => fetchPropPicks(), 90 * 60 * 1000);
+    return () => clearInterval(interval);
   }, [isNBA]);
 
   // Reload bot state + CLV when sport changes
@@ -583,72 +616,94 @@ export default function BotChallenge() {
         </div>
       )}
 
-      {/* NBA Prop Parlay of the Day — Brain's best player prop picks */}
-      {isNBA && propParlayPicks.length > 0 && (
+      {/* TODAY'S PROP PICKS — Server-generated, refreshed every 2hrs */}
+      {isNBA && (
         <div className="glass rounded-xl overflow-hidden border border-purple/20">
           <div className="px-4 py-2.5 bg-gradient-to-r from-purple/10 to-neon/5 border-b border-purple/15 flex items-center gap-2">
             <Brain className="w-4 h-4 text-purple" />
             <div className="flex-1">
-              <h3 className="text-xs font-bold text-silver uppercase tracking-wider">Prop Parlay of the Day</h3>
-              <p className="text-[9px] text-mercury/50">Brain's top 4 player prop projections</p>
+              <h3 className="text-xs font-bold text-silver uppercase tracking-wider">Today's Prop Picks</h3>
+              <p className="text-[9px] text-mercury/50">
+                {propPicksUpdatedAt
+                  ? `Updated ${Math.round((Date.now() - new Date(propPicksUpdatedAt).getTime()) / 60000)}m ago • auto-refreshes every 2h`
+                  : "Brain selects 4 best props each morning, updates lines hourly"}
+              </p>
             </div>
-            <span className="text-xs font-bold font-mono text-purple">{propParlayPicks.length} legs</span>
+            <button
+              onClick={async () => {
+                setPropPicksLoading(true);
+                try {
+                  const res = await fetch("/api/prop-picks-today?force=true");
+                  if (res.ok) {
+                    const data = await res.json();
+                    if (data.picks?.length > 0) {
+                      setTodayPropPicks(data.picks);
+                      setPropPicksUpdatedAt(data.updatedAt ?? data.generatedAt);
+                    }
+                  }
+                } catch {}
+                setPropPicksLoading(false);
+              }}
+              className="p-1.5 hover:bg-gunmetal/30 rounded transition-colors"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 text-mercury ${propPicksLoading ? "animate-spin" : ""}`} />
+            </button>
           </div>
-          <div className="divide-y divide-slate/10">
-            {propParlayPicks.map((prop, i) => (
-              <div key={i} className="px-4 py-2.5 flex items-center gap-2.5">
-                <span className="w-5 h-5 rounded-full bg-purple/20 text-purple text-[9px] font-bold flex items-center justify-center flex-shrink-0">{i + 1}</span>
-                <PlayerAvatar name={prop.playerName} size={22} />
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold text-silver truncate">{prop.playerName}</p>
-                  <p className="text-[9px] text-mercury/50">{prop.propType} • Proj: {prop.projectedValue}</p>
-                </div>
-                <div className="text-right flex-shrink-0">
-                  <span className={`text-xs font-bold font-mono ${prop.side === "over" ? "text-neon" : "text-purple"}`}>
-                    {prop.side === "over" ? "O" : "U"} {prop.line}
-                  </span>
-                  <p className="text-[8px] text-mercury/50">{(prop.probability * 100).toFixed(0)}%</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
-      {/* NBA Prop Bot — Auto-bets where brain accuracy > 60% */}
-      {isNBA && propParlayPicks.length > 0 && (
-        <div className="glass rounded-xl overflow-hidden border border-neon/15">
-          <div className="px-4 py-2.5 bg-gradient-to-r from-neon/10 to-electric/5 border-b border-neon/15 flex items-center gap-2">
-            <Target className="w-4 h-4 text-neon" />
-            <div className="flex-1">
-              <h3 className="text-xs font-bold text-silver uppercase tracking-wider">Prop Bot</h3>
-              <p className="text-[9px] text-mercury/50">Auto-bets on players where brain accuracy exceeds 60%</p>
+          {propPicksLoading && todayPropPicks.length === 0 ? (
+            <div className="px-4 py-6 flex items-center justify-center gap-2">
+              <Brain className="w-4 h-4 text-purple animate-pulse" />
+              <span className="text-xs text-mercury">Brain analyzing today's props...</span>
             </div>
-            <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-neon/10 text-neon">AUTO</span>
-          </div>
-          <div className="divide-y divide-slate/10">
-            {propParlayPicks.filter(p => p.probability > 0.55).slice(0, 3).map((prop, i) => (
-              <div key={i} className="px-4 py-2.5 flex items-center gap-2.5">
-                <div className="w-5 h-5 rounded-full bg-neon/20 text-neon text-[9px] font-bold flex items-center justify-center flex-shrink-0">$</div>
-                <PlayerAvatar name={prop.playerName} size={22} />
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold text-silver truncate">{prop.playerName}</p>
-                  <p className="text-[9px] text-mercury/50">{prop.propType} • Brain: {(prop.probability * 100).toFixed(0)}% confident</p>
+          ) : todayPropPicks.length === 0 ? (
+            <div className="px-4 py-6 text-center space-y-1">
+              <p className="text-xs text-mercury">No high-confidence props yet</p>
+              <p className="text-[10px] text-mercury/50">Brain needs today's odds to be posted — check back closer to tip-off</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-slate/10">
+              {todayPropPicks.map((prop, i) => (
+                <div key={i} className="px-4 py-3 flex items-center gap-3">
+                  {/* Rank */}
+                  <span className={`w-6 h-6 rounded-full text-[9px] font-bold flex items-center justify-center flex-shrink-0 ${
+                    i === 0 ? "bg-gold/20 text-gold" : "bg-purple/20 text-purple"
+                  }`}>{i + 1}</span>
+
+                  {/* Player */}
+                  <PlayerAvatar name={prop.playerName} size={26} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-silver truncate">{prop.playerName}</p>
+                    <p className="text-[9px] text-mercury/60">
+                      {prop.team} • {prop.propType}
+                      {prop.gameTime ? ` • ${new Date(prop.gameTime).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}` : ""}
+                    </p>
+                  </div>
+
+                  {/* Pick */}
+                  <div className="flex flex-col items-end flex-shrink-0 gap-0.5">
+                    <div className="flex items-center gap-1">
+                      <span className={`text-xs font-bold font-mono ${prop.side === "over" ? "text-neon" : "text-purple"}`}>
+                        {prop.side === "over" ? "OVER" : "UNDER"} {prop.line}
+                      </span>
+                      {prop.odds !== 0 && (
+                        <span className="text-[9px] text-mercury/70 font-mono">
+                          ({prop.odds > 0 ? "+" : ""}{prop.odds})
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="text-[8px] text-mercury/50">Proj: {prop.projectedValue}</span>
+                      <span className={`text-[8px] font-bold px-1 py-0.5 rounded ${
+                        prop.brainConfidence >= 65 ? "bg-neon/10 text-neon" :
+                        prop.brainConfidence >= 55 ? "bg-amber/10 text-amber" :
+                        "bg-mercury/10 text-mercury"
+                      }`}>{prop.brainConfidence}%</span>
+                    </div>
+                  </div>
                 </div>
-                <div className="text-right flex-shrink-0">
-                  <span className={`text-xs font-bold font-mono ${prop.side === "over" ? "text-neon" : "text-purple"}`}>
-                    {prop.side === "over" ? "OVER" : "UNDER"} {prop.line}
-                  </span>
-                  <p className="text-[8px] text-neon font-mono">$50 stake</p>
-                </div>
-              </div>
-            ))}
-            {propParlayPicks.filter(p => p.probability > 0.55).length === 0 && (
-              <div className="px-4 py-3 text-center">
-                <p className="text-[10px] text-mercury/50">No props meet the 60% accuracy threshold yet — brain is still learning</p>
-              </div>
-            )}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
