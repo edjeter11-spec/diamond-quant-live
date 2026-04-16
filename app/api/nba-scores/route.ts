@@ -17,21 +17,28 @@ const NBA_ARENAS: Record<string, string> = {
 
 export const revalidate = 30;
 
-// NBA scores from the free scoreboard endpoint
+function mapStatus(name: string): "pre" | "live" | "final" {
+  if (name === "STATUS_FINAL") return "final";
+  if (name === "STATUS_IN_PROGRESS" || name === "STATUS_HALFTIME") return "live";
+  return "pre";
+}
+
+function getPeriodLabel(period: number): string {
+  if (period <= 0) return "";
+  if (period <= 4) return `Q${period}`;
+  if (period === 5) return "OT";
+  return `${period - 4}OT`;
+}
+
+// NBA scores from ESPN free scoreboard endpoint
 export async function GET() {
   try {
-    // Use balldontlie for today's games
-    const today = new Date().toISOString().split("T")[0];
     const res = await fetch(
-      `https://api.balldontlie.io/v1/games?dates[]=${today}`,
-      {
-        headers: { "Authorization": "" }, // free tier, no key needed for basic
-        next: { revalidate: 30 },
-      }
+      "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard",
+      { next: { revalidate: 30 } }
     );
 
     if (!res.ok) {
-      // Fallback: return empty with message
       return NextResponse.json({
         games: [],
         message: "NBA scores temporarily unavailable",
@@ -39,48 +46,49 @@ export async function GET() {
     }
 
     const data = await res.json();
-    const games = (data.data ?? []).map((game: any) => {
-      const homeAbbrev = game.home_team?.abbreviation ?? getNBATeamAbbrev(game.home_team?.full_name ?? "");
-      const awayAbbrev = game.visitor_team?.abbreviation ?? getNBATeamAbbrev(game.visitor_team?.full_name ?? "");
-      const period = game.period ?? 0;
-      const isLive = period > 0 && game.status !== "Final";
-      const isFinal = game.status === "Final";
+    const games = (data.events ?? []).map((event: any) => {
+      const competition = event.competitions?.[0] ?? {};
+      const statusType = competition.status?.type ?? {};
+      const statusName: string = statusType.name ?? "";
+      const status = mapStatus(statusName);
+      const period: number = competition.status?.period ?? 0;
+      const timeRemaining: string = competition.status?.displayClock ?? "";
 
-      // Parse time remaining from status like "3 qtr 10:35" or game.time
-      let timeRemaining = game.time ?? "";
-      // balldontlie sometimes returns status like "Q3 10:35"
-      if (!timeRemaining && game.status && !isFinal && game.status.match(/\d/)) {
-        const timeMatch = game.status.match(/(\d+:\d+)/);
-        if (timeMatch) timeRemaining = timeMatch[1];
-      }
+      const home = (competition.competitors ?? []).find((c: any) => c.homeAway === "home") ?? {};
+      const away = (competition.competitors ?? []).find((c: any) => c.homeAway === "away") ?? {};
 
-      const periodLabel = period === 0 ? "" :
-        period <= 4 ? `Q${period}` :
-        period === 5 ? "OT" : `${period - 4}OT`;
+      const homeAbbrev: string = home.team?.abbreviation ?? getNBATeamAbbrev(home.team?.displayName ?? "");
+      const awayAbbrev: string = away.team?.abbreviation ?? getNBATeamAbbrev(away.team?.displayName ?? "");
+
+      const periodLabel = getPeriodLabel(period);
+      const venue = competition.venue?.fullName ?? NBA_ARENAS[homeAbbrev] ?? "";
+
+      const detailedStatus =
+        status === "final" ? "Final" :
+        status === "live" ? `${periodLabel} ${timeRemaining}`.trim() :
+        statusType.shortDetail ?? "";
 
       return {
-        id: String(game.id),
-        homeTeam: game.home_team?.full_name ?? "",
-        awayTeam: game.visitor_team?.full_name ?? "",
+        id: event.id ?? "",
+        homeTeam: home.team?.displayName ?? "",
+        awayTeam: away.team?.displayName ?? "",
         homeAbbrev,
         awayAbbrev,
-        homeScore: game.home_team_score ?? 0,
-        awayScore: game.visitor_team_score ?? 0,
-        status: isFinal ? "final" : isLive ? "live" : "pre",
+        homeScore: Number(home.score ?? 0),
+        awayScore: Number(away.score ?? 0),
+        status,
         period,
         periodLabel,
         timeRemaining,
-        // inning/outs not used for NBA but GameCard type expects them
         inning: period,
         inningHalf: "top",
         outs: 0,
-        startTime: game.datetime ?? game.date ?? new Date().toISOString(),
-        venue: NBA_ARENAS[homeAbbrev] ?? `${game.home_team?.city ?? ""} Arena`,
-        homePitcher: "", // N/A for NBA
+        startTime: event.date ?? new Date().toISOString(),
+        venue,
+        homePitcher: "",
         awayPitcher: "",
         weather: null,
-        detailedStatus: isFinal ? "Final" : isLive ? `${periodLabel} ${timeRemaining}`.trim() : game.status ?? "",
-        // NBA-specific
+        detailedStatus,
         isNBA: true,
       };
     });

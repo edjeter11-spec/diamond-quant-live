@@ -93,8 +93,14 @@ export async function GET(req: NextRequest) {
 
     const allProjections: Array<PropPickOfDay & { score: number }> = [];
 
-    // ── Step 1: Try live odds from the Odds API ──
+    // ── Step 1: Collect all live props from the Odds API ──
     let livePropsFound = 0;
+    const allLiveProps: Array<{
+      playerName: string; team: string; line: number; market: string;
+      gameTime?: string; bestOver?: { price: number; bookmaker: string };
+      bestUnder?: { price: number; bookmaker: string };
+    }> = [];
+
     try {
       const markets = ["player_points", "player_rebounds", "player_assists"];
       const baseUrl = `https://${process.env.VERCEL_URL || "diamond-quant-live.vercel.app"}`;
@@ -108,32 +114,85 @@ export async function GET(req: NextRequest) {
           const data = await res.json();
           const props = data.props ?? [];
           livePropsFound += props.length;
-
           for (const prop of props) {
             if (!prop.playerName || !prop.line || prop.line <= 0) continue;
-            const seasonAvg = prop.line; // best approx for live odds without real stats
-            const statApprox = { ppg: prop.line, rpg: prop.line, apg: prop.line };
-            const proj = projectProp(statApprox, market, prop.line, weights, { isHome: false, isB2B: false, leagueAvgTotal: 224 });
-            const label = market === "player_points" ? "Points" : market === "player_rebounds" ? "Rebounds" : "Assists";
-            const conviction = Math.abs(proj.probability - 0.5);
-            const score = conviction * proj.confidence;
-            const tier: "HIGH" | "MEDIUM" | "LEAN" = proj.confidence >= 60 ? "HIGH" : proj.confidence >= 40 ? "MEDIUM" : "LEAN";
-            const reasoning = buildReasoning(proj.factors, prop.line, proj.side, seasonAvg, label, undefined);
-            allProjections.push({
-              playerName: prop.playerName, team: prop.team ?? "", propType: label, market,
-              line: prop.line, side: proj.side, probability: proj.probability,
-              projectedValue: Math.round(proj.projectedValue * 10) / 10,
-              odds: proj.side === "over" ? (prop.bestOver?.price ?? -110) : (prop.bestUnder?.price ?? -110),
-              bookmaker: proj.side === "over" ? (prop.bestOver?.bookmaker ?? "") : (prop.bestUnder?.bookmaker ?? ""),
-              gameTime: prop.gameTime ?? "", brainConfidence: Math.round(proj.confidence),
-              tier, liveOdds: true, score, reasoning, seasonAvg,
-            });
+            allLiveProps.push({ ...prop, market });
           }
         } catch {}
       }
     } catch {}
 
-    // ── Step 2: Fallback — run brain on top NBA stars if no live odds ──
+    // ── Step 2: Fetch real stats for top players in parallel ──
+    const baseUrl = `https://${process.env.VERCEL_URL || "diamond-quant-live.vercel.app"}`;
+    const playerStatsMap = new Map<string, { ppg: number; rpg: number; apg: number; last5Avg?: number }>();
+
+    if (allLiveProps.length > 0) {
+      // Dedupe players, prefer points market for the stat lookup
+      const seenPlayers = new Set<string>();
+      const topPlayers: string[] = [];
+      for (const prop of allLiveProps) {
+        if (!seenPlayers.has(prop.playerName)) {
+          seenPlayers.add(prop.playerName);
+          topPlayers.push(prop.playerName);
+          if (topPlayers.length >= 12) break;
+        }
+      }
+
+      await Promise.allSettled(
+        topPlayers.map(async (name) => {
+          try {
+            const lineForPlayer = allLiveProps.find(p => p.playerName === name && p.market === "player_points")?.line ?? 20;
+            const res = await fetch(
+              `${baseUrl}/api/nba-player?name=${encodeURIComponent(name)}&market=player_points&line=${lineForPlayer}`,
+              { signal: AbortSignal.timeout(4000) }
+            );
+            if (res.ok) {
+              const data = await res.json();
+              const p = data.player;
+              if (p?.ppg !== undefined) {
+                const log = data.player?.gameLog ?? [];
+                const last5Avg = log.length >= 3
+                  ? log.slice(0, 5).reduce((s: number, g: any) => s + (g.points ?? 0), 0) / Math.min(log.length, 5)
+                  : undefined;
+                playerStatsMap.set(name, { ppg: p.ppg ?? lineForPlayer, rpg: p.rpg ?? 5, apg: p.apg ?? 3, last5Avg });
+              }
+            }
+          } catch {}
+        })
+      );
+    }
+
+    // ── Step 3: Run projections for all live props ──
+    if (livePropsFound > 0) {
+      for (const prop of allLiveProps) {
+        const { market } = prop;
+        const realStats = playerStatsMap.get(prop.playerName);
+        const seasonAvg = realStats
+          ? (market === "player_points" ? realStats.ppg : market === "player_rebounds" ? realStats.rpg : realStats.apg)
+          : prop.line;
+        const statApprox = realStats
+          ? { ppg: realStats.ppg, rpg: realStats.rpg, apg: realStats.apg }
+          : { ppg: prop.line, rpg: prop.line, apg: prop.line };
+        const last5Avg = realStats?.last5Avg;
+        const proj = projectProp(statApprox, market, prop.line, weights, { isHome: false, isB2B: false, leagueAvgTotal: 224 });
+        const label = market === "player_points" ? "Points" : market === "player_rebounds" ? "Rebounds" : "Assists";
+        const conviction = Math.abs(proj.probability - 0.5);
+        const score = conviction * proj.confidence;
+        const tier: "HIGH" | "MEDIUM" | "LEAN" = proj.confidence >= 60 ? "HIGH" : proj.confidence >= 40 ? "MEDIUM" : "LEAN";
+        const reasoning = buildReasoning(proj.factors, prop.line, proj.side, seasonAvg, label, last5Avg);
+        allProjections.push({
+          playerName: prop.playerName, team: prop.team ?? "", propType: label, market,
+          line: prop.line, side: proj.side, probability: proj.probability,
+          projectedValue: Math.round(proj.projectedValue * 10) / 10,
+          odds: proj.side === "over" ? (prop.bestOver?.price ?? -110) : (prop.bestUnder?.price ?? -110),
+          bookmaker: proj.side === "over" ? (prop.bestOver?.bookmaker ?? "") : (prop.bestUnder?.bookmaker ?? ""),
+          gameTime: prop.gameTime ?? "", brainConfidence: Math.round(proj.confidence),
+          tier, liveOdds: true, score, reasoning, seasonAvg, last5Avg,
+        });
+      }
+    }
+
+    // ── Step 4: Fallback — run brain on top NBA stars if no live odds ──
     if (livePropsFound === 0) {
       for (const player of NBA_STAR_FALLBACK) {
         for (const { market, label, line, stat } of getFallbackLines(player)) {

@@ -17,6 +17,9 @@ interface SelectedGameBannerProps {
     homePitcher: string;
     awayPitcher: string;
     venue: string;
+    isNBA?: boolean;
+    periodLabel?: string;
+    timeRemaining?: string;
   };
   onDeselect: () => void;
 }
@@ -34,9 +37,16 @@ export default function SelectedGameBanner({ game, onDeselect }: SelectedGameBan
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-danger opacity-75" />
             <span className="relative inline-flex rounded-full h-2 w-2 bg-danger" />
           </span>
-          <span className="text-xs font-semibold text-danger uppercase tracking-wider">
-            {game.inningHalf === "top" ? "▲" : "▼"}{game.inning}
-          </span>
+          {game.isNBA ? (
+            <span className="text-xs font-semibold text-danger uppercase tracking-wider">
+              {game.periodLabel || `Q${game.inning}`}
+              {game.timeRemaining ? ` ${game.timeRemaining}` : ""}
+            </span>
+          ) : (
+            <span className="text-xs font-semibold text-danger uppercase tracking-wider">
+              {game.inningHalf === "top" ? "▲" : "▼"}{game.inning}
+            </span>
+          )}
         </div>
       )}
 
@@ -58,12 +68,14 @@ export default function SelectedGameBanner({ game, onDeselect }: SelectedGameBan
         )}
       </div>
 
-      {/* Pitchers */}
-      <div className="hidden sm:flex items-center gap-1.5 text-xs text-mercury truncate min-w-0">
-        <span className="truncate">{game.awayPitcher}</span>
-        <span className="text-mercury/50">vs</span>
-        <span className="truncate">{game.homePitcher}</span>
-      </div>
+      {/* Pitchers (MLB only) */}
+      {!game.isNBA && (
+        <div className="hidden sm:flex items-center gap-1.5 text-xs text-mercury truncate min-w-0">
+          <span className="truncate">{game.awayPitcher}</span>
+          <span className="text-mercury/50">vs</span>
+          <span className="truncate">{game.homePitcher}</span>
+        </div>
+      )}
 
       {/* Venue */}
       <div className="hidden sm:flex items-center gap-1 text-[11px] text-mercury/70 flex-shrink-0 ml-auto">

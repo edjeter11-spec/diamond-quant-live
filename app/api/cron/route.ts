@@ -143,6 +143,46 @@ export async function GET(req: Request) {
       } catch {}
     }
 
+    // ── MLB Bot Settlement ──
+    // When games are finishing at night (3-7 UTC = 11PM-3AM ET)
+    if (final > 0 && hour >= 3 && hour <= 7) {
+      try {
+        const { settleAndLearn, saveSmartBot } = await import("@/lib/bot/smart-picks");
+        const { cloudGet } = await import("@/lib/supabase/client");
+        const mlbBotState = await cloudGet("smart_bot", { bankroll: 5000, picks: [], dailyPnL: {} }) as any;
+
+        const pendingCount = (mlbBotState.picks ?? []).filter((p: any) => p.result === "pending").length;
+        if (pendingCount > 0) {
+          const { botState: settled } = settleAndLearn(mlbBotState, completedGames, "mlb");
+          const newlySettled = settled.picks.filter((p: any, i: number) =>
+            mlbBotState.picks[i]?.result === "pending" && p.result !== "pending"
+          ).length;
+          if (newlySettled > 0) {
+            await cloudSet("smart_bot", settled);
+          }
+        }
+      } catch {}
+    }
+
+    // ── Weekly Brain Evolution (Sunday midnight UTC = Sunday 8PM ET) ──
+    const dayOfWeek = new Date().getUTCDay(); // 0 = Sunday
+    if (dayOfWeek === 0 && utcHour >= 0 && utcHour <= 2) {
+      try {
+        const lastEvolvedKey = "nba_brain_last_evolved";
+        const lastEvolved = await cloudGet<string | null>(lastEvolvedKey, null);
+        const daysSince = lastEvolved
+          ? (Date.now() - new Date(lastEvolved).getTime()) / (1000 * 60 * 60 * 24)
+          : 999;
+
+        if (daysSince >= 6) {
+          // Trigger evolution in background (don't await — cron has time limit)
+          const baseUrl = `https://${process.env.VERCEL_URL || "diamond-quant-live.vercel.app"}`;
+          fetch(`${baseUrl}/api/nba-prop-evolve?generations=2`).catch(() => {});
+          await cloudSet(lastEvolvedKey, new Date().toISOString());
+        }
+      } catch {}
+    }
+
     return NextResponse.json({
       ok: true,
       timestamp: new Date().toISOString(),

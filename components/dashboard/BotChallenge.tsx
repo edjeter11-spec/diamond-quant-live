@@ -17,8 +17,6 @@ import {
   type CLVRecord,
 } from "@/lib/bot/clv-tracker";
 import { loadEloState, saveEloState, updateElo } from "@/lib/bot/elo";
-import { loadNbaPropBrain, type NbaPropBrainState } from "@/lib/bot/nba-prop-brain";
-import { projectProp } from "@/lib/bot/nba-prop-projector";
 import { useAuth } from "@/lib/supabase/auth";
 import type { GameAnalysis } from "@/lib/bot/three-models";
 import TeamLogo from "@/components/ui/TeamLogo";
@@ -54,12 +52,6 @@ export default function BotChallenge() {
   });
 
   const clvSummary = useMemo(() => getCLVSummary(clvRecords), [clvRecords]);
-
-  // NBA Prop Brain picks (prop parlay of the day) — local fallback
-  const [propParlayPicks, setPropParlayPicks] = useState<Array<{
-    playerName: string; propType: string; line: number; side: string;
-    probability: number; projectedValue: number;
-  }>>([]);
 
   const [expandedPropPick, setExpandedPropPick] = useState<string | null>(null);
 
@@ -156,50 +148,6 @@ export default function BotChallenge() {
     }, 5000);
     return () => clearInterval(interval);
   }, [training]);
-
-  useEffect(() => {
-    if (!isNBA) { setPropParlayPicks([]); return; }
-    // Generate prop parlay from Brain projections on today's props
-    async function generatePropParlay() {
-      try {
-        // Try cloud brain first (pre-trained), fall back to localStorage
-        let brain: any;
-        try {
-          const { loadNbaPropBrainFromCloud } = await import("@/lib/bot/nba-prop-brain");
-          brain = await loadNbaPropBrainFromCloud();
-        } catch {
-          brain = loadNbaPropBrain();
-        }
-        // If no real brain data, skip
-        if (!brain?.weights || brain.totalGamesProcessed === 0) return;
-        const propsRes = await fetch("/api/players?sport=basketball_nba&market=player_points");
-        if (!propsRes.ok) return;
-        const propsData = await propsRes.json();
-        const props = propsData.props ?? [];
-
-        const projections: typeof propParlayPicks = [];
-        for (const prop of props.slice(0, 20)) {
-          const stats = { ppg: prop.line, rpg: 5, apg: 3 };
-          const ctx = { isHome: false, isB2B: false, leagueAvgTotal: 224 };
-          const proj = projectProp(stats, "player_points", prop.line, brain.weights, ctx);
-          if (proj.confidence >= 15) {
-            projections.push({
-              playerName: prop.playerName,
-              propType: "Points",
-              line: prop.line,
-              side: proj.side,
-              probability: proj.probability,
-              projectedValue: proj.projectedValue,
-            });
-          }
-        }
-        // Sort by confidence, take top 4
-        projections.sort((a, b) => Math.abs(b.probability - 0.5) - Math.abs(a.probability - 0.5));
-        setPropParlayPicks(projections.slice(0, 4));
-      } catch {}
-    }
-    generatePropParlay();
-  }, [isNBA]);
 
   // Fetch server-generated prop picks (refreshed every 2 hrs by the API)
   useEffect(() => {
