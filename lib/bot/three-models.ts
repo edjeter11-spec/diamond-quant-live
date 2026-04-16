@@ -142,9 +142,9 @@ async function buildPitcherProfile(pitcherName: string, opponentTeam: string): P
     const seasonEra = parseFloat(raw.era) || 4.50;
     let recentEra = seasonEra;
     if (last5.length >= 3) {
-      const recentIP = last5.reduce((s, g) => s + g.ip, 0);
+      const recentIP = last5.reduce((s: number, g: { ip: number; er: number; k: number; opponent: string }) => s + g.ip, 0);
       if (recentIP > 0) {
-        const rawRecentEra = (last5.reduce((s, g) => s + g.er, 0) / recentIP) * 9;
+        const rawRecentEra = (last5.reduce((s: number, g: { ip: number; er: number; k: number; opponent: string }) => s + g.er, 0) / recentIP) * 9;
         recentEra = Math.round((rawRecentEra * 0.6 + seasonEra * 0.4) * 100) / 100;
       }
     }
