@@ -213,7 +213,7 @@ export default function BotChallenge() {
       } catch {}
       setPropPicksLoading(false);
     }
-    fetchPropPicks();
+    fetchPropPicks(true); // force=true on first load so we always get fresh picks
     // Auto-refresh every 90 minutes
     const interval = setInterval(() => fetchPropPicks(), 90 * 60 * 1000);
     return () => clearInterval(interval);
@@ -655,53 +655,59 @@ export default function BotChallenge() {
               <Brain className="w-4 h-4 text-purple animate-pulse" />
               <span className="text-xs text-mercury">Brain analyzing today's props...</span>
             </div>
-          ) : todayPropPicks.length === 0 ? (
-            <div className="px-4 py-6 text-center space-y-1">
-              <p className="text-xs text-mercury">No high-confidence props yet</p>
-              <p className="text-[10px] text-mercury/50">Brain needs today's odds to be posted — check back closer to tip-off</p>
-            </div>
           ) : (
             <div className="divide-y divide-slate/10">
-              {todayPropPicks.map((prop, i) => (
-                <div key={i} className="px-4 py-3 flex items-center gap-3">
-                  {/* Rank */}
-                  <span className={`w-6 h-6 rounded-full text-[9px] font-bold flex items-center justify-center flex-shrink-0 ${
-                    i === 0 ? "bg-gold/20 text-gold" : "bg-purple/20 text-purple"
-                  }`}>{i + 1}</span>
+              {todayPropPicks.map((prop, i) => {
+                const tier = (prop as any).tier as "HIGH" | "MEDIUM" | "LEAN" | undefined;
+                const tierColor = tier === "HIGH" ? "bg-neon/15 text-neon border-neon/20"
+                  : tier === "MEDIUM" ? "bg-amber/15 text-amber border-amber/20"
+                  : "bg-electric/10 text-electric border-electric/20";
+                return (
+                  <div key={i} className="px-4 py-3 flex items-center gap-3">
+                    {/* Rank */}
+                    <span className={`w-6 h-6 rounded-full text-[9px] font-bold flex items-center justify-center flex-shrink-0 ${
+                      i === 0 ? "bg-gold/20 text-gold" : "bg-purple/20 text-purple"
+                    }`}>{i + 1}</span>
 
-                  {/* Player */}
-                  <PlayerAvatar name={prop.playerName} size={26} />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold text-silver truncate">{prop.playerName}</p>
-                    <p className="text-[9px] text-mercury/60">
-                      {prop.team} • {prop.propType}
-                      {prop.gameTime ? ` • ${new Date(prop.gameTime).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}` : ""}
-                    </p>
-                  </div>
+                    {/* Player */}
+                    <PlayerAvatar name={prop.playerName} size={26} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-xs font-semibold text-silver truncate">{prop.playerName}</p>
+                        {tier && (
+                          <span className={`text-[7px] font-bold px-1 py-0.5 rounded border flex-shrink-0 ${tierColor}`}>
+                            {tier}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[9px] text-mercury/60">
+                        {prop.team} • {prop.propType}
+                        {prop.gameTime ? ` • ${new Date(prop.gameTime).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}` : ""}
+                      </p>
+                    </div>
 
-                  {/* Pick */}
-                  <div className="flex flex-col items-end flex-shrink-0 gap-0.5">
-                    <div className="flex items-center gap-1">
-                      <span className={`text-xs font-bold font-mono ${prop.side === "over" ? "text-neon" : "text-purple"}`}>
-                        {prop.side === "over" ? "OVER" : "UNDER"} {prop.line}
-                      </span>
-                      {prop.odds !== 0 && (
-                        <span className="text-[9px] text-mercury/70 font-mono">
-                          ({prop.odds > 0 ? "+" : ""}{prop.odds})
+                    {/* Pick */}
+                    <div className="flex flex-col items-end flex-shrink-0 gap-0.5">
+                      <div className="flex items-center gap-1">
+                        <span className={`text-xs font-bold font-mono ${prop.side === "over" ? "text-neon" : "text-purple"}`}>
+                          {prop.side === "over" ? "OVER" : "UNDER"} {prop.line}
                         </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <span className="text-[8px] text-mercury/50">Proj: {prop.projectedValue}</span>
-                      <span className={`text-[8px] font-bold px-1 py-0.5 rounded ${
-                        prop.brainConfidence >= 65 ? "bg-neon/10 text-neon" :
-                        prop.brainConfidence >= 55 ? "bg-amber/10 text-amber" :
-                        "bg-mercury/10 text-mercury"
-                      }`}>{prop.brainConfidence}%</span>
+                        {prop.odds !== 0 && (
+                          <span className="text-[9px] text-mercury/70 font-mono">
+                            ({prop.odds > 0 ? "+" : ""}{prop.odds})
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[8px] text-mercury/50">Proj: {prop.projectedValue} • {prop.brainConfidence}% conf</span>
                     </div>
                   </div>
+                );
+              })}
+              {todayPropPicks.length === 0 && (
+                <div className="px-4 py-5 text-center">
+                  <p className="text-[10px] text-mercury/50">Odds not yet posted for today — picks generate at tip-off</p>
                 </div>
-              ))}
+              )}
             </div>
           )}
         </div>

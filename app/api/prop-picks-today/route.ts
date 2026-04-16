@@ -19,6 +19,7 @@ export interface PropPickOfDay {
   bookmaker: string;
   gameTime: string;
   brainConfidence: number; // 0-100
+  tier: "HIGH" | "MEDIUM" | "LEAN"; // confidence tier
 }
 
 export interface PropPicksToday {
@@ -80,9 +81,7 @@ export async function GET(req: NextRequest) {
           };
           const proj = projectProp(statApprox, market, prop.line, brain.weights, ctx);
 
-          // Only include if brain has strong conviction
-          if (proj.confidence < 20) continue;
-
+          // Include everything — we'll rank and label by tier
           const label = market === "player_points" ? "Points"
             : market === "player_rebounds" ? "Rebounds"
             : "Assists";
@@ -90,6 +89,11 @@ export async function GET(req: NextRequest) {
           // Score: distance from 0.5 (conviction) * confidence
           const conviction = Math.abs(proj.probability - 0.5);
           const score = conviction * proj.confidence;
+
+          // Confidence tier
+          const tier: "HIGH" | "MEDIUM" | "LEAN" =
+            proj.confidence >= 60 ? "HIGH" :
+            proj.confidence >= 40 ? "MEDIUM" : "LEAN";
 
           allProjections.push({
             playerName: prop.playerName,
@@ -104,6 +108,7 @@ export async function GET(req: NextRequest) {
             bookmaker: proj.side === "over" ? (prop.bestOver?.bookmaker ?? "") : (prop.bestUnder?.bookmaker ?? ""),
             gameTime: prop.gameTime ?? "",
             brainConfidence: Math.round(proj.confidence),
+            tier,
             score,
           });
         }
