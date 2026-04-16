@@ -26,9 +26,13 @@ interface GameCardProps {
     awayPitcher: string;
     weather: { temp?: string; wind?: string; condition?: string } | null;
     detailedStatus: string;
-    // Player IDs for headshots (optional, populated from scores API)
     homePitcherId?: number;
     awayPitcherId?: number;
+    // NBA-specific
+    isNBA?: boolean;
+    period?: number;
+    periodLabel?: string;
+    timeRemaining?: string;
   };
   oddsInfo?: {
     bestHomeML?: { bookmaker: string; odds: number };
@@ -60,9 +64,12 @@ export default function GameCard({ game, oddsInfo }: GameCardProps) {
   const { selectedGameId, selectGame } = useStore();
   const { currentSport } = useSport();
   const isSelected = selectedGameId === game.id;
+  const isNBA = game.isNBA || currentSport === "nba";
 
   const formatTime = (iso: string) => {
-    return new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+    try {
+      return new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+    } catch { return ""; }
   };
 
   const formatOdds = (odds: number) => (odds > 0 ? `+${odds}` : `${odds}`);
@@ -89,17 +96,26 @@ export default function GameCard({ game, oddsInfo }: GameCardProps) {
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-danger opacity-75" />
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-danger" />
               </span>
-              <span className="text-xs font-semibold text-danger uppercase tracking-wider">
-                {game.inningHalf === "top" ? "▲" : "▼"} {game.inning}
-              </span>
-              <span className="text-[10px] text-mercury">{game.outs} out{game.outs !== 1 ? "s" : ""}</span>
+              {isNBA ? (
+                <span className="text-xs font-semibold text-danger uppercase tracking-wider">
+                  {game.periodLabel || `Q${game.period}`}
+                  {game.timeRemaining ? ` ${game.timeRemaining}` : ""}
+                </span>
+              ) : (
+                <>
+                  <span className="text-xs font-semibold text-danger uppercase tracking-wider">
+                    {game.inningHalf === "top" ? "▲" : "▼"} {game.inning}
+                  </span>
+                  <span className="text-[10px] text-mercury">{game.outs} out{game.outs !== 1 ? "s" : ""}</span>
+                </>
+              )}
             </div>
           ) : game.status === "final" ? (
             <span className="text-xs font-semibold text-mercury uppercase tracking-wider">Final</span>
           ) : (
             <div className="flex items-center gap-1.5 text-xs text-mercury">
               <Clock className="w-3 h-3" />
-              {formatTime(game.startTime)}
+              {game.startTime ? formatTime(game.startTime) : "TBD"}
             </div>
           )}
         </div>
@@ -125,12 +141,11 @@ export default function GameCard({ game, oddsInfo }: GameCardProps) {
           <div className="flex items-center gap-2 sm:gap-2.5 min-w-0 flex-1">
             <TeamLogo team={game.awayAbbrev} size={24} className="sm:!w-7 sm:!h-7" />
             <div className="min-w-0 flex-1">
-              {/* Full name on desktop, abbrev on mobile */}
               <p className="text-sm sm:text-base font-bold text-silver leading-tight truncate">
                 <span className="sm:hidden">{game.awayAbbrev}</span>
                 <span className="hidden sm:inline">{awayFull}</span>
               </p>
-              <PitcherFace name={game.awayPitcher} pitcherId={game.awayPitcherId} />
+              {!isNBA && <PitcherFace name={game.awayPitcher} pitcherId={game.awayPitcherId} />}
             </div>
           </div>
           <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
@@ -163,7 +178,7 @@ export default function GameCard({ game, oddsInfo }: GameCardProps) {
                 <span className="sm:hidden">{game.homeAbbrev}</span>
                 <span className="hidden sm:inline">{homeFull}</span>
               </p>
-              <PitcherFace name={game.homePitcher} pitcherId={game.homePitcherId} />
+              {!isNBA && <PitcherFace name={game.homePitcher} pitcherId={game.homePitcherId} />}
             </div>
           </div>
           <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
@@ -187,11 +202,13 @@ export default function GameCard({ game, oddsInfo }: GameCardProps) {
 
       {/* Footer */}
       <div className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-1.5 sm:py-2 border-t border-slate/30 text-[9px] sm:text-[11px] text-mercury/60">
-        <div className="flex items-center gap-1 truncate">
-          <MapPin className="w-3 h-3 flex-shrink-0" />
-          <span className="truncate">{game.venue}</span>
-        </div>
-        {game.weather && (
+        {game.venue ? (
+          <div className="flex items-center gap-1 truncate">
+            <MapPin className="w-3 h-3 flex-shrink-0" />
+            <span className="truncate">{game.venue}</span>
+          </div>
+        ) : null}
+        {!isNBA && game.weather && (
           <div className="flex items-center gap-1 flex-shrink-0">
             <Cloud className="w-3 h-3" />
             {game.weather.temp}° {game.weather.wind}
