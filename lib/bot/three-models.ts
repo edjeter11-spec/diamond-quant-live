@@ -65,7 +65,8 @@ export interface GamePick {
 
 export interface PitcherProfile {
   name: string;
-  era: number;
+  era: number;        // season ERA
+  recentEra: number;  // recency-weighted: 60% last-5 starts + 40% season
   whip: number;
   k9: number;
   bb9: number;
@@ -137,9 +138,21 @@ async function buildPitcherProfile(pitcherName: string, opponentTeam: string): P
     const now = Date.now();
     const fatigueRisk = recentDates.some((d: string) => (now - new Date(d).getTime()) < 4 * 24 * 60 * 60 * 1000);
 
+    // Recency-weighted ERA: last 5 starts (60%) blended with season (40%)
+    const seasonEra = parseFloat(raw.era) || 4.50;
+    let recentEra = seasonEra;
+    if (last5.length >= 3) {
+      const recentIP = last5.reduce((s, g) => s + g.ip, 0);
+      if (recentIP > 0) {
+        const rawRecentEra = (last5.reduce((s, g) => s + g.er, 0) / recentIP) * 9;
+        recentEra = Math.round((rawRecentEra * 0.6 + seasonEra * 0.4) * 100) / 100;
+      }
+    }
+
     return {
       name: pitcherName,
-      era: parseFloat(raw.era) || 0,
+      era: seasonEra,
+      recentEra,
       whip: parseFloat(raw.whip) || 0,
       k9: ip > 0 ? (totalK / ip) * 9 : 0,
       bb9: ip > 0 ? ((parseInt(raw.baseOnBalls) || 0) / ip) * 9 : 0,
@@ -163,22 +176,27 @@ function runPitcherModel(
   homePitcher: PitcherProfile | null,
   awayPitcher: PitcherProfile | null,
   homeTeam: string,
-  awayTeam: string
+  awayTeam: string,
+  weather: { hittingImpact: number; pitchingImpact: number; hasRoof: boolean; summary: string } | null,
+  parkData: { games: number; homeWins: number; avgRuns: number } | null
 ): ModelPrediction {
   const factors: string[] = [];
-  let homeEdge = 0; // positive = home advantage
+  let homeEdge = 0;
+  let totalAdjust = 0;
 
   if (!homePitcher && !awayPitcher) {
     return { homeWinProb: 0.52, totalProjection: 8.5, confidence: 10, factors: ["No pitcher data available — using baseline"] };
   }
 
-  // ERA comparison
-  const homeERA = homePitcher?.era ?? 4.5;
-  const awayERA = awayPitcher?.era ?? 4.5;
-  const eraDiff = awayERA - homeERA; // positive = home pitcher is better
+  // ERA comparison — use recency-weighted ERA (60% last-5 + 40% season)
+  const homeERA = homePitcher?.recentEra ?? homePitcher?.era ?? 4.5;
+  const awayERA = awayPitcher?.recentEra ?? awayPitcher?.era ?? 4.5;
+  const eraDiff = awayERA - homeERA;
   homeEdge += eraDiff * 3;
   if (Math.abs(eraDiff) > 1.0) {
-    factors.push(`ERA edge: ${homePitcher?.name ?? homeTeam} ${homeERA.toFixed(2)} vs ${awayPitcher?.name ?? awayTeam} ${awayERA.toFixed(2)} (${eraDiff > 0 ? "home" : "away"} advantage)`);
+    const homeLabel = homePitcher ? `${homePitcher.name} ${homeERA.toFixed(2)}` : `${homeTeam} 4.50`;
+    const awayLabel = awayPitcher ? `${awayPitcher.name} ${awayERA.toFixed(2)}` : `${awayTeam} 4.50`;
+    factors.push(`ERA edge (recent): ${homeLabel} vs ${awayLabel} (${eraDiff > 0 ? "home" : "away"} advantage)`);
   }
 
   // WHIP comparison
@@ -213,24 +231,45 @@ function runPitcherModel(
     }
   }
 
-  // Last 5 starts trend
-  if (homePitcher?.last5 && homePitcher.last5.length >= 3) {
-    const recentERA = homePitcher.last5.reduce((s, g) => s + g.er, 0) /
-      Math.max(homePitcher.last5.reduce((s, g) => s + g.ip, 0) / 9, 0.1);
-    if (recentERA < homePitcher.era - 1) {
-      homeEdge += 2;
-      factors.push(`${homePitcher.name} trending up: ${recentERA.toFixed(2)} ERA in last ${homePitcher.last5.length} starts`);
-    }
+  // Recency trend signal: surface when recent form diverges significantly from season
+  if (homePitcher?.recentEra !== undefined && Math.abs(homePitcher.recentEra - homePitcher.era) > 1.0) {
+    const dir = homePitcher.recentEra < homePitcher.era ? "trending up" : "trending down";
+    factors.push(`${homePitcher.name} ${dir}: ${homePitcher.recentEra.toFixed(2)} recent ERA vs ${homePitcher.era.toFixed(2)} season`);
+  }
+  if (awayPitcher?.recentEra !== undefined && Math.abs(awayPitcher.recentEra - awayPitcher.era) > 1.0) {
+    const dir = awayPitcher.recentEra < awayPitcher.era ? "trending up" : "trending down";
+    factors.push(`${awayPitcher.name} ${dir}: ${awayPitcher.recentEra.toFixed(2)} recent ERA vs ${awayPitcher.era.toFixed(2)} season`);
   }
 
   // Fatigue
   if (homePitcher?.fatigueRisk) { homeEdge -= 2; factors.push(`${homePitcher.name} fatigue risk — pitched recently`); }
   if (awayPitcher?.fatigueRisk) { homeEdge += 2; factors.push(`${awayPitcher.name} fatigue risk — pitched recently`); }
 
-  // Convert edge to probability
-  const baseProb = 0.52; // home field
+  // ── Weather impact (only if no roof) ──
+  if (weather && !weather.hasRoof) {
+    const netImpact = weather.hittingImpact - weather.pitchingImpact;
+    if (Math.abs(netImpact) >= 2) {
+      totalAdjust += netImpact * 0.25;
+      if (netImpact > 0) homeEdge -= 0.5; // high-scoring game slightly less predictable
+      factors.push(`Weather: ${weather.summary}`);
+    }
+  }
+
+  // ── Park memory: historical home win rate at this venue ──
+  if (parkData && parkData.games >= 10) {
+    const parkRate = parkData.homeWins / parkData.games;
+    const parkAdj = (parkRate - 0.52) * 20; // scale ±10pts
+    homeEdge += parkAdj;
+    if (Math.abs(parkAdj) > 1.5) {
+      factors.push(`Park factor: home wins ${(parkRate * 100).toFixed(0)}% here (${parkData.games} games tracked)`);
+    }
+    // Park avg runs shifts total projection
+    totalAdjust += (parkData.avgRuns - 8.5) * 0.3;
+  }
+
+  const baseProb = 0.52;
   const prob = Math.min(0.80, Math.max(0.20, baseProb + homeEdge / 100));
-  const totalProjection = 4.5 * (homeERA + awayERA) / 4.0; // rough total
+  const totalProjection = Math.max(5, 4.5 * (homeERA + awayERA) / 4.0 + totalAdjust);
   const confidence = Math.min(80, Math.abs(homeEdge) * 3 + (homePitcher && awayPitcher ? 20 : 5));
 
   return { homeWinProb: prob, totalProjection, confidence, factors };
@@ -358,16 +397,16 @@ async function runEloPowerModel(homeTeam: string, awayTeam: string): Promise<Mod
 
   let homeEdge = (eloHomeProb - 0.5) * 100;
 
-  // SECONDARY: Head-to-head history from Brain memory
+  // SECONDARY: Head-to-head history from Brain memory (cloud — works server-side)
   try {
-    const { loadBrain } = await import("@/lib/bot/brain");
-    const brain = loadBrain();
+    const { loadBrainFromCloud } = await import("@/lib/bot/brain");
+    const brain = await loadBrainFromCloud();
     if (brain.matchupMemory) {
       const mKey = `${awayTeam.toLowerCase()}::${homeTeam.toLowerCase()}`;
       const matchup = brain.matchupMemory[mKey];
       if (matchup && matchup.games >= 3) {
         const homeRate = matchup.homeWins / matchup.games;
-        const h2hAdj = (homeRate - 0.5) * 10; // lighter weight than Elo
+        const h2hAdj = (homeRate - 0.5) * 10;
         homeEdge += h2hAdj;
         factors.push(`H2H: ${homeTeam.split(" ").pop()} ${matchup.homeWins}-${matchup.games - matchup.homeWins} at home (Brain memory)`);
       }
@@ -430,6 +469,14 @@ export async function analyzeAllGames(oddsData: any[], scores: any[]): Promise<G
   const now = Date.now();
   const analyses: GameAnalysis[] = [];
 
+  // Load brain once for park memory (cloud — has trained data)
+  let brainParkMemory: Record<string, { games: number; homeWins: number; avgRuns: number; nrfiRate: number }> = {};
+  try {
+    const { loadBrainFromCloud } = await import("@/lib/bot/brain");
+    const brain = await loadBrainFromCloud();
+    brainParkMemory = brain.parkMemory ?? {};
+  } catch {}
+
   // Analyze all games passed in (pre-filtered by the API route)
   const futureGames = oddsData.filter(g => {
     if (!g.commenceTime) return true; // no time = include
@@ -443,21 +490,36 @@ export async function analyzeAllGames(oddsData: any[], scores: any[]): Promise<G
       const awayTeam = game.awayTeam;
       const oddsLines = game.oddsLines ?? [];
 
-      // Find probable pitchers from scores
+      // Find probable pitchers + home abbreviation from scores
       const scoreGame = scores.find((s: any) =>
         s.homeTeam === homeTeam || s.homeAbbrev === homeTeam?.split(" ").pop()?.slice(0, 3)
       );
       const homePitcherName = scoreGame?.homePitcher ?? "TBD";
       const awayPitcherName = scoreGame?.awayPitcher ?? "TBD";
+      const homeAbbrev: string = scoreGame?.homeAbbrev ?? "";
+      const venueName: string = scoreGame?.venue ?? "";
 
-      // Build pitcher profiles in parallel
-      const [homePitcher, awayPitcher] = await Promise.all([
+      // Fetch pitcher profiles + weather in parallel
+      const [homePitcher, awayPitcher, weather] = await Promise.all([
         buildPitcherProfile(homePitcherName, awayTeam),
         buildPitcherProfile(awayPitcherName, homeTeam),
+        homeAbbrev ? import("@/lib/mlb/weather-fatigue").then(m => m.getGameWeather(homeAbbrev)).catch(() => null) : Promise.resolve(null),
       ]);
 
+      // Park memory: prefer venue name, fall back to stadium lookup by abbrev
+      let parkData: { games: number; homeWins: number; avgRuns: number } | null = null;
+      if (venueName && brainParkMemory[venueName]) {
+        parkData = brainParkMemory[venueName];
+      } else if (homeAbbrev) {
+        // Try matching by stadium name from weather-fatigue STADIUMS map
+        const stadiumEntry = Object.entries(brainParkMemory).find(([k]) =>
+          k.toLowerCase().includes(homeAbbrev.toLowerCase())
+        );
+        if (stadiumEntry) parkData = stadiumEntry[1];
+      }
+
       // Run 3 models
-      const pitcherModel = runPitcherModel(homePitcher, awayPitcher, homeTeam, awayTeam);
+      const pitcherModel = runPitcherModel(homePitcher, awayPitcher, homeTeam, awayTeam, weather, parkData);
       const marketModel = runMarketModel(oddsLines);
       const trendModel = await runEloPowerModel(homeTeam, awayTeam);
 
