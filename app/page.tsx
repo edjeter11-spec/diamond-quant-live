@@ -112,24 +112,33 @@ export default function WarRoom() {
 
   const fetchData = useCallback(async () => {
     setRefreshing(true);
+    const isNBA = currentSport === "nba";
+    const sportKey = config.oddsApiKey;
     try {
-      const isNBA = currentSport === "nba";
-      const sportKey = config.oddsApiKey;
+      // Scores load first — unblocks the UI immediately
+      const scoresP = isNBA
+        ? fetch("/api/nba-scores").then((r) => r.json()).catch(() => ({ games: [] }))
+        : fetch("/api/scores").then((r) => r.json()).catch(() => ({ games: [] }));
+      const oddsP = fetch(`/api/odds?sport=${sportKey}`).then((r) => r.json()).catch(() => ({ games: [] }));
+      const analysisP = isNBA
+        ? fetch("/api/nba-analysis").then((r) => r.json()).catch(() => ({ analyses: [] }))
+        : fetch("/api/analysis").then((r) => r.json()).catch(() => ({ analyses: [] }));
 
-      const [scoresRes, oddsRes, analysisRes] = await Promise.all([
-        // Scores: sport-specific
-        isNBA
-          ? fetch("/api/nba-scores").then((r) => r.json()).catch(() => ({ games: [] }))
-          : fetch("/api/scores").then((r) => r.json()).catch(() => ({ games: [] })),
-        // Odds: sport-aware
-        fetch(`/api/odds?sport=${sportKey}`).then((r) => r.json()).catch(() => ({ games: [] })),
-        // Analysis: sport-specific
-        isNBA
-          ? fetch("/api/nba-analysis").then((r) => r.json()).catch(() => ({ analyses: [] }))
-          : fetch("/api/analysis").then((r) => r.json()).catch(() => ({ analyses: [] })),
-      ]);
-
+      const scoresRes = await scoresP;
       const scoreGames = scoresRes.games ?? [];
+      setScores(scoreGames);
+      setLoading(false); // unblock UI as soon as scores arrive
+
+      // Auto-select first live or upcoming game — never a final
+      if (!selectedGameId && scoreGames.length > 0) {
+        const liveGame = scoreGames.find((g: any) => g.status === "live");
+        const upcoming = scoreGames.find((g: any) => g.status === "pre");
+        const pick = liveGame ?? upcoming;
+        if (pick) selectGame(pick.id);
+      }
+
+      // Odds + analysis load in parallel after scores
+      const [oddsRes, analysisRes] = await Promise.all([oddsP, analysisP]);
       let oddsGames = oddsRes.games ?? [];
       setIsDemo(false);
 
@@ -143,7 +152,6 @@ export default function WarRoom() {
         }
       }
 
-      setScores(scoreGames);
       setOddsData(oddsGames);
       setAnalyses(analysisRes.analyses ?? []);
       if (!isNBA) snapshotOdds(oddsGames);
@@ -155,18 +163,10 @@ export default function WarRoom() {
         return { ...score, odds };
       });
       setGames(merged);
-
-      // Auto-select first live or upcoming game — never a final
-      if (!selectedGameId && scoreGames.length > 0) {
-        const liveGame = scoreGames.find((g: any) => g.status === "live");
-        const upcoming = scoreGames.find((g: any) => g.status === "pre");
-        const pick = liveGame ?? upcoming;
-        if (pick) selectGame(pick.id);
-      }
     } catch (e) {
       console.error("Fetch error:", e);
+      setLoading(false);
     }
-    setLoading(false);
     setRefreshing(false);
   }, [setScores, setOddsData, setGames, setLoading, snapshotOdds, selectedGameId, selectGame, currentSport, config]);
 
@@ -196,6 +196,13 @@ export default function WarRoom() {
     setLoading(true);
     fetchData();
   }, [currentSport]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Manual refresh event from PicksBoard empty state
+  useEffect(() => {
+    const handler = () => fetchData();
+    window.addEventListener("dq-refresh", handler);
+    return () => window.removeEventListener("dq-refresh", handler);
+  }, [fetchData]);
 
   // Arb alert: flash + sound when new arbs appear
   const currentArbCount = oddsData.reduce((sum: number, g: any) => sum + (g.arbitrage?.length ?? 0), 0);
@@ -448,22 +455,6 @@ export default function WarRoom() {
           </div>
         </div>
 
-        <div className="md:hidden flex items-center gap-0.5 px-2 pb-2 overflow-x-auto scrollbar-hide">
-          {tabs.map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium whitespace-nowrap transition-all flex-shrink-0 ${
-                activeTab === tab.key
-                  ? "bg-neon/10 text-neon border border-neon/20"
-                  : "text-mercury hover:bg-gunmetal/50"
-              }`}
-            >
-              <tab.icon className="w-3.5 h-3.5" />
-              {tab.label}
-            </button>
-          ))}
-        </div>
       </header>
 
       <MigrationBanner />
@@ -526,7 +517,7 @@ export default function WarRoom() {
       />
 
       {/* Main Content */}
-      <main className="max-w-[1800px] mx-auto px-2 sm:px-4 py-3 sm:py-4">
+      <main className="max-w-[1800px] mx-auto px-2 sm:px-4 py-3 sm:py-4 pb-20 md:pb-4">
         {isLoading ? (
           <div className="flex items-center justify-center min-h-[60vh]">
             <div className="text-center">
@@ -678,28 +669,6 @@ export default function WarRoom() {
               <div className="max-w-3xl mx-auto space-y-4">
                 {currentSport === "nba" ? (
                   <>
-                    <div className="glass rounded-xl p-6 border border-orange-500/15 text-center">
-                      <div className="w-12 h-12 rounded-xl bg-orange-500/15 flex items-center justify-center mx-auto mb-3">
-                        <Diamond className="w-6 h-6 text-orange-500" />
-                      </div>
-                      <h2 className="text-lg font-bold text-silver mb-2">NBA Bot — Building Intelligence</h2>
-                      <p className="text-sm text-mercury mb-3">The NBA Brain is collecting data from live games. Analysis uses Net Rating, Home Court, Rest, Form, and Injury models.</p>
-                      <div className="grid grid-cols-3 gap-2 max-w-sm mx-auto">
-                        <div className="p-2 rounded bg-gunmetal/30 text-center">
-                          <p className="text-sm font-bold text-orange-500">30%</p>
-                          <p className="text-[8px] text-mercury">Net Rating</p>
-                        </div>
-                        <div className="p-2 rounded bg-gunmetal/30 text-center">
-                          <p className="text-sm font-bold text-orange-500">15%</p>
-                          <p className="text-[8px] text-mercury">Rest/B2B</p>
-                        </div>
-                        <div className="p-2 rounded bg-gunmetal/30 text-center">
-                          <p className="text-sm font-bold text-orange-500">15%</p>
-                          <p className="text-[8px] text-mercury">Injuries</p>
-                        </div>
-                      </div>
-                    </div>
-                    {/* Still show picks from NBA odds if available */}
                     <BotChallenge />
                   </>
                 ) : (
@@ -746,7 +715,23 @@ export default function WarRoom() {
         )}
       </main>
 
-      <footer className="border-t border-slate/20 mt-6 sm:mt-8 py-3 sm:py-4 text-center px-4">
+      {/* Mobile bottom nav bar */}
+      <nav className="md:hidden fixed bottom-0 inset-x-0 z-50 bg-bunker/95 backdrop-blur-lg border-t border-slate/30 flex items-stretch">
+        {tabs.map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-2 transition-colors ${
+              activeTab === tab.key ? "text-neon" : "text-mercury/50 hover:text-mercury"
+            }`}
+          >
+            <tab.icon className="w-4 h-4" />
+            <span className="text-[9px] font-medium">{tab.label}</span>
+          </button>
+        ))}
+      </nav>
+
+      <footer className="border-t border-slate/20 mt-6 sm:mt-8 py-3 sm:py-4 mb-14 md:mb-0 text-center px-4">
         <p className="text-[10px] sm:text-xs text-mercury/40 font-mono">
           Diamond-Quant Live v1.0 — Odds via The Odds API. Stats via {currentSport === "nba" ? "NBA Stats API" : "MLB Stats API"}.
         </p>

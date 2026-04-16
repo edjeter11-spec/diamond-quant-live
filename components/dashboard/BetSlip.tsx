@@ -214,6 +214,22 @@ export default function BetSlip({ isOpen, onClose, prefill }: BetSlipProps) {
                 <label className="block text-xs text-mercury mb-1 uppercase tracking-wider">
                   Stake
                 </label>
+                <div className="flex gap-1.5 mb-1.5">
+                  {[25, 50, 100, 250].map((amt) => (
+                    <button
+                      key={amt}
+                      type="button"
+                      onClick={() => setStake(String(amt))}
+                      className={`flex-1 py-1 rounded text-[10px] font-semibold border transition-colors ${
+                        stake === String(amt)
+                          ? "bg-neon/20 border-neon/40 text-neon"
+                          : "bg-gunmetal/40 border-slate/30 text-mercury/70 hover:border-neon/30 hover:text-mercury"
+                      }`}
+                    >
+                      ${amt}
+                    </button>
+                  ))}
+                </div>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-mercury text-sm">
                     $

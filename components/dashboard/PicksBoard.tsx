@@ -7,7 +7,7 @@ import {
   Trophy, Zap, Layers, TrendingUp, Target, ChevronDown,
   Star, DollarSign, ArrowUpRight, ArrowDownRight, BarChart3,
   Flame, Brain, Clock, Swords, Activity, CircleDot, ArrowUp, ArrowDown, Shield,
-  AlertTriangle, ExternalLink, Sparkles, RefreshCw,
+  AlertTriangle, ExternalLink, Sparkles, RefreshCw, Share2, Check,
 } from "lucide-react";
 import { getDeepLink } from "@/lib/odds/sportsbooks";
 import TeamLogo from "@/components/ui/TeamLogo";
@@ -486,8 +486,14 @@ export default function PicksBoard() {
       {combinedPicks.length === 0 && allEV.length === 0 && (
         <div className="glass rounded-xl p-8 text-center">
           <Activity className="w-8 h-8 text-mercury/20 mx-auto mb-3" />
-          <p className="text-sm text-mercury">Waiting for odds data...</p>
-          <p className="text-xs text-mercury/50 mt-1">Make sure your Odds API key has remaining quota. MLB games with 2+ books are required for analysis.</p>
+          <p className="text-sm text-mercury font-semibold">No picks available yet</p>
+          <p className="text-xs text-mercury/50 mt-1 mb-4">Odds data may be loading or outside peak hours. Requires 2+ books on active games.</p>
+          <button
+            onClick={() => window.dispatchEvent(new CustomEvent("dq-refresh"))}
+            className="inline-flex items-center gap-1.5 px-4 py-2 bg-neon/10 border border-neon/25 text-neon text-xs font-semibold rounded-lg hover:bg-neon/20 transition-colors"
+          >
+            <RefreshCw className="w-3.5 h-3.5" /> Refresh Data
+          </button>
         </div>
       )}
     </div>
@@ -501,6 +507,7 @@ function PickCard({ pick, isExpanded, onToggle, onAddToParlay, formatOdds }: {
   const [showAISummary, setShowAISummary] = useState(false);
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
+  const [shared, setShared] = useState(false);
 
   // Fetch AI summary when user opens it; use localStorage cache keyed by pick.id + date
   useEffect(() => {
@@ -683,6 +690,28 @@ function PickCard({ pick, isExpanded, onToggle, onAddToParlay, formatOdds }: {
             }}
               className="py-2 px-3 rounded-lg bg-gold/10 border border-gold/20 text-gold text-[11px] font-semibold hover:bg-gold/20 transition-all flex-shrink-0">
               Log $100
+            </button>
+            <button onClick={async (e) => {
+              e.stopPropagation();
+              try {
+                const res = await fetch("/api/slip/share", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ picks: [{ pick: pick.pick, game: pick.game, odds: pick.odds, bookmaker: pick.bookmaker, evPercentage: pick.evPercentage, market: pick.market }] }),
+                });
+                const data = await res.json();
+                const url = `${window.location.origin}${data.url}`;
+                if (navigator.share) {
+                  await navigator.share({ title: `Diamond Quant: ${pick.pick}`, url });
+                } else {
+                  await navigator.clipboard.writeText(url);
+                }
+                setShared(true);
+                setTimeout(() => setShared(false), 2500);
+              } catch {}
+            }}
+              className="py-2 px-2 rounded-lg bg-purple/10 border border-purple/20 text-purple/80 text-[11px] hover:bg-purple/20 transition-all flex-shrink-0 flex items-center gap-1">
+              {shared ? <Check className="w-3 h-3 text-neon" /> : <Share2 className="w-3 h-3" />}
             </button>
           </div>
         </div>
