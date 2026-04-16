@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { cloudGet, cloudSet } from "@/lib/supabase/client";
 import { loadNbaPropBrainFromCloud } from "@/lib/bot/nba-prop-brain";
 import { projectProp } from "@/lib/bot/nba-prop-projector";
+import { buildReasoning, type BrainReasoning } from "@/lib/bot/prop-reasoning";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -21,6 +22,9 @@ export interface PropPickOfDay {
   brainConfidence: number;
   tier: "HIGH" | "MEDIUM" | "LEAN";
   liveOdds: boolean; // true = from today's Odds API, false = brain projection only
+  reasoning?: BrainReasoning;
+  seasonAvg?: number;
+  last5Avg?: number;
 }
 
 export interface PropPicksToday {
@@ -107,12 +111,14 @@ export async function GET(req: NextRequest) {
 
           for (const prop of props) {
             if (!prop.playerName || !prop.line || prop.line <= 0) continue;
+            const seasonAvg = prop.line; // best approx for live odds without real stats
             const statApprox = { ppg: prop.line, rpg: prop.line, apg: prop.line };
             const proj = projectProp(statApprox, market, prop.line, weights, { isHome: false, isB2B: false, leagueAvgTotal: 224 });
             const label = market === "player_points" ? "Points" : market === "player_rebounds" ? "Rebounds" : "Assists";
             const conviction = Math.abs(proj.probability - 0.5);
             const score = conviction * proj.confidence;
             const tier: "HIGH" | "MEDIUM" | "LEAN" = proj.confidence >= 60 ? "HIGH" : proj.confidence >= 40 ? "MEDIUM" : "LEAN";
+            const reasoning = buildReasoning(proj.factors, prop.line, proj.side, seasonAvg, label, undefined);
             allProjections.push({
               playerName: prop.playerName, team: prop.team ?? "", propType: label, market,
               line: prop.line, side: proj.side, probability: proj.probability,
@@ -120,7 +126,7 @@ export async function GET(req: NextRequest) {
               odds: proj.side === "over" ? (prop.bestOver?.price ?? -110) : (prop.bestUnder?.price ?? -110),
               bookmaker: proj.side === "over" ? (prop.bestOver?.bookmaker ?? "") : (prop.bestUnder?.bookmaker ?? ""),
               gameTime: prop.gameTime ?? "", brainConfidence: Math.round(proj.confidence),
-              tier, liveOdds: true, score,
+              tier, liveOdds: true, score, reasoning, seasonAvg,
             });
           }
         } catch {}
@@ -136,13 +142,17 @@ export async function GET(req: NextRequest) {
           const conviction = Math.abs(proj.probability - 0.5);
           const score = conviction * proj.confidence;
           const tier: "HIGH" | "MEDIUM" | "LEAN" = proj.confidence >= 60 ? "HIGH" : proj.confidence >= 40 ? "MEDIUM" : "LEAN";
+          const seasonAvg = market === "player_points" ? player.ppg
+            : market === "player_rebounds" ? player.rpg
+            : player.apg;
+          const reasoning = buildReasoning(proj.factors, line, proj.side, seasonAvg, label, undefined);
           allProjections.push({
             playerName: player.playerName, team: player.team, propType: label, market,
             line, side: proj.side, probability: proj.probability,
             projectedValue: Math.round(proj.projectedValue * 10) / 10,
             odds: -110, bookmaker: "", gameTime: "",
             brainConfidence: Math.round(proj.confidence),
-            tier, liveOdds: false, score,
+            tier, liveOdds: false, score, reasoning, seasonAvg,
           });
         }
       }

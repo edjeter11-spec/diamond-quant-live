@@ -9,8 +9,9 @@ import { savePropSnapshot, getPropLineMovement, type PropLineMovement } from "@/
 import {
   User, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight,
   RefreshCw, ChevronDown, ChevronUp, Target, BarChart3, Clock,
-  Minus, Star, AlertCircle, Zap, Search, X,
+  Minus, Star, AlertCircle, Zap, Search, X, Brain,
 } from "lucide-react";
+import BrainPickDetail from "@/components/dashboard/BrainPickDetail";
 
 interface PropLine {
   playerName: string;
@@ -706,6 +707,23 @@ export default function PlayerProps() {
                                   <StatBox label="APG" value={(analysis.player as any).apg?.toFixed(1) ?? "—"} />
                                   <StatBox label="HIT%" value={`${(analysis.player as any).hitRates?.[selectedMarket]?.rate ?? 50}%`} />
                                 </div>
+                              </div>
+                            )}
+
+                            {/* Brain Analysis */}
+                            {(analysis as any).brainProjection?.reasoning && (
+                              <div>
+                                <div className="flex items-center gap-1.5 mb-1.5">
+                                  <Brain className="w-3.5 h-3.5 text-purple" />
+                                  <span className="text-[9px] text-mercury/60 uppercase tracking-wider font-semibold">Brain Analysis</span>
+                                </div>
+                                <BrainPickDetail
+                                  reasoning={(analysis as any).brainProjection.reasoning}
+                                  seasonAvg={(analysis as any).brainProjection.seasonAvg}
+                                  last5Avg={(analysis as any).brainProjection.last5Avg}
+                                  projectedValue={(analysis as any).brainProjection.projectedValue}
+                                  probability={(analysis as any).brainProjection.probability}
+                                />
                               </div>
                             )}
 

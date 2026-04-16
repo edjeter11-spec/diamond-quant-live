@@ -78,6 +78,55 @@ export async function GET(req: Request) {
       dataSource: profile.gamesPlayed > 0 ? "current" : "lastYear",
     };
 
+    // ── Brain projection ──
+    try {
+      const { loadNbaPropBrainFromCloud } = await import("@/lib/bot/nba-prop-brain");
+      const { projectProp } = await import("@/lib/bot/nba-prop-projector");
+      const { buildReasoning } = await import("@/lib/bot/prop-reasoning");
+
+      const brain = await loadNbaPropBrainFromCloud();
+      if (brain?.weights && line > 0) {
+        const statKey = market === "player_points" ? "ppg" : market === "player_rebounds" ? "rpg" : "apg";
+        const seasonAvg = (profile as any)[statKey] ?? profile.statAvg[market] ?? line;
+        const last5 = profile.gameLog.slice(0, 5);
+        const getter: Record<string, (g: any) => number> = {
+          player_points: (g) => g.points,
+          player_rebounds: (g) => g.rebounds,
+          player_assists: (g) => g.assists,
+        };
+        const getVal = getter[market] ?? ((g: any) => g.points);
+        const last5Avg = last5.length > 0 ? last5.reduce((s: number, g: any) => s + getVal(g), 0) / last5.length : undefined;
+
+        const recentForm = last5.length >= 5 ? {
+          last5Avg: last5Avg!,
+          last10Avg: profile.gameLog.slice(0, 10).reduce((s: number, g: any) => s + getVal(g), 0) / Math.min(profile.gameLog.length, 10),
+          seasonAvg,
+          gamesPlayed: profile.gamesPlayed,
+          variance: seasonAvg * 0.3,
+        } : undefined;
+
+        const proj = projectProp(
+          { ppg: profile.ppg, rpg: profile.rpg, apg: profile.apg },
+          market, line, brain.weights,
+          { isHome: false, isB2B: false, leagueAvgTotal: 224 },
+          recentForm
+        );
+
+        const propLabel = market === "player_points" ? "Points" : market === "player_rebounds" ? "Rebounds" : "Assists";
+        const reasoning = buildReasoning(proj.factors, line, proj.side, seasonAvg, propLabel, last5Avg);
+
+        (response as any).brainProjection = {
+          side: proj.side,
+          probability: proj.probability,
+          confidence: proj.confidence,
+          projectedValue: proj.projectedValue,
+          reasoning,
+          seasonAvg,
+          last5Avg,
+        };
+      }
+    } catch {}
+
     setCache(cacheKey, response);
 
     // Save to Supabase — cached for future Brain use + instant loading
