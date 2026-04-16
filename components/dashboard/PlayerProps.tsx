@@ -5,6 +5,7 @@ import { useStore } from "@/lib/store";
 import { useSport } from "@/lib/sport-context";
 import { BOOK_DISPLAY } from "@/lib/odds/the-odds-api";
 import PlayerAvatar from "@/components/ui/PlayerAvatar";
+import { savePropSnapshot, getPropLineMovement, type PropLineMovement } from "@/lib/odds/prop-line-tracker";
 import {
   User, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight,
   RefreshCw, ChevronDown, ChevronUp, Target, BarChart3, Clock,
@@ -145,6 +146,16 @@ export default function PlayerProps() {
       // Only update if we actually got data (don't replace good data with empty)
       if (newProps.length > 0 || props.length === 0) {
         setProps(newProps);
+        // Capture prop line snapshot for line movement tracking
+        if (newProps.length > 0) {
+          savePropSnapshot(newProps.map((p: any) => ({
+            playerName: p.playerName,
+            propType: p.market ?? selectedMarket,
+            line: p.line,
+            bestOverOdds: p.bestOver?.price ?? -110,
+            bestUnderOdds: p.bestUnder?.price ?? -110,
+          })));
+        }
       }
       setIsDemo(data.demo === true);
     } catch {
@@ -475,8 +486,19 @@ export default function PlayerProps() {
                     </p>
                   </div>
 
-                  {/* Line */}
-                  <span className="text-lg font-bold font-mono text-electric flex-shrink-0">{prop.line}</span>
+                  {/* Line + Movement indicator */}
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <span className="text-lg font-bold font-mono text-electric">{prop.line}</span>
+                    {(() => {
+                      const mv = getPropLineMovement(prop.playerName, prop.market ?? selectedMarket);
+                      if (!mv || mv.direction === "stable") return null;
+                      return (
+                        <span className={`text-[8px] font-mono font-bold ${mv.direction === "sharp_over" ? "text-neon" : "text-purple"}`} title={`Opened at ${mv.openingLine}`}>
+                          {mv.lineShift > 0 ? "↑" : "↓"}{Math.abs(mv.lineShift).toFixed(1)}
+                        </span>
+                      );
+                    })()}
+                  </div>
 
                   {/* Best Over/Under */}
                   <div className="flex gap-1.5 flex-shrink-0">
