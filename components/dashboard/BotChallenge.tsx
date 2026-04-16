@@ -679,10 +679,13 @@ export default function BotChallenge() {
                             {tier}
                           </span>
                         )}
+                        {!(prop as any).liveOdds && (
+                          <span className="text-[7px] px-1 py-0.5 rounded border border-mercury/20 text-mercury/40 flex-shrink-0">PROJ</span>
+                        )}
                       </div>
                       <p className="text-[9px] text-mercury/60">
                         {prop.team} • {prop.propType}
-                        {prop.gameTime ? ` • ${new Date(prop.gameTime).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}` : ""}
+                        {prop.gameTime ? ` • ${new Date(prop.gameTime).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}` : " • Brain projection"}
                       </p>
                     </div>
 
