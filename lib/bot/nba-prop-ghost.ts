@@ -5,6 +5,7 @@
 // ──────────────────────────────────────────────────────────
 
 import { projectProp, type ProjectionContext } from "./nba-prop-projector";
+import { isPlayerInjured, getInjuryImpact } from "@/lib/nba/injuries";
 import {
   type NbaPropBrainState, getPlayerAccuracy,
   loadNbaPropBrainFromCloud, saveNbaPropBrainToCloud,
@@ -89,6 +90,15 @@ export async function commitPropProjections(
   for (const prop of propsData) {
     const key = `${prop.playerName}::${prop.propType}`;
     if (existingKeys.has(key)) { skipped++; continue; }
+
+    // Check injury status — skip OUT/DOUBTFUL players
+    try {
+      const injury = await isPlayerInjured(prop.playerName);
+      if (injury) {
+        const impact = getInjuryImpact(injury.status);
+        if (!impact.shouldProject) { skipped++; continue; }
+      }
+    } catch {}
 
     // Get player stats for projection
     const playerStats = getPlayerStatsFromBrain(brain, prop.playerName, prop.propType);

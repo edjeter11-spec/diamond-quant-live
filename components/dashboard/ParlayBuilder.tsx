@@ -2,9 +2,10 @@
 
 import { useStore } from "@/lib/store";
 import { useSport } from "@/lib/sport-context";
-import { Layers, X, Sparkles, Save, Trash2, TrendingUp, AlertTriangle, ChevronDown, Zap } from "lucide-react";
-import { useState, useEffect } from "react";
+import { Layers, X, Sparkles, Save, Trash2, TrendingUp, AlertTriangle, ChevronDown, Zap, Link2, Unlink } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
 import type { ParlaySlip } from "@/lib/model/types";
+import { analyzeParlay } from "@/lib/bot/parlay-correlation";
 
 export default function ParlayBuilder() {
   const {
@@ -35,6 +36,16 @@ export default function ParlayBuilder() {
       setTopPicks(picks);
     }).catch(() => { setTopPicks([]); });
   }, [currentSport, isNBA]);
+
+  // Correlation analysis
+  const correlation = useMemo(() => {
+    if (parlayLegs.length < 2) return null;
+    return analyzeParlay(parlayLegs.map(leg => ({
+      game: leg.game,
+      pick: leg.pick,
+      market: leg.market,
+    })));
+  }, [parlayLegs]);
 
   const formatOdds = (odds: number) => (odds > 0 ? `+${odds}` : `${odds}`);
 
@@ -173,8 +184,35 @@ export default function ParlayBuilder() {
                 </span>
               </div>
 
-              {/* Correlation warning */}
-              {currentParlay.correlationAdjustedProb !== currentParlay.fairProb && (
+              {/* Correlation analysis */}
+              {correlation && correlation.correlations.length > 0 && (
+                <div className={`p-2.5 rounded-lg border ${
+                  correlation.score > 0 ? "bg-neon/5 border-neon/20" :
+                  correlation.score < 0 ? "bg-danger/5 border-danger/20" :
+                  "bg-amber/5 border-amber/20"
+                }`}>
+                  <div className="flex items-center gap-1.5 mb-1.5">
+                    {correlation.score > 0 ? <Link2 className="w-3.5 h-3.5 text-neon" /> : <Unlink className="w-3.5 h-3.5 text-danger" />}
+                    <p className={`text-[11px] font-semibold ${correlation.score > 0 ? "text-neon" : correlation.score < 0 ? "text-danger" : "text-amber"}`}>
+                      {correlation.recommendation}
+                    </p>
+                  </div>
+                  {correlation.correlations.map((c, i) => (
+                    <p key={i} className="text-[10px] text-mercury/70 mb-0.5">
+                      <span className={c.type === "positive" ? "text-neon" : "text-danger"}>
+                        {c.type === "positive" ? "+" : "−"}{Math.abs(c.boostPct)}%
+                      </span>{" "}
+                      {c.explanation}
+                    </p>
+                  ))}
+                  {correlation.overallBoost !== 0 && (
+                    <p className={`text-[10px] font-mono font-bold mt-1 ${correlation.overallBoost > 0 ? "text-neon" : "text-danger"}`}>
+                      Net correlation boost: {correlation.overallBoost > 0 ? "+" : ""}{correlation.overallBoost}%
+                    </p>
+                  )}
+                </div>
+              )}
+              {correlation && correlation.correlations.length === 0 && currentParlay.correlationAdjustedProb !== currentParlay.fairProb && (
                 <div className="flex items-start gap-2 p-2 rounded bg-amber/5 border border-amber/20">
                   <AlertTriangle className="w-3.5 h-3.5 text-amber flex-shrink-0 mt-0.5" />
                   <p className="text-[11px] text-amber/80">

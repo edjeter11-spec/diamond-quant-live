@@ -3,6 +3,7 @@ import { fetchTodayGames, getGameStatus, getTeamAbbrev } from "@/lib/mlb/stats-a
 import { loadNbaPropBrainFromCloud, saveNbaPropBrainToCloud } from "@/lib/bot/nba-prop-brain";
 import { auditCompletedGames } from "@/lib/bot/nba-prop-audit";
 import { commitPropProjections } from "@/lib/bot/nba-prop-ghost";
+import { buildAndSendRecap } from "@/lib/bot/daily-recap";
 import { cloudGet, cloudSet } from "@/lib/supabase/client";
 
 // This endpoint is called by Vercel Cron every 30 min
@@ -72,6 +73,24 @@ export async function GET(req: Request) {
         }
       } catch {}
     } catch {}
+
+    // ── Daily Discord Recap (send once when games are finishing) ──
+    const hour = new Date().getUTCHours(); // UTC
+    if (final > 0 && (hour >= 3 && hour <= 7)) { // ~11PM-3AM ET = games finishing
+      try {
+        // Check user preferences for Discord webhooks
+        const { supabase: sb } = await import("@/lib/supabase/client");
+        if (sb) {
+          const { data: prefs } = await sb.from("user_preferences").select("discord_webhook").neq("discord_webhook", "");
+          for (const pref of prefs ?? []) {
+            if (pref.discord_webhook) {
+              await buildAndSendRecap(pref.discord_webhook, "mlb");
+              await buildAndSendRecap(pref.discord_webhook, "nba");
+            }
+          }
+        }
+      } catch {}
+    }
 
     return NextResponse.json({
       ok: true,
