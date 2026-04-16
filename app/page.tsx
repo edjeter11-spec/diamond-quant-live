@@ -35,8 +35,9 @@ import { matchGames } from "@/lib/mlb/match-games";
 import { backupOddsToStorage, getOddsBackup } from "@/lib/odds/cache";
 import { sendDiscordAlert } from "@/lib/odds/sportsbooks";
 import { getDiscordWebhook, setDiscordWebhook } from "@/lib/store";
+import NRFITab from "@/components/dashboard/NRFITab";
 import {
-  Diamond, BarChart3, Layers, User, UserCircle, Wallet, Users, RefreshCw,
+  Diamond, BarChart3, Layers, User, UserCircle, Wallet, Users, RefreshCw, Shield,
   Radio, ChevronLeft, ChevronRight, X, HelpCircle, Volume2, VolumeX, AlertTriangle,
 } from "lucide-react";
 
@@ -293,6 +294,7 @@ export default function WarRoom() {
 
   const tabs = [
     { key: "dashboard" as const, icon: BarChart3, label: "Board" },
+    ...(currentSport !== "nba" ? [{ key: "nrfi" as const, icon: Shield, label: "NRFI" }] : []),
     { key: "bot" as const, icon: Diamond, label: "Bot" },
     { key: "parlays" as const, icon: Layers, label: "Parlays" },
     { key: "props" as const, icon: User, label: "Props" },
@@ -664,6 +666,8 @@ export default function WarRoom() {
               )
             )}
 
+
+            {activeTab === "nrfi" && <NRFITab />}
 
             {activeTab === "bot" && (
               <div className="max-w-3xl mx-auto space-y-4">
