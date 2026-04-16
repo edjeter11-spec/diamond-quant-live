@@ -75,6 +75,9 @@ export interface PitcherProfile {
   vsOpponent: { games: number; era: number; kPer9: number } | null;
   last5: Array<{ opponent: string; ip: number; er: number; k: number }>;
   fatigueRisk: boolean;
+  avgIP: number;        // average IP per start (last 5)
+  bullpenRisk: boolean; // true if avgIP < 5.0 — starter won't go deep
+  platoonSplit: { vsRightEra: number; vsLeftEra: number } | null;
 }
 
 // ── Fetch pitcher data ──
@@ -93,16 +96,18 @@ async function buildPitcherProfile(pitcherName: string, opponentTeam: string): P
     const year = new Date().getFullYear();
     const lastYear = year - 1;
 
-    // Fetch current + last year stats + game log in parallel
-    const [currentRes, lastYearRes, logRes] = await Promise.all([
+    // Fetch current + last year stats + game log + platoon splits in parallel
+    const [currentRes, lastYearRes, logRes, splitsRes] = await Promise.all([
       fetch(`${MLB_API}/people/${player.id}/stats?stats=season&season=${year}&group=pitching`),
       fetch(`${MLB_API}/people/${player.id}/stats?stats=season&season=${lastYear}&group=pitching`),
       fetch(`${MLB_API}/people/${player.id}/stats?stats=gameLog&season=${year}&group=pitching`),
+      fetch(`${MLB_API}/people/${player.id}/stats?stats=statSplits&season=${year}&group=pitching&sitCodes=vR,vL`),
     ]);
 
     const currentData = currentRes.ok ? await currentRes.json() : null;
     const lastYearData = lastYearRes.ok ? await lastYearRes.json() : null;
     const logData = logRes.ok ? await logRes.json() : null;
+    const splitsData = splitsRes.ok ? await splitsRes.json() : null;
 
     // Use current year, fall back to last year
     const raw = currentData?.stats?.[0]?.splits?.[0]?.stat ?? lastYearData?.stats?.[0]?.splits?.[0]?.stat;
@@ -138,6 +143,18 @@ async function buildPitcherProfile(pitcherName: string, opponentTeam: string): P
     const now = Date.now();
     const fatigueRisk = recentDates.some((d: string) => (now - new Date(d).getTime()) < 4 * 24 * 60 * 60 * 1000);
 
+    // Bullpen risk: avg innings per start
+    const avgIP = last5.length > 0 ? last5.reduce((s: number, g: { ip: number; er: number; k: number; opponent: string }) => s + g.ip, 0) / last5.length : 6.0;
+    const bullpenRisk = last5.length >= 3 && avgIP < 5.0;
+
+    // Platoon splits (L/R)
+    const splitEntries = splitsData?.stats?.[0]?.splits ?? [];
+    const vsRight = splitEntries.find((s: any) => s.split?.code === "vR");
+    const vsLeft = splitEntries.find((s: any) => s.split?.code === "vL");
+    const vsRightEra = vsRight ? parseFloat(vsRight.stat?.era) || null : null;
+    const vsLeftEra = vsLeft ? parseFloat(vsLeft.stat?.era) || null : null;
+    const platoonSplit = vsRightEra !== null && vsLeftEra !== null ? { vsRightEra, vsLeftEra } : null;
+
     // Recency-weighted ERA: last 5 starts (60%) blended with season (40%)
     const seasonEra = parseFloat(raw.era) || 4.50;
     let recentEra = seasonEra;
@@ -161,6 +178,9 @@ async function buildPitcherProfile(pitcherName: string, opponentTeam: string): P
       vsOpponent: vsOppData,
       last5,
       fatigueRisk,
+      avgIP: Math.round(avgIP * 10) / 10,
+      bullpenRisk,
+      platoonSplit,
     };
   } catch {
     return null;
@@ -244,6 +264,36 @@ function runPitcherModel(
   // Fatigue
   if (homePitcher?.fatigueRisk) { homeEdge -= 2; factors.push(`${homePitcher.name} fatigue risk — pitched recently`); }
   if (awayPitcher?.fatigueRisk) { homeEdge += 2; factors.push(`${awayPitcher.name} fatigue risk — pitched recently`); }
+
+  // ── Bullpen risk: short starter pattern → more runs, less predictable ──
+  if (homePitcher?.bullpenRisk) {
+    totalAdjust += 0.8;
+    homeEdge -= 1.5;
+    factors.push(`${homePitcher.name} bullpen risk: ${homePitcher.avgIP.toFixed(1)} IP/start avg (last 5)`);
+  }
+  if (awayPitcher?.bullpenRisk) {
+    totalAdjust += 0.8;
+    homeEdge += 1.5; // home team benefits when away starter won't go deep
+    factors.push(`${awayPitcher.name} bullpen risk: ${awayPitcher.avgIP.toFixed(1)} IP/start avg (last 5)`);
+  }
+
+  // ── Platoon splits: L/R ERA differential signals vulnerability ──
+  if (homePitcher?.platoonSplit) {
+    const { vsRightEra, vsLeftEra } = homePitcher.platoonSplit;
+    const diff = Math.abs(vsRightEra - vsLeftEra);
+    if (diff > 1.5) {
+      const weaker = vsRightEra > vsLeftEra ? "vs RHB" : "vs LHB";
+      factors.push(`${homePitcher.name} platoon gap: ${diff.toFixed(2)} ERA diff (weaker ${weaker})`);
+    }
+  }
+  if (awayPitcher?.platoonSplit) {
+    const { vsRightEra, vsLeftEra } = awayPitcher.platoonSplit;
+    const diff = Math.abs(vsRightEra - vsLeftEra);
+    if (diff > 1.5) {
+      const weaker = vsRightEra > vsLeftEra ? "vs RHB" : "vs LHB";
+      factors.push(`${awayPitcher.name} platoon gap: ${diff.toFixed(2)} ERA diff (weaker ${weaker})`);
+    }
+  }
 
   // ── Weather impact (only if no roof) ──
   if (weather && !weather.hasRoof) {
