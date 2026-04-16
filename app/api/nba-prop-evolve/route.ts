@@ -9,7 +9,7 @@ export const maxDuration = 300;
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const generations = Math.min(5, parseInt(searchParams.get("generations") || "3"));
+  const generations = Math.min(3, parseInt(searchParams.get("generations") || "2"));
 
   try {
     // Load current brain weights as starting point

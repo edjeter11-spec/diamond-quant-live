@@ -350,14 +350,19 @@ export async function runTournament(
   allData: NbaPlayerGameLog[],
   onProgress?: (msg: string) => void
 ): Promise<{ variants: BrainVariant[]; winner: BrainVariant }> {
+  // Sample data for speed — use every 3rd game to fit within Vercel timeout
+  const sampled = allData.filter((_, i) => i % 3 === 0);
+
   // 80/20 train/test split
-  const splitIdx = Math.floor(allData.length * 0.8);
-  const trainData = allData.slice(0, splitIdx);
-  const testData = allData.slice(splitIdx);
+  const splitIdx = Math.floor(sampled.length * 0.8);
+  const trainData = sampled.slice(0, splitIdx);
+  const testData = sampled.slice(splitIdx);
 
-  onProgress?.(`Gen ${generation}: ${trainData.length} train / ${testData.length} test games`);
+  onProgress?.(`Gen ${generation}: ${trainData.length} train / ${testData.length} test games (sampled from ${allData.length})`);
 
-  const variants = generateVariants(parentWeights, parentId, generation);
+  // Use top 3 variants for speed (not 5)
+  const allVariants = generateVariants(parentWeights, parentId, generation);
+  const variants = allVariants.slice(0, 3);
   const evaluated: BrainVariant[] = [];
 
   for (let i = 0; i < variants.length; i++) {
