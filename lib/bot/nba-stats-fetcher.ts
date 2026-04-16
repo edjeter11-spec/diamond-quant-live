@@ -150,7 +150,7 @@ export async function fetchAllTrainingData(
   // Fetch box scores for completed games (with rate limiting)
   // Process in batches to stay within Vercel timeout
   const allLogs: NbaPlayerGameLog[] = [];
-  const maxGames = Math.min(games.length, 400); // cap to ~400 games for timeout safety
+  const maxGames = Math.min(games.length, 200); // cap to ~200 games for timeout safety
 
   // Sample evenly across the season for better coverage
   const step = Math.max(1, Math.floor(games.length / maxGames));
