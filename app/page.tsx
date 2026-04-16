@@ -30,6 +30,8 @@ import { teamNameToAbbrev } from "@/lib/logos";
 import AuthButton from "@/components/auth/AuthButton";
 import UserProfile from "@/components/auth/UserProfile";
 import MigrationBanner from "@/components/auth/MigrationBanner";
+import PlayerCompare from "@/components/dashboard/PlayerCompare";
+import ROIChart from "@/components/dashboard/ROIChart";
 import { matchGames } from "@/lib/mlb/match-games";
 import { backupOddsToStorage, getOddsBackup } from "@/lib/odds/cache";
 import { sendDiscordAlert } from "@/lib/odds/sportsbooks";
@@ -70,6 +72,10 @@ function sendNotification(title: string, body: string) {
 function requestNotificationPermission() {
   try {
     if (typeof window === "undefined") return;
+    // Register service worker for push notifications
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js").catch(() => {});
+    }
     if (!("Notification" in window)) return;
     if (Notification.permission === "default") {
       Notification.requestPermission();
@@ -636,8 +642,9 @@ export default function WarRoom() {
               currentSport === "nba" ? (
                 <div className="max-w-6xl mx-auto space-y-4">
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
-                    <div className="lg:col-span-2">
+                    <div className="lg:col-span-2 space-y-4">
                       <PlayerProps />
+                      <PlayerCompare />
                     </div>
                     <div>
                       <ParlayBuilder />
@@ -733,6 +740,7 @@ export default function WarRoom() {
 
             {activeTab === "bankroll" && (
               <div className="max-w-2xl mx-auto space-y-4">
+                <ROIChart />
                 <SnapSync />
                 <ModelTracker />
                 <BankrollTracker />

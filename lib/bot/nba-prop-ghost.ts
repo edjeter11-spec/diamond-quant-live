@@ -13,7 +13,7 @@ import {
 import { supabase } from "@/lib/supabase/client";
 
 const PROP_MARKETS = ["player_points", "player_rebounds", "player_assists"];
-const PROP_BOT_MIN_ACCURACY = 0.60; // 60% win rate to auto-bet
+const PROP_BOT_MIN_ACCURACY = 0.55; // 55% win rate to auto-bet
 const PROP_BOT_KELLY_FRACTION = 0.10; // quarter-Kelly
 
 export interface PropPrediction {

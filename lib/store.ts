@@ -21,16 +21,23 @@ function loadFromStorage<T>(key: string, fallback: T): T {
 // Throttle cloud sync to max 1 write per key per 2 minutes
 const lastSyncTimes: Record<string, number> = {};
 
+// Critical keys sync immediately for cross-device consistency
+const IMMEDIATE_SYNC = new Set(["dq_bankroll", "dq_betHistory", "dq_savedParlays"]);
+
 function saveToStorage(key: string, value: any) {
   if (typeof window === "undefined") return;
   try {
     localStorage.setItem(key, JSON.stringify(value));
   } catch {}
-  // Throttled cloud sync
-  const now = Date.now();
-  if (!lastSyncTimes[key] || now - lastSyncTimes[key] > 120000) {
-    lastSyncTimes[key] = now;
+  // Immediate sync for bankroll/bets/parlays, throttled for everything else
+  if (IMMEDIATE_SYNC.has(key)) {
     syncToCloud(key, value);
+  } else {
+    const now = Date.now();
+    if (!lastSyncTimes[key] || now - lastSyncTimes[key] > 120000) {
+      lastSyncTimes[key] = now;
+      syncToCloud(key, value);
+    }
   }
 }
 
