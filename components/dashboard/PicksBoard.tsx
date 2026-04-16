@@ -31,6 +31,7 @@ interface Pick {
   warning?: string;
   edgeAge?: number;
   gameStatus?: "live" | "pre" | "tomorrow";
+  isSharp?: boolean;   // pick aligns with sharpest book
 }
 
 export default function PicksBoard() {
@@ -66,6 +67,7 @@ export default function PicksBoard() {
             history: game.homePitcher ? [`Home: ${game.homePitcher.name} (${game.homePitcher.era} ERA)`, `Away: ${game.awayPitcher?.name ?? 'TBD'} (${game.awayPitcher?.era ?? '?'} ERA)`] : [],
             commenceTime: game.commenceTime,
             gameStatus: undefined,
+            isSharp: game.consensus?.modelsAgree && (game.consensus?.confidence === "HIGH" || game.consensus?.confidence === "MEDIUM"),
           });
         }
       }
@@ -547,6 +549,9 @@ function PickCard({ pick, isExpanded, onToggle, onAddToParlay, formatOdds }: {
                 <span className="relative flex h-1.5 w-1.5"><span className="animate-ping absolute h-full w-full rounded-full bg-danger opacity-75" /><span className="relative rounded-full h-1.5 w-1.5 bg-danger" /></span>
                 <span className="text-[8px] font-bold text-danger uppercase">Live — Pre-game line</span>
               </span>
+            )}
+            {pick.isSharp && (
+              <span className="px-1 py-0.5 rounded bg-neon/10 text-[8px] font-bold text-neon uppercase flex-shrink-0">Sharp</span>
             )}
             {pick.gameStatus === "tomorrow" && (
               <span className="px-1 py-0.5 rounded bg-electric/10 text-[8px] font-bold text-electric uppercase flex-shrink-0">Tomorrow</span>

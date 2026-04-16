@@ -80,6 +80,21 @@ export default function BotChallenge() {
   const [evolving, setEvolving] = useState(false);
   const [evolutionResult, setEvolutionResult] = useState<any>(null);
 
+  // Load persisted evolution + training results on mount (NBA only)
+  useEffect(() => {
+    if (!isNBA) return;
+    // Load evolution result
+    fetch("/api/nba-prop-train-status").then(r => r.json()).then(data => {
+      if (data.status === "complete") setTrainingProgress(data);
+    }).catch(() => {});
+    // Load evolution state
+    import("@/lib/supabase/client").then(({ cloudGet }) => {
+      cloudGet("nba_brain_evolution", null).then((data: any) => {
+        if (data?.status === "complete") setEvolutionResult({ ok: true, ...data });
+      });
+    }).catch(() => {});
+  }, [isNBA]);
+
   const startEvolution = async () => {
     setEvolving(true);
     setEvolutionResult(null);
@@ -275,13 +290,18 @@ export default function BotChallenge() {
   const today = new Date().toISOString().split("T")[0];
   const todayPicks = botState.picks.filter(p => p.date === today);
   const settled = botState.picks.filter(p => p.result !== "pending");
+  const pendingPicks = botState.picks.filter(p => p.result === "pending");
   const wins = settled.filter(p => p.result === "win").length;
   const losses = settled.filter(p => p.result === "loss").length;
   const totalStaked = settled.reduce((s, p) => s + p.stake, 0);
   const totalReturns = settled.reduce((s, p) => s + p.payout, 0);
+  const pendingStaked = pendingPicks.reduce((s, p) => s + p.stake, 0);
   const profit = totalReturns - totalStaked;
+  // ROI based on actual settled bets, not pending
   const roi = totalStaked > 0 ? (profit / totalStaked) * 100 : 0;
-  const pending = botState.picks.filter(p => p.result === "pending").length;
+  // Real P&L = bankroll change from starting $5000
+  const realPL = botState.bankroll + pendingStaked - 5000 + profit;
+  const pending = pendingPicks.length;
 
   // Build CLV record map for quick lookup by pick ID
   const clvMap = useMemo(() => {
@@ -309,10 +329,10 @@ export default function BotChallenge() {
 
         {/* Stats */}
         <div className="grid grid-cols-4 gap-px bg-slate/10">
-          <MiniStat label="Record" value={`${wins}W-${losses}L`} color="text-silver" />
-          <MiniStat label="ROI" value={`${roi >= 0 ? "+" : ""}${roi.toFixed(1)}%`} color={roi >= 0 ? "text-neon" : "text-danger"} />
-          <MiniStat label="P/L" value={`${profit >= 0 ? "+" : ""}$${profit.toFixed(0)}`} color={profit >= 0 ? "text-neon" : "text-danger"} />
-          <MiniStat label="Pending" value={`${pending}`} color="text-amber" />
+          <MiniStat label="Record" value={settled.length > 0 ? `${wins}W-${losses}L` : `0-0`} color="text-silver" />
+          <MiniStat label="ROI" value={settled.length > 0 ? `${roi >= 0 ? "+" : ""}${roi.toFixed(1)}%` : "—"} color={roi >= 0 ? "text-neon" : "text-danger"} />
+          <MiniStat label="P/L" value={settled.length > 0 ? `${profit >= 0 ? "+" : ""}$${profit.toFixed(0)}` : "—"} color={profit >= 0 ? "text-neon" : "text-danger"} />
+          <MiniStat label="In Play" value={pending > 0 ? `$${pendingStaked.toFixed(0)}` : "—"} color="text-amber" />
         </div>
 
         {/* Per-Model Accuracy */}
@@ -512,6 +532,43 @@ export default function BotChallenge() {
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* NBA Prop Bot — Auto-bets where brain accuracy > 60% */}
+      {isNBA && propParlayPicks.length > 0 && (
+        <div className="glass rounded-xl overflow-hidden border border-neon/15">
+          <div className="px-4 py-2.5 bg-gradient-to-r from-neon/10 to-electric/5 border-b border-neon/15 flex items-center gap-2">
+            <Target className="w-4 h-4 text-neon" />
+            <div className="flex-1">
+              <h3 className="text-xs font-bold text-silver uppercase tracking-wider">Prop Bot</h3>
+              <p className="text-[9px] text-mercury/50">Auto-bets on players where brain accuracy exceeds 60%</p>
+            </div>
+            <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-neon/10 text-neon">AUTO</span>
+          </div>
+          <div className="divide-y divide-slate/10">
+            {propParlayPicks.filter(p => p.probability > 0.55).slice(0, 3).map((prop, i) => (
+              <div key={i} className="px-4 py-2.5 flex items-center gap-2.5">
+                <div className="w-5 h-5 rounded-full bg-neon/20 text-neon text-[9px] font-bold flex items-center justify-center flex-shrink-0">$</div>
+                <PlayerAvatar name={prop.playerName} size={22} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold text-silver truncate">{prop.playerName}</p>
+                  <p className="text-[9px] text-mercury/50">{prop.propType} • Brain: {(prop.probability * 100).toFixed(0)}% confident</p>
+                </div>
+                <div className="text-right flex-shrink-0">
+                  <span className={`text-xs font-bold font-mono ${prop.side === "over" ? "text-neon" : "text-purple"}`}>
+                    {prop.side === "over" ? "OVER" : "UNDER"} {prop.line}
+                  </span>
+                  <p className="text-[8px] text-neon font-mono">$50 stake</p>
+                </div>
+              </div>
+            ))}
+            {propParlayPicks.filter(p => p.probability > 0.55).length === 0 && (
+              <div className="px-4 py-3 text-center">
+                <p className="text-[10px] text-mercury/50">No props meet the 60% accuracy threshold yet — brain is still learning</p>
+              </div>
+            )}
           </div>
         </div>
       )}
