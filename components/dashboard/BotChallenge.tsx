@@ -80,17 +80,34 @@ export default function BotChallenge() {
   const [evolving, setEvolving] = useState(false);
   const [evolutionResult, setEvolutionResult] = useState<any>(null);
 
-  // Load persisted evolution + training results on mount (NBA only)
+  // Load persisted brain, training, and evolution results on mount (NBA only)
   useEffect(() => {
     if (!isNBA) return;
-    // Load evolution result
-    fetch("/api/nba-prop-train-status").then(r => r.json()).then(data => {
-      if (data.status === "complete") setTrainingProgress(data);
-    }).catch(() => {});
-    // Load evolution state
     import("@/lib/supabase/client").then(({ cloudGet }) => {
+      // Load training progress
+      cloudGet("nba_prop_training_progress", null).then((data: any) => {
+        if (data?.status === "complete") setTrainingProgress(data);
+      });
+      // Load evolution state
       cloudGet("nba_brain_evolution", null).then((data: any) => {
         if (data?.status === "complete") setEvolutionResult({ ok: true, ...data });
+      });
+      // Load brain summary for display
+      cloudGet("nba_prop_brain", null).then((brain: any) => {
+        if (brain?.isPreTrained && brain.totalGamesProcessed > 0) {
+          // Show brain stats even without explicit training progress
+          setTrainingProgress((prev: any) => prev ?? {
+            status: "complete",
+            gamesProcessed: brain.totalGamesProcessed,
+            propEventsTotal: brain.totalPredictions,
+            playersTracked: Object.keys(brain.playerMemory ?? {}).length,
+            accuracy: brain.markets ? {
+              player_points: { total: brain.markets.player_points?.totalPredictions ?? 0, hits: brain.markets.player_points?.hits ?? 0, winRate: brain.markets.player_points?.winRate ?? 0 },
+              player_rebounds: { total: brain.markets.player_rebounds?.totalPredictions ?? 0, hits: brain.markets.player_rebounds?.hits ?? 0, winRate: brain.markets.player_rebounds?.winRate ?? 0 },
+              player_assists: { total: brain.markets.player_assists?.totalPredictions ?? 0, hits: brain.markets.player_assists?.hits ?? 0, winRate: brain.markets.player_assists?.winRate ?? 0 },
+            } : {},
+          });
+        }
       });
     }).catch(() => {});
   }, [isNBA]);
