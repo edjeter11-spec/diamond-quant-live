@@ -3,6 +3,7 @@ import { cloudGet, cloudSet } from "@/lib/supabase/client";
 import { loadNbaPropBrainFromCloud } from "@/lib/bot/nba-prop-brain";
 import { projectProp } from "@/lib/bot/nba-prop-projector";
 import { buildReasoning, type BrainReasoning } from "@/lib/bot/prop-reasoning";
+import { fetchNBAInjuries } from "@/lib/nba/injuries";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -37,8 +38,8 @@ export interface PropPicksToday {
 const CACHE_KEY_PREFIX = "prop_picks_today_nba";
 const CACHE_TTL_MS = 2 * 60 * 60 * 1000; // 2 hours
 
-// Fallback: top NBA stars with 2024-25 season averages
-// Used when no live odds are posted yet so the section is never blank
+// Fallback: current NBA stars with 2024-25 season averages (updated rosters)
+// Used only when no live odds are posted. Injury-filtered at runtime.
 const NBA_STAR_FALLBACK = [
   { playerName: "Shai Gilgeous-Alexander", team: "OKC", ppg: 32.3, rpg: 5.2, apg: 6.4 },
   { playerName: "Nikola Jokic",            team: "DEN", ppg: 29.6, rpg: 13.0, apg: 10.2 },
@@ -47,14 +48,14 @@ const NBA_STAR_FALLBACK = [
   { playerName: "Jayson Tatum",            team: "BOS", ppg: 26.9, rpg: 8.3, apg: 5.2 },
   { playerName: "Anthony Davis",           team: "LAL", ppg: 26.2, rpg: 12.6, apg: 3.5 },
   { playerName: "Donovan Mitchell",        team: "CLE", ppg: 24.9, rpg: 4.5, apg: 5.0 },
-  { playerName: "Kevin Durant",            team: "PHX", ppg: 27.1, rpg: 6.3, apg: 4.0 },
-  { playerName: "Joel Embiid",             team: "PHI", ppg: 24.5, rpg: 7.8, apg: 5.7 },
+  { playerName: "Kevin Durant",            team: "HOU", ppg: 27.1, rpg: 6.3, apg: 4.0 },
   { playerName: "LeBron James",            team: "LAL", ppg: 23.7, rpg: 8.3, apg: 9.0 },
   { playerName: "Stephen Curry",           team: "GSW", ppg: 26.4, rpg: 4.8, apg: 5.2 },
   { playerName: "Trae Young",              team: "ATL", ppg: 22.6, rpg: 3.0, apg: 11.1 },
   { playerName: "Damian Lillard",          team: "MIL", ppg: 24.3, rpg: 4.4, apg: 7.2 },
   { playerName: "Devin Booker",            team: "PHX", ppg: 25.1, rpg: 4.9, apg: 7.1 },
-  { playerName: "Tyrese Haliburton",       team: "IND", ppg: 20.1, rpg: 4.7, apg: 9.2 },
+  { playerName: "Jalen Brunson",           team: "NYK", ppg: 25.9, rpg: 3.7, apg: 6.7 },
+  { playerName: "Cade Cunningham",         team: "DET", ppg: 25.7, rpg: 4.4, apg: 9.1 },
 ];
 
 // Lines to test per player (slightly offset from their average to create over/under signal)
@@ -194,7 +195,19 @@ export async function GET(req: NextRequest) {
 
     // ── Step 4: Fallback — run brain on top NBA stars if no live odds ──
     if (livePropsFound === 0) {
-      for (const player of NBA_STAR_FALLBACK) {
+      // Filter out injured/doubtful players using live ESPN injury feed
+      const injuryReports = await fetchNBAInjuries().catch(() => []);
+      const injuredNames = new Set<string>();
+      for (const team of injuryReports) {
+        for (const p of team.players) {
+          if (p.status === "Out" || p.status === "Doubtful") {
+            injuredNames.add(p.name.toLowerCase());
+          }
+        }
+      }
+      const healthyFallback = NBA_STAR_FALLBACK.filter(p => !injuredNames.has(p.playerName.toLowerCase()));
+
+      for (const player of healthyFallback) {
         for (const { market, label, line, stat } of getFallbackLines(player)) {
           if (line <= 0) continue;
           const proj = projectProp(stat, market, line, weights, { isHome: false, isB2B: false, leagueAvgTotal: 224 });
