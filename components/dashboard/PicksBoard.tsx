@@ -361,100 +361,27 @@ export default function PicksBoard() {
   const allFuture = combinedPicks.length > 0 && !hasLiveGames && !hasPreGames;
   const nextDayLabel = combinedPicks.find((p) => p.dayLabel)?.dayLabel;
 
-  // Parlay of the day — mix of bet types, filtered to a single day.
-  // Target day: today if any pre/live games exist, otherwise tomorrow/next-day.
-  const targetDayStatus: Pick["gameStatus"][] = (hasPreGames || hasLiveGames)
-    ? ["pre", "live"]
-    : ["tomorrow", "future"];
+  // Parlay of the day — pinned server-side so every user sees the same picks.
+  const [pinnedParlay, setPinnedParlay] = useState<{
+    legs: any[]; totalOdds: number; generatedAt: string; dayLabel: string;
+  } | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/parlay-today?sport=${currentSport}`)
+      .then(r => r.json())
+      .then(data => {
+        if (!cancelled && data.ok && data.legs?.length >= 2) {
+          setPinnedParlay({ legs: data.legs, totalOdds: data.totalOdds, generatedAt: data.generatedAt, dayLabel: data.dayLabel });
+        } else if (!cancelled) {
+          setPinnedParlay(null);
+        }
+      })
+      .catch(() => { if (!cancelled) setPinnedParlay(null); });
+    return () => { cancelled = true; };
+  }, [currentSport]);
 
-  const sameDay = (p: Pick) => targetDayStatus.includes(p.gameStatus);
-
-  // Score each pick by (confidence + EV). Higher = more parlay-worthy.
-  const scorePick = (p: Pick): number => {
-    const confScore = p.confidence === "HIGH" ? 3 : p.confidence === "MEDIUM" ? 2 : p.confidence === "LOW" ? 1 : 0;
-    return confScore * 5 + (p.evPercentage ?? 0);
-  };
-
-  const candidates = combinedPicks
-    .filter(sameDay)
-    .filter((p) => p.odds !== 0 && p.bookmaker !== "No lines posted")
-    .filter((p) => p.confidence === "HIGH" || p.confidence === "MEDIUM" || (p.evPercentage ?? 0) > 1)
-    .sort((a, b) => scorePick(b) - scorePick(a));
-
-  // Build player-prop candidates (NBA only — mixed into parlay when available)
-  const propCandidates: Pick[] = [];
-  if (isNBA) {
-    const propMarkets = [
-      { key: "player_points", label: "Points" },
-      { key: "player_rebounds", label: "Rebounds" },
-      { key: "player_assists", label: "Assists" },
-    ];
-    for (const { key, label } of propMarkets) {
-      const list: any[] = propsData[key] ?? [];
-      for (const prop of list) {
-        if (!prop.playerName || !prop.line) continue;
-        const overProb = prop.fairOverProb ?? 50;
-        const underProb = prop.fairUnderProb ?? 50;
-        const favourOver = overProb >= underProb;
-        const best = favourOver ? prop.bestOver : prop.bestUnder;
-        if (!best?.price) continue;
-        const topProb = Math.max(overProb, underProb);
-        if (topProb < 55) continue; // skip low-edge props
-        propCandidates.push({
-          id: `prop-${key}-${prop.playerName}`,
-          game: prop.playerName,
-          pick: `${prop.playerName} ${favourOver ? "Over" : "Under"} ${prop.line} ${label}`,
-          market: "player_prop",
-          odds: best.price,
-          bookmaker: best.bookmaker,
-          evPercentage: Math.round((topProb - 50) * 2 * 10) / 10, // crude EV proxy
-          fairProb: topProb,
-          confidence: topProb >= 65 ? "HIGH" : topProb >= 58 ? "MEDIUM" : "LOW",
-          kellyStake: 0,
-          reasoning: [],
-          commenceTime: prop.gameTime,
-          gameStatus: "pre",
-        });
-      }
-    }
-    propCandidates.sort((a, b) => scorePick(b) - scorePick(a));
-  }
-
-  // Mixed-type builder: one per market when possible, fall back to best-available.
-  const parlayLegs: Pick[] = [];
-  const usedGames = new Set<string>();
-  const usedMarkets = new Set<string>();
-
-  const tryAdd = (p: Pick): boolean => {
-    if (parlayLegs.length >= 3) return false;
-    if (usedGames.has(p.game)) return false;
-    parlayLegs.push(p);
-    usedGames.add(p.game);
-    usedMarkets.add(p.market);
-    return true;
-  };
-
-  // Pass 1 — one pick per market type (best of each)
-  const wantMarkets = ["moneyline", "spread", "total", "player_prop"];
-  for (const mkt of wantMarkets) {
-    if (parlayLegs.length >= 3) break;
-    const pool = mkt === "player_prop" ? propCandidates : candidates;
-    const best = pool.find((p) => p.market === mkt && !usedMarkets.has(p.market) && !usedGames.has(p.game));
-    if (best) tryAdd(best);
-  }
-
-  // Pass 2 — fill remaining slots with next best (any market)
-  const allCandidates = [...candidates, ...propCandidates].sort((a, b) => scorePick(b) - scorePick(a));
-  for (const p of allCandidates) {
-    if (parlayLegs.length >= 3) break;
-    tryAdd(p);
-  }
-
-  const parlayOdds = parlayLegs.reduce((acc, p) => {
-    const dec = p.odds > 0 ? (p.odds / 100) + 1 : (100 / Math.abs(p.odds)) + 1;
-    return acc * dec;
-  }, 1);
-  const parlayAmerican = parlayOdds >= 2 ? Math.round((parlayOdds - 1) * 100) : Math.round(-100 / (parlayOdds - 1));
+  const parlayLegs = pinnedParlay?.legs ?? [];
+  const parlayAmerican = pinnedParlay?.totalOdds ?? 0;
 
   const formatOdds = (odds: number) => (odds > 0 ? `+${odds}` : `${odds}`);
 
@@ -501,8 +428,13 @@ export default function PicksBoard() {
         <div className="glass rounded-xl overflow-hidden border border-purple/20">
           <div className="px-3 sm:px-4 py-2.5 bg-gradient-to-r from-purple/10 to-neon/5 border-b border-purple/15 flex items-center gap-2">
             <Layers className="w-4 h-4 text-purple" />
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               <h2 className="text-xs sm:text-sm font-bold text-silver uppercase tracking-wider">Parlay of the Day</h2>
+              {pinnedParlay?.generatedAt && (
+                <p className="text-[9px] text-mercury/60 mt-0.5">
+                  {pinnedParlay.dayLabel} • Locked at {new Date(pinnedParlay.generatedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" })} ET
+                </p>
+              )}
             </div>
             <span className="text-base sm:text-lg font-bold font-mono text-purple">{formatOdds(parlayAmerican)}</span>
           </div>
