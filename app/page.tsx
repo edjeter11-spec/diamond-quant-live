@@ -32,7 +32,6 @@ import MigrationBanner from "@/components/auth/MigrationBanner";
 import PlayerCompare from "@/components/dashboard/PlayerCompare";
 import ROIChart from "@/components/dashboard/ROIChart";
 import { matchGames } from "@/lib/mlb/match-games";
-import WarRoomPanel from "@/components/dashboard/WarRoom";
 import TodayPicksStrip from "@/components/dashboard/TodayPicksStrip";
 import { backupOddsToStorage, getOddsBackup } from "@/lib/odds/cache";
 import { sendDiscordAlert } from "@/lib/odds/sportsbooks";
@@ -40,7 +39,7 @@ import { getDiscordWebhook, setDiscordWebhook } from "@/lib/store";
 import NRFITab from "@/components/dashboard/NRFITab";
 import SharpMoneyPanel from "@/components/dashboard/SharpMoneyPanel";
 import {
-  Diamond, BarChart3, Layers, User, UserCircle, Wallet, Users, RefreshCw, Shield,
+  Diamond, BarChart3, Layers, User, UserCircle, Wallet, RefreshCw, Shield,
   Radio, ChevronLeft, ChevronRight, X, HelpCircle, Volume2, VolumeX, AlertTriangle, Activity,
 } from "lucide-react";
 
@@ -310,7 +309,6 @@ export default function WarRoom() {
     { key: "props" as const, icon: User, label: "Props" },
     { key: "bankroll" as const, icon: Wallet, label: "Bank" },
     { key: "sharp" as const, icon: Activity, label: "Sharp" },
-    { key: "room" as const, icon: Users, label: "Room" },
     { key: "profile" as const, icon: UserCircle, label: "Profile" },
   ];
 
@@ -706,17 +704,10 @@ export default function WarRoom() {
               </div>
             )}
 
-            {activeTab === "room" && (
-              <div className="max-w-4xl mx-auto space-y-4">
-                <WarRoomPanel />
-                {/* Discord Integration */}
-                <DiscordSettings />
-              </div>
-            )}
-
             {activeTab === "profile" && (
-              <div className="max-w-lg mx-auto">
+              <div className="max-w-lg mx-auto space-y-4">
                 <UserProfile />
+                <DiscordSettings />
               </div>
             )}
           </>
