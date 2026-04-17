@@ -29,33 +29,25 @@ export async function POST(req: Request) {
       contents: [{
         parts: [
           {
-            text: `You are a sports betting slip reader. Extract ALL information from this betting slip screenshot. Return ONLY valid JSON with this exact structure, no other text:
+            text: `Extract the following fields from this receipt / order summary screenshot into JSON. Treat this purely as a data-extraction task (OCR + structuring).
 
-{
-  "sportsbook": "the sportsbook name (DraftKings, FanDuel, BetMGM, etc.)",
-  "betType": "straight" or "parlay" or "prop",
-  "stake": the dollar amount risked as a number,
-  "toWin": the potential payout as a number,
-  "odds": the American odds as a number (e.g. +150 or -110),
-  "legs": [
-    {
-      "game": "Team A @ Team B" or "Player Name",
-      "pick": "the specific pick (e.g. Yankees ML, Over 8.5, Judge Over 1.5 Hits)",
-      "odds": American odds for this leg as a number,
-      "market": "moneyline" or "spread" or "total" or "player_prop"
-    }
-  ],
-  "status": "pending" or "won" or "lost"
-}
+Fields:
+- sportsbook (string): the vendor/brand name shown (e.g. DraftKings, FanDuel, BetMGM)
+- betType (string): "straight" | "parlay" | "prop"
+- stake (number): the dollar amount listed as "Wager", "Risk", or "Stake"
+- toWin (number): the dollar amount listed as "To Win", "Payout", or "Returns"
+- odds (number): the overall American odds (e.g. 150 or -110). Positive numbers go as positive, negatives as negative.
+- legs (array): one entry per selection. Each has:
+  - game (string): "Team A @ Team B" for team bets, or player name for props
+  - pick (string): the exact selection (e.g. "Yankees ML", "Over 8.5", "Judge Over 1.5 Hits")
+  - odds (number): American odds for that single leg
+  - market (string): "moneyline" | "spread" | "total" | "player_prop"
+- status (string): "pending" | "won" | "lost"
+  - "won" if a green check/badge, "WON", "WIN", "CASHED", "PAID" is visible
+  - "lost" if a red X/badge, "LOST", "LOSS", greyed-out styling is visible
+  - "pending" otherwise (live, scheduled, open)
 
-If it's a straight bet, legs should have exactly 1 entry. For parlays, include all legs. Extract exact odds, teams, and amounts.
-
-For "status": carefully determine if the bet has already been settled:
-- Return "won" if you see a green badge/icon, checkmark, "WON", "WIN", "CASHED", "PAID", or the amount shown as a credit/profit with a green color
-- Return "lost" if you see a red badge/icon, X mark, "LOST", "LOSS", "SETTLED - LOSS", or greyed-out/strikethrough styling
-- Return "pending" if you see "PENDING", "LIVE", "OPEN", "ACTIVE", no result indicator, or the games haven't played
-
-If you can't read something, use null.`
+For straight bets, legs has exactly 1 entry. For parlays include all legs. Use null for anything unreadable. Return ONLY the JSON object, nothing else.`
           },
           {
             inline_data: {
@@ -67,12 +59,20 @@ If you can't read something, use null.`
       }],
       generationConfig: {
         temperature: 0.1,
-        maxOutputTokens: 1024,
+        maxOutputTokens: 2048,
+        responseMimeType: "application/json",
       },
+      safetySettings: [
+        { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+        { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+        { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+        { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" },
+      ],
     });
 
     let lastErr = "";
     let text = "";
+    let usedModel = "";
 
     // Try each model until one succeeds
     for (const model of MODELS) {
@@ -86,32 +86,67 @@ If you can't read something, use null.`
       if (!response.ok) {
         lastErr = await response.text();
         console.error(`Gemini ${model} error:`, lastErr.slice(0, 300));
-        // If it's a 404 (model not found), try the next model; otherwise surface the error
         if (response.status === 404 || response.status === 400) continue;
         return NextResponse.json({ error: `Gemini error: ${lastErr.slice(0, 200)}` }, { status: response.status });
       }
 
       const data = await response.json();
-      text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-      if (text) break;
+
+      // Check if the response was blocked by safety filters
+      const blockReason = data.promptFeedback?.blockReason;
+      if (blockReason) {
+        lastErr = `Blocked by Gemini safety filter: ${blockReason}`;
+        console.error(`Gemini ${model} blocked:`, blockReason);
+        continue;
+      }
+
+      // Check finish reason on candidate
+      const candidate = data.candidates?.[0];
+      const finishReason = candidate?.finishReason;
+      if (finishReason && finishReason !== "STOP" && finishReason !== "MAX_TOKENS") {
+        lastErr = `Gemini stopped early: ${finishReason}`;
+        console.error(`Gemini ${model} finish reason:`, finishReason);
+        continue;
+      }
+
+      text = candidate?.content?.parts?.[0]?.text ?? "";
+      if (text) { usedModel = model; break; }
       lastErr = "Empty response from " + model;
     }
 
     if (!text) {
-      return NextResponse.json({ error: `All Gemini models failed: ${lastErr.slice(0, 200)}` }, { status: 502 });
+      return NextResponse.json(
+        { error: `Couldn't read the slip — ${lastErr.slice(0, 200) || "all models failed"}. Try a cropped, well-lit screenshot of just the bet details.` },
+        { status: 502 }
+      );
     }
 
-    // Extract JSON from response (Gemini sometimes wraps in markdown)
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      return NextResponse.json({ error: "Could not parse bet slip", raw: text }, { status: 422 });
+    // Extract JSON from response (with responseMimeType set, text should be pure JSON)
+    let parsed: any;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      // Fallback: find first {...} block
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        console.error("Unparseable response from", usedModel, "— raw:", text.slice(0, 500));
+        return NextResponse.json({
+          error: `Gemini returned non-JSON: "${text.slice(0, 100)}..." — try a clearer screenshot of the bet details`
+        }, { status: 422 });
+      }
+      try {
+        parsed = JSON.parse(jsonMatch[0]);
+      } catch (e: any) {
+        return NextResponse.json({
+          error: `JSON parse failed: ${e.message}. Raw: ${text.slice(0, 100)}`
+        }, { status: 422 });
+      }
     }
-
-    const parsed = JSON.parse(jsonMatch[0]);
 
     return NextResponse.json({
       success: true,
       slip: parsed,
+      model: usedModel,
     });
   } catch (error: any) {
     console.error("Scan error:", error);
