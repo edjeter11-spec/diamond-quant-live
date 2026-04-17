@@ -55,11 +55,12 @@ export default function SnapSync() {
           setSlip(data.slip);
           setMode("review");
         } else {
-          setErrorMsg(data.error ?? "Couldn't read the slip — try a clearer screenshot");
+          const errText = data.error ?? "Couldn't read the slip — try a clearer screenshot";
+          setErrorMsg(String(errText).slice(0, 200));
           setMode("error");
         }
-      } catch (err) {
-        setErrorMsg("Scan failed — check your connection");
+      } catch (err: any) {
+        setErrorMsg(err?.message ?? "Scan failed — check your connection");
         setMode("error");
       }
     };

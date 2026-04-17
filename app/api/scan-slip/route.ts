@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 30;
 
 const GEMINI_KEY = process.env.GEMINI_API_KEY || "";
-const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
+
+// Try models in order — fall back if one is unavailable/deprecated
+const MODELS = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"];
 
 export async function POST(req: Request) {
   if (!GEMINI_KEY) {
@@ -11,23 +14,22 @@ export async function POST(req: Request) {
   }
 
   try {
-    const { image } = await req.json(); // base64 image data
+    const { image } = await req.json(); // base64 image data (data URL)
 
     if (!image) {
       return NextResponse.json({ error: "No image provided" }, { status: 400 });
     }
 
-    // Strip data URL prefix if present
+    // Detect mime type from data URL; default to png since most screenshots are png
+    const mimeMatch = image.match(/^data:(image\/\w+);base64,/);
+    const mimeType = mimeMatch?.[1] ?? "image/png";
     const base64Data = image.replace(/^data:image\/\w+;base64,/, "");
 
-    const response = await fetch(`${GEMINI_URL}?key=${GEMINI_KEY}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{
-          parts: [
-            {
-              text: `You are a sports betting slip reader. Extract ALL information from this betting slip screenshot. Return ONLY valid JSON with this exact structure, no other text:
+    const requestBody = JSON.stringify({
+      contents: [{
+        parts: [
+          {
+            text: `You are a sports betting slip reader. Extract ALL information from this betting slip screenshot. Return ONLY valid JSON with this exact structure, no other text:
 
 {
   "sportsbook": "the sportsbook name (DraftKings, FanDuel, BetMGM, etc.)",
@@ -54,30 +56,50 @@ For "status": carefully determine if the bet has already been settled:
 - Return "pending" if you see "PENDING", "LIVE", "OPEN", "ACTIVE", no result indicator, or the games haven't played
 
 If you can't read something, use null.`
-            },
-            {
-              inline_data: {
-                mime_type: "image/jpeg",
-                data: base64Data,
-              }
+          },
+          {
+            inline_data: {
+              mime_type: mimeType,
+              data: base64Data,
             }
-          ]
-        }],
-        generationConfig: {
-          temperature: 0.1,
-          maxOutputTokens: 1024,
-        },
-      }),
+          }
+        ]
+      }],
+      generationConfig: {
+        temperature: 0.1,
+        maxOutputTokens: 1024,
+      },
     });
 
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error("Gemini error:", errText);
-      return NextResponse.json({ error: "Gemini API error" }, { status: 500 });
+    let lastErr = "";
+    let text = "";
+
+    // Try each model until one succeeds
+    for (const model of MODELS) {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_KEY}`;
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: requestBody,
+      });
+
+      if (!response.ok) {
+        lastErr = await response.text();
+        console.error(`Gemini ${model} error:`, lastErr.slice(0, 300));
+        // If it's a 404 (model not found), try the next model; otherwise surface the error
+        if (response.status === 404 || response.status === 400) continue;
+        return NextResponse.json({ error: `Gemini error: ${lastErr.slice(0, 200)}` }, { status: response.status });
+      }
+
+      const data = await response.json();
+      text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+      if (text) break;
+      lastErr = "Empty response from " + model;
     }
 
-    const data = await response.json();
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+    if (!text) {
+      return NextResponse.json({ error: `All Gemini models failed: ${lastErr.slice(0, 200)}` }, { status: 502 });
+    }
 
     // Extract JSON from response (Gemini sometimes wraps in markdown)
     const jsonMatch = text.match(/\{[\s\S]*\}/);
