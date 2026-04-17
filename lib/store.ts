@@ -74,7 +74,7 @@ interface OddsSnapshot {
 interface AppState {
   // UI State
   selectedGameId: string | null;
-  activeTab: "dashboard" | "nrfi" | "bot" | "parlays" | "props" | "bankroll" | "room" | "profile";
+  activeTab: "dashboard" | "nrfi" | "bot" | "parlays" | "props" | "bankroll" | "sharp" | "room" | "profile";
   sidebarOpen: boolean;
 
   // Live Data

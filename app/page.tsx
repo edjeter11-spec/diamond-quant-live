@@ -38,9 +38,10 @@ import { backupOddsToStorage, getOddsBackup } from "@/lib/odds/cache";
 import { sendDiscordAlert } from "@/lib/odds/sportsbooks";
 import { getDiscordWebhook, setDiscordWebhook } from "@/lib/store";
 import NRFITab from "@/components/dashboard/NRFITab";
+import SharpMoneyPanel from "@/components/dashboard/SharpMoneyPanel";
 import {
   Diamond, BarChart3, Layers, User, UserCircle, Wallet, Users, RefreshCw, Shield,
-  Radio, ChevronLeft, ChevronRight, X, HelpCircle, Volume2, VolumeX, AlertTriangle,
+  Radio, ChevronLeft, ChevronRight, X, HelpCircle, Volume2, VolumeX, AlertTriangle, Activity,
 } from "lucide-react";
 
 // Arb alert sound (short beep)
@@ -308,6 +309,7 @@ export default function WarRoom() {
     { key: "parlays" as const, icon: Layers, label: "Parlays" },
     { key: "props" as const, icon: User, label: "Props" },
     { key: "bankroll" as const, icon: Wallet, label: "Bank" },
+    { key: "sharp" as const, icon: Activity, label: "Sharp" },
     { key: "room" as const, icon: Users, label: "Room" },
     { key: "profile" as const, icon: UserCircle, label: "Profile" },
   ];
@@ -695,6 +697,12 @@ export default function WarRoom() {
                 >
                   + Log a Bet
                 </button>
+              </div>
+            )}
+
+            {activeTab === "sharp" && (
+              <div className="max-w-3xl mx-auto">
+                <SharpMoneyPanel />
               </div>
             )}
 
