@@ -14,6 +14,7 @@ import TeamLogo from "@/components/ui/TeamLogo";
 import InfoTip from "@/components/ui/InfoTip";
 import Link from "next/link";
 import { usePremium } from "@/lib/hooks/usePremium";
+import TodayPropPicks from "@/components/dashboard/TodayPropPicks";
 
 interface Pick {
   id: string;
@@ -99,12 +100,21 @@ export default function PicksBoard() {
         setPropsLoading(false);
       });
     } else {
-      fetch("/api/players?market=pitcher_strikeouts").then(r => r.json()).then(ks => {
-        if (!cancelled) {
-          setPropsData({ pitcher_strikeouts: ks.props ?? [] });
-          setPropsLoading(false);
-        }
-      }).catch(() => { if (!cancelled) setPropsLoading(false); });
+      Promise.all([
+        fetch("/api/players?market=pitcher_strikeouts").then(r => r.json()).catch(() => ({ props: [] })),
+        fetch("/api/players?market=batter_hits").then(r => r.json()).catch(() => ({ props: [] })),
+        fetch("/api/players?market=batter_home_runs").then(r => r.json()).catch(() => ({ props: [] })),
+        fetch("/api/players?market=batter_total_bases").then(r => r.json()).catch(() => ({ props: [] })),
+      ]).then(([ks, hits, hrs, tb]) => {
+        if (cancelled) return;
+        setPropsData({
+          pitcher_strikeouts: ks.props ?? [],
+          batter_hits: hits.props ?? [],
+          batter_home_runs: hrs.props ?? [],
+          batter_total_bases: tb.props ?? [],
+        });
+        setPropsLoading(false);
+      });
     }
     return () => { cancelled = true; };
   }, [isNBA]);
@@ -502,6 +512,9 @@ export default function PicksBoard() {
           </div>
         </div>
       )}
+
+      {/* ═══ TODAY'S PLAYER PROPS ═══ */}
+      <TodayPropPicks sport={currentSport} propsData={propsData} loading={propsLoading} />
 
       {/* ═══ MARKET SECTIONS ═══ */}
       {sections.map((sec) => (

@@ -159,7 +159,7 @@ export default function GameCard({ game, oddsInfo }: GameCardProps) {
                 {formatOdds(oddsInfo.bestAwayML.odds)}
               </span>
             )}
-            {game.status !== "pre" && (
+            {(game.status === "live" || game.status === "final") && (
               <span className={`text-lg sm:text-xl font-bold font-mono w-6 sm:w-8 text-right ${
                 game.awayScore > game.homeScore ? "text-neon" : "text-silver"
               }`}>
@@ -192,7 +192,7 @@ export default function GameCard({ game, oddsInfo }: GameCardProps) {
                 {formatOdds(oddsInfo.bestHomeML.odds)}
               </span>
             )}
-            {game.status !== "pre" && (
+            {(game.status === "live" || game.status === "final") && (
               <span className={`text-lg sm:text-xl font-bold font-mono w-6 sm:w-8 text-right ${
                 game.homeScore > game.awayScore ? "text-neon" : "text-silver"
               }`}>

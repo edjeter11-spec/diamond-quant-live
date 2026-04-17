@@ -23,6 +23,16 @@ const NBA_TEAM_IDS: Record<string, number> = {
   "OKC": 1610612760, "ORL": 1610612753, "PHI": 1610612755, "PHX": 1610612756,
   "POR": 1610612757, "SAC": 1610612758, "SAS": 1610612759, "TOR": 1610612761,
   "UTA": 1610612762, "WAS": 1610612764,
+  // ESPN / Odds API aliases — must resolve to the same franchise IDs
+  "GS":  1610612744, // Warriors (ESPN)
+  "NO":  1610612740, // Pelicans (ESPN)
+  "SA":  1610612759, // Spurs (ESPN)
+  "NY":  1610612752, // Knicks (ESPN)
+  "BK":  1610612751, // Nets (ESPN)
+  "UTAH":1610612762, // Jazz (occasionally)
+  "PHO": 1610612756, // Suns (occasionally)
+  "CHAR":1610612766, // Hornets (occasionally)
+  "WSH": 1610612764, // Wizards (occasionally)
 };
 
 // Get team logo URL
@@ -143,6 +153,10 @@ const NBA_ABBREV_TO_FULL: Record<string, string> = {
   "ORL": "Orlando Magic", "PHI": "Philadelphia 76ers", "PHX": "Phoenix Suns",
   "POR": "Portland Trail Blazers", "SAC": "Sacramento Kings", "SAS": "San Antonio Spurs",
   "TOR": "Toronto Raptors", "UTA": "Utah Jazz", "WAS": "Washington Wizards",
+  // Aliases from ESPN / Odds API feeds
+  "GS": "Golden State Warriors", "NO": "New Orleans Pelicans", "SA": "San Antonio Spurs",
+  "NY": "New York Knicks", "BK": "Brooklyn Nets", "UTAH": "Utah Jazz",
+  "PHO": "Phoenix Suns", "CHAR": "Charlotte Hornets", "WSH": "Washington Wizards",
 };
 
 export function getFullTeamName(abbrev: string, sport: "mlb" | "nba" = "mlb"): string {
