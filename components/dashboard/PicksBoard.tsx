@@ -30,7 +30,8 @@ interface Pick {
   isSuspicious?: boolean;
   warning?: string;
   edgeAge?: number;
-  gameStatus?: "live" | "pre" | "tomorrow";
+  gameStatus?: "live" | "pre" | "tomorrow" | "future";
+  dayLabel?: string; // e.g. "Tomorrow", "Sat", "Apr 19" — resolved at pick creation
   isSharp?: boolean;   // pick aligns with sharpest book
 }
 
@@ -102,24 +103,31 @@ export default function PicksBoard() {
     return map;
   }, [scores]);
 
-  const getGameStatus = useCallback((gameName: string, commenceTime?: string): "live" | "pre" | "tomorrow" | "final" => {
+  const getGameStatus = useCallback((gameName: string, commenceTime?: string): { status: "live" | "pre" | "tomorrow" | "future" | "final"; dayLabel?: string } => {
     // Check scores for live/final status
     const lower = gameName.toLowerCase();
     for (const [name, status] of gameStatusMap) {
       if (lower.includes(name)) {
-        if (status === "final") return "final";
-        if (status === "live") return "live";
+        if (status === "final") return { status: "final" };
+        if (status === "live") return { status: "live" };
       }
     }
-    // Check commence time for tomorrow
+    // Compute day offset for future games
     if (commenceTime) {
       const gameDate = new Date(commenceTime);
       const today = new Date();
-      if (gameDate.getDate() !== today.getDate() || gameDate.getMonth() !== today.getMonth()) {
-        return "tomorrow";
+      const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      const startOfGame = new Date(gameDate.getFullYear(), gameDate.getMonth(), gameDate.getDate());
+      const dayDiff = Math.round((startOfGame.getTime() - startOfToday.getTime()) / 86400000);
+      if (dayDiff === 1) return { status: "tomorrow", dayLabel: "Tomorrow" };
+      if (dayDiff > 1) {
+        const label = dayDiff < 7
+          ? gameDate.toLocaleDateString("en-US", { weekday: "short" })
+          : gameDate.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+        return { status: "future", dayLabel: label };
       }
     }
-    return "pre";
+    return { status: "pre" };
   }, [gameStatusMap]);
 
   // Collect ALL picks — EV bets + single-book value + matchup predictions
@@ -137,7 +145,7 @@ export default function PicksBoard() {
         if (gameStart < now - 4 * 60 * 60 * 1000) continue;
       }
 
-      const status = getGameStatus(gameName, game.commenceTime);
+      const { status, dayLabel } = getGameStatus(gameName, game.commenceTime);
       if (status === "final") continue;
 
       const bookCount = game.oddsLines?.length ?? 0;
@@ -164,6 +172,7 @@ export default function PicksBoard() {
             warning: bet.warning,
             edgeAge: bet.edgeAge ?? 0,
             gameStatus: status as Pick["gameStatus"],
+            dayLabel,
           });
         }
       }
@@ -192,6 +201,7 @@ export default function PicksBoard() {
             history: ["Home field advantage: ~54% baseline", "Line may shift as more books post"],
             commenceTime: game.commenceTime,
             gameStatus: status as Pick["gameStatus"],
+            dayLabel,
           });
         }
 
@@ -214,6 +224,7 @@ export default function PicksBoard() {
             history: ["Road underdogs with value have historically been profitable long-term"],
             commenceTime: game.commenceTime,
             gameStatus: status as Pick["gameStatus"],
+            dayLabel,
           });
         }
 
@@ -235,6 +246,7 @@ export default function PicksBoard() {
             history: ["League average is ~8.5 runs per game"],
             commenceTime: game.commenceTime,
             gameStatus: status as Pick["gameStatus"],
+            dayLabel,
           });
         }
       }
@@ -265,9 +277,9 @@ export default function PicksBoard() {
       }
     }
 
-    // Sort: live first → pre-game → tomorrow. Within each: EV bets first, then single-book, then previews
+    // Sort: live → pre-game → tomorrow → future. Within each: EV bets first
     return picks.sort((a, b) => {
-      const statusOrder = { live: 0, pre: 1, tomorrow: 2 };
+      const statusOrder: Record<string, number> = { live: 0, pre: 1, tomorrow: 2, future: 3 };
       const aOrder = statusOrder[a.gameStatus ?? "pre"] ?? 1;
       const bOrder = statusOrder[b.gameStatus ?? "pre"] ?? 1;
       if (aOrder !== bOrder) return aOrder - bOrder;
@@ -328,10 +340,11 @@ export default function PicksBoard() {
     };
   }, [combinedPicks]);
 
-  // Check if all picks are tomorrow (show banner)
+  // Check if all picks are for a future day (show banner)
   const hasLiveGames = combinedPicks.some((p) => p.gameStatus === "live");
   const hasPreGames = combinedPicks.some((p) => p.gameStatus === "pre");
-  const allTomorrow = combinedPicks.length > 0 && !hasLiveGames && !hasPreGames;
+  const allFuture = combinedPicks.length > 0 && !hasLiveGames && !hasPreGames;
+  const nextDayLabel = combinedPicks.find((p) => p.dayLabel)?.dayLabel;
 
   // Parlay of the day: best ML picks from 3-model + EV analysis
   const parlayPool = combinedPicks.filter((p) => p.market === "moneyline" && (p.confidence === "HIGH" || p.confidence === "MEDIUM" || p.evPercentage > 1));
@@ -356,7 +369,7 @@ export default function PicksBoard() {
     { key: "locks", title: "TOP LOCKS", subtitle: "Highest confidence — model's best plays", icon: Trophy, iconColor: "text-gold", bg: "bg-gold/5", border: "border-gold/20", picks: topLocks },
     { key: "longshots", title: "LONGSHOT VALUE", subtitle: "Underdogs with +EV edge", icon: Zap, iconColor: "text-amber", bg: "bg-amber/5", border: "border-amber/20", picks: longshots },
     { key: "ml", title: "MONEYLINES", subtitle: "Best ML value today", icon: Swords, iconColor: "text-neon", bg: "bg-neon/5", border: "border-neon/20", picks: moneylines },
-    { key: "rl", title: "RUN LINES", subtitle: "Spread picks with value", icon: Shield, iconColor: "text-purple", bg: "bg-purple/5", border: "border-purple/20", picks: runLines },
+    { key: "rl", title: isNBA ? "SPREADS" : "RUN LINES", subtitle: isNBA ? "Point spread picks with value" : "Run line picks with value", icon: Shield, iconColor: "text-purple", bg: "bg-purple/5", border: "border-purple/20", picks: runLines },
     { key: "overs", title: "OVERS", subtitle: "Game totals leaning over", icon: ArrowUp, iconColor: "text-neon", bg: "bg-neon/5", border: "border-neon/15", picks: overs },
     { key: "unders", title: "UNDERS", subtitle: "Game totals leaning under", icon: ArrowDown, iconColor: "text-electric", bg: "bg-electric/5", border: "border-electric/15", picks: unders },
   ];
@@ -381,10 +394,12 @@ export default function PicksBoard() {
           <span className="text-xs text-danger font-semibold">Live games in progress — odds updating in real time</span>
         </div>
       )}
-      {allTomorrow && (
+      {allFuture && (
         <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-electric/5 border border-electric/15">
           <Clock className="w-3.5 h-3.5 text-electric" />
-          <span className="text-xs text-electric font-semibold">Today's games are done — showing tomorrow's picks</span>
+          <span className="text-xs text-electric font-semibold">
+            No games today — showing picks for {nextDayLabel ?? "upcoming games"}
+          </span>
         </div>
       )}
 
@@ -560,8 +575,10 @@ function PickCard({ pick, isExpanded, onToggle, onAddToParlay, formatOdds }: {
             {pick.isSharp && (
               <span className="px-1 py-0.5 rounded bg-neon/10 text-[8px] font-bold text-neon uppercase flex-shrink-0">Sharp</span>
             )}
-            {pick.gameStatus === "tomorrow" && (
-              <span className="px-1 py-0.5 rounded bg-electric/10 text-[8px] font-bold text-electric uppercase flex-shrink-0">Tomorrow</span>
+            {(pick.gameStatus === "tomorrow" || pick.gameStatus === "future") && (
+              <span className="px-1 py-0.5 rounded bg-electric/10 text-[8px] font-bold text-electric uppercase flex-shrink-0">
+                {pick.dayLabel ?? "Upcoming"}
+              </span>
             )}
             <TeamLogo team={pick.pick.split(" ML")[0].split(" Over")[0].split(" Under")[0].split("/")[0]} size={14} />
             <p className="text-xs sm:text-sm font-medium text-silver truncate">{pick.pick}</p>
