@@ -180,7 +180,9 @@ export async function GET(req: Request) {
         if (daysSince >= 6) {
           // Trigger evolution in background (don't await — cron has time limit)
           const baseUrl = `https://${process.env.VERCEL_URL || "diamond-quant-live.vercel.app"}`;
-          fetch(`${baseUrl}/api/nba-prop-evolve?generations=2`).catch(() => {});
+          fetch(`${baseUrl}/api/nba-prop-evolve?generations=2`, {
+            headers: { "x-cron-secret": process.env.CRON_SECRET ?? "" },
+          }).catch(() => {});
           await cloudSet(lastEvolvedKey, new Date().toISOString());
         }
       } catch {}

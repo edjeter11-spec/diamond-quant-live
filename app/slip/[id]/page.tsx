@@ -48,7 +48,8 @@ export default function SlipPage({ params }: { params: Promise<{ id: string }> }
     if (reacted) return;
     setReacted(emoji);
     try {
-      await fetch(`/api/slip/${id}/react`, {
+      const { fetchWithAuth } = await import("@/lib/supabase/fetch-with-auth");
+      await fetchWithAuth(`/api/slip/${id}/react`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ emoji }),

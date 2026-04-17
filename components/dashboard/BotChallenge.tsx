@@ -74,8 +74,14 @@ export default function BotChallenge() {
     setTraining(true);
     setTrainingProgress({ status: "running", message: "Starting..." });
     try {
-      const res = await fetch("/api/nba-prop-train?reset=true&seasons=2022,2023,2024");
+      const { fetchWithAuth } = await import("@/lib/supabase/fetch-with-auth");
+      const res = await fetchWithAuth("/api/nba-prop-train?reset=true&seasons=2022,2023,2024");
       const data = await res.json();
+      if (!res.ok) {
+        setTrainingProgress({ status: "error", error: data.error ?? "Training failed" });
+        setTraining(false);
+        return;
+      }
       setTrainingProgress({ status: "complete", ...data });
     } catch (err: any) {
       setTrainingProgress({ status: "error", error: err.message });
@@ -123,8 +129,14 @@ export default function BotChallenge() {
     setEvolving(true);
     setEvolutionResult(null);
     try {
-      const res = await fetch("/api/nba-prop-evolve?generations=3");
+      const { fetchWithAuth } = await import("@/lib/supabase/fetch-with-auth");
+      const res = await fetchWithAuth("/api/nba-prop-evolve?generations=3");
       const data = await res.json();
+      if (!res.ok) {
+        setEvolutionResult({ ok: false, error: data.error ?? "Evolution failed" });
+        setEvolving(false);
+        return;
+      }
       setEvolutionResult(data);
     } catch (err: any) {
       setEvolutionResult({ ok: false, error: err.message });

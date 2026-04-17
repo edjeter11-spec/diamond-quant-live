@@ -736,7 +736,8 @@ function PickCard({ pick, isExpanded, onToggle, onAddToParlay, formatOdds }: {
             <button onClick={async (e) => {
               e.stopPropagation();
               try {
-                const res = await fetch("/api/slip/share", {
+                const { fetchWithAuth } = await import("@/lib/supabase/fetch-with-auth");
+                const res = await fetchWithAuth("/api/slip/share", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({ picks: [{ pick: pick.pick, game: pick.game, odds: pick.odds, bookmaker: pick.bookmaker, evPercentage: pick.evPercentage, market: pick.market }] }),

@@ -3,11 +3,20 @@ import { evolve } from "@/lib/bot/nba-brain-evolution";
 import { loadNbaPropBrainFromCloud, saveNbaPropBrainToCloud } from "@/lib/bot/nba-prop-brain";
 import { fetchAllTrainingData } from "@/lib/bot/nba-stats-fetcher";
 import { cloudGet, cloudSet } from "@/lib/supabase/client";
+import { getUserFromRequest } from "@/lib/supabase/server-auth";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 export async function GET(req: NextRequest) {
+  // Lock down: admin-only OR cron secret. 5-min compute job — DOS vector if open.
+  const cronSecret = req.headers.get("x-cron-secret");
+  if (cronSecret !== process.env.CRON_SECRET) {
+    const user = await getUserFromRequest(req);
+    if (!user) return NextResponse.json({ ok: false, error: "Auth required" }, { status: 401 });
+    if (!user.isAdmin) return NextResponse.json({ ok: false, error: "Admin only" }, { status: 403 });
+  }
+
   const { searchParams } = new URL(req.url);
   const generations = Math.min(2, parseInt(searchParams.get("generations") || "2"));
 
