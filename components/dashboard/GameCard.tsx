@@ -5,6 +5,7 @@ import { useSport } from "@/lib/sport-context";
 import { Clock, MapPin, Cloud, ChevronRight, TrendingUp, Zap } from "lucide-react";
 import TeamLogo from "@/components/ui/TeamLogo";
 import PlayerAvatar from "@/components/ui/PlayerAvatar";
+import WeatherBadge from "@/components/ui/WeatherBadge";
 import { getFullTeamName } from "@/lib/logos";
 
 interface GameCardProps {
@@ -121,6 +122,7 @@ export default function GameCard({ game, oddsInfo }: GameCardProps) {
           )}
         </div>
         <div className="flex items-center gap-2">
+          <WeatherBadge team={game.homeAbbrev} sport={(currentSport as "mlb" | "nba")} />
           {oddsInfo?.arbCount && oddsInfo.arbCount > 0 && (
             <span className="flex items-center gap-1 px-1.5 py-0.5 bg-gold/15 border border-gold/30 rounded text-gold text-[10px] font-bold">
               <Zap className="w-2.5 h-2.5" /> ARB
