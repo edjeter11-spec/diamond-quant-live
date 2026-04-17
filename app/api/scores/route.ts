@@ -7,6 +7,8 @@ export async function GET() {
   try {
     const games = await fetchTodayGames();
 
+    const STALE_MS = 5 * 60 * 60 * 1000; // drop finals + ghost-live games >5h past first pitch
+    const now = Date.now();
     const formatted = games.map((game) => ({
       id: String(game.gamePk),
       homeTeam: game.teams.home.team.name,
@@ -27,7 +29,15 @@ export async function GET() {
       awayPitcherId: game.teams.away.probablePitcher?.id ?? null,
       weather: game.weather ?? null,
       detailedStatus: game.status.detailedState,
-    }));
+    })).filter((g) => {
+      const startMs = new Date(g.startTime).getTime();
+      if (!Number.isFinite(startMs)) return true;
+      const aged = now - startMs > STALE_MS;
+      if (g.status === "final" && aged) return false;
+      if (g.status === "live" && aged && (g.inning ?? 0) <= 1
+          && (g.homeScore ?? 0) + (g.awayScore ?? 0) === 0) return false;
+      return true;
+    });
 
     return NextResponse.json({ games: formatted, timestamp: new Date().toISOString() });
   } catch (error) {

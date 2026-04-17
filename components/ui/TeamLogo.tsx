@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { getTeamLogoByName, getTeamLogo } from "@/lib/logos";
+import { getTeamLogoByName, getTeamLogo, teamNameToAbbrev } from "@/lib/logos";
 import { useSport } from "@/lib/sport-context";
 
 interface TeamLogoProps {
@@ -18,16 +18,18 @@ export default function TeamLogo({ team, size = 20, className = "" }: TeamLogoPr
   let url = getTeamLogo(team, currentSport);
   if (!url) url = getTeamLogoByName(team, currentSport);
 
-  // If no URL or image failed to load, render a letter circle fallback
+  // If no URL or image failed to load, render a 3-letter abbreviation fallback
+  // (single-letter looked like a cryptic status code in tight UI rows)
   if (!url || imgError) {
-    const letter = (team?.charAt(0) || "?").toUpperCase();
+    const abbrev = teamNameToAbbrev(team || "", currentSport as "mlb" | "nba");
+    const label = (abbrev && abbrev.length <= 4 ? abbrev : (team || "?").slice(0, 3)).toUpperCase();
     return (
       <div
-        className={`flex-shrink-0 rounded-full bg-gunmetal/50 border border-slate/20 flex items-center justify-center text-mercury/70 font-bold ${className}`}
-        style={{ width: size, height: size, fontSize: size * 0.45, lineHeight: 1 }}
+        className={`flex-shrink-0 rounded-full bg-gunmetal/50 border border-slate/20 flex items-center justify-center text-mercury/80 font-bold tracking-tight ${className}`}
+        style={{ width: size, height: size, fontSize: size * 0.32, lineHeight: 1 }}
         title={team}
       >
-        {letter}
+        {label}
       </div>
     );
   }

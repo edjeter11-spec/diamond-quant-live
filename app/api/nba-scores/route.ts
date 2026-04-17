@@ -46,6 +46,8 @@ export async function GET() {
     }
 
     const data = await res.json();
+    const STALE_MS = 5 * 60 * 60 * 1000; // games more than 5h past tip and not finalised → drop
+    const now = Date.now();
     const games = (data.events ?? []).map((event: any) => {
       const competition = event.competitions?.[0] ?? {};
       const statusType = competition.status?.type ?? {};
@@ -91,6 +93,22 @@ export async function GET() {
         detailedStatus,
         isNBA: true,
       };
+    }).filter((g: any) => {
+      // Drop yesterday's finals + ghost-stuck "live" games more than 5h past tip
+      if (g.status === "final") {
+        const startMs = new Date(g.startTime).getTime();
+        if (Number.isFinite(startMs) && now - startMs > STALE_MS) return false;
+      }
+      if (g.status === "live") {
+        const startMs = new Date(g.startTime).getTime();
+        // If a game says "live" but tipped >5h ago and shows no progress (period 0/1, 0-0)
+        // it's a stuck feed entry — drop it
+        if (Number.isFinite(startMs) && now - startMs > STALE_MS
+            && (g.period ?? 0) <= 1 && (g.homeScore ?? 0) + (g.awayScore ?? 0) === 0) {
+          return false;
+        }
+      }
+      return true;
     });
 
     return NextResponse.json({ games, timestamp: new Date().toISOString() });
