@@ -2,9 +2,9 @@
 
 import { useState, useRef, useCallback } from "react";
 import { useStore } from "@/lib/store";
+import { americanToDecimal } from "@/lib/model/kelly";
 import {
-  Camera, Upload, X, CheckCircle, RefreshCw, AlertTriangle,
-  DollarSign, Layers, Target, Zap,
+  Camera, Upload, CheckCircle, RefreshCw, AlertTriangle, Image as ImageIcon, Zap,
 } from "lucide-react";
 
 interface ScannedSlip {
@@ -23,12 +23,14 @@ interface ScannedSlip {
 }
 
 export default function SnapSync() {
-  const { addBet } = useStore();
+  const { addBet, settleBet, betHistory } = useStore();
   const [mode, setMode] = useState<"idle" | "scanning" | "review" | "success" | "error">("idle");
   const [slip, setSlip] = useState<ScannedSlip | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState("");
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [successMsg, setSuccessMsg] = useState("");
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
 
   const handleFile = useCallback(async (file: File) => {
     setMode("scanning");
@@ -85,36 +87,67 @@ export default function SnapSync() {
   const confirmBet = () => {
     if (!slip) return;
 
-    if (slip.betType === "parlay" && slip.legs.length > 1) {
-      // Log as parlay
-      addBet({
-        game: slip.legs.map(l => l.game).join(" + "),
-        market: "parlay",
-        pick: slip.legs.map(l => l.pick).join(" / "),
-        bookmaker: slip.sportsbook ?? "Unknown",
-        odds: slip.odds,
-        stake: slip.stake,
-        result: "pending",
-        payout: 0,
-        isParlay: true,
-        parlayLegs: slip.legs.map(l => l.pick),
-        evAtPlacement: 0,
-      });
+    // Gemini returns status as "pending" | "won" | "lost" — map to our internal type
+    const rawStatus = (slip.status ?? "pending").toLowerCase();
+    const detectedResult: "pending" | "win" | "loss" | "push" =
+      rawStatus === "won" || rawStatus === "win" ? "win"
+      : rawStatus === "lost" || rawStatus === "loss" ? "loss"
+      : rawStatus === "push" ? "push"
+      : "pending";
+
+    const isParlay = slip.betType === "parlay" && slip.legs.length > 1;
+    const bet = isParlay
+      ? {
+          game: slip.legs.map(l => l.game).join(" + "),
+          market: "parlay",
+          pick: slip.legs.map(l => l.pick).join(" / "),
+          bookmaker: slip.sportsbook ?? "Unknown",
+          odds: slip.odds,
+          stake: slip.stake,
+          result: "pending" as const,
+          payout: 0,
+          isParlay: true,
+          parlayLegs: slip.legs.map(l => l.pick),
+          evAtPlacement: 0,
+        }
+      : {
+          game: slip.legs[0]?.game ?? "",
+          market: slip.legs[0]?.market ?? "moneyline",
+          pick: slip.legs[0]?.pick ?? slip.betType,
+          bookmaker: slip.sportsbook ?? "Unknown",
+          odds: slip.legs[0]?.odds ?? slip.odds,
+          stake: slip.stake,
+          result: "pending" as const,
+          payout: 0,
+          isParlay: false,
+          evAtPlacement: 0,
+        };
+
+    addBet(bet);
+
+    // If Gemini detected the bet already hit or lost, auto-settle immediately
+    if (detectedResult !== "pending") {
+      setTimeout(() => {
+        const { betHistory: latest } = useStore.getState();
+        const just = latest[latest.length - 1];
+        if (just) {
+          const payout = detectedResult === "win"
+            ? bet.stake * americanToDecimal(bet.odds)
+            : detectedResult === "push"
+              ? bet.stake
+              : 0;
+          settleBet(just.id, detectedResult, payout);
+          setSuccessMsg(
+            detectedResult === "win"
+              ? `Win logged — +$${(payout - bet.stake).toFixed(2)} to bankroll`
+              : detectedResult === "loss"
+                ? `Loss logged — -$${bet.stake.toFixed(2)} from bankroll`
+                : "Push logged — stake returned"
+          );
+        }
+      }, 50);
     } else {
-      // Log as straight bet
-      const leg = slip.legs[0];
-      addBet({
-        game: leg?.game ?? "",
-        market: leg?.market ?? "moneyline",
-        pick: leg?.pick ?? slip.betType,
-        bookmaker: slip.sportsbook ?? "Unknown",
-        odds: leg?.odds ?? slip.odds,
-        stake: slip.stake,
-        result: "pending",
-        payout: 0,
-        isParlay: false,
-        evAtPlacement: 0,
-      });
+      setSuccessMsg("Bet added to pending — will auto-settle when resolved");
     }
 
     setMode("success");
@@ -122,7 +155,8 @@ export default function SnapSync() {
       setMode("idle");
       setSlip(null);
       setPreview(null);
-    }, 2000);
+      setSuccessMsg("");
+    }, 2500);
   };
 
   const reset = () => {
@@ -148,20 +182,42 @@ export default function SnapSync() {
       </div>
 
       <div className="p-4">
-        {/* Idle — Drop zone */}
+        {/* Idle — Drop zone + camera/gallery buttons */}
         {mode === "idle" && (
           <div
             onDragOver={(e) => e.preventDefault()}
             onDrop={handleDrop}
-            onClick={() => fileInputRef.current?.click()}
-            className="border-2 border-dashed border-slate/30 rounded-xl p-6 text-center cursor-pointer hover:border-electric/40 hover:bg-electric/5 transition-all"
+            className="border-2 border-dashed border-slate/30 rounded-xl p-5 hover:border-electric/30 transition-all"
           >
-            <Upload className="w-8 h-8 text-mercury/30 mx-auto mb-2" />
-            <p className="text-sm text-mercury font-medium">Drop a screenshot or tap to upload</p>
-            <p className="text-[10px] text-mercury/50 mt-1">Works with DraftKings, FanDuel, BetMGM, and more</p>
-            <p className="text-[10px] text-electric mt-2">Or paste a screenshot (Ctrl+V / Cmd+V)</p>
+            <div className="text-center mb-4">
+              <Upload className="w-7 h-7 text-mercury/30 mx-auto mb-1.5" />
+              <p className="text-xs text-mercury font-medium">Import a bet slip to your bankroll</p>
+              <p className="text-[10px] text-mercury/50 mt-0.5">AI reads it, auto-settles wins/losses, and syncs across devices</p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 mb-2">
+              <button
+                onClick={() => cameraInputRef.current?.click()}
+                className="flex flex-col items-center gap-1.5 py-3 rounded-lg bg-electric/10 border border-electric/25 text-electric hover:bg-electric/20 active:scale-[0.98] transition-all"
+              >
+                <Camera className="w-5 h-5" />
+                <span className="text-xs font-semibold">Take Photo</span>
+              </button>
+              <button
+                onClick={() => galleryInputRef.current?.click()}
+                className="flex flex-col items-center gap-1.5 py-3 rounded-lg bg-neon/10 border border-neon/25 text-neon hover:bg-neon/20 active:scale-[0.98] transition-all"
+              >
+                <ImageIcon className="w-5 h-5" />
+                <span className="text-xs font-semibold">Photo Library</span>
+              </button>
+            </div>
+
+            <p className="text-[10px] text-mercury/40 text-center">
+              or drop / paste a screenshot (Ctrl+V)
+            </p>
+
             <input
-              ref={fileInputRef}
+              ref={cameraInputRef}
               type="file"
               accept="image/*"
               capture="environment"
@@ -169,6 +225,18 @@ export default function SnapSync() {
               onChange={(e) => {
                 const file = e.target.files?.[0];
                 if (file) handleFile(file);
+                e.target.value = "";
+              }}
+            />
+            <input
+              ref={galleryInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleFile(file);
+                e.target.value = "";
               }}
             />
           </div>
@@ -193,9 +261,38 @@ export default function SnapSync() {
           <div className="space-y-3 animate-slide-up">
             <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-electric/5 border border-electric/15">
               <Zap className="w-4 h-4 text-electric" />
-              <p className="text-xs text-electric font-medium">
+              <p className="text-xs text-electric font-medium flex-1">
                 Found a {slip.legs.length > 1 ? `${slip.legs.length}-leg parlay` : "straight bet"} on {slip.sportsbook ?? "Unknown"}
               </p>
+              {slip.status && slip.status !== "pending" && (
+                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                  slip.status === "won" ? "bg-neon/20 text-neon" :
+                  slip.status === "lost" ? "bg-danger/20 text-danger" :
+                  "bg-mercury/20 text-mercury"
+                }`}>
+                  {slip.status.toUpperCase()}
+                </span>
+              )}
+            </div>
+
+            {/* Result override — let user correct detected status */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-mercury/60 uppercase tracking-wider flex-shrink-0">Result:</span>
+              {(["pending", "won", "lost"] as const).map((s) => (
+                <button
+                  key={s}
+                  onClick={() => setSlip({ ...slip, status: s })}
+                  className={`flex-1 py-1 rounded text-[10px] font-semibold border transition-colors ${
+                    slip.status === s
+                      ? s === "won" ? "bg-neon/20 border-neon/40 text-neon"
+                        : s === "lost" ? "bg-danger/20 border-danger/40 text-danger"
+                        : "bg-amber/20 border-amber/40 text-amber"
+                      : "bg-gunmetal/40 border-slate/30 text-mercury/70 hover:border-electric/30"
+                  }`}
+                >
+                  {s === "pending" ? "Pending" : s === "won" ? "Won" : "Lost"}
+                </button>
+              ))}
             </div>
 
             {/* Slip preview */}
@@ -258,7 +355,7 @@ export default function SnapSync() {
           <div className="text-center py-6 animate-slide-up">
             <CheckCircle className="w-10 h-10 text-neon mx-auto mb-2" />
             <p className="text-sm text-neon font-semibold">Bet logged!</p>
-            <p className="text-[10px] text-mercury/50 mt-1">Added to your bankroll — will auto-settle when the game ends</p>
+            <p className="text-[10px] text-mercury/60 mt-1">{successMsg || "Added to your bankroll — syncs across devices"}</p>
           </div>
         )}
 

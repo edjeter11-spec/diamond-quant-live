@@ -46,7 +46,14 @@ export async function POST(req: Request) {
   "status": "pending" or "won" or "lost"
 }
 
-If it's a straight bet, legs should have exactly 1 entry. For parlays, include all legs. Extract exact odds, teams, and amounts. If you can't read something, use null.`
+If it's a straight bet, legs should have exactly 1 entry. For parlays, include all legs. Extract exact odds, teams, and amounts.
+
+For "status": carefully determine if the bet has already been settled:
+- Return "won" if you see a green badge/icon, checkmark, "WON", "WIN", "CASHED", "PAID", or the amount shown as a credit/profit with a green color
+- Return "lost" if you see a red badge/icon, X mark, "LOST", "LOSS", "SETTLED - LOSS", or greyed-out/strikethrough styling
+- Return "pending" if you see "PENDING", "LIVE", "OPEN", "ACTIVE", no result indicator, or the games haven't played
+
+If you can't read something, use null.`
             },
             {
               inline_data: {
