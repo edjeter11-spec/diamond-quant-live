@@ -273,7 +273,7 @@ export default function PlayerProps() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && searchPlayer()}
-              placeholder="Search any player (e.g. Aaron Judge)..."
+              placeholder={`Search any player (e.g. ${currentSport === "nba" ? "Devin Booker" : "Aaron Judge"})...`}
               className="w-full pl-8 pr-3 py-2 bg-gunmetal/50 border border-slate/30 rounded-lg text-sm text-silver placeholder:text-mercury/40 focus:outline-none focus:border-electric/30"
             />
             {searchQuery && (

@@ -87,6 +87,21 @@ export async function GET(req: Request) {
 
     const grouped = groupByPlayer(allProps);
 
+    // Augment NBA props with playerId for headshot URLs
+    if (sport === "basketball_nba" && grouped.length > 0) {
+      try {
+        const { searchNBAPlayer } = await import("@/lib/nba/player-stats");
+        await Promise.all(
+          grouped.map(async (g: any) => {
+            try {
+              const p = await searchNBAPlayer(g.playerName);
+              if (p?.id) g.playerId = p.id;
+            } catch {}
+          })
+        );
+      } catch {}
+    }
+
     const response = {
       props: grouped,
       markets: PROP_MARKETS,

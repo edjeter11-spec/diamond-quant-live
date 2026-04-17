@@ -12,6 +12,7 @@ import PropDetail from "@/components/dashboard/PropDetail";
 
 interface RawProp {
   playerName: string;
+  playerId?: number | string;
   team?: string;
   line: number;
   market: string;
@@ -25,6 +26,7 @@ interface RawProp {
 interface PropPick {
   key: string;
   playerName: string;
+  playerId?: number | string;
   team?: string;
   side: "over" | "under";
   line: number;
@@ -73,6 +75,7 @@ function scoreProp(side: "over" | "under", prop: RawProp): PropPick | null {
   return {
     key: `${prop.market}-${prop.playerName}-${side}`,
     playerName: prop.playerName,
+    playerId: prop.playerId,
     team: prop.team,
     side,
     line: prop.line,
@@ -195,7 +198,7 @@ export default function TodayPropPicks({
                   }`}>
                     {p.side === "over" ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}
                   </div>
-                  <PlayerAvatar name={p.playerName} size={24} />
+                  <PlayerAvatar name={p.playerName} playerId={p.playerId} sport={sport} size={24} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">
                       <p className="text-xs sm:text-sm font-semibold text-silver truncate">

@@ -16,6 +16,7 @@ import Link from "next/link";
 import { usePremium } from "@/lib/hooks/usePremium";
 import TodayPropPicks from "@/components/dashboard/TodayPropPicks";
 import PropDetail from "@/components/dashboard/PropDetail";
+import { formatPickLabel } from "@/lib/display";
 
 interface Pick {
   id: string;
@@ -608,6 +609,7 @@ function PickCard({ pick, isExpanded, onToggle, onAddToParlay, formatOdds }: {
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [shared, setShared] = useState(false);
   const { bankroll, scores } = useStore();
+  const { currentSport } = useSport();
 
   // Demote Sharp tag if the underlying game has TBD pitcher (input incomplete).
   const isPitcherTBD = useMemo(() => {
@@ -696,8 +698,8 @@ function PickCard({ pick, isExpanded, onToggle, onAddToParlay, formatOdds }: {
                 {pick.dayLabel ?? "Upcoming"}
               </span>
             )}
-            <TeamLogo team={pick.pick.split(" ML")[0].split(" Over")[0].split(" Under")[0].split("/")[0]} size={14} />
-            <p className="text-xs sm:text-sm font-medium text-silver truncate">{pick.pick}</p>
+            <TeamLogo team={pick.pick.split(" ML")[0].split(" Moneyline")[0].split(" Over")[0].split(" Under")[0].split("/")[0]} size={14} />
+            <p className="text-xs sm:text-sm font-medium text-silver truncate">{formatPickLabel(pick.pick, currentSport as any)}</p>
           </div>
           <p className="text-[9px] sm:text-[10px] text-mercury/60 truncate flex items-center gap-1">
             {pick.commenceTime && (

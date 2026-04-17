@@ -4,8 +4,10 @@ import { useState } from "react";
 
 interface PlayerAvatarProps {
   name: string;
-  photo?: string | null;   // direct URL to headshot
-  size?: number;            // px, default 20
+  photo?: string | null;      // direct URL to headshot
+  playerId?: number | string | null; // auto-builds URL if sport given
+  sport?: "mlb" | "nba" | null;
+  size?: number;              // px, default 20
   className?: string;
 }
 
@@ -16,14 +18,25 @@ function getInitials(name: string): string {
   return name.charAt(0).toUpperCase();
 }
 
-export default function PlayerAvatar({ name, photo, size = 20, className = "" }: PlayerAvatarProps) {
+// Build the official headshot URL for a player id + sport.
+function buildHeadshotUrl(playerId: string | number, sport: "mlb" | "nba"): string {
+  if (sport === "nba") {
+    return `https://cdn.nba.com/headshots/nba/latest/260x190/${playerId}.png`;
+  }
+  // MLB stats API
+  return `https://img.mlbstatic.com/mlb-photos/image/upload/d_people:generic:headshot:67:current.png/w_213,q_auto:best/v1/people/${playerId}/headshot/67/current`;
+}
+
+export default function PlayerAvatar({ name, photo, playerId, sport, size = 20, className = "" }: PlayerAvatarProps) {
   const [imgError, setImgError] = useState(false);
 
-  // Show headshot if available and not errored
-  if (photo && !imgError) {
+  // Prefer an explicit photo URL. Fall back to auto-built URL when we have id + sport.
+  const resolved = photo ?? (playerId && sport ? buildHeadshotUrl(playerId, sport) : null);
+
+  if (resolved && !imgError) {
     return (
       <img
-        src={photo}
+        src={resolved}
         alt={name}
         width={size}
         height={size}

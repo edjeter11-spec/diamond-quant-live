@@ -23,6 +23,7 @@ import TeamLogo from "@/components/ui/TeamLogo";
 import PlayerAvatar from "@/components/ui/PlayerAvatar";
 import BrainPickDetail from "@/components/dashboard/BrainPickDetail";
 import type { BrainReasoning } from "@/lib/bot/prop-reasoning";
+import { formatPickLabel } from "@/lib/display";
 
 export default function BotChallenge() {
   const { scores } = useStore();
@@ -749,7 +750,7 @@ function PickRow({ pick, clvRecord, isExpanded, onToggle, formatOdds, compact }:
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
             {pick.confidence === "HIGH" && <Crown className="w-3 h-3 text-gold flex-shrink-0" />}
-            <p className="text-xs sm:text-sm font-medium text-silver truncate">{pick.pick}</p>
+            <p className="text-xs sm:text-sm font-medium text-silver truncate">{formatPickLabel(pick.pick, (config as any).key ?? "mlb")}</p>
             {/* Inline CLV badge on settled picks */}
             {clvRecord && clvRecord.closingOdds !== 0 && (
               <span className={`text-[8px] font-bold px-1 py-0.5 rounded flex-shrink-0 ${clvRecord.beatClosing ? "bg-neon/15 text-neon" : "bg-danger/15 text-danger"}`}>
