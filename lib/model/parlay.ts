@@ -84,18 +84,28 @@ function correlationAdjustedProb(legs: ParlayLeg[]): number {
 
 // Build a full parlay slip with analysis
 export function buildParlay(legs: ParlayLeg[], bankroll: number = 1000): ParlaySlip {
-  const combinedDecimalOdds = calculateCombinedOdds(legs);
+  // Defensive: normalize fairProb to 0-1 range and clamp; some legacy callers
+  // passed it as a percentage which silently inverted the parlay math.
+  const safeLegs: ParlayLeg[] = legs.map(leg => {
+    let fp = leg.fairProb;
+    if (fp > 1) fp = fp / 100;
+    fp = Math.min(0.99, Math.max(0.01, fp));
+    return fp === leg.fairProb ? leg : { ...leg, fairProb: fp };
+  });
+  const combinedDecimalOdds = calculateCombinedOdds(safeLegs);
   const impliedProb = 1 / combinedDecimalOdds;
-  const fairProb = legs.reduce((acc, leg) => acc * leg.fairProb, 1);
-  const corrAdjProb = correlationAdjustedProb(legs);
+  const fairProb = safeLegs.reduce((acc, leg) => acc * leg.fairProb, 1);
+  const corrAdjProb = correlationAdjustedProb(safeLegs);
 
-  const evPct = ((corrAdjProb - impliedProb) / impliedProb) * 100;
+  // Correct EV: jointFairProb * decimalOdds - 1 (algebraically same as the
+  // (fair - implied) / implied form, but more readable).
+  const evPct = (corrAdjProb * combinedDecimalOdds - 1) * 100;
   const suggestedStake = evPct > 0
     ? kellyStake(corrAdjProb, combinedDecimalOdds, bankroll, 0.1) // 10% kelly for parlays
     : 0;
 
   return {
-    legs,
+    legs: safeLegs,
     combinedOdds: decimalToAmerican(combinedDecimalOdds),
     impliedProb: Math.round(impliedProb * 10000) / 100,
     fairProb: Math.round(fairProb * 10000) / 100,

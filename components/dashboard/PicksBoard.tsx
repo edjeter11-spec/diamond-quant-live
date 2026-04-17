@@ -317,18 +317,46 @@ export default function PicksBoard() {
       return team;
     }
 
+    // Honesty gate: never call something HIGH/MEDIUM or Sharp without a real edge.
+    // Also caps confidence at LOW for MLB totals when starter is TBD (pitcher
+    // is the dominant input — without it the model is guessing).
+    function honestify(p: Pick): Pick {
+      const ev = p.evPercentage ?? 0;
+      let conf = p.confidence;
+      let isSharp = !!p.isSharp;
+
+      // Edge thresholds — keep parity with backend EV calc
+      if (ev < 1.5) isSharp = false;
+      if (ev < 2.0 && conf === "HIGH") conf = "MEDIUM";
+      if (ev < 1.0 && conf === "MEDIUM") conf = "LOW";
+      if (ev <= 0) { conf = "LOW"; isSharp = false; }
+
+      // TBD pitcher → cap totals at LOW, kill Sharp
+      const isTotal = p.market === "total";
+      if (isTotal && p.game) {
+        const gameSrc = scores.find((s: any) =>
+          p.game.includes(s.homeTeam) || p.game.includes(s.awayTeam) ||
+          p.game.includes(s.homeAbbrev) || p.game.includes(s.awayAbbrev)
+        );
+        const tbd = !!gameSrc && (gameSrc.homePitcher === "TBD" || gameSrc.awayPitcher === "TBD");
+        if (tbd) { conf = "LOW"; isSharp = false; }
+      }
+
+      return (conf === p.confidence && isSharp === !!p.isSharp) ? p : { ...p, confidence: conf, isSharp };
+    }
+
     // Model picks first (they have real analysis)
     for (const p of modelPicks) {
       const key = normalizeKey(p);
-      if (!seen.has(key)) { seen.add(key); merged.push(p); }
+      if (!seen.has(key)) { seen.add(key); merged.push(honestify(p)); }
     }
     // Then EV picks that aren't duplicates
     for (const p of allEV) {
       const key = normalizeKey(p);
-      if (!seen.has(key)) { seen.add(key); merged.push(p); }
+      if (!seen.has(key)) { seen.add(key); merged.push(honestify(p)); }
     }
     return merged;
-  }, [modelPicks, allEV]);
+  }, [modelPicks, allEV, scores]);
 
   // Build all sections in one stable useMemo
   const { topLocks, longshots, moneylines, runLines, overs, unders } = useMemo(() => {

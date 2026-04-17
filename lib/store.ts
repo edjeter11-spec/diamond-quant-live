@@ -211,7 +211,12 @@ export const useStore = create<AppState>((set, get) => ({
   addParlayLeg: (leg) => {
     const id = `leg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     const impliedProb = americanToImpliedProb(leg.odds);
-    const newLeg: ParlayLeg = { ...leg, id, impliedProb };
+    // Defensive normalization: callers historically passed fairProb in either
+    // 0-1 or 0-100 range. Coerce to 0-1 and clamp so parlay math stays sane.
+    let fairProb = leg.fairProb;
+    if (fairProb > 1) fairProb = fairProb / 100;
+    fairProb = Math.min(0.99, Math.max(0.01, fairProb));
+    const newLeg: ParlayLeg = { ...leg, id, impliedProb, fairProb };
 
     set((s) => {
       const legs = [...s.parlayLegs, newLeg];
