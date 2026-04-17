@@ -33,6 +33,7 @@ import PlayerCompare from "@/components/dashboard/PlayerCompare";
 import ROIChart from "@/components/dashboard/ROIChart";
 import { matchGames } from "@/lib/mlb/match-games";
 import TodayPicksStrip from "@/components/dashboard/TodayPicksStrip";
+import TonightsPlays from "@/components/dashboard/TonightsPlays";
 import { backupOddsToStorage, getOddsBackup } from "@/lib/odds/cache";
 import { sendDiscordAlert } from "@/lib/odds/sportsbooks";
 import { getDiscordWebhook, setDiscordWebhook } from "@/lib/store";
@@ -571,6 +572,9 @@ export default function WarRoom() {
 
                   {/* Center — Main Picks Board */}
                   <div className="flex-1 min-w-0 space-y-3 sm:space-y-4">
+                    {/* Tonight's Plays — 30-second answer */}
+                    <TonightsPlays sport={currentSport} />
+
                     {/* Today's bot picks strip */}
                     <TodayPicksStrip sport={currentSport} onNavigateBot={() => setActiveTab("bot")} />
 
@@ -738,6 +742,10 @@ export default function WarRoom() {
           Analytics platform — for informational & educational purposes only.
         </p>
         <div className="flex flex-wrap items-center justify-center gap-3 mt-3 text-[10px] text-mercury/50">
+          <a href="/results" className="hover:text-mercury transition-colors">Track Record</a>
+          <span className="text-mercury/20">·</span>
+          <a href="/pricing" className="hover:text-mercury transition-colors">Pricing</a>
+          <span className="text-mercury/20">·</span>
           <a href="/terms" className="hover:text-mercury transition-colors">Terms</a>
           <span className="text-mercury/20">·</span>
           <a href="/privacy" className="hover:text-mercury transition-colors">Privacy</a>

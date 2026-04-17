@@ -1,238 +1,280 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Diamond, Trophy, TrendingUp, TrendingDown, BarChart3, Target, CheckCircle, XCircle, Brain, Zap, Crown, Shield } from "lucide-react";
+import Link from "next/link";
+import {
+  Diamond, Trophy, CheckCircle, XCircle, Minus, ArrowLeft,
+  TrendingUp, TrendingDown, Target,
+} from "lucide-react";
+
+interface Bucket {
+  total: number;
+  wins: number;
+  losses: number;
+  winRate: number;
+  profitUnits: number;
+}
+
+interface ResultsData {
+  ok: boolean;
+  days: number;
+  overall: Bucket & { pushes: number };
+  byCategory: Record<"parlay" | "lock" | "longshot" | "prop", Bucket>;
+  bySport: Record<"mlb" | "nba", Bucket>;
+  daily: Array<{ date: string; wins: number; losses: number; profitUnits: number }>;
+  recent: Array<{
+    pick_date: string; sport: string; category: string;
+    pick_text: string; game: string; odds: number;
+    result: string; profit_units: number; settled_at: string;
+  }>;
+}
+
+const CATEGORY_LABEL: Record<string, string> = {
+  parlay: "Parlay of the Day",
+  lock: "Top Locks",
+  longshot: "Longshots",
+  prop: "Player Props",
+};
 
 export default function ResultsPage() {
-  const [data, setData] = useState<any>(null);
+  const [data, setData] = useState<ResultsData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [days, setDays] = useState(30);
 
   useEffect(() => {
-    // Load from Supabase (public data)
-    async function load() {
-      try {
-        const res = await fetch("https://grbswzfizblkekrzhadw.supabase.co/rest/v1/app_state?select=key,value&key=in.(smart_bot,model_accuracy,brain,clv_mlb,clv_nba,elo_mlb,elo_nba)", {
-          headers: {
-            "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdyYnN3emZpemJsa2VrcnpoYWR3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUyNzI4MjUsImV4cCI6MjA5MDg0ODgyNX0.z-QDBxdxVaFCrNbyHChh9wC0lrwh9aE91-LJ_Fq5G9k",
-          },
-        });
-        if (res.ok) {
-          const rows = await res.json();
-          const d: any = {};
-          for (const row of rows) d[row.key] = row.value;
-          setData(d);
-        }
-      } catch {}
-    }
-    load();
-  }, []);
-
-  const bot = data?.smart_bot;
-  const accuracy = data?.model_accuracy;
-  const brain = data?.brain;
-  const clvRecords = data?.clv_mlb ?? [];
-  const eloState = data?.elo_mlb;
-
-  // CLV summary
-  const clvWithClosing = clvRecords.filter((r: any) => r.closingOdds !== 0);
-  const clvBeatCount = clvWithClosing.filter((r: any) => r.beatClosing).length;
-  const clvBeatRate = clvWithClosing.length > 0 ? (clvBeatCount / clvWithClosing.length) * 100 : 0;
-  const avgCLV = clvWithClosing.length > 0
-    ? clvWithClosing.reduce((s: number, r: any) => s + (r.clvPercent ?? 0), 0) / clvWithClosing.length : 0;
-  const isSharp = clvWithClosing.length >= 10 && clvBeatRate > 55;
-
-  // Elo top teams
-  const eloTeams = eloState?.teams ? Object.values(eloState.teams)
-    .filter((t: any) => t.gamesPlayed >= 5)
-    .sort((a: any, b: any) => b.rating - a.rating)
-    .slice(0, 10) : [];
-
-  const settled = bot?.picks?.filter((p: any) => p.result !== "pending") ?? [];
-  const wins = settled.filter((p: any) => p.result === "win").length;
-  const losses = settled.filter((p: any) => p.result === "loss").length;
-  const totalStaked = settled.reduce((s: number, p: any) => s + (p.stake ?? 0), 0);
-  const totalReturns = settled.reduce((s: number, p: any) => s + (p.payout ?? 0), 0);
-  const profit = totalReturns - totalStaked;
-  const roi = totalStaked > 0 ? (profit / totalStaked) * 100 : 0;
-  const winRate = (wins + losses) > 0 ? (wins / (wins + losses)) * 100 : 0;
+    setLoading(true);
+    fetch(`/api/results?days=${days}`)
+      .then(r => r.json())
+      .then(d => { setData(d.ok ? d : null); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [days]);
 
   return (
-    <div className="min-h-screen bg-[#0a0a0f] text-[#c4c8d8]">
+    <div className="min-h-screen bg-void text-silver">
       {/* Header */}
-      <div className="max-w-4xl mx-auto px-4 pt-8 pb-4">
-        <div className="flex items-center gap-3 mb-2">
-          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-[#00ff88]/20 to-[#00d4ff]/20 flex items-center justify-center border border-[#00ff88]/20">
-            <Diamond className="w-5 h-5 text-[#00ff88]" />
+      <header className="border-b border-slate/30 bg-bunker/80 backdrop-blur-lg sticky top-0 z-40">
+        <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
+          <Link href="/" className="flex items-center gap-2 text-mercury hover:text-silver transition-colors">
+            <ArrowLeft className="w-4 h-4" />
+            <span className="text-sm">Dashboard</span>
+          </Link>
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-neon/20 to-electric/20 border border-neon/25 flex items-center justify-center">
+              <Trophy className="w-4 h-4 text-neon" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-silver leading-tight">Public Track Record</p>
+              <p className="text-[9px] text-mercury/60 font-mono uppercase tracking-wider">Every Pick · Every Result · No Edits</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-xl font-bold text-white">Diamond-Quant Live</h1>
-            <p className="text-xs text-[#8b8fa3] font-mono">PUBLIC BOT RESULTS — VERIFIED PICKS</p>
+          <div className="flex items-center gap-1 bg-gunmetal/40 rounded-lg p-0.5">
+            {[7, 30, 90].map(n => (
+              <button
+                key={n}
+                onClick={() => setDays(n)}
+                className={`px-2.5 py-1 rounded text-[11px] font-semibold transition-colors ${
+                  days === n ? "bg-neon/15 text-neon" : "text-mercury/60 hover:text-mercury"
+                }`}
+              >
+                {n}d
+              </button>
+            ))}
           </div>
         </div>
-        <p className="text-sm text-[#8b8fa3] mt-2">
-          Transparent results from our 3-model AI system. Every pick, every result, no edits.
-        </p>
-      </div>
+      </header>
 
-      {/* Stats */}
-      <div className="max-w-4xl mx-auto px-4">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-          <StatCard label="Record" value={`${wins}W-${losses}L`} color={winRate > 52 ? "#00ff88" : "#c4c8d8"} />
-          <StatCard label="Win Rate" value={`${winRate.toFixed(1)}%`} color={winRate > 52 ? "#00ff88" : winRate < 48 ? "#ff3b5c" : "#c4c8d8"} />
-          <StatCard label="ROI" value={`${roi >= 0 ? "+" : ""}${roi.toFixed(1)}%`} color={roi > 0 ? "#00ff88" : "#ff3b5c"} />
-          <StatCard label="Profit" value={`${profit >= 0 ? "+" : ""}$${profit.toFixed(0)}`} color={profit >= 0 ? "#00ff88" : "#ff3b5c"} />
-        </div>
-
-        {/* Model accuracy */}
-        {accuracy?.consensus?.total > 0 && (
-          <div className="rounded-xl bg-[#0f1117] border border-[#2a2d3e]/50 p-4 mb-6">
-            <div className="flex items-center gap-2 mb-3">
-              <Brain className="w-4 h-4 text-[#00d4ff]" />
-              <h2 className="text-sm font-bold text-white uppercase tracking-wider">Model Accuracy</h2>
-            </div>
-            <div className="grid grid-cols-4 gap-3">
-              <ModelStat name="Pitcher" rate={accuracy.pitcher?.winRate ?? 0} total={accuracy.pitcher?.total ?? 0} />
-              <ModelStat name="Market" rate={accuracy.market?.winRate ?? 0} total={accuracy.market?.total ?? 0} />
-              <ModelStat name="Trend" rate={accuracy.trend?.winRate ?? 0} total={accuracy.trend?.total ?? 0} />
-              <ModelStat name="Consensus" rate={accuracy.consensus?.winRate ?? 0} total={accuracy.consensus?.total ?? 0} />
-            </div>
+      <main className="max-w-4xl mx-auto px-4 py-6 space-y-6">
+        {loading ? (
+          <div className="glass rounded-xl p-12 text-center">
+            <Diamond className="w-8 h-8 text-neon/40 mx-auto mb-3 animate-pulse" />
+            <p className="text-sm text-mercury">Loading track record...</p>
           </div>
-        )}
-
-        {/* CLV Edge Proof */}
-        {clvWithClosing.length > 0 && (
-          <div className="rounded-xl bg-[#0f1117] border border-[#2a2d3e]/50 p-4 mb-6">
-            <div className="flex items-center gap-2 mb-3">
-              <Zap className="w-4 h-4 text-[#a855f7]" />
-              <h2 className="text-sm font-bold text-white uppercase tracking-wider">Closing Line Value</h2>
-              {isSharp && (
-                <span className="px-1.5 py-0.5 rounded bg-[#00ff88]/10 text-[#00ff88] text-[9px] font-bold">SHARP</span>
-              )}
-            </div>
-            <p className="text-xs text-[#8b8fa3] mb-3">
-              CLV measures if we get better odds than the market closing line. Beating the close consistently = proven edge.
-            </p>
-            <div className="grid grid-cols-3 gap-3">
-              <div className="text-center">
-                <p className={`text-lg font-bold font-mono ${clvBeatRate > 55 ? "text-[#00ff88]" : "text-[#c4c8d8]"}`}>
-                  {clvBeatRate.toFixed(1)}%
-                </p>
-                <p className="text-[8px] text-[#8b8fa3]">Beat Rate ({clvWithClosing.length} bets)</p>
-              </div>
-              <div className="text-center">
-                <p className={`text-lg font-bold font-mono ${avgCLV > 0 ? "text-[#00ff88]" : "text-[#ff3b5c]"}`}>
-                  {avgCLV > 0 ? "+" : ""}{avgCLV.toFixed(2)}%
-                </p>
-                <p className="text-[8px] text-[#8b8fa3]">Avg CLV</p>
-              </div>
-              <div className="text-center">
-                <p className="text-lg font-bold font-mono text-[#c4c8d8]">{clvRecords.length}</p>
-                <p className="text-[8px] text-[#8b8fa3]">Total Tracked</p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Elo Power Rankings */}
-        {eloTeams.length > 0 && (
-          <div className="rounded-xl bg-[#0f1117] border border-[#2a2d3e]/50 p-4 mb-6">
-            <div className="flex items-center gap-2 mb-3">
-              <Crown className="w-4 h-4 text-[#f59e0b]" />
-              <h2 className="text-sm font-bold text-white uppercase tracking-wider">Power Rankings (Elo)</h2>
-              <span className="text-[9px] text-[#8b8fa3] ml-auto">{eloState?.totalGamesProcessed ?? 0} games processed</span>
-            </div>
-            <div className="space-y-1">
-              {eloTeams.map((team: any, i: number) => (
-                <div key={team.team} className="flex items-center gap-2 px-2 py-1.5 rounded bg-[#1a1d2e]/50">
-                  <span className={`text-[10px] font-bold w-5 text-center ${i === 0 ? "text-[#f59e0b]" : i < 3 ? "text-[#00ff88]" : "text-[#8b8fa3]"}`}>
-                    {i + 1}
-                  </span>
-                  <p className="text-xs text-white flex-1 font-medium">{team.team}</p>
-                  <p className="text-xs font-mono text-[#00d4ff] font-bold">{team.rating}</p>
-                  <p className="text-[9px] text-[#8b8fa3] w-14 text-right">{team.wins}W-{team.losses}L</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Brain info */}
-        {brain && (
-          <div className="rounded-xl bg-[#0f1117] border border-[#2a2d3e]/50 p-4 mb-6">
-            <div className="flex items-center gap-2 mb-2">
-              <Target className="w-4 h-4 text-[#a855f7]" />
-              <h2 className="text-sm font-bold text-white uppercase tracking-wider">Intelligence</h2>
-            </div>
-            <p className="text-xs text-[#8b8fa3]">
-              Model {brain.version} • Trained on {brain.totalGamesProcessed?.toLocaleString() ?? 0} games •
-              Knows {Object.keys(brain.pitcherMemory ?? {}).length} pitchers,{" "}
-              {Object.keys(brain.parkMemory ?? {}).length} parks,{" "}
-              {Object.keys(brain.matchupMemory ?? {}).length} matchups
+        ) : !data || data.overall.total === 0 ? (
+          <div className="glass rounded-xl p-10 text-center">
+            <Target className="w-10 h-10 text-mercury/30 mx-auto mb-3" />
+            <p className="text-base font-semibold text-silver">Building our track record</p>
+            <p className="text-sm text-mercury/70 mt-1 max-w-md mx-auto">
+              The first picks are being logged and will settle after games complete. Check back in 24 hours.
             </p>
           </div>
-        )}
+        ) : (
+          <>
+            {/* Overall stats */}
+            <section>
+              <h2 className="text-[10px] font-semibold text-mercury/60 uppercase tracking-wider mb-2">
+                Last {data.days} days · {data.overall.total} settled picks
+              </h2>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <StatCard
+                  label="Record"
+                  value={`${data.overall.wins}–${data.overall.losses}${data.overall.pushes ? `–${data.overall.pushes}` : ""}`}
+                  tone={data.overall.winRate > 52 ? "good" : data.overall.winRate < 48 ? "bad" : "neutral"}
+                />
+                <StatCard
+                  label="Win Rate"
+                  value={`${data.overall.winRate.toFixed(1)}%`}
+                  tone={data.overall.winRate > 52.4 ? "good" : data.overall.winRate < 50 ? "bad" : "neutral"}
+                  sub="vs 52.4% break-even"
+                />
+                <StatCard
+                  label="Profit"
+                  value={`${data.overall.profitUnits >= 0 ? "+" : ""}${data.overall.profitUnits.toFixed(1)}u`}
+                  tone={data.overall.profitUnits > 0 ? "good" : "bad"}
+                  sub="1 unit = 1% bankroll"
+                />
+                <StatCard
+                  label="ROI"
+                  value={`${data.overall.total > 0 ? ((data.overall.profitUnits / data.overall.total) * 100).toFixed(1) : "0.0"}%`}
+                  tone={data.overall.profitUnits > 0 ? "good" : "bad"}
+                  sub="per pick"
+                />
+              </div>
+            </section>
 
-        {/* Recent picks */}
-        <div className="rounded-xl bg-[#0f1117] border border-[#2a2d3e]/50 overflow-hidden mb-8">
-          <div className="px-4 py-3 border-b border-[#2a2d3e]/50">
-            <h2 className="text-sm font-bold text-white uppercase tracking-wider">Recent Picks</h2>
-          </div>
-          {settled.length === 0 ? (
-            <div className="p-8 text-center text-[#8b8fa3] text-sm">No settled picks yet — check back after games finish</div>
-          ) : (
-            <div className="divide-y divide-[#2a2d3e]/30">
-              {[...settled].reverse().slice(0, 20).map((pick: any, i: number) => (
-                <div key={i} className="px-4 py-3 flex items-center gap-3">
-                  <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${
-                    pick.result === "win" ? "bg-[#00ff88]/15" : "bg-[#ff3b5c]/15"
-                  }`}>
-                    {pick.result === "win" ? <CheckCircle className="w-3.5 h-3.5 text-[#00ff88]" /> : <XCircle className="w-3.5 h-3.5 text-[#ff3b5c]" />}
+            {/* By category */}
+            <section>
+              <h2 className="text-[10px] font-semibold text-mercury/60 uppercase tracking-wider mb-2">By pick type</h2>
+              <div className="glass rounded-xl overflow-hidden divide-y divide-slate/20">
+                {Object.entries(data.byCategory).map(([k, bucket]) => (
+                  bucket.total > 0 && (
+                    <div key={k} className="px-4 py-3 flex items-center gap-3">
+                      <div className="flex-1">
+                        <p className="text-sm font-semibold text-silver">{CATEGORY_LABEL[k] ?? k}</p>
+                        <p className="text-[11px] text-mercury/60">
+                          {bucket.wins}W–{bucket.losses}L · {bucket.total} picks
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className={`text-sm font-bold font-mono ${bucket.winRate > 52 ? "text-neon" : bucket.winRate < 48 ? "text-danger" : "text-silver"}`}>
+                          {bucket.winRate.toFixed(1)}%
+                        </p>
+                        <p className={`text-[11px] font-mono ${bucket.profitUnits >= 0 ? "text-neon/80" : "text-danger/80"}`}>
+                          {bucket.profitUnits >= 0 ? "+" : ""}{bucket.profitUnits.toFixed(1)}u
+                        </p>
+                      </div>
+                    </div>
+                  )
+                ))}
+              </div>
+            </section>
+
+            {/* By sport */}
+            <section>
+              <h2 className="text-[10px] font-semibold text-mercury/60 uppercase tracking-wider mb-2">By sport</h2>
+              <div className="grid grid-cols-2 gap-3">
+                {(["mlb", "nba"] as const).map(sport => {
+                  const b = data.bySport[sport];
+                  if (!b || b.total === 0) return (
+                    <div key={sport} className="glass rounded-xl p-4">
+                      <p className="text-xs text-mercury/50 uppercase tracking-wider">{sport}</p>
+                      <p className="text-sm text-mercury/30 mt-1">No picks yet</p>
+                    </div>
+                  );
+                  return (
+                    <div key={sport} className="glass rounded-xl p-4">
+                      <p className="text-xs text-mercury/60 uppercase tracking-wider mb-1">{sport}</p>
+                      <p className="text-2xl font-bold font-mono text-silver">{b.wins}–{b.losses}</p>
+                      <div className="flex items-center justify-between mt-1">
+                        <p className={`text-xs font-mono ${b.winRate > 52 ? "text-neon" : "text-mercury/70"}`}>
+                          {b.winRate.toFixed(1)}%
+                        </p>
+                        <p className={`text-xs font-mono ${b.profitUnits >= 0 ? "text-neon" : "text-danger"}`}>
+                          {b.profitUnits >= 0 ? "+" : ""}{b.profitUnits.toFixed(1)}u
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+
+            {/* Daily chart */}
+            {data.daily.length > 0 && (
+              <section>
+                <h2 className="text-[10px] font-semibold text-mercury/60 uppercase tracking-wider mb-2">Daily P/L</h2>
+                <div className="glass rounded-xl p-4">
+                  <div className="flex items-end gap-1 h-24">
+                    {data.daily.slice(-30).map(d => {
+                      const maxAbs = Math.max(...data.daily.map(x => Math.abs(x.profitUnits)), 1);
+                      const h = Math.max(4, (Math.abs(d.profitUnits) / maxAbs) * 84);
+                      return (
+                        <div
+                          key={d.date}
+                          className="flex-1 flex flex-col items-center justify-end gap-0.5"
+                          title={`${d.date}: ${d.wins}W–${d.losses}L · ${d.profitUnits >= 0 ? "+" : ""}${d.profitUnits.toFixed(1)}u`}
+                        >
+                          <div
+                            className={`w-full rounded-sm ${d.profitUnits >= 0 ? "bg-neon/70" : "bg-danger/70"}`}
+                            style={{ height: `${h}px` }}
+                          />
+                        </div>
+                      );
+                    })}
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium text-white truncate">{pick.pick}</p>
-                    <p className="text-[10px] text-[#8b8fa3] truncate">{pick.game} • {pick.date}</p>
-                  </div>
-                  <div className="text-right flex-shrink-0">
-                    <p className="text-xs font-mono text-white">{pick.odds > 0 ? "+" : ""}{pick.odds}</p>
-                    <p className={`text-[10px] font-mono ${(pick.payout - pick.stake) >= 0 ? "text-[#00ff88]" : "text-[#ff3b5c]"}`}>
-                      {(pick.payout - pick.stake) >= 0 ? "+" : ""}${(pick.payout - pick.stake).toFixed(0)}
-                    </p>
-                  </div>
+                  <p className="text-[10px] text-mercury/50 mt-3 text-center font-mono">
+                    {data.daily.length} days · green = profit · red = loss
+                  </p>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
+              </section>
+            )}
 
-        {/* Footer */}
-        <div className="text-center pb-8">
-          <p className="text-[10px] text-[#8b8fa3]/50 font-mono">
-            Diamond-Quant Live — AI-Powered Sports Intelligence
-          </p>
-          <a href="/" className="text-[10px] text-[#00d4ff] hover:text-[#00ff88] transition-colors">
-            ← Back to Dashboard
-          </a>
-        </div>
-      </div>
+            {/* Recent settled */}
+            {data.recent.length > 0 && (
+              <section>
+                <h2 className="text-[10px] font-semibold text-mercury/60 uppercase tracking-wider mb-2">Most recent settled picks</h2>
+                <div className="glass rounded-xl overflow-hidden divide-y divide-slate/20">
+                  {data.recent.slice(0, 15).map((r, i) => (
+                    <div key={i} className="px-3 py-2.5 flex items-center gap-2">
+                      <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${
+                        r.result === "win" ? "bg-neon/15" : r.result === "loss" ? "bg-danger/15" : "bg-mercury/15"
+                      }`}>
+                        {r.result === "win" ? <CheckCircle className="w-3 h-3 text-neon" /> :
+                         r.result === "loss" ? <XCircle className="w-3 h-3 text-danger" /> :
+                         <Minus className="w-3 h-3 text-mercury" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-silver truncate">{r.pick_text}</p>
+                        <p className="text-[10px] text-mercury/50 truncate">
+                          {r.pick_date} · {r.sport.toUpperCase()} · {CATEGORY_LABEL[r.category] ?? r.category}
+                        </p>
+                      </div>
+                      <div className="text-right flex-shrink-0">
+                        <p className="text-xs font-mono text-silver">{r.odds > 0 ? "+" : ""}{r.odds}</p>
+                        <p className={`text-[10px] font-mono ${Number(r.profit_units) >= 0 ? "text-neon/80" : "text-danger/80"}`}>
+                          {Number(r.profit_units) >= 0 ? "+" : ""}{Number(r.profit_units).toFixed(2)}u
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* Transparency note */}
+            <section>
+              <div className="glass rounded-xl p-4 border border-electric/15 bg-electric/5">
+                <p className="text-xs font-semibold text-electric mb-1">How this works</p>
+                <p className="text-[11px] text-mercury/80 leading-relaxed">
+                  Every pick published in &quot;Today&apos;s Bot Picks&quot;, &quot;Parlay of the Day&quot;, and &quot;Top Locks&quot;
+                  is logged to this public record the moment it&apos;s generated. After games complete, the results are
+                  graded automatically from the official scores. We don&apos;t hide losing picks or edit past results.
+                </p>
+              </div>
+            </section>
+          </>
+        )}
+      </main>
     </div>
   );
 }
 
-function StatCard({ label, value, color }: { label: string; value: string; color: string }) {
+function StatCard({ label, value, tone, sub }: { label: string; value: string; tone: "good" | "bad" | "neutral"; sub?: string }) {
+  const color = tone === "good" ? "text-neon" : tone === "bad" ? "text-danger" : "text-silver";
   return (
-    <div className="rounded-xl bg-[#0f1117] border border-[#2a2d3e]/50 p-3 text-center">
-      <p className="text-lg font-bold font-mono" style={{ color }}>{value}</p>
-      <p className="text-[9px] text-[#8b8fa3] uppercase">{label}</p>
-    </div>
-  );
-}
-
-function ModelStat({ name, rate, total }: { name: string; rate: number; total: number }) {
-  return (
-    <div className="text-center">
-      <p className={`text-sm font-bold font-mono ${rate > 52 ? "text-[#00ff88]" : rate > 48 ? "text-[#c4c8d8]" : "text-[#ff3b5c]"}`}>
-        {rate.toFixed(1)}%
-      </p>
-      <p className="text-[8px] text-[#8b8fa3]">{name} ({total})</p>
+    <div className="glass rounded-xl p-3">
+      <p className="text-[10px] text-mercury/60 uppercase tracking-wider">{label}</p>
+      <p className={`text-xl font-bold font-mono mt-1 ${color}`}>{value}</p>
+      {sub && <p className="text-[9px] text-mercury/40 mt-0.5">{sub}</p>}
     </div>
   );
 }

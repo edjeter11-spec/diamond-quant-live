@@ -11,10 +11,10 @@ const PLANS = [
     price: "$0",
     period: "forever",
     features: [
+      "3 picks per day",
       "Live odds from 10+ sportsbooks",
-      "3-model game analysis",
-      "Basic player props",
-      "5 prop searches/day",
+      "Public track record",
+      "Bankroll + bet logging",
     ],
     cta: "Current Plan",
     highlighted: false,
@@ -22,38 +22,21 @@ const PLANS = [
   },
   {
     name: "Pro",
-    price: "$19",
+    price: "$15",
     period: "/month",
     features: [
-      "Everything in Free",
-      "AI Prop Brain projections",
-      "Unlimited player searches",
-      "Brain accuracy badges",
-      "Prop Bot auto-picks",
-      "Parlay correlation engine",
-      "Push notifications",
+      "Unlimited picks — every +EV bet we find",
+      "Parlay of the Day + Top Locks unlocked",
+      "AI Prop Brain (NBA) + prop projections",
+      "Live arbitrage scanner",
+      "Sharp money tracker",
+      "Auto-settle bets from screenshots",
       "Discord daily recap",
+      "7-day free trial · cancel anytime",
     ],
-    cta: "Upgrade to Pro",
+    cta: "Start 7-Day Free Trial",
     highlighted: true,
     priceId: process.env.NEXT_PUBLIC_STRIPE_PRO_PRICE_ID || "price_pro",
-  },
-  {
-    name: "Elite",
-    price: "$49",
-    period: "/month",
-    features: [
-      "Everything in Pro",
-      "Brain Evolution engine",
-      "Real-time line movement alerts",
-      "Player comparison tool",
-      "Defensive matchup data",
-      "Priority support",
-      "Early access to features",
-    ],
-    cta: "Go Elite",
-    highlighted: false,
-    priceId: process.env.NEXT_PUBLIC_STRIPE_ELITE_PRICE_ID || "price_elite",
   },
 ];
 
@@ -92,7 +75,7 @@ export default function PricingPage() {
         </div>
 
         {/* Plans */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl mx-auto">
           {PLANS.map((plan) => (
             <div
               key={plan.name}

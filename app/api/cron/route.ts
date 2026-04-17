@@ -6,6 +6,7 @@ import { commitPropProjections } from "@/lib/bot/nba-prop-ghost";
 import { buildAndSendRecap } from "@/lib/bot/daily-recap";
 import { generateSmartPicks } from "@/lib/bot/smart-picks";
 import { cloudGet, cloudSet } from "@/lib/supabase/client";
+import { logDailyPicks, settlePendingPicks, etDateString, type LoggedPick } from "@/lib/bot/track-record";
 
 // This endpoint is called by Vercel Cron every 30 min
 // It checks for finished games and logs results
@@ -78,6 +79,18 @@ export async function GET(req: Request) {
       } catch {}
     } catch {}
 
+    // ── Track Record: settle yesterday's logged picks ──
+    let trackSettled = 0;
+    try {
+      const settleGames = completedGames.map(g => ({
+        homeTeam: g.homeTeam ?? "", awayTeam: g.awayTeam ?? "",
+        homeAbbrev: g.homeAbbrev ?? "", awayAbbrev: g.awayAbbrev ?? "",
+        homeScore: g.homeScore ?? 0, awayScore: g.awayScore ?? 0,
+      }));
+      const { settled } = await settlePendingPicks(settleGames);
+      trackSettled = settled;
+    } catch (e) { console.error("track settle error:", e); }
+
     // ── Auto-generate today's smart picks for all users ──
     // Runs in the morning hours (7-11 AM ET = 11-15 UTC) so picks are ready for the day
     const utcHour = new Date().getUTCHours();
@@ -102,6 +115,17 @@ export async function GET(req: Request) {
               if (existingToday.length === 0) {
                 await cloudSet("smart_bot", { ...botState, picks: [...(botState.picks ?? []), ...mlbPicks] });
               }
+
+              // ── Log to public track record ──
+              const etDate = etDateString();
+              const logged: LoggedPick[] = mlbPicks.slice(0, 5).map((p: any, idx: number) => ({
+                sport: "mlb" as const, pickDate: etDate,
+                category: idx === 0 ? "lock" : p.odds > 150 ? "longshot" : "lock",
+                pickText: p.pick, game: p.game, market: p.market,
+                odds: p.odds, bookmaker: p.bookmaker,
+                evPercentage: p.evPercentage, fairProb: p.fairProb, confidence: p.confidence,
+              }));
+              await logDailyPicks(logged);
             }
           }
         }
@@ -122,10 +146,21 @@ export async function GET(req: Request) {
               if (existingNbaToday.length === 0) {
                 await cloudSet("smart_bot_nba", { ...nbaBotState, picks: [...(nbaBotState.picks ?? []), ...nbaPicks] });
               }
+
+              // ── Log to public track record ──
+              const etDate = etDateString();
+              const logged: LoggedPick[] = nbaPicks.slice(0, 5).map((p: any, idx: number) => ({
+                sport: "nba" as const, pickDate: etDate,
+                category: idx === 0 ? "lock" : p.odds > 150 ? "longshot" : "lock",
+                pickText: p.pick, game: p.game, market: p.market,
+                odds: p.odds, bookmaker: p.bookmaker,
+                evPercentage: p.evPercentage, fairProb: p.fairProb, confidence: p.confidence,
+              }));
+              await logDailyPicks(logged);
             }
           }
         }
-      } catch {}
+      } catch (e) { console.error("pick gen/log error:", e); }
     }
 
     // ── Daily Discord Recap (send once when games are finishing) ──

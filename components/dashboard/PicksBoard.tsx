@@ -12,6 +12,8 @@ import {
 import { getDeepLink } from "@/lib/odds/sportsbooks";
 import TeamLogo from "@/components/ui/TeamLogo";
 import InfoTip from "@/components/ui/InfoTip";
+import Link from "next/link";
+import { usePremium } from "@/lib/hooks/usePremium";
 
 interface Pick {
   id: string;
@@ -39,6 +41,7 @@ interface Pick {
 export default function PicksBoard() {
   const { oddsData, scores, addParlayLeg } = useStore();
   const { currentSport, config } = useSport();
+  const { isPremium } = usePremium();
   const isNBA = currentSport === "nba";
   const [expandedPick, setExpandedPick] = useState<string | null>(null);
   const [propsData, setPropsData] = useState<Record<string, any[]>>({});
@@ -528,7 +531,7 @@ export default function PicksBoard() {
             </div>
           ) : (
             <div className="divide-y divide-slate/10">
-              {sec.picks.map((pick) => (
+              {(isPremium ? sec.picks : sec.picks.slice(0, 3)).map((pick) => (
                 <PickCard
                   key={pick.id}
                   pick={pick}
@@ -541,6 +544,19 @@ export default function PicksBoard() {
                   formatOdds={formatOdds}
                 />
               ))}
+              {!isPremium && sec.picks.length > 3 && (
+                <Link
+                  href="/pricing"
+                  className="block px-4 py-3 text-center bg-gradient-to-br from-neon/10 to-electric/5 border-t border-neon/20 hover:from-neon/20 transition-colors group"
+                >
+                  <p className="text-xs font-bold text-neon">
+                    +{sec.picks.length - 3} more {sec.title.toLowerCase()} locked
+                  </p>
+                  <p className="text-[10px] text-mercury/70 mt-0.5">
+                    Upgrade to Pro · $15/mo · <span className="text-electric group-hover:underline">Start 7-day free trial →</span>
+                  </p>
+                </Link>
+              )}
             </div>
           )}
         </div>
