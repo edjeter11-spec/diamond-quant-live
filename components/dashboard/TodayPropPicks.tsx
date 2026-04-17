@@ -8,6 +8,7 @@ import { useStore } from "@/lib/store";
 import { usePremium } from "@/lib/hooks/usePremium";
 import InfoTip from "@/components/ui/InfoTip";
 import PlayerAvatar from "@/components/ui/PlayerAvatar";
+import PropDetail from "@/components/dashboard/PropDetail";
 
 interface RawProp {
   playerName: string;
@@ -95,6 +96,7 @@ export default function TodayPropPicks({
   loading: boolean;
 }) {
   const [expanded, setExpanded] = useState(true);
+  const [openPick, setOpenPick] = useState<string | null>(null);
   const { addParlayLeg } = useStore();
   const { isPremium } = usePremium();
 
@@ -180,49 +182,70 @@ export default function TodayPropPicks({
       {/* Picks list */}
       {expanded && (
         <div className="divide-y divide-slate/10">
-          {visible.map((p) => (
-            <div key={p.key} className="px-3 sm:px-4 py-2.5 flex items-center gap-2.5 hover:bg-gunmetal/20 transition-colors">
-              <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                p.side === "over" ? "bg-neon/10 text-neon" : "bg-amber/10 text-amber"
-              }`}>
-                {p.side === "over" ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}
-              </div>
-              <PlayerAvatar name={p.playerName} size={24} />
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5">
-                  <p className="text-xs sm:text-sm font-semibold text-silver truncate">
-                    {p.playerName} {p.side === "over" ? "Over" : "Under"} {p.line}
-                  </p>
-                  <span className="text-[9px] font-bold uppercase text-mercury/50 tracking-wider">{p.label}</span>
-                  {p.fairProb >= 60 && (
-                    <Flame className="w-3 h-3 text-danger" />
-                  )}
-                </div>
-                <p className="text-[10px] text-mercury/60 truncate">
-                  {p.bookmaker} · {p.fairProb}% fair · <span className={p.evPercentage > 0 ? "text-neon" : "text-mercury/60"}>+{p.evPercentage}% edge</span>
-                </p>
-              </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <span className="text-xs sm:text-sm font-mono font-bold text-silver">
-                  {p.odds > 0 ? "+" : ""}{p.odds}
-                </span>
+          {visible.map((p) => {
+            const isOpen = openPick === p.key;
+            return (
+              <div key={p.key}>
                 <button
-                  onClick={() => addParlayLeg({
-                    game: p.playerName,
-                    market: "player_prop" as any,
-                    pick: `${p.playerName} ${p.side === "over" ? "Over" : "Under"} ${p.line} ${p.label}`,
-                    odds: p.odds,
-                    fairProb: p.fairProb / 100,
-                    bookmaker: p.bookmaker ?? "",
-                  })}
-                  className="px-2 py-1 rounded bg-neon/10 border border-neon/20 text-neon text-[10px] font-bold hover:bg-neon/20 transition-colors"
-                  title="Add to parlay builder"
+                  onClick={() => setOpenPick(isOpen ? null : p.key)}
+                  className="w-full px-3 sm:px-4 py-2.5 flex items-center gap-2.5 hover:bg-gunmetal/20 transition-colors text-left"
                 >
-                  + Parlay
+                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                    p.side === "over" ? "bg-neon/10 text-neon" : "bg-amber/10 text-amber"
+                  }`}>
+                    {p.side === "over" ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}
+                  </div>
+                  <PlayerAvatar name={p.playerName} size={24} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-xs sm:text-sm font-semibold text-silver truncate">
+                        {p.playerName} {p.side === "over" ? "Over" : "Under"} {p.line}
+                      </p>
+                      <span className="text-[9px] font-bold uppercase text-mercury/50 tracking-wider">{p.label}</span>
+                      {p.fairProb >= 60 && (
+                        <Flame className="w-3 h-3 text-danger" />
+                      )}
+                    </div>
+                    <p className="text-[10px] text-mercury/60 truncate">
+                      {p.bookmaker} · {p.fairProb}% fair · <span className={p.evPercentage > 0 ? "text-neon" : "text-mercury/60"}>+{p.evPercentage}% edge</span>
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <span className="text-xs sm:text-sm font-mono font-bold text-silver">
+                      {p.odds > 0 ? "+" : ""}{p.odds}
+                    </span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        addParlayLeg({
+                          game: p.playerName,
+                          market: "player_prop" as any,
+                          pick: `${p.playerName} ${p.side === "over" ? "Over" : "Under"} ${p.line} ${p.label}`,
+                          odds: p.odds,
+                          fairProb: p.fairProb / 100,
+                          bookmaker: p.bookmaker ?? "",
+                        });
+                      }}
+                      className="px-2 py-1 rounded bg-neon/10 border border-neon/20 text-neon text-[10px] font-bold hover:bg-neon/20 transition-colors"
+                      title="Add to parlay builder"
+                    >
+                      + Parlay
+                    </button>
+                    <ChevronDown className={`w-3.5 h-3.5 text-mercury/50 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+                  </div>
                 </button>
+                {isOpen && (
+                  <PropDetail
+                    sport={sport}
+                    playerName={p.playerName}
+                    market={p.market}
+                    line={p.line}
+                    side={p.side}
+                  />
+                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
           {lockedCount > 0 && !isPremium && (
             <Link
               href="/pricing"

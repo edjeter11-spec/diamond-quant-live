@@ -15,6 +15,7 @@ import InfoTip from "@/components/ui/InfoTip";
 import Link from "next/link";
 import { usePremium } from "@/lib/hooks/usePremium";
 import TodayPropPicks from "@/components/dashboard/TodayPropPicks";
+import PropDetail from "@/components/dashboard/PropDetail";
 
 interface Pick {
   id: string;
@@ -577,7 +578,7 @@ export default function PicksBoard() {
 
       {/* ═══ PROPS (sport-specific) ═══ */}
       {!isNBA && (
-        <PropSection title="STRIKEOUTS" subtitle="Pitcher K props with live odds" icon={Flame} iconColor="text-danger" props={propsData.pitcher_strikeouts ?? []} loading={propsLoading} expandedPick={expandedPick} setExpanded={setExpandedPick} addParlayLeg={addParlayLeg} />
+        <PropSection title="STRIKEOUTS" subtitle="Pitcher K props with live odds" icon={Flame} iconColor="text-danger" props={propsData.pitcher_strikeouts ?? []} loading={propsLoading} expandedPick={expandedPick} setExpanded={setExpandedPick} addParlayLeg={addParlayLeg} sport={currentSport as "mlb" | "nba"} market="pitcher_strikeouts" />
       )}
 
       {/* No data state */}
@@ -861,12 +862,14 @@ function PickCard({ pick, isExpanded, onToggle, onAddToParlay, formatOdds }: {
 }
 
 // ──────────────────────────────────────────────────────────
-function PropSection({ title, subtitle, icon: Icon, iconColor, props, loading, expandedPick, setExpanded, addParlayLeg }: {
+function PropSection({ title, subtitle, icon: Icon, iconColor, props, loading, expandedPick, setExpanded, addParlayLeg, sport, market: marketOverride }: {
   title: string; subtitle: string; icon: any; iconColor: string;
   props: any[]; loading: boolean;
   expandedPick: string | null; setExpanded: (id: string | null) => void; addParlayLeg: any;
+  sport?: "mlb" | "nba";
+  market?: string;
 }) {
-  const market = title.toLowerCase().replace(/\s/g, "_");
+  const market = marketOverride ?? title.toLowerCase().replace(/\s/g, "_");
   const { scores } = useStore();
 
   // Build player → team lookup from scores (pitchers are listed per team)
@@ -970,6 +973,15 @@ function PropSection({ title, subtitle, icon: Icon, iconColor, props, loading, e
                         <ArrowDownRight className="w-3 h-3" /> Under {p.line}
                       </button>
                     </div>
+                    {sport && (
+                      <PropDetail
+                        sport={sport}
+                        playerName={p.playerName}
+                        market={market}
+                        line={p.line}
+                        side={(p.fairOverProb ?? 0) >= (p.fairUnderProb ?? 0) ? "over" : "under"}
+                      />
+                    )}
                   </div>
                 )}
               </div>
