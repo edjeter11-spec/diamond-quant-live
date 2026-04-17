@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, use } from "react";
-import { Diamond, Share2, Flame, Skull, Eye, ArrowLeft, CheckCircle, XCircle, Clock } from "lucide-react";
+import { Diamond, Share2, Flame, Skull, Eye, ArrowLeft, CheckCircle, XCircle, Clock, TrendingUp, Zap } from "lucide-react";
 import Link from "next/link";
 
 interface SharedSlip {
@@ -91,6 +91,9 @@ export default function SlipPage({ params }: { params: Promise<{ id: string }> }
 
   const picks = slip.slip_data.picks ?? [];
   const totalOdds = slip.slip_data.totalOdds;
+  const stake = slip.slip_data.stake;
+  const toPayout = (odds: number, bet: number) => odds > 0 ? bet * (odds / 100) : bet * (100 / Math.abs(odds));
+  const payout = stake && totalOdds ? Math.round(toPayout(totalOdds, stake) * 100) / 100 : null;
 
   return (
     <div className="min-h-screen bg-[#0a0a0f] text-[#c4c8d8]">
@@ -164,17 +167,50 @@ export default function SlipPage({ params }: { params: Promise<{ id: string }> }
           ))}
         </div>
 
+        {/* Payout */}
+        {payout !== null && stake && (
+          <div className="rounded-xl bg-[#0f1117] border border-[#2a2d3e]/50 p-4 mb-4 flex items-center justify-between">
+            <div>
+              <p className="text-[10px] text-[#8b8fa3] uppercase tracking-wider">Risk</p>
+              <p className="text-sm font-mono font-bold text-white">${stake.toFixed(2)}</p>
+            </div>
+            <TrendingUp className="w-4 h-4 text-[#00ff88]/40" />
+            <div className="text-right">
+              <p className="text-[10px] text-[#8b8fa3] uppercase tracking-wider">To Win</p>
+              <p className="text-sm font-mono font-bold text-[#00ff88]">${payout.toFixed(2)}</p>
+            </div>
+          </div>
+        )}
+
         {/* Share */}
         <button
           onClick={() => navigator.clipboard.writeText(window.location.href)}
-          className="w-full py-2.5 rounded-xl bg-[#00d4ff]/10 border border-[#00d4ff]/20 text-[#00d4ff] text-xs font-semibold hover:bg-[#00d4ff]/20 transition-all flex items-center justify-center gap-2"
+          className="w-full py-2.5 rounded-xl bg-[#00d4ff]/10 border border-[#00d4ff]/20 text-[#00d4ff] text-xs font-semibold hover:bg-[#00d4ff]/20 transition-all flex items-center justify-center gap-2 mb-6"
         >
           <Share2 className="w-3.5 h-3.5" /> Copy Link
         </button>
 
-        <div className="text-center mt-6">
-          <Link href="/" className="text-[10px] text-[#00d4ff] hover:text-[#00ff88] transition-colors">
-            ← Back to Dashboard
+        {/* Conversion CTA */}
+        <Link href="/" className="block rounded-xl bg-gradient-to-br from-[#00ff88]/15 to-[#00d4ff]/10 border border-[#00ff88]/25 p-5 hover:border-[#00ff88]/50 transition-all group">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-9 h-9 rounded-lg bg-[#00ff88]/15 flex items-center justify-center flex-shrink-0">
+              <Diamond className="w-4 h-4 text-[#00ff88]" />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-bold text-white">Get your own +EV picks</p>
+              <p className="text-[10px] text-[#8b8fa3]">Live odds across 10+ books · Quant models · Free</p>
+            </div>
+            <Zap className="w-4 h-4 text-[#00ff88] group-hover:scale-110 transition-transform" />
+          </div>
+          <div className="flex items-center justify-center gap-1 mt-2 pt-3 border-t border-[#2a2d3e]/30">
+            <span className="text-[10px] font-bold text-[#00ff88] uppercase tracking-wider">See Today&apos;s Board</span>
+            <span className="text-[#00ff88]">→</span>
+          </div>
+        </Link>
+
+        <div className="text-center mt-4">
+          <Link href="/" className="text-[10px] text-[#8b8fa3] hover:text-[#c4c8d8] transition-colors">
+            diamond-quant-live.vercel.app
           </Link>
         </div>
       </div>
