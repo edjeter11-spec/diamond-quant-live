@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { cloudGet } from "@/lib/supabase/client";
 import { Diamond, TrendingUp, ChevronRight } from "lucide-react";
 
 interface Pick {
@@ -25,12 +24,20 @@ export default function TodayPicksStrip({ sport, onNavigateBot }: { sport: strin
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const today = new Date().toISOString().split("T")[0];
-    const key = sport === "nba" ? `smart_bot_today_nba_${today}` : `smart_bot_today_mlb_${today}`;
-    cloudGet<{ picks: Pick[] } | null>(key, null).then(data => {
-      if (data?.picks?.length) setPicks(data.picks.slice(0, 4));
-      setLoading(false);
-    });
+    let cancelled = false;
+    setLoading(true);
+    fetch(`/api/today-picks?sport=${sport}`)
+      .then(r => r.json())
+      .then((data: { picks?: Pick[] }) => {
+        if (cancelled) return;
+        if (data?.picks?.length) setPicks(data.picks.slice(0, 4));
+        else setPicks([]);
+        setLoading(false);
+      })
+      .catch(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
   }, [sport]);
 
   if (loading) {
