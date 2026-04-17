@@ -32,13 +32,22 @@ export default function LiveTicker() {
   }
 
   for (const score of scores) {
-    if (score.status === "live") {
-      alerts.push({
-        type: "live",
-        text: `LIVE: ${score.awayAbbrev} ${score.awayScore} @ ${score.homeAbbrev} ${score.homeScore} (${score.inningHalf === "top" ? "▲" : "▼"}${score.inning})`,
-        priority: 1,
-      });
-    }
+    if (score.status !== "live") continue;
+    // Skip ghost-live games (status flipped but no actual play yet) — avoids "0 0 ▲1" noise
+    const hasAction = (score.awayScore ?? 0) > 0 || (score.homeScore ?? 0) > 0
+      || (score.inning ?? 0) > 1
+      || (score.period ?? 0) > 1
+      || (score.outs ?? 0) > 0;
+    if (!hasAction) continue;
+    const isMLB = score.inningHalf != null;
+    const periodTxt = isMLB
+      ? `${score.inningHalf === "top" ? "▲" : "▼"}${score.inning ?? 1}`
+      : `${score.periodLabel || `Q${score.period ?? 1}`}${score.timeRemaining ? ` ${score.timeRemaining}` : ""}`;
+    alerts.push({
+      type: "live",
+      text: `LIVE: ${score.awayAbbrev} ${score.awayScore ?? 0} @ ${score.homeAbbrev} ${score.homeScore ?? 0} (${periodTxt})`,
+      priority: 1,
+    });
   }
 
   // Sort by priority

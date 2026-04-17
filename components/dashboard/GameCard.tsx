@@ -90,7 +90,8 @@ export default function GameCard({ game, oddsInfo }: GameCardProps) {
       {/* Header */}
       <div className="flex items-center justify-between px-3 sm:px-4 py-2 border-b border-slate/30">
         <div className="flex items-center gap-2">
-          {game.status === "live" ? (
+          {game.status === "live" && (((game.awayScore ?? 0) + (game.homeScore ?? 0)) > 0
+              || (game.inning ?? 0) > 1 || (game.period ?? 0) > 1 || (game.outs ?? 0) > 0) ? (
             <div className="flex items-center gap-1.5">
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-danger opacity-75" />

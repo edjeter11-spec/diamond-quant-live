@@ -6,6 +6,7 @@ import { Layers, X, Sparkles, Save, Trash2, TrendingUp, AlertTriangle, ChevronDo
 import { useState, useEffect, useMemo } from "react";
 import type { ParlaySlip } from "@/lib/model/types";
 import { analyzeParlay } from "@/lib/bot/parlay-correlation";
+import InfoTip from "@/components/ui/InfoTip";
 
 export default function ParlayBuilder() {
   const {
@@ -176,13 +177,23 @@ export default function ParlayBuilder() {
 
               {/* EV */}
               <div className="flex items-center justify-between">
-                <span className="text-xs text-mercury uppercase">EV Edge</span>
+                <InfoTip term="EV"><span className="text-xs text-mercury uppercase">EV Edge</span></InfoTip>
                 <span className={`text-sm font-bold font-mono ${
                   currentParlay.evPercentage > 0 ? "text-neon" : "text-danger"
                 }`}>
                   {currentParlay.evPercentage > 0 ? "+" : ""}{currentParlay.evPercentage.toFixed(1)}%
                 </span>
               </div>
+              {currentParlay.evPercentage < 0 && (
+                <div className="px-2.5 py-2 rounded-lg bg-danger/5 border border-danger/15">
+                  <p className="text-[10px] text-mercury/80 leading-relaxed">
+                    <strong className="text-danger">Why is this negative?</strong> Each leg&apos;s odds include
+                    sportsbook vig (~4–5%). When you parlay, vig <InfoTip term="VIG"><span className="underline decoration-dotted">compounds across legs</span></InfoTip>,
+                    so even +EV individual picks often net out negative when combined. Profitable parlays
+                    require either correlation or genuinely large per-leg edges.
+                  </p>
+                </div>
+              )}
 
               {/* Correlation analysis */}
               {correlation && correlation.correlations.length > 0 && (

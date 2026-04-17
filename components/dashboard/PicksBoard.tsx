@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { getDeepLink } from "@/lib/odds/sportsbooks";
 import TeamLogo from "@/components/ui/TeamLogo";
+import InfoTip from "@/components/ui/InfoTip";
 
 interface Pick {
   id: string;
@@ -548,6 +549,31 @@ function PickCard({ pick, isExpanded, onToggle, onAddToParlay, formatOdds }: {
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [shared, setShared] = useState(false);
+  const { bankroll, scores } = useStore();
+
+  // Demote Sharp tag if the underlying game has TBD pitcher (input incomplete).
+  const isPitcherTBD = useMemo(() => {
+    if (!pick.game) return false;
+    if (pick.game.includes("TBD")) return true;
+    // Match by team in scores feed
+    const scoreGame = scores.find((s: any) =>
+      pick.game.includes(s.homeTeam) || pick.game.includes(s.awayTeam) ||
+      pick.game.includes(s.homeAbbrev) || pick.game.includes(s.awayAbbrev)
+    );
+    return scoreGame ? (scoreGame.homePitcher === "TBD" || scoreGame.awayPitcher === "TBD") : false;
+  }, [pick.game, scores]);
+  const showSharp = pick.isSharp && !isPitcherTBD;
+
+  // Unit-size suggestion (1u = 1% of bankroll, scaled by edge, capped 0.5–5u).
+  const unitSize = useMemo(() => {
+    const bank = bankroll?.currentBankroll ?? 0;
+    if (bank <= 0 || pick.evPercentage <= 0) return null;
+    const baseUnit = bank * 0.01; // 1 unit = 1% of bankroll
+    const edge = pick.evPercentage; // %
+    const units = Math.min(5, Math.max(0.5, Math.round(edge * 0.5 * 2) / 2)); // 0.5u per 1% EV, cap 5u, 0.5 step
+    const dollars = Math.round(units * baseUnit * 100) / 100;
+    return { units, dollars };
+  }, [bankroll, pick.evPercentage]);
 
   // Fetch AI summary when user opens it; use localStorage cache keyed by pick.id + date
   useEffect(() => {
@@ -597,8 +623,15 @@ function PickCard({ pick, isExpanded, onToggle, onAddToParlay, formatOdds }: {
                 <span className="text-[8px] font-bold text-danger uppercase">Live — Pre-game line</span>
               </span>
             )}
-            {pick.isSharp && (
-              <span className="px-1 py-0.5 rounded bg-neon/10 text-[8px] font-bold text-neon uppercase flex-shrink-0">Sharp</span>
+            {showSharp && (
+              <InfoTip term="SHARP" iconClassName="w-2.5 h-2.5">
+                <span className="px-1 py-0.5 rounded bg-neon/10 text-[8px] font-bold text-neon uppercase flex-shrink-0">Sharp</span>
+              </InfoTip>
+            )}
+            {isPitcherTBD && pick.isSharp && (
+              <span className="px-1 py-0.5 rounded bg-amber/10 text-[8px] font-bold text-amber uppercase flex-shrink-0" title="Pitcher TBD — model input incomplete">
+                TBD
+              </span>
             )}
             {(pick.gameStatus === "tomorrow" || pick.gameStatus === "future") && (
               <span className="px-1 py-0.5 rounded bg-electric/10 text-[8px] font-bold text-electric uppercase flex-shrink-0">
@@ -626,7 +659,14 @@ function PickCard({ pick, isExpanded, onToggle, onAddToParlay, formatOdds }: {
         </div>
         <div className="text-right flex-shrink-0">
           <p className="text-xs sm:text-sm font-mono font-bold text-silver">{formatOdds(pick.odds)}</p>
-          <p className="text-[9px] sm:text-[10px] font-mono text-neon font-semibold">+{pick.evPercentage.toFixed(1)}%</p>
+          <p className="text-[9px] sm:text-[10px] font-mono text-neon font-semibold flex items-center justify-end gap-0.5">
+            <InfoTip term="EV"><span>+{pick.evPercentage.toFixed(1)}%</span></InfoTip>
+          </p>
+          {unitSize && (
+            <p className="text-[9px] font-mono text-electric/70 mt-0.5">
+              <InfoTip term="UNIT"><span>{unitSize.units}u (${unitSize.dollars})</span></InfoTip>
+            </p>
+          )}
         </div>
         {/* Edge age / freshness */}
         {pick.edgeAge !== undefined && pick.edgeAge > 0 && (
