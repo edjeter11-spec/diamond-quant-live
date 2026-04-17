@@ -1,16 +1,39 @@
 import type { Metadata, Viewport } from "next";
 import { AuthProvider } from "@/lib/supabase/auth";
+import AgeGate from "@/components/AgeGate";
 import "./globals.css";
 
+const SITE_URL = "https://diamond-quant-live.vercel.app";
+
 export const metadata: Metadata = {
-  title: "Diamond-Quant Live | Sports Betting Intelligence",
-  description: "AI-powered MLB & NBA betting analytics with 3-model consensus, player prop projections, and self-learning brain.",
-  icons: { icon: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💎</text></svg>" },
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: "Diamond-Quant Live — Sports Betting Intelligence",
+    template: "%s | Diamond-Quant Live",
+  },
+  description: "AI-powered MLB & NBA betting analytics — 3-model consensus, live +EV picks, player prop projections, arbitrage scanner, and a self-learning brain.",
+  keywords: ["sports betting", "MLB", "NBA", "expected value", "arbitrage", "player props", "parlay", "quant"],
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
     title: "DQ Live",
+  },
+  openGraph: {
+    type: "website",
+    url: SITE_URL,
+    siteName: "Diamond-Quant Live",
+    title: "Diamond-Quant Live — Sports Betting Intelligence",
+    description: "Quant-driven +EV sports picks across 10+ sportsbooks. Live arbs, player props, and a self-learning brain.",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Diamond-Quant Live",
+    description: "Quant-driven +EV sports picks across 10+ sportsbooks.",
+  },
+  robots: {
+    index: true,
+    follow: true,
   },
 };
 
@@ -27,6 +50,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className="dark">
       <body className="min-h-screen bg-void text-silver antialiased">
         <AuthProvider>
+          <AgeGate />
           {children}
         </AuthProvider>
       </body>

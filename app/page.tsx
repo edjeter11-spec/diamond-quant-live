@@ -744,8 +744,17 @@ export default function WarRoom() {
           Diamond-Quant Live v1.0 — Odds via The Odds API. Stats via {currentSport === "nba" ? "NBA Stats API" : "MLB Stats API"}.
         </p>
         <p className="text-[9px] sm:text-[10px] text-mercury/30 mt-1">
-          For entertainment & educational purposes. Gamble responsibly.
+          For entertainment & educational purposes. Must be 21+. Gamble responsibly.
         </p>
+        <div className="flex flex-wrap items-center justify-center gap-3 mt-3 text-[10px] text-mercury/50">
+          <a href="/terms" className="hover:text-mercury transition-colors">Terms</a>
+          <span className="text-mercury/20">·</span>
+          <a href="/privacy" className="hover:text-mercury transition-colors">Privacy</a>
+          <span className="text-mercury/20">·</span>
+          <a href="/responsible-gaming" className="hover:text-mercury transition-colors">Responsible Gaming</a>
+          <span className="text-mercury/20">·</span>
+          <a href="tel:1-800-426-2537" className="hover:text-electric transition-colors">1-800-GAMBLER</a>
+        </div>
       </footer>
     </div>
   );
