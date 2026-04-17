@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import { AuthProvider } from "@/lib/supabase/auth";
-import AgeGate from "@/components/AgeGate";
 import "./globals.css";
 
 const SITE_URL = "https://diamond-quant-live.vercel.app";
@@ -50,7 +49,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className="dark">
       <body className="min-h-screen bg-void text-silver antialiased">
         <AuthProvider>
-          <AgeGate />
           {children}
         </AuthProvider>
       </body>

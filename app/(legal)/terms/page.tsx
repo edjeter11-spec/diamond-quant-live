@@ -16,7 +16,7 @@ export default function TermsPage() {
       <section className="space-y-2">
         <h2 className="text-lg font-semibold text-silver mt-6">1. Acceptance of Terms</h2>
         <p className="text-sm text-mercury/80 leading-relaxed">
-          By accessing or using Diamond-Quant Live (&quot;the Service&quot;), you agree to be bound by these Terms of Service. If you do not agree, do not use the Service. You must be of legal gambling age in your jurisdiction (18+ or 21+ depending on location) to use the Service.
+          By accessing or using Diamond-Quant Live (&quot;the Service&quot;), you agree to be bound by these Terms of Service. If you do not agree, do not use the Service.
         </p>
       </section>
 
