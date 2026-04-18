@@ -30,7 +30,6 @@ import MigrationBanner from "@/components/auth/MigrationBanner";
 import PlayerCompare from "@/components/dashboard/PlayerCompare";
 import ROIChart from "@/components/dashboard/ROIChart";
 import { matchGames } from "@/lib/mlb/match-games";
-import TodayPicksStrip from "@/components/dashboard/TodayPicksStrip";
 import TonightsPlays from "@/components/dashboard/TonightsPlays";
 import FloatingParlayChip from "@/components/dashboard/FloatingParlayChip";
 import Toaster from "@/components/ui/Toaster";
@@ -571,9 +570,6 @@ export default function WarRoom() {
                   <div className="flex-1 min-w-0 space-y-3 sm:space-y-4">
                     {/* Tonight's Plays — 30-second answer */}
                     <TonightsPlays sport={currentSport} />
-
-                    {/* Today's bot picks strip */}
-                    <TodayPicksStrip sport={currentSport} onNavigateBot={() => setActiveTab("bot")} />
 
                     {/* Model accuracy at the top */}
                     <ModelTracker />

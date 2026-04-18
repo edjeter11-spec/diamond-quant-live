@@ -148,7 +148,7 @@ export default function GameCard({ game, oddsInfo }: GameCardProps) {
                 <span className="sm:hidden">{game.awayAbbrev}</span>
                 <span className="hidden sm:inline">{awayFull}</span>
               </p>
-              {!isNBA && <PitcherFace name={game.awayPitcher} pitcherId={game.awayPitcherId} />}
+              {!isNBA && <div className="hidden sm:block"><PitcherFace name={game.awayPitcher} pitcherId={game.awayPitcherId} /></div>}
             </div>
           </div>
           <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
@@ -181,7 +181,7 @@ export default function GameCard({ game, oddsInfo }: GameCardProps) {
                 <span className="sm:hidden">{game.homeAbbrev}</span>
                 <span className="hidden sm:inline">{homeFull}</span>
               </p>
-              {!isNBA && <PitcherFace name={game.homePitcher} pitcherId={game.homePitcherId} />}
+              {!isNBA && <div className="hidden sm:block"><PitcherFace name={game.homePitcher} pitcherId={game.homePitcherId} /></div>}
             </div>
           </div>
           <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
@@ -203,21 +203,23 @@ export default function GameCard({ game, oddsInfo }: GameCardProps) {
         </div>
       </div>
 
-      {/* Footer */}
-      <div className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-1.5 sm:py-2 border-t border-slate/30 text-[9px] sm:text-[11px] text-mercury/60">
-        {game.venue ? (
-          <div className="flex items-center gap-1 truncate">
-            <MapPin className="w-3 h-3 flex-shrink-0" />
-            <span className="truncate">{game.venue}</span>
-          </div>
-        ) : null}
-        {!isNBA && game.weather && (
-          <div className="flex items-center gap-1 flex-shrink-0">
-            <Cloud className="w-3 h-3" />
-            {game.weather.temp}° {game.weather.wind}
-          </div>
-        )}
-      </div>
+      {/* Footer — desktop only; mobile hides venue for density */}
+      {(game.venue || (!isNBA && game.weather)) && (
+        <div className="hidden sm:flex items-center gap-3 px-4 py-2 border-t border-slate/30 text-[11px] text-mercury/60">
+          {game.venue ? (
+            <div className="flex items-center gap-1 truncate">
+              <MapPin className="w-3 h-3 flex-shrink-0" />
+              <span className="truncate">{game.venue}</span>
+            </div>
+          ) : null}
+          {!isNBA && game.weather && (
+            <div className="flex items-center gap-1 flex-shrink-0">
+              <Cloud className="w-3 h-3" />
+              {game.weather.temp}° {game.weather.wind}
+            </div>
+          )}
+        </div>
+      )}
     </button>
   );
 }
