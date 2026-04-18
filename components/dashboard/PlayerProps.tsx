@@ -322,7 +322,7 @@ export default function PlayerProps() {
           <div className="flex gap-3 mb-3">
             {/* Headshot */}
             {searchResult.player.photo && (
-              <PlayerAvatar name={searchResult.player.name} photo={searchResult.player.photo} size={64} className="sm:!w-20 sm:!h-20 !rounded-xl" />
+              <PlayerAvatar name={searchResult.player.name} photo={searchResult.player.photo} sport={currentSport as "mlb" | "nba"} size={64} className="sm:!w-20 sm:!h-20 !rounded-xl" />
             )}
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
@@ -480,6 +480,8 @@ export default function PlayerProps() {
                       <PlayerAvatar
                         name={prop.playerName}
                         photo={analysis?.player?.photo}
+                        playerId={(prop as any).playerId}
+                        sport={currentSport as "mlb" | "nba"}
                         size={22}
                       />
                       <p className="text-sm font-semibold text-silver truncate">{prop.playerName}</p>
@@ -695,7 +697,7 @@ export default function PlayerProps() {
                             {(analysis.player as any)?.ppg !== undefined && (
                               <div className="rounded-lg bg-gunmetal/30 p-3">
                                 <div className="flex items-center gap-3 mb-2">
-                                  <PlayerAvatar name={analysis.player.name} photo={(analysis.player as any).photo} size={48} className="!rounded-lg" />
+                                  <PlayerAvatar name={analysis.player.name} photo={(analysis.player as any).photo} sport={currentSport as "mlb" | "nba"} size={48} className="!rounded-lg" />
                                   <div>
                                     <p className="text-xs font-semibold text-silver">{analysis.player.name}</p>
                                     <p className="text-[10px] text-mercury">{(analysis.player as any).teamAbbrev} • {analysis.player.position} • #{(analysis.player as any).number}</p>

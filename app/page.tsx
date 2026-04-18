@@ -30,6 +30,7 @@ import ROIChart from "@/components/dashboard/ROIChart";
 import { matchGames } from "@/lib/mlb/match-games";
 import TonightsPlays from "@/components/dashboard/TonightsPlays";
 import StreakBanner from "@/components/dashboard/StreakBanner";
+import { useWarmNbaPlayerIndex } from "@/lib/hooks/useNbaPlayerIndex";
 import FloatingParlayChip from "@/components/dashboard/FloatingParlayChip";
 import Toaster from "@/components/ui/Toaster";
 import { backupOddsToStorage, getOddsBackup } from "@/lib/odds/cache";
@@ -92,6 +93,8 @@ export default function WarRoom() {
   } = useStore();
   const { currentSport, config, setSport } = useSport();
   const { isAdmin } = useAuth();
+  // Pre-load NBA player index on app start — makes headshots instant on Props tab
+  useWarmNbaPlayerIndex();
 
   const [refreshing, setRefreshing] = useState(false);
   const [mobileGamesOpen, setMobileGamesOpen] = useState(false);

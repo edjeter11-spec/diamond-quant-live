@@ -104,3 +104,14 @@ export function useNbaPlayerId(name: string | undefined | null): number | null {
 
   return id;
 }
+
+/**
+ * Call once at the top of the app to prime the NBA player index.
+ * No return value — just triggers the background load so avatars
+ * resolve instantly the first time they render.
+ */
+export function useWarmNbaPlayerIndex(): void {
+  useEffect(() => {
+    loadIndex().catch(() => {});
+  }, []);
+}
