@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Brain, TrendingUp, TrendingDown, Minus, Activity, CheckCircle, XCircle, Sparkles, RefreshCw, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { useStore } from "@/lib/store";
+import MatchupInsights from "@/components/dashboard/MatchupInsights";
 
 export interface PropDetailProps {
   sport: "mlb" | "nba";
@@ -171,6 +172,18 @@ export default function PropDetail({
             </span>
           </div>
         </div>
+      )}
+
+      {/* Matchup Insights — rolling averages, hit rate, trend, dynamic advice */}
+      {gameLog.length > 0 && (
+        <MatchupInsights
+          playerName={playerName}
+          market={market}
+          line={line}
+          gameLog={gameLog}
+          seasonAvg={seasonAvg}
+          vsOpponent={data.vsOpponent}
+        />
       )}
 
       {/* Recommendation + reasoning */}
