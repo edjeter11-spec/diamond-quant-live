@@ -12,6 +12,7 @@ import {
   Minus, Star, AlertCircle, Zap, Search, X, Brain,
 } from "lucide-react";
 import BrainPickDetail from "@/components/dashboard/BrainPickDetail";
+import MatchupInsights from "@/components/dashboard/MatchupInsights";
 
 interface PropLine {
   playerName: string;
@@ -715,6 +716,22 @@ export default function PlayerProps() {
                                 </div>
                               </div>
                             )}
+
+                            {/* Matchup Insights — stats + dynamic advice */}
+                            <MatchupInsights
+                              playerName={prop.playerName}
+                              market={prop.market}
+                              line={prop.line}
+                              gameLog={(analysis as any).player?.gameLog ?? analysis.last10Games ?? []}
+                              seasonAvg={
+                                (analysis.player as any)?.ppg
+                                ?? analysis.player?.avgStrikeoutsPerGame
+                                ?? analysis.player?.hitsPerGame
+                                ?? analysis.player?.tbPerGame
+                              }
+                              vsOpponent={analysis.vsOpponent}
+                              position={analysis.player?.position}
+                            />
 
                             {/* Brain Analysis */}
                             {(analysis as any).brainProjection?.reasoning && (
