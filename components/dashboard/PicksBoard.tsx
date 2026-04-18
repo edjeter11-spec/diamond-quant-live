@@ -854,8 +854,8 @@ function PickCard({ pick, isExpanded, onToggle, onAddToParlay, formatOdds }: {
 
           {/* Action buttons — primary inline, secondary in overflow */}
           <div className="flex gap-1.5 relative">
-            {getDeepLink(pick.bookmaker) && (
-              <a href={getDeepLink(pick.bookmaker)} target="_blank" rel="noopener noreferrer"
+            {getDeepLink(pick.bookmaker, { sport: currentSport as "mlb" | "nba", ev: pick.evPercentage }) && (
+              <a href={getDeepLink(pick.bookmaker, { sport: currentSport as "mlb" | "nba", ev: pick.evPercentage })} target="_blank" rel="noopener noreferrer"
                 className="flex-1 py-2 rounded-lg bg-electric/10 border border-electric/20 text-electric text-[11px] font-semibold hover:bg-electric/20 transition-all flex items-center justify-center gap-1">
                 <ExternalLink className="w-3 h-3" /> {pick.bookmaker.split(" ")[0]}
               </a>

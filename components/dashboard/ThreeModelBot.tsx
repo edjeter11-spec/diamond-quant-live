@@ -242,9 +242,9 @@ export default function ThreeModelBot() {
                 {/* Picks */}
                 {game.picks.map((pick, i) => (
                   <div key={i} className="flex gap-2">
-                    {getDeepLink(pick.bookmaker) && (
+                    {getDeepLink(pick.bookmaker, { sport: "mlb", ev: pick.evPercentage }) && (
                       <a
-                        href={getDeepLink(pick.bookmaker)}
+                        href={getDeepLink(pick.bookmaker, { sport: "mlb", ev: pick.evPercentage })}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="flex-1 py-2.5 rounded-lg bg-electric/10 border border-electric/20 text-electric text-xs font-semibold hover:bg-electric/20 transition-all flex items-center justify-center gap-1"

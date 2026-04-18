@@ -1,69 +1,123 @@
 // ──────────────────────────────────────────────────────────
-// Sportsbook Deep Links + Dead Line Detection
+// Sportsbook Deep Links + Affiliate Tracking
+//
+// Every link out to a sportsbook carries our affiliate code when
+// one is configured via env vars. Free users clicking "Open in DK"
+// earn us the deposit CPA without any sub commitment.
+//
+// To activate: add NEXT_PUBLIC_AFFILIATE_<BOOK> to Vercel env.
+// Falls back to plain deep links when no code is set.
 // ──────────────────────────────────────────────────────────
 
-// Deep link URLs for each sportsbook
-// These open the sportsbook's app or website to the MLB section
-const DEEP_LINKS: Record<string, { web: string; app?: string }> = {
+// Sport-aware deep link URLs (web; app schemes intentionally omitted —
+// most users open web and the book's site handles app-handoff).
+const DEEP_LINKS: Record<string, { mlb: string; nba: string }> = {
   draftkings: {
-    web: "https://sportsbook.draftkings.com/leagues/baseball/mlb",
-    app: "draftkings://sportsbook/leagues/baseball/mlb",
+    mlb: "https://sportsbook.draftkings.com/leagues/baseball/mlb",
+    nba: "https://sportsbook.draftkings.com/leagues/basketball/nba",
   },
   fanduel: {
-    web: "https://sportsbook.fanduel.com/baseball/mlb",
-    app: "fanduel://sportsbook/baseball/mlb",
+    mlb: "https://sportsbook.fanduel.com/baseball/mlb",
+    nba: "https://sportsbook.fanduel.com/basketball/nba",
   },
   betmgm: {
-    web: "https://sports.betmgm.com/en/sports/baseball-23/betting/usa-9/mlb-75",
-    app: "betmgm://sports/baseball",
+    mlb: "https://sports.betmgm.com/en/sports/baseball-23/betting/usa-9/mlb-75",
+    nba: "https://sports.betmgm.com/en/sports/basketball-7/betting/usa-9/nba-6004",
   },
   fanatics: {
-    web: "https://sportsbook.fanatics.com/baseball/mlb",
+    mlb: "https://sportsbook.fanatics.com/baseball/mlb",
+    nba: "https://sportsbook.fanatics.com/basketball/nba",
   },
   hardrockbet: {
-    web: "https://app.hardrock.bet/sports/baseball/mlb",
+    mlb: "https://app.hardrock.bet/sports/baseball/mlb",
+    nba: "https://app.hardrock.bet/sports/basketball/nba",
   },
   betrivers: {
-    web: "https://www.betrivers.com/sports/baseball/mlb",
+    mlb: "https://www.betrivers.com/sports/baseball/mlb",
+    nba: "https://www.betrivers.com/sports/basketball/nba",
   },
   espnbet: {
-    web: "https://espnbet.com/sport/baseball/organization/mlb",
+    mlb: "https://espnbet.com/sport/baseball/organization/mlb",
+    nba: "https://espnbet.com/sport/basketball/organization/nba",
   },
   pointsbetus: {
-    web: "https://www.pointsbet.com/sports/baseball/MLB",
+    mlb: "https://www.pointsbet.com/sports/baseball/MLB",
+    nba: "https://www.pointsbet.com/sports/basketball/NBA",
   },
   bovada: {
-    web: "https://www.bovada.lv/sports/baseball/mlb",
+    mlb: "https://www.bovada.lv/sports/baseball/mlb",
+    nba: "https://www.bovada.lv/sports/basketball/nba",
   },
   williamhill_us: {
-    web: "https://www.caesars.com/sportsbook-and-casino/sports/baseball/mlb",
+    mlb: "https://www.caesars.com/sportsbook-and-casino/sports/baseball/mlb",
+    nba: "https://www.caesars.com/sportsbook-and-casino/sports/basketball/nba",
   },
 };
 
-export function getDeepLink(bookmakerKey: string): string {
+// Which query-param each book uses for affiliate attribution
+const AFFILIATE_PARAM: Record<string, string> = {
+  draftkings: "wpsrc",
+  fanduel: "btag",
+  betmgm: "wm",
+  fanatics: "btag",
+  hardrockbet: "btag",
+  betrivers: "btag",
+  espnbet: "btag",
+  pointsbetus: "btag",
+  bovada: "btag",
+  williamhill_us: "ref",
+};
+
+// Read the affiliate code for a given book from env
+function getAffiliateCode(book: string): string | undefined {
+  if (typeof process === "undefined") return undefined;
+  const upper = book.toUpperCase();
+  return process.env[`NEXT_PUBLIC_AFFILIATE_${upper}`];
+}
+
+function appendAffiliate(url: string, book: string, extra?: { ev?: number }): string {
+  if (!url) return url;
+  const code = getAffiliateCode(book);
+  if (!code) return url; // not configured; return plain link
+  const param = AFFILIATE_PARAM[book] ?? "btag";
+  const joiner = url.includes("?") ? "&" : "?";
+  const evTag = extra?.ev != null ? `&dq_ev=${Math.round(extra.ev * 10) / 10}` : "";
+  return `${url}${joiner}${param}=${encodeURIComponent(code)}${evTag}`;
+}
+
+function resolveBookKey(bookmakerKey: string): string {
   const key = bookmakerKey.toLowerCase().replace(/\s+/g, "");
-  // Try exact match first
-  const match = DEEP_LINKS[key];
-  if (match) return match.web;
-
-  // Try partial match
-  for (const [k, v] of Object.entries(DEEP_LINKS)) {
-    if (key.includes(k) || k.includes(key)) return v.web;
+  if (DEEP_LINKS[key]) return key;
+  for (const k of Object.keys(DEEP_LINKS)) {
+    if (key.includes(k) || k.includes(key)) return k;
   }
-
-  // Fallback: try to match by display name
   const nameMap: Record<string, string> = {
     "draftkings": "draftkings", "fanduel": "fanduel", "betmgm": "betmgm",
-    "fanatics": "fanatics", "hard rock": "hardrockbet", "betrivers": "betrivers",
-    "espn bet": "espnbet", "pointsbet": "pointsbetus", "bovada": "bovada",
-    "caesars": "williamhill_us",
+    "fanatics": "fanatics", "hardrock": "hardrockbet", "betrivers": "betrivers",
+    "espnbet": "espnbet", "pointsbet": "pointsbetus", "bovada": "bovada",
+    "caesars": "williamhill_us", "williamhill": "williamhill_us",
   };
-
   for (const [name, k] of Object.entries(nameMap)) {
-    if (key.includes(name.replace(/\s/g, ""))) return DEEP_LINKS[k]?.web ?? "";
+    if (key.includes(name)) return k;
   }
-
   return "";
+}
+
+/**
+ * Get a deep link to a sportsbook.
+ * - Defaults to MLB section (maintains backward compat with existing callers)
+ * - Pass `sport` to direct to the correct sport's landing page
+ * - Appends affiliate code automatically when NEXT_PUBLIC_AFFILIATE_<BOOK> is set
+ */
+export function getDeepLink(
+  bookmakerKey: string,
+  opts?: { sport?: "mlb" | "nba"; ev?: number }
+): string {
+  const bookKey = resolveBookKey(bookmakerKey);
+  if (!bookKey) return "";
+  const sport = opts?.sport ?? "mlb";
+  const base = DEEP_LINKS[bookKey]?.[sport] ?? DEEP_LINKS[bookKey]?.mlb ?? "";
+  return appendAffiliate(base, bookKey, { ev: opts?.ev });
 }
 
 // ──────────────────────────────────────────────────────────

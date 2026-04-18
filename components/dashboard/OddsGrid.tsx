@@ -1,6 +1,7 @@
 "use client";
 
 import { useStore } from "@/lib/store";
+import { useSport } from "@/lib/sport-context";
 import { getDeepLink } from "@/lib/odds/sportsbooks";
 import { ExternalLink } from "lucide-react";
 
@@ -10,6 +11,7 @@ interface OddsGridProps {
 
 export default function OddsGrid({ gameId }: OddsGridProps) {
   const { oddsData, addParlayLeg } = useStore();
+  const { currentSport } = useSport();
   const gameOdds = oddsData.find((g: any) => g.id === gameId);
 
   if (!gameOdds) {
@@ -92,9 +94,9 @@ export default function OddsGrid({ gameId }: OddsGridProps) {
             {oddsLines?.map((line: any, idx: number) => (
               <tr key={idx} className="border-b border-slate/10 hover:bg-gunmetal/50 transition-colors">
                 <td className="px-4 py-2.5">
-                  {getDeepLink(line.bookmakerKey || line.bookmaker) ? (
+                  {getDeepLink(line.bookmakerKey || line.bookmaker, { sport: currentSport as "mlb" | "nba" }) ? (
                     <a
-                      href={getDeepLink(line.bookmakerKey || line.bookmaker)}
+                      href={getDeepLink(line.bookmakerKey || line.bookmaker, { sport: currentSport as "mlb" | "nba" })}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-sm font-medium text-silver hover:text-neon transition-colors inline-flex items-center gap-1 group"

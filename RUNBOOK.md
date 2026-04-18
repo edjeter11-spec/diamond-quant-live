@@ -100,7 +100,33 @@ Check it ran by looking at Vercel → Functions → Logs for `/api/cron`.
 6. `/results` — shows track record (or "building our track record" state if no settled picks yet)
 7. `/pricing` — shows Free + Pro ($15/mo) plans
 
-## 8. Things NOT live yet (by design)
+## 8. Affiliate codes (passive revenue)
+
+Every "Open in [Sportsbook]" button on the app now auto-wraps an
+affiliate code when one is configured. Free users clicking through
+earn you the deposit CPA without needing a paid subscription.
+
+Sign up for each book's affiliate program (most live on Impact,
+CJ Affiliate, or direct via the book's partnerships team) and add:
+
+```
+NEXT_PUBLIC_AFFILIATE_DRAFTKINGS   = <your btag/wpsrc>
+NEXT_PUBLIC_AFFILIATE_FANDUEL      = <your btag>
+NEXT_PUBLIC_AFFILIATE_BETMGM       = <your wm code>
+NEXT_PUBLIC_AFFILIATE_FANATICS     = <your btag>
+NEXT_PUBLIC_AFFILIATE_HARDROCKBET  = <your btag>
+NEXT_PUBLIC_AFFILIATE_BETRIVERS    = <your btag>
+NEXT_PUBLIC_AFFILIATE_ESPNBET      = <your btag>
+NEXT_PUBLIC_AFFILIATE_POINTSBETUS  = <your btag>
+NEXT_PUBLIC_AFFILIATE_BOVADA       = <your btag>
+NEXT_PUBLIC_AFFILIATE_WILLIAMHILL_US = <your Caesars ref>
+```
+
+Books without codes fall back to plain deep links (no loss). Adding
+codes is risk-free — costs nothing, potentially pays $50–$500 per
+user who deposits via your link.
+
+## 9. Things NOT live yet (by design)
 
 - Email daily recap (needs a transactional email provider like Resend — not wired)
 - Server-side push triggers (SW ready, server trigger left for manual wiring)

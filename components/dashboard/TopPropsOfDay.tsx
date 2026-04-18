@@ -314,9 +314,9 @@ export default function TopPropsOfDay() {
 
                   {/* Action Buttons */}
                   <div className="flex gap-2">
-                    {getDeepLink(pick.bestBook) && (
+                    {getDeepLink(pick.bestBook, { sport: "mlb" }) && (
                       <a
-                        href={getDeepLink(pick.bestBook)}
+                        href={getDeepLink(pick.bestBook, { sport: "mlb" })}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="flex-1 py-2.5 rounded-lg bg-electric/10 border border-electric/20 text-electric text-xs font-semibold hover:bg-electric/20 transition-all flex items-center justify-center gap-1"
