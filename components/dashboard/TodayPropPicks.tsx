@@ -54,6 +54,11 @@ const MARKET_LABEL: Record<string, string> = {
 const OVER_BIAS_TIE_BREAK = 1.5;
 const OVER_DISPLAY_BOOST = 1.0;
 
+// Markets where "under" is a dead bet (e.g. home runs — line is 0.5,
+// under = "won't hit a homer" which has no real analytical edge).
+// We force Over side and never render an Under suggestion.
+const OVER_ONLY_MARKETS = new Set(["batter_home_runs"]);
+
 function americanImplied(odds: number): number {
   if (!odds) return 0.5;
   return odds > 0 ? 100 / (odds + 100) : Math.abs(odds) / (Math.abs(odds) + 100);
@@ -113,8 +118,13 @@ export default function TodayPropPicks({
         const over = prop.fairOverProb ?? 0;
         const under = prop.fairUnderProb ?? 0;
         let preferredSide: "over" | "under";
-        if (over >= under - OVER_BIAS_TIE_BREAK) preferredSide = "over";
-        else preferredSide = "under";
+        if (OVER_ONLY_MARKETS.has(prop.market)) {
+          preferredSide = "over"; // HR unders are meaningless — always over
+        } else if (over >= under - OVER_BIAS_TIE_BREAK) {
+          preferredSide = "over";
+        } else {
+          preferredSide = "under";
+        }
 
         const primary = scoreProp(preferredSide, prop);
         if (primary) all.push(primary);

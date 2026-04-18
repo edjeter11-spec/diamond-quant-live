@@ -141,8 +141,14 @@ export default function TopPropsOfDay() {
 
             if (analysis.recommendation) {
               const side = analysis.recommendation.side;
-              if (side === "over" || side === "lean_over") pick.recommendation = "OVER";
-              else if (side === "under" || side === "lean_under") pick.recommendation = "UNDER";
+              // Force Over on HR props — Under is dead money for home runs
+              if (pick.market === "batter_home_runs") {
+                pick.recommendation = "OVER";
+              } else if (side === "over" || side === "lean_over") {
+                pick.recommendation = "OVER";
+              } else if (side === "under" || side === "lean_under") {
+                pick.recommendation = "UNDER";
+              }
               pick.confidence = Math.max(pick.confidence, analysis.recommendation.confidence);
             }
           }

@@ -245,8 +245,8 @@ export default function PropDetail({
         )}
       </div>
 
-      {/* Add to Parlay */}
-      <div className="grid grid-cols-2 gap-1.5 pt-1">
+      {/* Add to Parlay — Over only for markets where Under is dead money (HRs) */}
+      {market === "batter_home_runs" ? (
         <button
           onClick={() => addParlayLeg({
             game: playerName,
@@ -256,34 +256,51 @@ export default function PropDetail({
             fairProb: overFairProb ?? 0.5,
             bookmaker: overBook ?? "best price",
           })}
-          className={`flex items-center justify-center gap-1 py-2 rounded-lg text-[11px] font-semibold transition-colors ${
-            side === "over"
-              ? "bg-neon/15 border border-neon/30 text-neon hover:bg-neon/25"
-              : "bg-gunmetal/40 border border-slate/25 text-mercury hover:text-silver"
-          }`}
+          className="flex items-center justify-center gap-1 py-2 rounded-lg bg-neon/15 border border-neon/30 text-neon hover:bg-neon/25 text-[11px] font-semibold transition-colors"
         >
           <ArrowUpRight className="w-3 h-3" /> Over {line}
           {overOdds != null && <span className="text-[10px] opacity-70">({overOdds > 0 ? "+" : ""}{overOdds})</span>}
         </button>
-        <button
-          onClick={() => addParlayLeg({
-            game: playerName,
-            market: "player_prop" as any,
-            pick: `${playerName} Under ${line} ${(LABEL_FOR_MARKET[market] ?? "").toUpperCase()}`,
-            odds: underOdds ?? -110,
-            fairProb: underFairProb ?? 0.5,
-            bookmaker: underBook ?? "best price",
-          })}
-          className={`flex items-center justify-center gap-1 py-2 rounded-lg text-[11px] font-semibold transition-colors ${
-            side === "under"
-              ? "bg-purple/15 border border-purple/30 text-purple hover:bg-purple/25"
-              : "bg-gunmetal/40 border border-slate/25 text-mercury hover:text-silver"
-          }`}
-        >
-          <ArrowDownRight className="w-3 h-3" /> Under {line}
-          {underOdds != null && <span className="text-[10px] opacity-70">({underOdds > 0 ? "+" : ""}{underOdds})</span>}
-        </button>
-      </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-1.5 pt-1">
+          <button
+            onClick={() => addParlayLeg({
+              game: playerName,
+              market: "player_prop" as any,
+              pick: `${playerName} Over ${line} ${(LABEL_FOR_MARKET[market] ?? "").toUpperCase()}`,
+              odds: overOdds ?? -110,
+              fairProb: overFairProb ?? 0.5,
+              bookmaker: overBook ?? "best price",
+            })}
+            className={`flex items-center justify-center gap-1 py-2 rounded-lg text-[11px] font-semibold transition-colors ${
+              side === "over"
+                ? "bg-neon/15 border border-neon/30 text-neon hover:bg-neon/25"
+                : "bg-gunmetal/40 border border-slate/25 text-mercury hover:text-silver"
+            }`}
+          >
+            <ArrowUpRight className="w-3 h-3" /> Over {line}
+            {overOdds != null && <span className="text-[10px] opacity-70">({overOdds > 0 ? "+" : ""}{overOdds})</span>}
+          </button>
+          <button
+            onClick={() => addParlayLeg({
+              game: playerName,
+              market: "player_prop" as any,
+              pick: `${playerName} Under ${line} ${(LABEL_FOR_MARKET[market] ?? "").toUpperCase()}`,
+              odds: underOdds ?? -110,
+              fairProb: underFairProb ?? 0.5,
+              bookmaker: underBook ?? "best price",
+            })}
+            className={`flex items-center justify-center gap-1 py-2 rounded-lg text-[11px] font-semibold transition-colors ${
+              side === "under"
+                ? "bg-purple/15 border border-purple/30 text-purple hover:bg-purple/25"
+                : "bg-gunmetal/40 border border-slate/25 text-mercury hover:text-silver"
+            }`}
+          >
+            <ArrowDownRight className="w-3 h-3" /> Under {line}
+            {underOdds != null && <span className="text-[10px] opacity-70">({underOdds > 0 ? "+" : ""}{underOdds})</span>}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

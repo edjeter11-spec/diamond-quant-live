@@ -517,14 +517,16 @@ export default function PlayerProps() {
                     })()}
                   </div>
 
-                  {/* Best Over/Under */}
+                  {/* Best Over/Under — HRs are Over-only */}
                   <div className="flex gap-1.5 flex-shrink-0">
                     <span className="text-xs font-mono text-neon bg-neon/10 px-1.5 py-0.5 rounded">
                       O {formatOdds(prop.bestOver?.price ?? 0)}
                     </span>
-                    <span className="text-xs font-mono text-purple bg-purple/10 px-1.5 py-0.5 rounded">
-                      U {formatOdds(prop.bestUnder?.price ?? 0)}
-                    </span>
+                    {prop.market !== "batter_home_runs" && (
+                      <span className="text-xs font-mono text-purple bg-purple/10 px-1.5 py-0.5 rounded">
+                        U {formatOdds(prop.bestUnder?.price ?? 0)}
+                      </span>
+                    )}
                   </div>
 
                   {/* Recommendation badge (if analyzed) */}
@@ -583,23 +585,25 @@ export default function PlayerProps() {
                                     >
                                       O {formatOdds(book.overPrice)}
                                     </button>
-                                    <button
-                                      onClick={() => {
-                                        addParlayLeg({
-                                          game: prop.playerName,
-                                          market: "player_prop",
-                                          pick: `${prop.playerName} Under ${prop.line} ${MARKET_LABELS[prop.market]}`,
-                                          odds: book.underPrice,
-                                          fairProb: prop.fairUnderProb / 100,
-                                          bookmaker: book.bookmaker,
-                                        });
-                                      }}
-                                      className={`text-[11px] font-mono font-semibold px-1.5 py-0.5 rounded transition-all active:scale-95 ${
-                                        isBestUnder ? "best-odds" : "text-purple/80 hover:bg-purple/10"
-                                      }`}
-                                    >
-                                      U {formatOdds(book.underPrice)}
-                                    </button>
+                                    {prop.market !== "batter_home_runs" && (
+                                      <button
+                                        onClick={() => {
+                                          addParlayLeg({
+                                            game: prop.playerName,
+                                            market: "player_prop",
+                                            pick: `${prop.playerName} Under ${prop.line} ${MARKET_LABELS[prop.market]}`,
+                                            odds: book.underPrice,
+                                            fairProb: prop.fairUnderProb / 100,
+                                            bookmaker: book.bookmaker,
+                                          });
+                                        }}
+                                        className={`text-[11px] font-mono font-semibold px-1.5 py-0.5 rounded transition-all active:scale-95 ${
+                                          isBestUnder ? "best-odds" : "text-purple/80 hover:bg-purple/10"
+                                        }`}
+                                      >
+                                        U {formatOdds(book.underPrice)}
+                                      </button>
+                                    )}
                                   </div>
                                 </div>
                               );
@@ -768,23 +772,33 @@ export default function PlayerProps() {
                           </>
                         )}
 
-                        {/* Quick bet buttons */}
-                        <div className="grid grid-cols-2 gap-2">
+                        {/* Quick bet buttons — HRs are Over-only (Under is dead money) */}
+                        {prop.market === "batter_home_runs" ? (
                           <button
                             onClick={() => handleAddProp(prop, "over")}
-                            className="flex items-center justify-center gap-2 py-2.5 rounded-lg bg-neon/10 border border-neon/20 text-neon text-sm font-semibold hover:bg-neon/20 active:scale-[0.98] transition-all"
+                            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-neon/10 border border-neon/20 text-neon text-sm font-semibold hover:bg-neon/20 active:scale-[0.98] transition-all"
                           >
                             <ArrowUpRight className="w-4 h-4" />
                             Over {prop.line} ({formatOdds(prop.bestOver.price)})
                           </button>
-                          <button
-                            onClick={() => handleAddProp(prop, "under")}
-                            className="flex items-center justify-center gap-2 py-2.5 rounded-lg bg-purple/10 border border-purple/20 text-purple text-sm font-semibold hover:bg-purple/20 active:scale-[0.98] transition-all"
-                          >
-                            <ArrowDownRight className="w-4 h-4" />
-                            Under {prop.line} ({formatOdds(prop.bestUnder.price)})
-                          </button>
-                        </div>
+                        ) : (
+                          <div className="grid grid-cols-2 gap-2">
+                            <button
+                              onClick={() => handleAddProp(prop, "over")}
+                              className="flex items-center justify-center gap-2 py-2.5 rounded-lg bg-neon/10 border border-neon/20 text-neon text-sm font-semibold hover:bg-neon/20 active:scale-[0.98] transition-all"
+                            >
+                              <ArrowUpRight className="w-4 h-4" />
+                              Over {prop.line} ({formatOdds(prop.bestOver.price)})
+                            </button>
+                            <button
+                              onClick={() => handleAddProp(prop, "under")}
+                              className="flex items-center justify-center gap-2 py-2.5 rounded-lg bg-purple/10 border border-purple/20 text-purple text-sm font-semibold hover:bg-purple/20 active:scale-[0.98] transition-all"
+                            >
+                              <ArrowDownRight className="w-4 h-4" />
+                              Under {prop.line} ({formatOdds(prop.bestUnder.price)})
+                            </button>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
