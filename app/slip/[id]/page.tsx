@@ -70,19 +70,19 @@ export default function SlipPage({ params }: { params: Promise<{ id: string }> }
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center">
-        <Diamond className="w-8 h-8 text-[#00ff88]/20 animate-pulse" />
+      <div className="min-h-screen bg-void flex items-center justify-center">
+        <Diamond className="w-8 h-8 text-neon/20 animate-pulse" />
       </div>
     );
   }
 
   if (!slip) {
     return (
-      <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center text-center px-4">
+      <div className="min-h-screen bg-void flex items-center justify-center text-center px-4">
         <div>
-          <Diamond className="w-10 h-10 text-[#8b8fa3]/20 mx-auto mb-3" />
-          <p className="text-sm text-[#8b8fa3]">Slip not found or expired</p>
-          <Link href="/" className="text-xs text-[#00d4ff] hover:text-[#00ff88] mt-2 inline-block">
+          <Diamond className="w-10 h-10 text-mercury/20 mx-auto mb-3" />
+          <p className="text-sm text-mercury">Slip not found or expired</p>
+          <Link href="/" className="text-xs text-electric hover:text-neon mt-2 inline-block">
             ← Back to Dashboard
           </Link>
         </div>
@@ -97,50 +97,50 @@ export default function SlipPage({ params }: { params: Promise<{ id: string }> }
   const payout = stake && totalOdds ? Math.round(toPayout(totalOdds, stake) * 100) / 100 : null;
 
   return (
-    <div className="min-h-screen bg-[#0a0a0f] text-[#c4c8d8]">
+    <div className="min-h-screen bg-void text-silver">
       <div className="max-w-lg mx-auto px-4 pt-6 pb-8">
         {/* Header */}
         <div className="flex items-center gap-3 mb-6">
-          <Link href="/" className="p-2 rounded-lg hover:bg-[#1a1d2e] transition-colors">
-            <ArrowLeft className="w-4 h-4 text-[#8b8fa3]" />
+          <Link href="/" className="p-2 rounded-lg hover:bg-gunmetal/60 transition-colors">
+            <ArrowLeft className="w-4 h-4 text-mercury" />
           </Link>
-          <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-[#00ff88]/20 to-[#00d4ff]/20 flex items-center justify-center border border-[#00ff88]/20">
-            <Share2 className="w-4 h-4 text-[#00ff88]" />
+          <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-neon/20 to-electric/20 flex items-center justify-center border border-neon/20">
+            <Share2 className="w-4 h-4 text-neon" />
           </div>
           <div className="flex-1">
             <h1 className="text-lg font-bold text-white">Shared Slip</h1>
-            <p className="text-[10px] text-[#8b8fa3]">
+            <p className="text-[10px] text-mercury">
               {slip.slip_data.sharedBy ?? "Anonymous"} • {new Date(slip.created_at).toLocaleDateString()}
             </p>
           </div>
-          <div className="flex items-center gap-1 text-[10px] text-[#8b8fa3]">
+          <div className="flex items-center gap-1 text-[10px] text-mercury">
             <Eye className="w-3 h-3" /> {slip.views}
           </div>
         </div>
 
         {/* Picks */}
-        <div className="rounded-xl bg-[#0f1117] border border-[#2a2d3e]/50 overflow-hidden mb-4">
-          <div className="px-4 py-3 border-b border-[#2a2d3e]/30 bg-[#00ff88]/5">
+        <div className="rounded-xl bg-bunker border border-slate/40 overflow-hidden mb-4">
+          <div className="px-4 py-3 border-b border-slate/30 bg-neon/5">
             <p className="text-xs font-bold text-white uppercase tracking-wider">
               {picks.length}-Leg {picks.length > 1 ? "Parlay" : "Straight"}
               {totalOdds ? ` • ${formatOdds(Math.round(totalOdds))}` : ""}
             </p>
           </div>
-          <div className="divide-y divide-[#2a2d3e]/20">
+          <div className="divide-y divide-slate/20">
             {picks.map((pick, i) => (
               <div key={i} className="px-4 py-3 flex items-center gap-3">
                 <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${
-                  pick.result === "win" ? "bg-[#00ff88]/15" :
-                  pick.result === "loss" ? "bg-[#ff3b5c]/15" :
-                  "bg-[#2a2d3e]/50"
+                  pick.result === "win" ? "bg-neon/15" :
+                  pick.result === "loss" ? "bg-danger/15" :
+                  "bg-slate/50"
                 }`}>
-                  {pick.result === "win" ? <CheckCircle className="w-3.5 h-3.5 text-[#00ff88]" /> :
-                   pick.result === "loss" ? <XCircle className="w-3.5 h-3.5 text-[#ff3b5c]" /> :
-                   <Clock className="w-3.5 h-3.5 text-[#8b8fa3]" />}
+                  {pick.result === "win" ? <CheckCircle className="w-3.5 h-3.5 text-neon" /> :
+                   pick.result === "loss" ? <XCircle className="w-3.5 h-3.5 text-danger" /> :
+                   <Clock className="w-3.5 h-3.5 text-mercury" />}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-medium text-white truncate">{pick.pick}</p>
-                  <p className="text-[10px] text-[#8b8fa3] truncate">{pick.game}</p>
+                  <p className="text-[10px] text-mercury truncate">{pick.game}</p>
                 </div>
                 <p className="text-xs font-mono font-bold text-white">{formatOdds(pick.odds)}</p>
               </div>
@@ -152,14 +152,14 @@ export default function SlipPage({ params }: { params: Promise<{ id: string }> }
         <div className="flex items-center justify-center gap-3 mb-6">
           {[
             { emoji: "fire", icon: Flame, color: "text-orange-500", bg: "bg-orange-500/10 border-orange-500/20" },
-            { emoji: "skull", icon: Skull, color: "text-[#8b8fa3]", bg: "bg-[#8b8fa3]/10 border-[#8b8fa3]/20" },
+            { emoji: "skull", icon: Skull, color: "text-mercury", bg: "bg-mercury/10 border-mercury/20" },
           ].map(({ emoji, icon: Icon, color, bg }) => (
             <button
               key={emoji}
               onClick={() => handleReact(emoji)}
               disabled={!!reacted}
               className={`flex items-center gap-1.5 px-4 py-2 rounded-xl border transition-all ${
-                reacted === emoji ? `${bg} scale-110` : `bg-[#0f1117] border-[#2a2d3e]/50 hover:${bg}`
+                reacted === emoji ? `${bg} scale-110` : `bg-bunker border-slate/40 hover:${bg}`
               } disabled:opacity-70`}
             >
               <Icon className={`w-4 h-4 ${color}`} />
@@ -170,15 +170,15 @@ export default function SlipPage({ params }: { params: Promise<{ id: string }> }
 
         {/* Payout */}
         {payout !== null && stake && (
-          <div className="rounded-xl bg-[#0f1117] border border-[#2a2d3e]/50 p-4 mb-4 flex items-center justify-between">
+          <div className="rounded-xl bg-bunker border border-slate/40 p-4 mb-4 flex items-center justify-between">
             <div>
-              <p className="text-[10px] text-[#8b8fa3] uppercase tracking-wider">Risk</p>
+              <p className="text-[10px] text-mercury uppercase tracking-wider">Risk</p>
               <p className="text-sm font-mono font-bold text-white">${stake.toFixed(2)}</p>
             </div>
-            <TrendingUp className="w-4 h-4 text-[#00ff88]/40" />
+            <TrendingUp className="w-4 h-4 text-neon/40" />
             <div className="text-right">
-              <p className="text-[10px] text-[#8b8fa3] uppercase tracking-wider">To Win</p>
-              <p className="text-sm font-mono font-bold text-[#00ff88]">${payout.toFixed(2)}</p>
+              <p className="text-[10px] text-mercury uppercase tracking-wider">To Win</p>
+              <p className="text-sm font-mono font-bold text-neon">${payout.toFixed(2)}</p>
             </div>
           </div>
         )}
@@ -186,31 +186,31 @@ export default function SlipPage({ params }: { params: Promise<{ id: string }> }
         {/* Share */}
         <button
           onClick={() => navigator.clipboard.writeText(window.location.href)}
-          className="w-full py-2.5 rounded-xl bg-[#00d4ff]/10 border border-[#00d4ff]/20 text-[#00d4ff] text-xs font-semibold hover:bg-[#00d4ff]/20 transition-all flex items-center justify-center gap-2 mb-6"
+          className="w-full py-2.5 rounded-xl bg-electric/10 border border-electric/20 text-electric text-xs font-semibold hover:bg-electric/20 transition-all flex items-center justify-center gap-2 mb-6"
         >
           <Share2 className="w-3.5 h-3.5" /> Copy Link
         </button>
 
         {/* Conversion CTA */}
-        <Link href="/" className="block rounded-xl bg-gradient-to-br from-[#00ff88]/15 to-[#00d4ff]/10 border border-[#00ff88]/25 p-5 hover:border-[#00ff88]/50 transition-all group">
+        <Link href="/" className="block rounded-xl bg-gradient-to-br from-neon/15 to-electric/10 border border-neon/25 p-5 hover:border-neon/50 transition-all group">
           <div className="flex items-center gap-3 mb-2">
-            <div className="w-9 h-9 rounded-lg bg-[#00ff88]/15 flex items-center justify-center flex-shrink-0">
-              <Diamond className="w-4 h-4 text-[#00ff88]" />
+            <div className="w-9 h-9 rounded-lg bg-neon/15 flex items-center justify-center flex-shrink-0">
+              <Diamond className="w-4 h-4 text-neon" />
             </div>
             <div className="flex-1">
               <p className="text-sm font-bold text-white">Get your own +EV picks</p>
-              <p className="text-[10px] text-[#8b8fa3]">Live odds across 10+ books · Quant models · Free</p>
+              <p className="text-[10px] text-mercury">Live odds across 10+ books · Quant models · Free</p>
             </div>
-            <Zap className="w-4 h-4 text-[#00ff88] group-hover:scale-110 transition-transform" />
+            <Zap className="w-4 h-4 text-neon group-hover:scale-110 transition-transform" />
           </div>
-          <div className="flex items-center justify-center gap-1 mt-2 pt-3 border-t border-[#2a2d3e]/30">
-            <span className="text-[10px] font-bold text-[#00ff88] uppercase tracking-wider">See Today&apos;s Board</span>
-            <span className="text-[#00ff88]">→</span>
+          <div className="flex items-center justify-center gap-1 mt-2 pt-3 border-t border-slate/30">
+            <span className="text-[10px] font-bold text-neon uppercase tracking-wider">See Today&apos;s Board</span>
+            <span className="text-neon">→</span>
           </div>
         </Link>
 
         <div className="text-center mt-4">
-          <Link href="/" className="text-[10px] text-[#8b8fa3] hover:text-[#c4c8d8] transition-colors">
+          <Link href="/" className="text-[10px] text-mercury hover:text-silver transition-colors">
             diamond-quant-live.vercel.app
           </Link>
         </div>

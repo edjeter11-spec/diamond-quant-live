@@ -20,12 +20,12 @@ import ThreeModelBot from "@/components/dashboard/ThreeModelBot";
 import ModelLogs from "@/components/dashboard/ModelLogs";
 import GhostBots from "@/components/dashboard/GhostBots";
 import BrainViz from "@/components/dashboard/BrainViz";
-import TrainingPanel from "@/components/dashboard/TrainingPanel";
 import TopPropsOfDay from "@/components/dashboard/TopPropsOfDay";
 import SnapSync from "@/components/dashboard/SnapSync";
 import { teamNameToAbbrev } from "@/lib/logos";
 import AuthButton from "@/components/auth/AuthButton";
 import UserProfile from "@/components/auth/UserProfile";
+import { useAuth } from "@/lib/supabase/auth";
 import MigrationBanner from "@/components/auth/MigrationBanner";
 import PlayerCompare from "@/components/dashboard/PlayerCompare";
 import ROIChart from "@/components/dashboard/ROIChart";
@@ -92,6 +92,7 @@ export default function WarRoom() {
     selectGame, snapshotOdds, getLineMovements, hydrate,
   } = useStore();
   const { currentSport, config, setSport } = useSport();
+  const { isAdmin } = useAuth();
 
   const [refreshing, setRefreshing] = useState(false);
   const [mobileGamesOpen, setMobileGamesOpen] = useState(false);
@@ -644,8 +645,8 @@ export default function WarRoom() {
                     <ThreeModelBot />
                     <BrainViz />
                     <BotChallenge />
-                    <GhostBots />
-                    <ModelLogs />
+                    {isAdmin && <GhostBots />}
+                    {isAdmin && <ModelLogs />}
                   </>
                 )}
               </div>
