@@ -16,6 +16,7 @@ import Link from "next/link";
 import { usePremium } from "@/lib/hooks/usePremium";
 import TodayPropPicks from "@/components/dashboard/TodayPropPicks";
 import PropDetail from "@/components/dashboard/PropDetail";
+import LineMovementBadge from "@/components/ui/LineMovementBadge";
 import { formatPickLabel } from "@/lib/display";
 
 interface Pick {
@@ -732,6 +733,12 @@ function PickCard({ pick, isExpanded, onToggle, onAddToParlay, formatOdds }: {
                 TBD
               </span>
             )}
+            {/* Line movement badge — shows when line moved ≥0.5pt recently */}
+            <LineMovementBadge
+              gameId={pick.id.split("-")[0]}
+              market={pick.market}
+            />
+
             {(pick.gameStatus === "tomorrow" || pick.gameStatus === "future") && (
               <span className="px-1 py-0.5 rounded bg-electric/10 text-[8px] font-bold text-electric uppercase flex-shrink-0">
                 {pick.dayLabel ?? "Upcoming"}
