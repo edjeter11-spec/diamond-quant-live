@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CheckCircle, Info, AlertTriangle, X } from "lucide-react";
 
 interface Toast {
@@ -8,26 +8,57 @@ interface Toast {
   tone: "good" | "info" | "warn";
   message: string;
   sub?: string;
+  count?: number;
 }
 
 // Listens for window "dq-toast" CustomEvents and renders ephemeral toasts.
 // Any part of the app (including the zustand store) can fire one with:
 //   window.dispatchEvent(new CustomEvent("dq-toast", { detail: { tone, message, sub } }));
+//
+// Debounces rapid identical-message toasts: adding multiple legs in
+// quick succession shows one coalesced "Added to slip · 3 legs · +421".
 export default function Toaster() {
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const lastTimer = useRef<Map<string, number>>(new Map());
 
   useEffect(() => {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent).detail as { tone?: Toast["tone"]; message?: string; sub?: string } | undefined;
       if (!detail?.message) return;
-      const toast: Toast = {
-        id: Date.now() + Math.random(),
-        tone: detail.tone ?? "info",
-        message: detail.message,
-        sub: detail.sub,
-      };
-      setToasts(t => [...t.slice(-3), toast]);
-      setTimeout(() => setToasts(t => t.filter(x => x.id !== toast.id)), 2800);
+      const tone = detail.tone ?? "info";
+      const message = detail.message;
+      const sub = detail.sub;
+
+      setToasts(t => {
+        // If the same message is already visible, update its sub (latest value wins) + bump count
+        const idx = t.findIndex(x => x.message === message);
+        if (idx >= 0) {
+          const existing = t[idx];
+          const updated: Toast = {
+            ...existing,
+            sub,
+            count: (existing.count ?? 1) + 1,
+          };
+          // Extend its lifetime
+          const prev = lastTimer.current.get(String(existing.id));
+          if (prev) window.clearTimeout(prev);
+          const newTimer = window.setTimeout(
+            () => setToasts(list => list.filter(x => x.id !== existing.id)),
+            2400
+          );
+          lastTimer.current.set(String(existing.id), newTimer);
+          return [...t.slice(0, idx), updated, ...t.slice(idx + 1)];
+        }
+        // Otherwise push a fresh toast
+        const id = Date.now() + Math.random();
+        const toast: Toast = { id, tone, message, sub, count: 1 };
+        const timer = window.setTimeout(
+          () => setToasts(list => list.filter(x => x.id !== id)),
+          2400
+        );
+        lastTimer.current.set(String(id), timer);
+        return [...t.slice(-3), toast];
+      });
     };
     window.addEventListener("dq-toast", handler);
     return () => window.removeEventListener("dq-toast", handler);

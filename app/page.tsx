@@ -620,7 +620,6 @@ export default function WarRoom() {
                   {/* Right Sidebar — XL */}
                   <div className="hidden xl:block w-80 flex-shrink-0 space-y-4">
                     <div className="sticky top-24 space-y-4">
-                      <ParlayBuilder />
                       <LineMovement movements={lineMovements} />
                     </div>
                   </div>
