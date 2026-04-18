@@ -394,7 +394,7 @@ export default function BotChallenge() {
           <MiniStat label="In Play" value={pending > 0 ? `$${pendingStaked.toFixed(0)}` : "—"} color="text-amber" />
         </div>
 
-        {/* Per-Model Accuracy — NBA shows Prop Brain accuracy, MLB shows 3-model accuracy */}
+        {/* Accuracy — NBA shows Prop Brain, MLB shows consensus engine */}
         {isNBA ? (
           trainingProgress?.accuracy && Object.keys(trainingProgress.accuracy).length > 0 && (
             <div className="px-4 py-2 border-t border-slate/10">
@@ -546,17 +546,17 @@ export default function BotChallenge() {
       {loading ? (
         <div className="glass rounded-xl p-4 flex items-center justify-center gap-2">
           <RefreshCw className="w-4 h-4 text-electric animate-spin" />
-          <span className="text-sm text-mercury">Running 3-model analysis...</span>
+          <span className="text-sm text-mercury">Generating today's picks...</span>
         </div>
       ) : todayPicks.length === 0 ? (
         <div className="glass rounded-xl p-4 text-center">
           <p className="text-sm text-mercury">Waiting for enough game data to generate picks</p>
-          <p className="text-[10px] text-mercury/50 mt-1">Picks auto-generate from 3-model consensus — no manual action needed</p>
+          <p className="text-[10px] text-mercury/50 mt-1">Picks auto-generate each morning — no manual action needed</p>
         </div>
       ) : (
         <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-neon/5 border border-neon/15">
           <CheckCircle className="w-3.5 h-3.5 text-neon" />
-          <span className="text-xs text-neon font-medium">Today's {todayPicks.length} picks locked — generated from 3-model analysis</span>
+          <span className="text-xs text-neon font-medium">Today's {todayPicks.length} picks locked in</span>
         </div>
       )}
 

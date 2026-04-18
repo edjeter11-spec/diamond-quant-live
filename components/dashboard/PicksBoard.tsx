@@ -383,7 +383,7 @@ export default function PicksBoard() {
   }, [modelPicks, allEV, scores]);
 
   // Build all sections in one stable useMemo
-  const { topLocks, longshots, moneylines, runLines, overs, unders } = useMemo(() => {
+  const { topLocks, longshots } = useMemo(() => {
     const usedIds = new Set<string>();
     function takeUnique(pool: Pick[], count: number, extraFilter?: (p: Pick) => boolean): Pick[] {
       const result: Pick[] = [];
@@ -399,12 +399,10 @@ export default function PicksBoard() {
       return result;
     }
     return {
-      topLocks: takeUnique(combinedPicks, 4, (p) => (p.confidence === "HIGH" || p.confidence === "MEDIUM" || p.evPercentage > 3) && p.evPercentage >= 0),
-      longshots: takeUnique(combinedPicks, 4, (p) => p.odds > 120),
-      moneylines: takeUnique(combinedPicks, 5, (p) => p.market === "moneyline"),
-      runLines: takeUnique(combinedPicks, 5, (p) => p.market === "spread"),
-      overs: takeUnique(combinedPicks, 5, (p) => p.market === "total" && p.pick.toLowerCase().includes("over")),
-      unders: takeUnique(combinedPicks, 5, (p) => p.market === "total" && p.pick.toLowerCase().includes("under")),
+      // Locks — highest-confidence across ANY market
+      topLocks: takeUnique(combinedPicks, 6, (p) => p.confidence === "HIGH" || p.confidence === "MEDIUM"),
+      // Longshots — plus-money value plays across ANY market
+      longshots: takeUnique(combinedPicks, 5, (p) => p.odds >= 150),
     };
   }, [combinedPicks]);
 
@@ -438,13 +436,11 @@ export default function PicksBoard() {
 
   const formatOdds = (odds: number) => (odds > 0 ? `+${odds}` : `${odds}`);
 
+  // Today's Slate — two cross-market buckets. Props (TodayPropPicks)
+  // and NRFI/YRFI (on the /nrfi tab) are their own components.
   const sections = [
-    { key: "locks", title: "TOP LOCKS", subtitle: "Highest confidence — model's best plays", icon: Trophy, iconColor: "text-gold", bg: "bg-gold/5", border: "border-gold/20", picks: topLocks },
-    { key: "longshots", title: "LONGSHOT VALUE", subtitle: "Underdogs with +EV edge", icon: Zap, iconColor: "text-amber", bg: "bg-amber/5", border: "border-amber/20", picks: longshots },
-    { key: "ml", title: "MONEYLINES", subtitle: "Best ML value today", icon: Swords, iconColor: "text-neon", bg: "bg-neon/5", border: "border-neon/20", picks: moneylines },
-    { key: "rl", title: isNBA ? "SPREADS" : "RUN LINES", subtitle: isNBA ? "Point spread picks with value" : "Run line picks with value", icon: Shield, iconColor: "text-purple", bg: "bg-purple/5", border: "border-purple/20", picks: runLines },
-    { key: "overs", title: "OVERS", subtitle: "Game totals leaning over", icon: ArrowUp, iconColor: "text-neon", bg: "bg-neon/5", border: "border-neon/15", picks: overs },
-    { key: "unders", title: "UNDERS", subtitle: "Game totals leaning under", icon: ArrowDown, iconColor: "text-electric", bg: "bg-electric/5", border: "border-electric/15", picks: unders },
+    { key: "locks", title: "LOCKS", subtitle: "Our highest-confidence plays today", icon: Trophy, iconColor: "text-gold", bg: "bg-gold/5", border: "border-gold/20", picks: topLocks },
+    { key: "longshots", title: "LONGSHOTS", subtitle: "Plus-money underdogs worth a look", icon: Zap, iconColor: "text-amber", bg: "bg-amber/5", border: "border-amber/20", picks: longshots },
   ];
 
   return (
@@ -596,10 +592,6 @@ export default function PicksBoard() {
         );
       })}
 
-      {/* ═══ PROPS (sport-specific) ═══ */}
-      {!isNBA && (
-        <PropSection title="STRIKEOUTS" subtitle="Pitcher K props with live odds" icon={Flame} iconColor="text-danger" props={propsData.pitcher_strikeouts ?? []} loading={propsLoading} expandedPick={expandedPick} setExpanded={setExpandedPick} addParlayLeg={addParlayLeg} sport={currentSport as "mlb" | "nba"} market="pitcher_strikeouts" />
-      )}
 
       {/* No data state */}
       {combinedPicks.length === 0 && allEV.length === 0 && (

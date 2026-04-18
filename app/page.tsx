@@ -14,12 +14,11 @@ import LineMovement from "@/components/dashboard/LineMovement";
 import SelectedGameBanner from "@/components/dashboard/SelectedGameBanner";
 import BetSlip from "@/components/dashboard/BetSlip";
 import PicksBoard from "@/components/dashboard/PicksBoard";
-import ModelTracker from "@/components/dashboard/ModelTracker";
 import BotChallenge from "@/components/dashboard/BotChallenge";
 import ThreeModelBot from "@/components/dashboard/ThreeModelBot";
+import BrainViz from "@/components/dashboard/BrainViz";
 import ModelLogs from "@/components/dashboard/ModelLogs";
 import GhostBots from "@/components/dashboard/GhostBots";
-import BrainViz from "@/components/dashboard/BrainViz";
 import TopPropsOfDay from "@/components/dashboard/TopPropsOfDay";
 import SnapSync from "@/components/dashboard/SnapSync";
 import { teamNameToAbbrev } from "@/lib/logos";
@@ -27,7 +26,6 @@ import AuthButton from "@/components/auth/AuthButton";
 import UserProfile from "@/components/auth/UserProfile";
 import { useAuth } from "@/lib/supabase/auth";
 import MigrationBanner from "@/components/auth/MigrationBanner";
-import PlayerCompare from "@/components/dashboard/PlayerCompare";
 import ROIChart from "@/components/dashboard/ROIChart";
 import { matchGames } from "@/lib/mlb/match-games";
 import TonightsPlays from "@/components/dashboard/TonightsPlays";
@@ -573,9 +571,6 @@ export default function WarRoom() {
                     {/* Tonight's Plays — 30-second answer */}
                     <TonightsPlays sport={currentSport} />
 
-                    {/* Model accuracy at the top */}
-                    <ModelTracker />
-
                     <PicksBoard />
 
                     {/* Game deep-dive (when a game is selected) */}
@@ -622,7 +617,6 @@ export default function WarRoom() {
               currentSport === "nba" ? (
                 <div className="max-w-5xl mx-auto space-y-4">
                   <PlayerProps />
-                  <PlayerCompare />
                 </div>
               ) : (
                 <div className="max-w-5xl mx-auto space-y-4">
@@ -644,7 +638,7 @@ export default function WarRoom() {
                 ) : (
                   <>
                     <ThreeModelBot />
-                    <BrainViz />
+                    {isAdmin && <BrainViz />}
                     <BotChallenge />
                     {isAdmin && <GhostBots />}
                     {isAdmin && <ModelLogs />}
@@ -657,7 +651,6 @@ export default function WarRoom() {
               <div className="max-w-2xl mx-auto space-y-4">
                 <ROIChart />
                 <SnapSync />
-                <ModelTracker />
                 <BankrollTracker />
                 <button
                   onClick={() => openBetSlip()}
