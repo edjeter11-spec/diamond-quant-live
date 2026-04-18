@@ -567,11 +567,11 @@ export async function analyzeAllGames(oddsData: any[], scores: any[]): Promise<G
       const homeAbbrev: string = scoreGame?.homeAbbrev ?? "";
       const venueName: string = scoreGame?.venue ?? "";
 
-      // Team abbrevs for bullpen fatigue lookup
+      // Team abbrevs for bullpen fatigue + lineup injury lookup
       const awayAbbrev: string = scoreGame?.awayAbbrev ?? "";
 
-      // Fetch pitcher profiles + weather + bullpen fatigue in parallel
-      const [homePitcher, awayPitcher, weather, bullpenFatigue] = await Promise.all([
+      // Fetch pitcher profiles + weather + bullpen fatigue + team injuries in parallel
+      const [homePitcher, awayPitcher, weather, bullpenFatigue, teamInjuries] = await Promise.all([
         buildPitcherProfile(homePitcherName, awayTeam),
         buildPitcherProfile(awayPitcherName, homeTeam),
         homeAbbrev ? import("@/lib/mlb/weather-fatigue").then(m => m.getGameWeather(homeAbbrev)).catch(() => null) : Promise.resolve(null),
@@ -583,6 +583,19 @@ export async function analyzeAllGames(oddsData: any[], scores: any[]): Promise<G
             const [home, away] = await Promise.all([
               homeId ? mod.getBullpenFatigue(homeId, homeAbbrev) : Promise.resolve(null),
               awayId ? mod.getBullpenFatigue(awayId, awayAbbrev) : Promise.resolve(null),
+            ]);
+            return { home, away };
+          } catch { return null; }
+        })(),
+        (async () => {
+          try {
+            const bp = await import("@/lib/mlb/bullpen-fatigue");
+            const inj = await import("@/lib/mlb/team-injuries");
+            const homeId = homeAbbrev ? bp.getTeamIdByAbbrev(homeAbbrev) : null;
+            const awayId = awayAbbrev ? bp.getTeamIdByAbbrev(awayAbbrev) : null;
+            const [home, away] = await Promise.all([
+              homeId ? inj.getTeamInjuries(homeId, homeAbbrev) : Promise.resolve(null),
+              awayId ? inj.getTeamInjuries(awayId, awayAbbrev) : Promise.resolve(null),
             ]);
             return { home, away };
           } catch { return null; }
@@ -603,6 +616,28 @@ export async function analyzeAllGames(oddsData: any[], scores: any[]): Promise<G
 
       // Run 3 models
       const pitcherModel = runPitcherModel(homePitcher, awayPitcher, homeTeam, awayTeam, weather, parkData, bullpenFatigue);
+
+      // Apply team-injury (lineup) edge — key hitters out make the opposing
+      // pitcher's job easier. Away IL → boosts home side; home IL → boosts away.
+      if (teamInjuries) {
+        try {
+          const { computeInjuryEdge } = await import("@/lib/mlb/team-injuries");
+          const homeInjEdge = teamInjuries.home ? computeInjuryEdge(teamInjuries.home) : 0;
+          const awayInjEdge = teamInjuries.away ? computeInjuryEdge(teamInjuries.away) : 0;
+          // Home team's missing hitters = lower home scoring = favors away pitcher (awayEdge++)
+          // Away team's missing hitters = favors home pitcher (homeEdge++)
+          const netEdge = awayInjEdge - homeInjEdge;
+          if (Math.abs(netEdge) >= 0.3) {
+            const shift = netEdge * 0.035; // ~3.5% prob per run of scoring edge
+            pitcherModel.homeWinProb = Math.min(0.95, Math.max(0.05, pitcherModel.homeWinProb + shift));
+            if (teamInjuries.home?.impactfulOut) pitcherModel.factors.push(teamInjuries.home.summary);
+            if (teamInjuries.away?.impactfulOut) pitcherModel.factors.push(teamInjuries.away.summary);
+            // Total projection tilts down when offenses are weakened
+            pitcherModel.totalProjection = Math.max(6, pitcherModel.totalProjection - (homeInjEdge + awayInjEdge) * 0.6);
+          }
+        } catch {}
+      }
+
       const marketModel = runMarketModel(oddsLines);
       const trendModel = await runEloPowerModel(homeTeam, awayTeam);
 
