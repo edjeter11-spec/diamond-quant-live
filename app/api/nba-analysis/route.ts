@@ -22,10 +22,21 @@ export async function GET() {
     // Filter to upcoming games only
     const futureGames = rawGames.filter(g => new Date(g.commence_time).getTime() > now - 30 * 60 * 1000);
 
-    const analyses = futureGames.slice(0, 12).map(game => {
+    const { getRestState, computeRestEdge } = await import("@/lib/nba/rest-fatigue");
+
+    const analyses = await Promise.all(futureGames.slice(0, 12).map(async (game) => {
       const oddsLines = parseOddsLines(game);
       const homeTeam = game.home_team;
       const awayTeam = game.away_team;
+
+      // Rest/B2B fatigue lookup (parallel — each cached for 2h)
+      const homeAbbrev = getNBATeamAbbrev(homeTeam);
+      const awayAbbrev = getNBATeamAbbrev(awayTeam);
+      const [homeRest, awayRest] = await Promise.all([
+        getRestState(homeAbbrev).catch(() => null),
+        getRestState(awayAbbrev).catch(() => null),
+      ]);
+      const restEdge = homeRest && awayRest ? computeRestEdge(homeRest, awayRest) : { edge: 0, factors: [] };
 
       // Run 3 NBA models
       const netRatingModel = runNetRatingModel(homeTeam, awayTeam, oddsLines);
@@ -48,6 +59,14 @@ export async function GET() {
       };
 
       const formModel = runFormModel(homeTeam, awayTeam);
+
+      // Inject rest edge into the form model (it's the closest home for schedule-based signal)
+      if (restEdge.edge !== 0) {
+        const probShift = restEdge.edge * 0.035; // ~3.5% win-prob per point of rest edge
+        formModel.homeWinProb = Math.min(0.95, Math.max(0.05, formModel.homeWinProb + probShift));
+        formModel.factors.push(...restEdge.factors);
+        formModel.confidence = Math.min(80, formModel.confidence + 15);
+      }
 
       // Consensus
       const consensus = buildNBAConsensus(netRatingModel, marketModel, formModel);
@@ -117,7 +136,7 @@ export async function GET() {
         homePitcher: null, // N/A for NBA
         awayPitcher: null,
       };
-    });
+    }));
 
     const response = {
       analyses,
