@@ -8,10 +8,8 @@ import GameCard from "@/components/dashboard/GameCard";
 import OddsGrid from "@/components/dashboard/OddsGrid";
 import QuantVerdict from "@/components/dashboard/QuantVerdict";
 import ArbitrageAlert from "@/components/dashboard/ArbitrageAlert";
-import ParlayBuilder from "@/components/dashboard/ParlayBuilder";
 import PlayerProps from "@/components/dashboard/PlayerProps";
 import BankrollTracker from "@/components/dashboard/BankrollTracker";
-import EVBoard from "@/components/dashboard/EVBoard";
 import LineMovement from "@/components/dashboard/LineMovement";
 import SelectedGameBanner from "@/components/dashboard/SelectedGameBanner";
 import BetSlip from "@/components/dashboard/BetSlip";
@@ -41,7 +39,7 @@ import { sendDiscordAlert } from "@/lib/odds/sportsbooks";
 import { getDiscordWebhook, setDiscordWebhook } from "@/lib/store";
 import NRFITab from "@/components/dashboard/NRFITab";
 import {
-  Diamond, BarChart3, Layers, User, UserCircle, Wallet, RefreshCw, Shield,
+  Diamond, BarChart3, User, UserCircle, Wallet, RefreshCw, Shield,
   Radio, ChevronLeft, ChevronRight, X, HelpCircle, Volume2, VolumeX, AlertTriangle,
 } from "lucide-react";
 
@@ -305,10 +303,9 @@ export default function WarRoom() {
 
   const tabs = [
     { key: "dashboard" as const, icon: BarChart3, label: "Board" },
-    ...(currentSport !== "nba" ? [{ key: "nrfi" as const, icon: Shield, label: "NRFI" }] : []),
     { key: "bot" as const, icon: Diamond, label: "Bot" },
-    { key: "parlays" as const, icon: Layers, label: "Parlays" },
     { key: "props" as const, icon: User, label: "Props" },
+    ...(currentSport !== "nba" ? [{ key: "nrfi" as const, icon: Shield, label: "NRFI" }] : []),
     { key: "bankroll" as const, icon: Wallet, label: "Bank" },
     { key: "profile" as const, icon: UserCircle, label: "Profile" },
   ];
@@ -611,10 +608,6 @@ export default function WarRoom() {
                       </>
                     )}
 
-                    {/* Parlay builder on mobile */}
-                    <div className="xl:hidden">
-                      <ParlayBuilder />
-                    </div>
                   </div>
 
                   {/* Right Sidebar — XL */}
@@ -627,40 +620,16 @@ export default function WarRoom() {
               </>
             )}
 
-            {activeTab === "parlays" && (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 max-w-5xl mx-auto">
-                <ParlayBuilder />
-                <div className="space-y-3 sm:space-y-4">
-                  <EVBoard />
-                  <LineMovement movements={lineMovements} />
-                </div>
-              </div>
-            )}
-
             {activeTab === "props" && (
               currentSport === "nba" ? (
-                <div className="max-w-6xl mx-auto space-y-4">
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
-                    <div className="lg:col-span-2 space-y-4">
-                      <PlayerProps />
-                      <PlayerCompare />
-                    </div>
-                    <div>
-                      <ParlayBuilder />
-                    </div>
-                  </div>
+                <div className="max-w-5xl mx-auto space-y-4">
+                  <PlayerProps />
+                  <PlayerCompare />
                 </div>
               ) : (
-                <div className="max-w-6xl mx-auto space-y-4">
+                <div className="max-w-5xl mx-auto space-y-4">
                   <TopPropsOfDay />
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
-                    <div className="lg:col-span-2">
-                      <PlayerProps />
-                    </div>
-                    <div>
-                      <ParlayBuilder />
-                    </div>
-                  </div>
+                  <PlayerProps />
                 </div>
               )
             )}

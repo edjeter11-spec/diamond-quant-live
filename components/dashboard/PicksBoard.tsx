@@ -47,6 +47,7 @@ export default function PicksBoard() {
   const { isPremium } = usePremium();
   const isNBA = currentSport === "nba";
   const [expandedPick, setExpandedPick] = useState<string | null>(null);
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
   const [propsData, setPropsData] = useState<Record<string, any[]>>({});
   const [propsLoading, setPropsLoading] = useState(true);
   const [modelPicks, setModelPicks] = useState<Pick[]>([]);
@@ -502,15 +503,6 @@ export default function PicksBoard() {
                 </div>
               </div>
             ))}
-            <button
-              onClick={() => parlayLegs.forEach((leg) => addParlayLeg({
-                game: leg.game, market: leg.market as any, pick: leg.pick,
-                odds: leg.odds, fairProb: leg.fairProb / 100, bookmaker: leg.bookmaker,
-              }))}
-              className="w-full py-2 rounded-lg bg-purple/15 border border-purple/25 text-purple text-xs font-semibold hover:bg-purple/25 active:scale-[0.98] transition-all"
-            >
-              Add All to Parlay Builder
-            </button>
           </div>
         </div>
       )}
@@ -519,9 +511,16 @@ export default function PicksBoard() {
       <TodayPropPicks sport={currentSport} propsData={propsData} loading={propsLoading} />
 
       {/* ═══ MARKET SECTIONS ═══ */}
-      {sections.map((sec) => (
+      {sections.map((sec) => {
+        // Default-collapsed for lower-signal sections; user can expand
+        const defaultCollapsed = sec.key === "longshots" || sec.key === "unders";
+        const isCollapsed = collapsedSections[sec.key] ?? defaultCollapsed;
+        return (
         <div key={sec.key} className="glass rounded-xl overflow-hidden">
-          <div className={`px-3 sm:px-4 py-2.5 border-b ${sec.border} ${sec.bg} flex items-center gap-2`}>
+          <button
+            onClick={() => setCollapsedSections(prev => ({ ...prev, [sec.key]: !(prev[sec.key] ?? defaultCollapsed) }))}
+            className={`w-full px-3 sm:px-4 py-2.5 border-b ${sec.border} ${sec.bg} flex items-center gap-2 hover:brightness-110 transition-all text-left`}
+          >
             <sec.icon className={`w-4 h-4 ${sec.iconColor}`} />
             <div className="flex-1">
               <h2 className="text-xs sm:text-sm font-bold text-silver uppercase tracking-wider">{sec.title}</h2>
@@ -530,8 +529,9 @@ export default function PicksBoard() {
             {sec.picks.length > 0 && (
               <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-gunmetal text-mercury">{sec.picks.length}</span>
             )}
-          </div>
-          {sec.picks.length === 0 ? (
+            <ChevronDown className={`w-4 h-4 text-mercury/50 transition-transform ${isCollapsed ? "" : "rotate-180"}`} />
+          </button>
+          {isCollapsed ? null : sec.picks.length === 0 ? (
             <div className="px-3 py-3">
               <p className="text-[10px] text-amber/70 mb-2">Best available — model still refining full analysis</p>
               {/* Show fallback picks from combined pool regardless of section filter */}
@@ -575,7 +575,8 @@ export default function PicksBoard() {
             </div>
           )}
         </div>
-      ))}
+        );
+      })}
 
       {/* ═══ PROPS (sport-specific) ═══ */}
       {!isNBA && (
