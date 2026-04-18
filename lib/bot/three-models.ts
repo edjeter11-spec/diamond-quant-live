@@ -198,7 +198,11 @@ function runPitcherModel(
   homeTeam: string,
   awayTeam: string,
   weather: { hittingImpact: number; pitchingImpact: number; hasRoof: boolean; summary: string } | null,
-  parkData: { games: number; homeWins: number; avgRuns: number } | null
+  parkData: { games: number; homeWins: number; avgRuns: number } | null,
+  bullpens?: {
+    home?: { tired: boolean; score: number; summary: string } | null;
+    away?: { tired: boolean; score: number; summary: string } | null;
+  } | null
 ): ModelPrediction {
   const factors: string[] = [];
   let homeEdge = 0;
@@ -275,6 +279,20 @@ function runPitcherModel(
     totalAdjust += 0.8;
     homeEdge += 1.5; // home team benefits when away starter won't go deep
     factors.push(`${awayPitcher.name} bullpen risk: ${awayPitcher.avgIP.toFixed(1)} IP/start avg (last 5)`);
+  }
+
+  // ── Bullpen last-3-days fatigue ──
+  // Sharpies: when a team's bullpen has been leaned on hard the last
+  // 72h, the back-end of tonight's game is weaker than the market thinks.
+  if (bullpens?.home?.tired) {
+    homeEdge -= 0.4 + (bullpens.home.score >= 7 ? 0.3 : 0);
+    totalAdjust += 0.3;
+    factors.push(bullpens.home.summary);
+  }
+  if (bullpens?.away?.tired) {
+    homeEdge += 0.4 + (bullpens.away.score >= 7 ? 0.3 : 0);
+    totalAdjust += 0.3;
+    factors.push(bullpens.away.summary);
   }
 
   // ── Platoon splits: L/R ERA differential signals vulnerability ──
@@ -549,11 +567,26 @@ export async function analyzeAllGames(oddsData: any[], scores: any[]): Promise<G
       const homeAbbrev: string = scoreGame?.homeAbbrev ?? "";
       const venueName: string = scoreGame?.venue ?? "";
 
-      // Fetch pitcher profiles + weather in parallel
-      const [homePitcher, awayPitcher, weather] = await Promise.all([
+      // Team abbrevs for bullpen fatigue lookup
+      const awayAbbrev: string = scoreGame?.awayAbbrev ?? "";
+
+      // Fetch pitcher profiles + weather + bullpen fatigue in parallel
+      const [homePitcher, awayPitcher, weather, bullpenFatigue] = await Promise.all([
         buildPitcherProfile(homePitcherName, awayTeam),
         buildPitcherProfile(awayPitcherName, homeTeam),
         homeAbbrev ? import("@/lib/mlb/weather-fatigue").then(m => m.getGameWeather(homeAbbrev)).catch(() => null) : Promise.resolve(null),
+        (async () => {
+          try {
+            const mod = await import("@/lib/mlb/bullpen-fatigue");
+            const homeId = homeAbbrev ? mod.getTeamIdByAbbrev(homeAbbrev) : null;
+            const awayId = awayAbbrev ? mod.getTeamIdByAbbrev(awayAbbrev) : null;
+            const [home, away] = await Promise.all([
+              homeId ? mod.getBullpenFatigue(homeId, homeAbbrev) : Promise.resolve(null),
+              awayId ? mod.getBullpenFatigue(awayId, awayAbbrev) : Promise.resolve(null),
+            ]);
+            return { home, away };
+          } catch { return null; }
+        })(),
       ]);
 
       // Park memory: prefer venue name, fall back to stadium lookup by abbrev
@@ -569,7 +602,7 @@ export async function analyzeAllGames(oddsData: any[], scores: any[]): Promise<G
       }
 
       // Run 3 models
-      const pitcherModel = runPitcherModel(homePitcher, awayPitcher, homeTeam, awayTeam, weather, parkData);
+      const pitcherModel = runPitcherModel(homePitcher, awayPitcher, homeTeam, awayTeam, weather, parkData, bullpenFatigue);
       const marketModel = runMarketModel(oddsLines);
       const trendModel = await runEloPowerModel(homeTeam, awayTeam);
 
