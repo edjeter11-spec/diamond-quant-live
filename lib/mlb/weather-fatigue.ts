@@ -118,8 +118,18 @@ export async function getGameWeather(homeAbbrev: string): Promise<WeatherReport 
       }
     }
 
-    // Coors Field bonus
-    if (homeAbbrev === "COL") hittingImpact += 5;
+    // Park × weather interaction (multiplicative for wind-sensitive parks,
+    // plus baked-in park-factor baseline). Replaces the old "+5 for Coors"
+    // hard-coded hack with a 30-park table.
+    try {
+      const { applyParkWeatherInteraction } = await import("@/lib/mlb/park-factors");
+      const adjusted = applyParkWeatherInteraction(
+        homeAbbrev, hittingImpact, pitchingImpact,
+        windSpeed, windDirection, temp
+      );
+      hittingImpact = adjusted.hittingImpact;
+      pitchingImpact = adjusted.pitchingImpact;
+    } catch {}
 
     const summary = buildWeatherSummary(temp, windSpeed, windDirection, humidity, condition, stadium, hittingImpact, pitchingImpact);
 
