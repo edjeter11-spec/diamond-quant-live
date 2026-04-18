@@ -333,19 +333,27 @@ export default function PicksBoard() {
       return team;
     }
 
-    // Honesty gate: never call something HIGH/MEDIUM or Sharp without a real edge.
-    // Also caps confidence at LOW for MLB totals when starter is TBD (pitcher
-    // is the dominant input — without it the model is guessing).
+    // Honesty gate:
+    // 1) Sharp tag requires a real market-vs-model edge (EV >= 1.5%).
+    // 2) Model confidence flows through as-is from consensus — heavy favorites
+    //    with efficient markets can still be "HIGH" (the model likes them)
+    //    even when EV ≈ 0. Users want to see "Cavs -350" as a lock regardless
+    //    of edge. Only kill confidence when the edge is meaningfully negative
+    //    or when starter/input data is incomplete.
+    // 3) MLB totals with TBD starter cap at LOW (pitcher is dominant input).
     function honestify(p: Pick): Pick {
       const ev = p.evPercentage ?? 0;
       let conf = p.confidence;
       let isSharp = !!p.isSharp;
 
-      // Edge thresholds — keep parity with backend EV calc
+      // Sharp requires measurable edge — keep this gate
       if (ev < 1.5) isSharp = false;
-      if (ev < 2.0 && conf === "HIGH") conf = "MEDIUM";
-      if (ev < 1.0 && conf === "MEDIUM") conf = "LOW";
-      if (ev <= 0) { conf = "LOW"; isSharp = false; }
+
+      // Only demote confidence when edge is meaningfully bad (< -1.5%), not
+      // just zero. A 0% edge means the market agrees with the model — that's
+      // fine, still a lock.
+      if (ev < -1.5 && conf === "HIGH") conf = "MEDIUM";
+      if (ev < -3.0) { conf = "LOW"; isSharp = false; }
 
       // TBD pitcher → cap totals at LOW, kill Sharp
       const isTotal = p.market === "total";
