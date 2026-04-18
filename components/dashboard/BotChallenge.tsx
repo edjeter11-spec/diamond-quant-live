@@ -642,7 +642,7 @@ export default function BotChallenge() {
                       }`}>{i + 1}</span>
 
                       {/* Player */}
-                      <PlayerAvatar name={prop.playerName} size={26} />
+                      <PlayerAvatar name={prop.playerName} sport="nba" size={26} />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5">
                           <p className="text-xs font-semibold text-silver truncate">{prop.playerName}</p>

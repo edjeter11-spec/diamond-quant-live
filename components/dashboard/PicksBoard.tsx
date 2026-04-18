@@ -534,14 +534,24 @@ export default function PicksBoard() {
           {isCollapsed ? null : sec.picks.length === 0 ? (
             <div className="px-3 py-3">
               <p className="text-[10px] text-amber/70 mb-2">Best available — model still refining full analysis</p>
-              {/* Show fallback picks from combined pool regardless of section filter */}
-              {combinedPicks.slice(0, 2).map((pick, fi) => (
-                <div key={fi} className="flex items-center gap-2 px-2 py-1.5 rounded bg-gunmetal/20 mb-1">
-                  <div className="w-1.5 h-1.5 rounded-full bg-amber flex-shrink-0" />
-                  <p className="text-[11px] text-mercury truncate flex-1">{pick.pick}</p>
-                  <span className="text-[10px] font-mono text-silver">{formatOdds(pick.odds)}</span>
-                </div>
-              ))}
+              {/* Fallback — show up to 3 varied best picks from pool (deduped by market) */}
+              {(() => {
+                const seenMarkets = new Set<string>();
+                const varied: Pick[] = [];
+                for (const p of combinedPicks) {
+                  if (seenMarkets.has(p.market)) continue;
+                  seenMarkets.add(p.market);
+                  varied.push(p);
+                  if (varied.length >= 3) break;
+                }
+                return varied.map((pick, fi) => (
+                  <div key={fi} className="flex items-center gap-2 px-2.5 py-2 rounded-lg bg-gunmetal/30 border border-slate/20 mb-1.5">
+                    <TeamLogo team={pick.pick.split(" ML")[0].split(" Moneyline")[0].split(" Over")[0].split(" Under")[0].split("/")[0].trim()} size={20} className="flex-shrink-0" />
+                    <p className="text-xs sm:text-sm font-medium text-silver truncate flex-1">{formatPickLabel(pick.pick, currentSport as any)}</p>
+                    <span className="text-xs font-mono font-bold text-silver">{formatOdds(pick.odds)}</span>
+                  </div>
+                ));
+              })()}
               {combinedPicks.length === 0 && <p className="text-xs text-mercury/40 text-center">Waiting for odds data</p>}
             </div>
           ) : (
