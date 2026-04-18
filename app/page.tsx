@@ -29,6 +29,7 @@ import MigrationBanner from "@/components/auth/MigrationBanner";
 import ROIChart from "@/components/dashboard/ROIChart";
 import { matchGames } from "@/lib/mlb/match-games";
 import TonightsPlays from "@/components/dashboard/TonightsPlays";
+import StreakBanner from "@/components/dashboard/StreakBanner";
 import FloatingParlayChip from "@/components/dashboard/FloatingParlayChip";
 import Toaster from "@/components/ui/Toaster";
 import { backupOddsToStorage, getOddsBackup } from "@/lib/odds/cache";
@@ -568,6 +569,9 @@ export default function WarRoom() {
 
                   {/* Center — Main Picks Board */}
                   <div className="flex-1 min-w-0 space-y-3 sm:space-y-4">
+                    {/* Streak banner — social proof / retention hook */}
+                    <StreakBanner />
+
                     {/* Tonight's Plays — 30-second answer */}
                     <TonightsPlays sport={currentSport} />
 

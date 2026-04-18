@@ -4,6 +4,7 @@ import { loadNbaPropBrainFromCloud, saveNbaPropBrainToCloud } from "@/lib/bot/nb
 import { auditCompletedGames } from "@/lib/bot/nba-prop-audit";
 import { commitPropProjections } from "@/lib/bot/nba-prop-ghost";
 import { buildAndSendRecap } from "@/lib/bot/daily-recap";
+import { sendDailyRecapToAll } from "@/lib/email/daily-recap";
 import { generateSmartPicks } from "@/lib/bot/smart-picks";
 import { cloudGet, cloudSet } from "@/lib/supabase/client";
 import { logDailyPicks, settlePendingPicks, etDateString, type LoggedPick } from "@/lib/bot/track-record";
@@ -179,6 +180,16 @@ export async function GET(req: Request) {
           }
         }
       } catch {}
+    }
+
+    // ── Daily Email Recap (8am ET = 12-13 UTC) ──
+    // No-op when RESEND_API_KEY is not configured.
+    let emailRecap = { sent: 0, skipped: 0 };
+    if (utcHour >= 12 && utcHour <= 13) {
+      try {
+        const baseUrl = `https://${process.env.VERCEL_URL || "diamond-quant-live.vercel.app"}`;
+        emailRecap = await sendDailyRecapToAll(baseUrl);
+      } catch (e) { console.error("email recap error:", e); }
     }
 
     // ── MLB Bot Settlement ──

@@ -5,7 +5,7 @@ import { useAuth } from "@/lib/supabase/auth";
 import { useStore } from "@/lib/store";
 import {
   User, Mail, Shield, Bell, BellOff, Globe, Download,
-  Save, Loader2, Smartphone, Crown, Ticket, Copy, Check,
+  Save, Loader2, Smartphone, Crown, Ticket, Copy, Check, Pause, Play,
 } from "lucide-react";
 
 export default function UserProfile() {
@@ -119,6 +119,28 @@ export default function UserProfile() {
           <StatBox label="Profit" value={`${profit >= 0 ? "+" : ""}$${profit.toFixed(0)}`} color={profit >= 0 ? "text-neon" : "text-danger"} />
         </div>
       </div>
+
+      {/* Subscription status + pause */}
+      {(profile as any)?.stripe_customer_id && (
+        <div className="glass rounded-xl p-4 space-y-3">
+          <h3 className="text-xs font-bold text-silver uppercase tracking-wider flex items-center gap-1.5">
+            <Crown className="w-3.5 h-3.5 text-gold" /> Pro Subscription
+          </h3>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold text-silver">
+                {(profile as any).subscription_status === "paused" ? "Paused" : (profile as any).is_premium ? "Active" : "Inactive"}
+              </p>
+              <p className="text-[10px] text-mercury/60">
+                {(profile as any).subscription_status === "paused"
+                  ? "You won't be charged during the pause. Resume anytime."
+                  : "Need a break? Pause for 30 days instead of canceling."}
+              </p>
+            </div>
+            <SubscriptionPauseButton paused={(profile as any).subscription_status === "paused"} />
+          </div>
+        </div>
+      )}
 
       {/* Edit Profile */}
       <div className="glass rounded-xl p-4 space-y-3">
@@ -258,5 +280,45 @@ function StatBox({ label, value, color }: { label: string; value: string; color:
       <p className={`text-sm font-bold font-mono ${color}`}>{value}</p>
       <p className="text-[8px] text-mercury/50 uppercase">{label}</p>
     </div>
+  );
+}
+
+function SubscriptionPauseButton({ paused }: { paused: boolean }) {
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(false);
+
+  const toggle = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const { fetchWithAuth } = await import("@/lib/supabase/fetch-with-auth");
+      const res = await fetchWithAuth("/api/stripe/pause", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: paused ? "resume" : "pause" }),
+      });
+      if (res.ok) {
+        setDone(true);
+        setTimeout(() => window.location.reload(), 600);
+      }
+    } catch {}
+    setBusy(false);
+  };
+
+  return (
+    <button
+      onClick={toggle}
+      disabled={busy}
+      className={`px-3 py-2 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 flex-shrink-0 ${
+        paused
+          ? "bg-neon/15 border border-neon/30 text-neon hover:bg-neon/25"
+          : "bg-amber/10 border border-amber/30 text-amber hover:bg-amber/20"
+      } disabled:opacity-50`}
+    >
+      {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> :
+       done ? <Check className="w-3.5 h-3.5" /> :
+       paused ? <Play className="w-3.5 h-3.5" /> : <Pause className="w-3.5 h-3.5" />}
+      {paused ? "Resume" : "Pause 30 days"}
+    </button>
   );
 }
