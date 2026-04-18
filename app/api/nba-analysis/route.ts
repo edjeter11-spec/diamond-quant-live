@@ -23,6 +23,7 @@ export async function GET() {
     const futureGames = rawGames.filter(g => new Date(g.commence_time).getTime() > now - 30 * 60 * 1000);
 
     const { getRestState, computeRestEdge } = await import("@/lib/nba/rest-fatigue");
+    const { getTeamInjuries } = await import("@/lib/nba/injuries");
 
     const analyses = await Promise.all(futureGames.slice(0, 12).map(async (game) => {
       const oddsLines = parseOddsLines(game);
@@ -32,11 +33,30 @@ export async function GET() {
       // Rest/B2B fatigue lookup (parallel — each cached for 2h)
       const homeAbbrev = getNBATeamAbbrev(homeTeam);
       const awayAbbrev = getNBATeamAbbrev(awayTeam);
-      const [homeRest, awayRest] = await Promise.all([
+      const [homeRest, awayRest, homeInjuries, awayInjuries] = await Promise.all([
         getRestState(homeAbbrev).catch(() => null),
         getRestState(awayAbbrev).catch(() => null),
+        getTeamInjuries(homeAbbrev).catch(() => []),
+        getTeamInjuries(awayAbbrev).catch(() => []),
       ]);
       const restEdge = homeRest && awayRest ? computeRestEdge(homeRest, awayRest) : { edge: 0, factors: [] };
+
+      // Star-out impact: each OUT player = -1.5 pts for their team;
+      // DOUBTFUL = -1.0; QUESTIONABLE = -0.4 (partial impact factor)
+      let injuryEdge = 0;
+      const injuryFactors: string[] = [];
+      for (const inj of (homeInjuries ?? [])) {
+        if (inj.status === "Out") { injuryEdge -= 1.5; injuryFactors.push(`${homeAbbrev} OUT: ${inj.name}`); }
+        else if (inj.status === "Doubtful") { injuryEdge -= 1.0; injuryFactors.push(`${homeAbbrev} DOUBTFUL: ${inj.name}`); }
+        else if (inj.status === "Questionable") { injuryEdge -= 0.4; }
+      }
+      for (const inj of (awayInjuries ?? [])) {
+        if (inj.status === "Out") { injuryEdge += 1.5; injuryFactors.push(`${awayAbbrev} OUT: ${inj.name}`); }
+        else if (inj.status === "Doubtful") { injuryEdge += 1.0; injuryFactors.push(`${awayAbbrev} DOUBTFUL: ${inj.name}`); }
+        else if (inj.status === "Questionable") { injuryEdge += 0.4; }
+      }
+      // Cap total injury swing so 8 benchwarmers out doesn't blow up the model
+      injuryEdge = Math.max(-5, Math.min(5, injuryEdge));
 
       // Run 3 NBA models
       const netRatingModel = runNetRatingModel(homeTeam, awayTeam, oddsLines);
@@ -66,6 +86,14 @@ export async function GET() {
         formModel.homeWinProb = Math.min(0.95, Math.max(0.05, formModel.homeWinProb + probShift));
         formModel.factors.push(...restEdge.factors);
         formModel.confidence = Math.min(80, formModel.confidence + 15);
+      }
+
+      // Inject injury edge into the netRating model (star absences hit team quality directly)
+      if (injuryEdge !== 0) {
+        const probShift = injuryEdge * 0.035;
+        netRatingModel.homeWinProb = Math.min(0.95, Math.max(0.05, netRatingModel.homeWinProb + probShift));
+        netRatingModel.factors.push(...injuryFactors.slice(0, 4));
+        netRatingModel.confidence = Math.min(80, netRatingModel.confidence + Math.abs(injuryEdge) * 3);
       }
 
       // Consensus

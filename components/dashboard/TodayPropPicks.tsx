@@ -21,6 +21,7 @@ interface RawProp {
   bestUnder?: { price: number; bookmaker: string };
   fairOverProb: number;  // 0-100
   fairUnderProb: number; // 0-100
+  injuryStatus?: "Out" | "Doubtful" | "Questionable" | "Probable" | "Day-To-Day";
 }
 
 interface PropPick {
@@ -113,6 +114,8 @@ export default function TodayPropPicks({
     for (const market of Object.keys(propsData)) {
       for (const prop of propsData[market] ?? []) {
         if (!prop.playerName || !prop.line) continue;
+        // Hide props when the player is confirmed OUT or DOUBTFUL — zero edge
+        if (prop.injuryStatus === "Out" || prop.injuryStatus === "Doubtful") continue;
 
         // Decide preferred side with Over-bias tiebreak
         const over = prop.fairOverProb ?? 0;

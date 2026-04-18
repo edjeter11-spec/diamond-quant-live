@@ -87,15 +87,24 @@ export async function GET(req: Request) {
 
     const grouped = groupByPlayer(allProps);
 
-    // Augment NBA props with playerId for headshot URLs
+    // Augment NBA props with playerId (headshots) + injuryStatus (filter bad props)
     if (sport === "basketball_nba" && grouped.length > 0) {
       try {
         const { searchNBAPlayer } = await import("@/lib/nba/player-stats");
+        const { isPlayerInjured } = await import("@/lib/nba/injuries");
+
         await Promise.all(
           grouped.map(async (g: any) => {
             try {
-              const p = await searchNBAPlayer(g.playerName);
+              const [p, injury] = await Promise.all([
+                searchNBAPlayer(g.playerName).catch(() => null),
+                isPlayerInjured(g.playerName).catch(() => null),
+              ]);
               if (p?.id) g.playerId = p.id;
+              if (injury) {
+                g.injuryStatus = injury.status;
+                g.injuryNote = injury.shortComment;
+              }
             } catch {}
           })
         );
