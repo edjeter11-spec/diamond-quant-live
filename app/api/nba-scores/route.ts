@@ -30,86 +30,98 @@ function getPeriodLabel(period: number): string {
   return `${period - 4}OT`;
 }
 
-// NBA scores from ESPN free scoreboard endpoint
+function mapEvent(event: any) {
+  const competition = event.competitions?.[0] ?? {};
+  const statusType = competition.status?.type ?? {};
+  const statusName: string = statusType.name ?? "";
+  const status = mapStatus(statusName);
+  const period: number = competition.status?.period ?? 0;
+  const timeRemaining: string = competition.status?.displayClock ?? "";
+  const home = (competition.competitors ?? []).find((c: any) => c.homeAway === "home") ?? {};
+  const away = (competition.competitors ?? []).find((c: any) => c.homeAway === "away") ?? {};
+  const homeAbbrev: string = home.team?.abbreviation ?? getNBATeamAbbrev(home.team?.displayName ?? "");
+  const awayAbbrev: string = away.team?.abbreviation ?? getNBATeamAbbrev(away.team?.displayName ?? "");
+  const periodLabel = getPeriodLabel(period);
+  const venue = competition.venue?.fullName ?? NBA_ARENAS[homeAbbrev] ?? "";
+  const detailedStatus =
+    status === "final" ? "Final" :
+    status === "live" ? `${periodLabel} ${timeRemaining}`.trim() :
+    statusType.shortDetail ?? "";
+
+  return {
+    id: event.id ?? "",
+    homeTeam: home.team?.displayName ?? "",
+    awayTeam: away.team?.displayName ?? "",
+    homeAbbrev, awayAbbrev,
+    homeScore: Number(home.score ?? 0),
+    awayScore: Number(away.score ?? 0),
+    status, period, periodLabel, timeRemaining,
+    inning: period, inningHalf: "top", outs: 0,
+    startTime: event.date ?? new Date().toISOString(),
+    venue, homePitcher: "", awayPitcher: "",
+    weather: null, detailedStatus, isNBA: true,
+  };
+}
+
+// Drop yesterday's finals + ghost-stuck "live" entries
+function isActive(g: ReturnType<typeof mapEvent>, now: number, staleMs: number): boolean {
+  const startMs = new Date(g.startTime).getTime();
+  if (g.status === "final") {
+    if (Number.isFinite(startMs) && now - startMs > staleMs) return false;
+  }
+  if (g.status === "live") {
+    if (Number.isFinite(startMs) && now - startMs > staleMs
+        && (g.period ?? 0) <= 1 && (g.homeScore ?? 0) + (g.awayScore ?? 0) === 0) {
+      return false;
+    }
+  }
+  return true;
+}
+
+async function fetchScoreboardForDate(yyyymmdd?: string): Promise<any[]> {
+  const url = yyyymmdd
+    ? `https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=${yyyymmdd}`
+    : "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard";
+  const res = await fetch(url, { next: { revalidate: 30 } });
+  if (!res.ok) return [];
+  const data = await res.json();
+  return data.events ?? [];
+}
+
+function yyyymmdd(d: Date): string {
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  return `${y}${m}${day}`;
+}
+
+// NBA scores from ESPN scoreboard — auto-looks-ahead to tomorrow when
+// today has no non-final games left (common late at night between slates).
 export async function GET() {
   try {
-    const res = await fetch(
-      "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard",
-      { next: { revalidate: 30 } }
-    );
-
-    if (!res.ok) {
-      return NextResponse.json({
-        games: [],
-        message: "NBA scores temporarily unavailable",
-      });
-    }
-
-    const data = await res.json();
-    const STALE_MS = 5 * 60 * 60 * 1000; // games more than 5h past tip and not finalised → drop
+    const STALE_MS = 5 * 60 * 60 * 1000;
     const now = Date.now();
-    const games = (data.events ?? []).map((event: any) => {
-      const competition = event.competitions?.[0] ?? {};
-      const statusType = competition.status?.type ?? {};
-      const statusName: string = statusType.name ?? "";
-      const status = mapStatus(statusName);
-      const period: number = competition.status?.period ?? 0;
-      const timeRemaining: string = competition.status?.displayClock ?? "";
 
-      const home = (competition.competitors ?? []).find((c: any) => c.homeAway === "home") ?? {};
-      const away = (competition.competitors ?? []).find((c: any) => c.homeAway === "away") ?? {};
+    // 1) Pull today's scoreboard
+    const todayEvents = await fetchScoreboardForDate();
+    let games = todayEvents.map(mapEvent).filter(g => isActive(g, now, STALE_MS));
 
-      const homeAbbrev: string = home.team?.abbreviation ?? getNBATeamAbbrev(home.team?.displayName ?? "");
-      const awayAbbrev: string = away.team?.abbreviation ?? getNBATeamAbbrev(away.team?.displayName ?? "");
-
-      const periodLabel = getPeriodLabel(period);
-      const venue = competition.venue?.fullName ?? NBA_ARENAS[homeAbbrev] ?? "";
-
-      const detailedStatus =
-        status === "final" ? "Final" :
-        status === "live" ? `${periodLabel} ${timeRemaining}`.trim() :
-        statusType.shortDetail ?? "";
-
-      return {
-        id: event.id ?? "",
-        homeTeam: home.team?.displayName ?? "",
-        awayTeam: away.team?.displayName ?? "",
-        homeAbbrev,
-        awayAbbrev,
-        homeScore: Number(home.score ?? 0),
-        awayScore: Number(away.score ?? 0),
-        status,
-        period,
-        periodLabel,
-        timeRemaining,
-        inning: period,
-        inningHalf: "top",
-        outs: 0,
-        startTime: event.date ?? new Date().toISOString(),
-        venue,
-        homePitcher: "",
-        awayPitcher: "",
-        weather: null,
-        detailedStatus,
-        isNBA: true,
-      };
-    }).filter((g: any) => {
-      // Drop yesterday's finals + ghost-stuck "live" games more than 5h past tip
-      if (g.status === "final") {
-        const startMs = new Date(g.startTime).getTime();
-        if (Number.isFinite(startMs) && now - startMs > STALE_MS) return false;
-      }
-      if (g.status === "live") {
-        const startMs = new Date(g.startTime).getTime();
-        // If a game says "live" but tipped >5h ago and shows no progress (period 0/1, 0-0)
-        // it's a stuck feed entry — drop it
-        if (Number.isFinite(startMs) && now - startMs > STALE_MS
-            && (g.period ?? 0) <= 1 && (g.homeScore ?? 0) + (g.awayScore ?? 0) === 0) {
-          return false;
+    // 2) If everything today is finished/stripped, look at the next few days
+    //    so the sidebar is never "No games" when a slate is coming up.
+    const hasUpcoming = games.some(g => g.status !== "final");
+    if (!hasUpcoming) {
+      for (let i = 1; i <= 3; i++) {
+        const d = new Date();
+        d.setUTCDate(d.getUTCDate() + i);
+        const events = await fetchScoreboardForDate(yyyymmdd(d));
+        const nextGames = events.map(mapEvent).filter(g => isActive(g, now, STALE_MS));
+        if (nextGames.length > 0) {
+          // Merge: keep today's finals that are still recent, plus upcoming
+          games = [...games, ...nextGames];
+          break;
         }
       }
-      return true;
-    });
+    }
 
     return NextResponse.json({ games, timestamp: new Date().toISOString() });
   } catch (error) {

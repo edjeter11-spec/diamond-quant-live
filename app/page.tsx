@@ -331,7 +331,8 @@ export default function WarRoom() {
     <div className="space-y-2">
       {activeGames.length === 0 ? (
         <div className="glass rounded-xl p-6 text-center">
-          <p className="text-sm text-mercury">No live or upcoming games right now</p>
+          <p className="text-sm text-mercury">No {currentSport.toUpperCase()} games in the next few days</p>
+          <p className="text-[11px] text-mercury/50 mt-1">Check back when the next slate is posted</p>
         </div>
       ) : (
         activeGames.map((game: any) => {

@@ -63,6 +63,15 @@ export async function fetchTodayGames(): Promise<MLBGame[]> {
   return data.dates?.[0]?.games ?? [];
 }
 
+// Fetch schedule for a specific ISO date (YYYY-MM-DD)
+export async function fetchGamesForDate(date: string): Promise<MLBGame[]> {
+  const url = `${MLB_API}/schedule?sportId=1&date=${date}&hydrate=probablePitcher,linescore,weather,team`;
+  const res = await fetch(url, { next: { revalidate: 60 } });
+  if (!res.ok) return [];
+  const data = await res.json();
+  return data.dates?.[0]?.games ?? [];
+}
+
 // Fetch live game data (updates every ~10 seconds during games)
 export async function fetchLiveGame(gamePk: number): Promise<{
   linescore: any;
