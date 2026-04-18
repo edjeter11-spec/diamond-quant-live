@@ -49,6 +49,15 @@ export default function PicksBoard() {
   const [expandedPick, setExpandedPick] = useState<string | null>(null);
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
   const [propsData, setPropsData] = useState<Record<string, any[]>>({});
+  const [calibration, setCalibration] = useState<{ calibrationDelta: number; sample: number } | null>(null);
+
+  // Fetch calibration curve once — used by honestify to rewrite overconfident labels
+  useEffect(() => {
+    fetch("/api/calibration")
+      .then(r => r.json())
+      .then(d => { if (d?.curve) setCalibration({ calibrationDelta: d.curve.calibrationDelta, sample: d.curve.sample }); })
+      .catch(() => {});
+  }, []);
   const [propsLoading, setPropsLoading] = useState(true);
   const [modelPicks, setModelPicks] = useState<Pick[]>([]);
 
@@ -341,6 +350,13 @@ export default function PicksBoard() {
     //    of edge. Only kill confidence when the edge is meaningfully negative
     //    or when starter/input data is incomplete.
     // 3) MLB totals with TBD starter cap at LOW (pitcher is dominant input).
+    // 4) Calibration haircut: if the brain is historically overconfident
+    //    (calibrationDelta < -0.03 = predicted 3%+ higher than actual),
+    //    demote HIGH picks one step. Users never see a label we can't back up.
+    const calibDelta = calibration?.calibrationDelta ?? 0;
+    const calibReliable = (calibration?.sample ?? 0) >= 50;
+    const overconfident = calibReliable && calibDelta < -0.03;
+
     function honestify(p: Pick): Pick {
       const ev = p.evPercentage ?? 0;
       let conf = p.confidence;
@@ -354,6 +370,9 @@ export default function PicksBoard() {
       // fine, still a lock.
       if (ev < -1.5 && conf === "HIGH") conf = "MEDIUM";
       if (ev < -3.0) { conf = "LOW"; isSharp = false; }
+
+      // Calibration haircut — the brain has been overclaiming lately
+      if (overconfident && conf === "HIGH") conf = "MEDIUM";
 
       // TBD pitcher → cap totals at LOW, kill Sharp
       const isTotal = p.market === "total";
@@ -380,7 +399,7 @@ export default function PicksBoard() {
       if (!seen.has(key)) { seen.add(key); merged.push(honestify(p)); }
     }
     return merged;
-  }, [modelPicks, allEV, scores]);
+  }, [modelPicks, allEV, scores, calibration]);
 
   // Build all sections in one stable useMemo
   const { topLocks, longshots } = useMemo(() => {

@@ -213,8 +213,23 @@ export async function GET(req: Request) {
       } catch {}
     }
 
-    // ── Weekly Brain Evolution (Sunday midnight UTC = Sunday 8PM ET) ──
+    // ── Weekly Calibration (Sunday 2-3 UTC = Sat 10-11 PM ET) ──
+    // Recompute the "predicted prob vs actual hit rate" curve.
+    let calibrationSample = 0;
     const dayOfWeek = new Date().getUTCDay(); // 0 = Sunday
+    if (dayOfWeek === 0 && utcHour >= 2 && utcHour <= 3) {
+      try {
+        const { computeCalibration, saveCalibration } = await import("@/lib/bot/calibration");
+        const curve = await computeCalibration();
+        if (curve) {
+          await saveCalibration(curve);
+          calibrationSample = curve.sample;
+        }
+      } catch (e) { console.error("calibration error:", e); }
+    }
+
+    // ── Weekly Brain Evolution (Sunday midnight UTC = Sunday 8PM ET) ──
+    // Uses dayOfWeek from calibration block above.
     if (dayOfWeek === 0 && utcHour >= 0 && utcHour <= 2) {
       try {
         const lastEvolvedKey = "nba_brain_last_evolved";
