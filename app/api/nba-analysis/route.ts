@@ -24,6 +24,7 @@ export async function GET() {
 
     const { getRestState, computeRestEdge } = await import("@/lib/nba/rest-fatigue");
     const { getTeamInjuries } = await import("@/lib/nba/injuries");
+    const { projectGameTotal, getTeamRating } = await import("@/lib/nba/pace-ratings");
 
     const analyses = await Promise.all(futureGames.slice(0, 12).map(async (game) => {
       const oddsLines = parseOddsLines(game);
@@ -94,6 +95,25 @@ export async function GET() {
         netRatingModel.homeWinProb = Math.min(0.95, Math.max(0.05, netRatingModel.homeWinProb + probShift));
         netRatingModel.factors.push(...injuryFactors.slice(0, 4));
         netRatingModel.confidence = Math.min(80, netRatingModel.confidence + Math.abs(injuryEdge) * 3);
+      }
+
+      // Pace × ratings → projected total (replaces the old hard-coded 224 baseline)
+      const paceProj = projectGameTotal(homeAbbrev, awayAbbrev);
+      netRatingModel.totalProjection = paceProj.projectedTotal;
+      formModel.totalProjection = paceProj.projectedTotal;
+      // Tilt market model's total slightly toward the pace-based projection
+      marketModel.totalProjection = (marketModel.totalProjection + paceProj.projectedTotal) / 2;
+      if (paceProj.factors.length > 0) {
+        netRatingModel.factors.push(...paceProj.factors.slice(0, 2));
+      }
+      // Apply net-rating gap as a win-probability nudge (sharper than the stubbed 0.58)
+      const homeR = getTeamRating(homeAbbrev);
+      const awayR = getTeamRating(awayAbbrev);
+      const netGap = homeR.netRating - awayR.netRating;
+      if (Math.abs(netGap) >= 1) {
+        const ratingShift = Math.max(-0.25, Math.min(0.25, netGap * 0.018));
+        netRatingModel.homeWinProb = Math.min(0.92, Math.max(0.08, netRatingModel.homeWinProb + ratingShift));
+        netRatingModel.factors.push(`Net rating: ${homeAbbrev} ${homeR.netRating > 0 ? "+" : ""}${homeR.netRating} vs ${awayAbbrev} ${awayR.netRating > 0 ? "+" : ""}${awayR.netRating}`);
       }
 
       // Consensus
