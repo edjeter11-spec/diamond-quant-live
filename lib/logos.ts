@@ -37,14 +37,26 @@ const NBA_TEAM_IDS: Record<string, number> = {
 
 // Get team logo URL
 export function getTeamLogo(abbrev: string, sport: "mlb" | "nba" = "mlb"): string {
+  const upper = (abbrev || "").toUpperCase();
   if (sport === "nba") {
-    const id = NBA_TEAM_IDS[abbrev];
+    const id = NBA_TEAM_IDS[upper];
     if (id) return `https://cdn.nba.com/logos/nba/${id}/primary/L/logo.svg`;
     return "";
   }
-  const id = MLB_TEAM_IDS[abbrev];
-  if (id) return `https://midfield.mlbstatic.com/t_gen_default_100/team-logos/${id}.svg`;
+  const id = MLB_TEAM_IDS[upper];
+  if (id) return `https://www.mlbstatic.com/team-logos/${id}.svg`;
   return "";
+}
+
+// Fallback MLB logo on ESPN CDN (lowercase abbrev).
+// ESPN uses slightly different abbrevs for some teams — map here.
+const MLB_ESPN_ABBREV: Record<string, string> = {
+  CWS: "chw", WSH: "wsh", SD: "sd", SF: "sf", TB: "tb", KC: "kc",
+};
+export function getMlbLogoFallback(abbrev: string): string {
+  const upper = (abbrev || "").toUpperCase();
+  const espn = MLB_ESPN_ABBREV[upper] ?? upper.toLowerCase();
+  return `https://a.espncdn.com/i/teamlogos/mlb/500/${espn}.png`;
 }
 
 // Get team logo from full name

@@ -708,7 +708,7 @@ function PickCard({ pick, isExpanded, onToggle, onAddToParlay, formatOdds }: {
                 {pick.dayLabel ?? "Upcoming"}
               </span>
             )}
-            <TeamLogo team={pick.pick.split(" ML")[0].split(" Moneyline")[0].split(" Over")[0].split(" Under")[0].split("/")[0]} size={14} />
+            <TeamLogo team={pick.pick.split(" ML")[0].split(" Moneyline")[0].split(" Over")[0].split(" Under")[0].split("/")[0].trim()} size={20} className="flex-shrink-0" />
             <p className="text-xs sm:text-sm font-medium text-silver truncate">{formatPickLabel(pick.pick, currentSport as any)}</p>
           </div>
           <p className="text-[9px] sm:text-[10px] text-mercury/60 truncate flex items-center gap-1">
