@@ -63,11 +63,11 @@ function scoreProp(side: "over" | "under", prop: RawProp): PropPick | null {
   const best = side === "over" ? prop.bestOver : prop.bestUnder;
   if (!best?.price) return null;
   const fair = (side === "over" ? prop.fairOverProb : prop.fairUnderProb) ?? 0;
-  if (fair < 52) return null; // skip coinflips
+  // Only hard-skip true coinflips; we want a populated board for today's slate
+  if (fair < 50) return null;
 
   const implied = americanImplied(best.price) * 100;
-  const ev = fair - implied; // edge vs market
-  if (ev < 0.5) return null;  // must have meaningful edge
+  const ev = fair - implied; // edge vs market (can be negative)
 
   const boost = side === "over" ? OVER_DISPLAY_BOOST : 0;
   const score = (fair - 50) + ev * 0.5 + boost;
@@ -147,9 +147,25 @@ export default function TodayPropPicks({
     );
   }
 
-  if (picks.length === 0) return null;
+  if (picks.length === 0) {
+    return (
+      <div className="glass rounded-xl overflow-hidden border border-purple/15">
+        <div className="px-3 sm:px-4 py-2.5 border-b border-purple/15 bg-gradient-to-r from-purple/10 to-transparent flex items-center gap-2">
+          <Users className="w-4 h-4 text-purple" />
+          <div>
+            <h2 className="text-xs sm:text-sm font-bold text-silver uppercase tracking-wider">Today&apos;s Player Props</h2>
+            <p className="text-[9px] text-mercury/60 mt-0.5">Waiting for books to post lines</p>
+          </div>
+        </div>
+        <div className="px-4 py-6 text-center">
+          <p className="text-xs text-mercury/60">No {sport.toUpperCase()} player prop lines posted yet</p>
+          <p className="text-[10px] text-mercury/40 mt-1">Books typically post props 4–8 hours before tip-off. Check back closer to game time.</p>
+        </div>
+      </div>
+    );
+  }
 
-  const visible = isPremium ? picks : picks.slice(0, 3);
+  const visible = isPremium ? picks : picks.slice(0, 5);
   const lockedCount = picks.length - visible.length;
   const overCount = picks.filter(p => p.side === "over").length;
 
