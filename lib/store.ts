@@ -218,11 +218,38 @@ export const useStore = create<AppState>((set, get) => ({
     fairProb = Math.min(0.99, Math.max(0.01, fairProb));
     const newLeg: ParlayLeg = { ...leg, id, impliedProb, fairProb };
 
+    // Dedupe: same pick + bookmaker + odds = duplicate
+    const currentLegs = get().parlayLegs;
+    const isDup = currentLegs.some(
+      (l) => l.pick === newLeg.pick && l.bookmaker === newLeg.bookmaker && l.odds === newLeg.odds
+    );
+    if (isDup) {
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("dq-toast", {
+          detail: { tone: "info", message: "Already in your slip", sub: `${currentLegs.length} leg${currentLegs.length !== 1 ? "s" : ""}` },
+        }));
+      }
+      return;
+    }
+
     set((s) => {
       const legs = [...s.parlayLegs, newLeg];
       const currentParlay = legs.length >= 2 ? buildParlay(legs, s.bankroll.currentBankroll) : null;
       return { parlayLegs: legs, currentParlay };
     });
+
+    // Ephemeral toast so users get clear feedback regardless of which component fired the add
+    if (typeof window !== "undefined") {
+      const after = get();
+      const total = after.currentParlay?.combinedOdds;
+      window.dispatchEvent(new CustomEvent("dq-toast", {
+        detail: {
+          tone: "good",
+          message: "Added to slip",
+          sub: `${after.parlayLegs.length} leg${after.parlayLegs.length !== 1 ? "s" : ""}${total != null ? ` · ${total > 0 ? "+" : ""}${total}` : ""}`,
+        },
+      }));
+    }
   },
 
   removeParlayLeg: (legId) => {

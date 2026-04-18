@@ -34,6 +34,8 @@ import ROIChart from "@/components/dashboard/ROIChart";
 import { matchGames } from "@/lib/mlb/match-games";
 import TodayPicksStrip from "@/components/dashboard/TodayPicksStrip";
 import TonightsPlays from "@/components/dashboard/TonightsPlays";
+import FloatingParlayChip from "@/components/dashboard/FloatingParlayChip";
+import Toaster from "@/components/ui/Toaster";
 import { backupOddsToStorage, getOddsBackup } from "@/lib/odds/cache";
 import { sendDiscordAlert } from "@/lib/odds/sportsbooks";
 import { getDiscordWebhook, setDiscordWebhook } from "@/lib/store";
@@ -710,6 +712,10 @@ export default function WarRoom() {
           </>
         )}
       </main>
+
+      {/* Global UI: ephemeral toasts + floating parlay slip */}
+      <Toaster />
+      <FloatingParlayChip activeTab={activeTab} onOpenBuilder={() => setActiveTab("parlays")} />
 
       {/* Mobile bottom nav bar */}
       <nav className="md:hidden fixed bottom-0 inset-x-0 z-50 bg-bunker/95 backdrop-blur-lg border-t border-slate/30 flex items-stretch">

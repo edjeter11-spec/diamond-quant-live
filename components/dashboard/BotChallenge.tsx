@@ -675,6 +675,28 @@ export default function BotChallenge() {
                         </div>
                         <span className="text-[8px] text-mercury/50">Proj: {prop.projectedValue} • {prop.brainConfidence}% conf</span>
                       </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const { addParlayLeg } = useStore.getState();
+                          const label = prop.propType === "player_points" ? "Points"
+                            : prop.propType === "player_rebounds" ? "Rebounds"
+                            : prop.propType === "player_assists" ? "Assists"
+                            : prop.propType;
+                          addParlayLeg({
+                            game: prop.playerName,
+                            market: "player_prop" as any,
+                            pick: `${prop.playerName} ${prop.side === "over" ? "Over" : "Under"} ${prop.line} ${label}`,
+                            odds: prop.odds || -110,
+                            fairProb: (prop.probability ?? 0.5),
+                            bookmaker: prop.bookmaker || "best price",
+                          });
+                        }}
+                        className="px-2 py-1 rounded bg-neon/10 border border-neon/20 text-neon text-[10px] font-bold hover:bg-neon/20 transition-colors flex-shrink-0"
+                        title="Add to parlay"
+                      >
+                        + Parlay
+                      </button>
                       <ChevronDown className={`w-3.5 h-3.5 text-mercury/40 flex-shrink-0 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
                     </button>
 
