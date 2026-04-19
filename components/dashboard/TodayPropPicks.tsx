@@ -91,11 +91,12 @@ function scoreProp(side: "over" | "under", prop: RawProp): PropPick | null {
   const brainFair = side === "over" ? prop.brainOverProb : prop.brainUnderProb;
   const marketFair = side === "over" ? prop.fairOverProb : prop.fairUnderProb;
   const usesBrain = typeof brainFair === "number" && brainFair > 0;
-  const fair = usesBrain ? brainFair! : (marketFair ?? 0);
-
-  // Keep the board populated all day — even slim-edge picks surface, ranked
-  // by score. Only hard-skip when we truly have no probability signal.
-  if (fair <= 0) return null;
+  // Always have *some* probability signal — fall back to the implied book
+  // probability if both brain and devig are missing, so the row still ranks.
+  const impliedFallback = americanImplied(best.price) * 100;
+  const fair = usesBrain
+    ? brainFair!
+    : (marketFair && marketFair > 0 ? marketFair : impliedFallback);
 
   const implied = americanImplied(best.price) * 100;
   // EV always measured against market implied (that's what you actually bet into)
@@ -148,27 +149,16 @@ export default function TodayPropPicks({
         // Hide props when the player is confirmed OUT or DOUBTFUL — zero edge
         if (prop.injuryStatus === "Out" || prop.injuryStatus === "Doubtful") continue;
 
-        // Pick the side with the higher probability. Brain-driven when
-        // present, else market devig. Home runs = always Over (under has
-        // no analytical meaning on 0.5 lines).
-        const brainOver = prop.brainOverProb ?? 0;
-        const brainUnder = prop.brainUnderProb ?? 0;
-        const marketOver = prop.fairOverProb ?? 0;
-        const marketUnder = prop.fairUnderProb ?? 0;
-        const over = brainOver > 0 ? brainOver : marketOver;
-        const under = brainUnder > 0 ? brainUnder : marketUnder;
-
-        let preferredSide: "over" | "under";
-        if (OVER_ONLY_MARKETS.has(prop.market)) {
-          preferredSide = "over";
-        } else if (over >= under - OVER_BIAS_TIE_BREAK) {
-          preferredSide = "over";
-        } else {
-          preferredSide = "under";
-        }
-
-        const primary = scoreProp(preferredSide, prop);
-        if (primary) all.push(primary);
+        // Score both sides and keep whichever produces a valid pick with
+        // the higher score. Home runs force Over (under is meaningless on
+        // a 0.5 line). This guarantees the board fills as long as the
+        // prop has any pricing data at all.
+        const tryOver = scoreProp("over", prop);
+        const tryUnder = OVER_ONLY_MARKETS.has(prop.market) ? null : scoreProp("under", prop);
+        const winner =
+          tryOver && tryUnder ? (tryOver.score >= tryUnder.score ? tryOver : tryUnder)
+          : tryOver ?? tryUnder;
+        if (winner) all.push(winner);
       }
     }
     // Rank and dedupe by player (one pick per player across markets)
