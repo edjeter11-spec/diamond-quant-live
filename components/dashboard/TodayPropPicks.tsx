@@ -93,8 +93,9 @@ function scoreProp(side: "over" | "under", prop: RawProp): PropPick | null {
   const usesBrain = typeof brainFair === "number" && brainFair > 0;
   const fair = usesBrain ? brainFair! : (marketFair ?? 0);
 
-  // Only hard-skip true coinflips; we want a populated board for today's slate
-  if (fair < 50) return null;
+  // Keep the board populated all day — even slim-edge picks surface, ranked
+  // by score. Only hard-skip when we truly have no probability signal.
+  if (fair <= 0) return null;
 
   const implied = americanImplied(best.price) * 100;
   // EV always measured against market implied (that's what you actually bet into)
@@ -147,12 +148,19 @@ export default function TodayPropPicks({
         // Hide props when the player is confirmed OUT or DOUBTFUL — zero edge
         if (prop.injuryStatus === "Out" || prop.injuryStatus === "Doubtful") continue;
 
-        // Decide preferred side with Over-bias tiebreak
-        const over = prop.fairOverProb ?? 0;
-        const under = prop.fairUnderProb ?? 0;
+        // Pick the side with the higher probability. Brain-driven when
+        // present, else market devig. Home runs = always Over (under has
+        // no analytical meaning on 0.5 lines).
+        const brainOver = prop.brainOverProb ?? 0;
+        const brainUnder = prop.brainUnderProb ?? 0;
+        const marketOver = prop.fairOverProb ?? 0;
+        const marketUnder = prop.fairUnderProb ?? 0;
+        const over = brainOver > 0 ? brainOver : marketOver;
+        const under = brainUnder > 0 ? brainUnder : marketUnder;
+
         let preferredSide: "over" | "under";
         if (OVER_ONLY_MARKETS.has(prop.market)) {
-          preferredSide = "over"; // HR unders are meaningless — always over
+          preferredSide = "over";
         } else if (over >= under - OVER_BIAS_TIE_BREAK) {
           preferredSide = "over";
         } else {
