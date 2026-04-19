@@ -40,7 +40,7 @@ export async function GET(req: Request) {
   const sport = searchParams.get("sport") || "baseball_mlb";
 
   // Check server cache (keyed by sport + market)
-  const cacheKey = `props_${sport}_${market}`;
+  const cacheKey = `props_v2_${sport}_${market}`;
   const cached = getCached(cacheKey, CACHE_TTL.PROPS);
   if (cached) {
     return NextResponse.json(cached, {
@@ -88,21 +88,33 @@ export async function GET(req: Request) {
     const alt = ALT_MARKETS[market];
     const marketsParam = alt ? `${market},${alt}` : market;
 
-    // Fetch props for all games in parallel — sequential loop was the mobile
-    // bottleneck (5 games × ~500ms = 2.5s cold-cache). 3 games is plenty for
-    // the Board card and keeps the request tight.
-    const propGames = (events as any[]).slice(0, 3);
+    // Fetch props for all games in parallel. If the combined main+alt call
+    // is rejected (some sports/events don't support alt markets), retry with
+    // the main market alone so the board stays populated.
+    const propGames = (events as any[]).slice(0, 5);
     const perGameResults = await Promise.all(
       propGames.map(async (game: any) => {
-        try {
-          const data = await fetchPlayerProps(apiKey, game.id, marketsParam, sport);
+        const attempt = async (mkt: string) => {
+          const data = await fetchPlayerProps(apiKey, game.id, mkt, sport);
           const props = parsePlayerProps(data);
           for (const prop of props) {
             prop.team = `${game.away_team} @ ${game.home_team}`;
             (prop as any).gameTime = game.commence_time;
           }
           return props;
+        };
+        try {
+          const primary = await attempt(marketsParam);
+          if (primary.length > 0) return primary;
+          // No props parsed — try main-only in case alt was rejected silently
+          if (alt) {
+            try { return await attempt(market); } catch {}
+          }
+          return primary;
         } catch {
+          if (alt) {
+            try { return await attempt(market); } catch {}
+          }
           return [];
         }
       }),
@@ -143,17 +155,28 @@ export async function GET(req: Request) {
                 g.injuryNote = injury.shortComment;
               }
 
-              // Brain projection — runs only if we have stats + weights
-              if (p && weights) {
+              // Brain projection — runs whenever we have weights. If NBA CDN
+              // lookup didn't resolve the player, fall back to the line as
+              // seasonAvg so every prop still gets a brain read.
+              if (weights) {
+                const statKey = g.market === "player_points" ? "ppg" : g.market === "player_rebounds" ? "rpg" : "apg";
+                const fallbackAvg = Number(g.line) || 0;
+                const stats = p
+                  ? { ppg: p.ppg ?? 0, rpg: p.rpg ?? 0, apg: p.apg ?? 0 }
+                  : { ppg: g.market === "player_points" ? fallbackAvg : 0,
+                      rpg: g.market === "player_rebounds" ? fallbackAvg : 0,
+                      apg: g.market === "player_assists" ? fallbackAvg : 0 };
+                void statKey;
                 // Determine if player's team is home from prop.team ("Away @ Home")
                 const teamStr: string = g.team ?? "";
                 const atIdx = teamStr.indexOf(" @ ");
                 const homeTeam = atIdx >= 0 ? teamStr.slice(atIdx + 3) : "";
-                const isHome = homeTeam.toLowerCase().includes((p.teamAbbrev ?? "").toLowerCase()) ||
-                               homeTeam.toLowerCase().includes((p.lastName ?? "").toLowerCase() ? "__disabled__" : "__disabled__");
+                const isHome = p?.teamAbbrev
+                  ? homeTeam.toLowerCase().includes(p.teamAbbrev.toLowerCase())
+                  : false;
 
                 const projection = projectProp(
-                  { ppg: p.ppg, rpg: p.rpg, apg: p.apg },
+                  stats,
                   g.market,
                   g.line,
                   weights,
