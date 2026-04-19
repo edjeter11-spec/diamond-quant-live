@@ -126,6 +126,22 @@ Books without codes fall back to plain deep links (no loss). Adding
 codes is risk-free — costs nothing, potentially pays $50–$500 per
 user who deposits via your link.
 
+## 8b. Complimentary / full-access users
+
+Grant anyone admin + premium automatically by email:
+
+```
+COMP_ACCESS_EMAILS = declan@example.com,partner@example.com
+```
+
+On their next sign-in the app flips `user_profiles.is_admin = true`,
+`is_premium = true`, `subscription_status = "comp"` — no Stripe
+needed. Idempotent: doesn't rewrite profiles that are already set.
+
+Remove an email from the list and they keep whatever state was last
+written; to actually revoke, either flip the DB row manually or
+build a dedicated revoke endpoint.
+
 ## 9. Auto-settle user bets
 
 Bets placed by users (via Snap & Sync screenshot import, PickCard

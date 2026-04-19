@@ -105,6 +105,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Listen for auth changes
+  // Fire the complimentary-access check once per session — no-op unless
+  // the user's email is in COMP_ACCESS_EMAILS (server-side env list).
+  const ensureComp = useCallback(async (accessToken: string | undefined) => {
+    if (!accessToken) return;
+    try {
+      const res = await fetch("/api/auth/ensure-comp", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      });
+      const data = await res.json();
+      if (data?.compGranted && !data?.alreadySet && user) {
+        // Refresh profile so is_admin/is_premium propagate immediately
+        fetchProfile(user.id);
+      }
+    } catch {}
+  }, [fetchProfile, user]);
+
   useEffect(() => {
     if (!supabase) { setLoading(false); return; }
 
@@ -112,7 +129,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     supabase.auth.getSession().then(({ data: { session: s } }) => {
       setSession(s);
       setUser(s?.user ?? null);
-      if (s?.user) fetchProfile(s.user.id);
+      if (s?.user) { fetchProfile(s.user.id); ensureComp(s.access_token); }
       setLoading(false);
     });
 
@@ -120,12 +137,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
       setSession(s);
       setUser(s?.user ?? null);
-      if (s?.user) fetchProfile(s.user.id);
+      if (s?.user) { fetchProfile(s.user.id); ensureComp(s?.access_token); }
       else { setProfile(null); setPreferences(null); }
     });
 
     return () => subscription.unsubscribe();
-  }, [fetchProfile]);
+  }, [fetchProfile, ensureComp]);
 
   // ── Sign in with email/password ──
   const signInWithEmail = useCallback(async (email: string, password: string) => {
