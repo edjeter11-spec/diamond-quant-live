@@ -62,14 +62,13 @@ export async function GET(req: Request) {
       if (!eventsRes.ok) throw new Error(`Events API error: ${eventsRes.status}`);
       const allEvents = await eventsRes.json();
 
-      // Prioritize FUTURE games (where props are most likely posted)
-      // Sort by commence time, take upcoming games first
-      const now = Date.now();
+      // Only include games happening TODAY (sports day = 4 AM ET → 4 AM ET next day).
+      // This filter applies to both NBA and MLB props.
+      const { start: dayStart, end: dayEnd } = getSportsDayWindowET();
       events = allEvents
         .filter((e: any) => {
           const gameTime = new Date(e.commence_time).getTime();
-          // Future games up to 36hrs out, or games started within last 2hrs
-          return gameTime > now - 2 * 60 * 60 * 1000 && gameTime < now + 36 * 60 * 60 * 1000;
+          return gameTime >= dayStart && gameTime < dayEnd;
         })
         .sort((a: any, b: any) => {
           // Soonest games first — they're most likely to have props posted
@@ -187,6 +186,53 @@ export async function GET(req: Request) {
 
 function americanToDecimal(odds: number): number {
   return odds > 0 ? odds / 100 + 1 : 100 / Math.abs(odds) + 1;
+}
+
+// Returns [start, end) UTC ms for the current "sports day" in ET:
+// 4 AM ET today → 4 AM ET tomorrow. Handles EST/EDT via Intl.
+function getSportsDayWindowET(): { start: number; end: number } {
+  const now = new Date();
+  const fmt = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    hour12: false,
+  });
+  const parts = fmt.formatToParts(now);
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "0";
+  const etYear = Number(get("year"));
+  const etMonth = Number(get("month"));
+  const etDay = Number(get("day"));
+  const etHour = Number(get("hour"));
+
+  // If it's before 4 AM ET, the sports day started yesterday at 4 AM ET.
+  const anchor = new Date(Date.UTC(etYear, etMonth - 1, etDay, 4, 0, 0));
+  if (etHour < 4) anchor.setUTCDate(anchor.getUTCDate() - 1);
+
+  // Convert that ET-wall-clock anchor (4 AM on anchor date) to real UTC ms
+  // by computing ET offset for that instant.
+  const offsetMin = getEtOffsetMinutes(anchor);
+  const startMs = anchor.getTime() + offsetMin * 60 * 1000;
+  const endMs = startMs + 24 * 60 * 60 * 1000;
+  return { start: startMs, end: endMs };
+}
+
+function getEtOffsetMinutes(d: Date): number {
+  // Offset (in minutes) you ADD to an ET wall-clock Date(.UTC(...)) to get real UTC ms.
+  // e.g. EDT = UTC-4 → offset = +240; EST = UTC-5 → offset = +300.
+  const tzFmt = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    timeZoneName: "shortOffset",
+  });
+  const parts = tzFmt.formatToParts(d);
+  const tz = parts.find((p) => p.type === "timeZoneName")?.value ?? "GMT-5";
+  const m = tz.match(/GMT([+-]\d{1,2})(?::(\d{2}))?/);
+  if (!m) return 300;
+  const hours = Number(m[1]);
+  const mins = Number(m[2] ?? "0");
+  return -(hours * 60 + Math.sign(hours) * mins);
 }
 
 function groupByPlayer(props: ReturnType<typeof parsePlayerProps>) {
