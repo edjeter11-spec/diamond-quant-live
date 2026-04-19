@@ -127,9 +127,9 @@ export async function GET(req: Request) {
         const brain = await loadNbaPropBrainFromCloud().catch(() => null);
         const weights = brain?.weights;
 
-        // Cap augmentation to the top 15 groups — each triggers NBA CDN
-        // lookups that add latency. Users only see ~8 picks anyway.
-        const augmentTargets = grouped.slice(0, 15);
+        // Cap augmentation to top 30 — enough for the full props page while
+        // keeping cold-cache latency bounded (all lookups run in parallel).
+        const augmentTargets = grouped.slice(0, 30);
         await Promise.all(
           augmentTargets.map(async (g: any) => {
             try {
