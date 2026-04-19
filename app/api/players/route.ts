@@ -40,7 +40,7 @@ export async function GET(req: Request) {
   const sport = searchParams.get("sport") || "baseball_mlb";
 
   // Check server cache (keyed by sport + market)
-  const cacheKey = `props_v2_${sport}_${market}`;
+  const cacheKey = `props_v3_${sport}_${market}`;
   const cached = getCached(cacheKey, CACHE_TTL.PROPS);
   if (cached) {
     return NextResponse.json(cached, {
@@ -155,18 +155,15 @@ export async function GET(req: Request) {
                 g.injuryNote = injury.shortComment;
               }
 
-              // Brain projection — runs whenever we have weights. If NBA CDN
-              // lookup didn't resolve the player, fall back to the line as
-              // seasonAvg so every prop still gets a brain read.
-              if (weights) {
-                const statKey = g.market === "player_points" ? "ppg" : g.market === "player_rebounds" ? "rpg" : "apg";
-                const fallbackAvg = Number(g.line) || 0;
-                const stats = p
-                  ? { ppg: p.ppg ?? 0, rpg: p.rpg ?? 0, apg: p.apg ?? 0 }
-                  : { ppg: g.market === "player_points" ? fallbackAvg : 0,
-                      rpg: g.market === "player_rebounds" ? fallbackAvg : 0,
-                      apg: g.market === "player_assists" ? fallbackAvg : 0 };
-                void statKey;
+              // Brain projection — only runs when we have real stats for the
+              // relevant market. Zero-stat fallbacks produced nonsense (line
+              // 25 vs 0 ppg = 99% under) which the client filter dropped.
+              const relevantStat = g.market === "player_points" ? p?.ppg
+                : g.market === "player_rebounds" ? p?.rpg
+                : g.market === "player_assists" ? p?.apg
+                : 0;
+              if (weights && p && Number(relevantStat) > 0) {
+                const stats = { ppg: p.ppg ?? 0, rpg: p.rpg ?? 0, apg: p.apg ?? 0 };
                 // Determine if player's team is home from prop.team ("Away @ Home")
                 const teamStr: string = g.team ?? "";
                 const atIdx = teamStr.indexOf(" @ ");
