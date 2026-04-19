@@ -648,17 +648,13 @@ export default function WarRoom() {
 
             {activeTab === "bot" && (
               <div className="max-w-3xl mx-auto space-y-4">
-                {currentSport === "nba" ? (
-                  <>
-                    <BotChallenge />
-                  </>
-                ) : (
+                <BotChallenge />
+                {currentSport === "mlb" && isAdmin && (
                   <>
                     <ThreeModelBot />
-                    {isAdmin && <BrainViz />}
-                    <BotChallenge />
-                    {isAdmin && <GhostBots />}
-                    {isAdmin && <ModelLogs />}
+                    <BrainViz />
+                    <GhostBots />
+                    <ModelLogs />
                   </>
                 )}
               </div>

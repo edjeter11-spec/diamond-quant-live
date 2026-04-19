@@ -317,7 +317,11 @@ export default function PlayerProps() {
           <p className="text-xs text-danger">{searchError}</p>
         </div>
       )}
-      {searchResult && (
+      {searchResult && searchResult.player && (() => {
+        const sr: any = searchResult;
+        const gamesList: any[] = sr.last10Games ?? sr.player?.gameLog ?? [];
+        const teamLabel = sr.player?.team ?? sr.player?.teamAbbrev ?? "";
+        return (
         <div className="px-3 sm:px-4 py-4 bg-electric/5 border-b border-electric/15">
           {/* Player Card Header with Photo */}
           <div className="flex gap-3 mb-3">
@@ -333,9 +337,9 @@ export default function PlayerProps() {
                 )}
               </div>
               <div className="flex items-center gap-2 mt-0.5">
-                <span className="text-xs px-2 py-0.5 rounded bg-electric/15 text-electric font-medium">{searchResult.player.team}</span>
-                <span className="text-xs px-2 py-0.5 rounded bg-gunmetal text-mercury">{searchResult.player.position}</span>
-                <span className="text-[10px] text-mercury/50">{searchResult.player.gamesPlayed}G this season</span>
+                {teamLabel && <span className="text-xs px-2 py-0.5 rounded bg-electric/15 text-electric font-medium">{teamLabel}</span>}
+                {searchResult.player.position && <span className="text-xs px-2 py-0.5 rounded bg-gunmetal text-mercury">{searchResult.player.position}</span>}
+                {searchResult.player.gamesPlayed != null && <span className="text-[10px] text-mercury/50">{searchResult.player.gamesPlayed}G this season</span>}
               </div>
             </div>
           </div>
@@ -379,16 +383,16 @@ export default function PlayerProps() {
           )}
 
           {/* Last 10+ Games Chart */}
-          {searchResult.last10Games.length > 0 && (
+          {gamesList.length > 0 && (
             <div className="mb-3 rounded-lg bg-gunmetal/20 p-3">
               <p className="text-[10px] text-mercury uppercase tracking-wider mb-2 font-semibold">
-                Last {searchResult.last10Games.length} Games
+                Last {gamesList.length} Games
               </p>
               <div className="flex items-end gap-1 h-20">
-                {searchResult.last10Games.map((game: any, gi: number) => {
+                {gamesList.map((game: any, gi: number) => {
                   const statKey = MARKET_STAT_KEY[selectedMarket] || "strikeouts";
                   const val = game[statKey] ?? 0;
-                  const maxVal = Math.max(...searchResult.last10Games.map((g: any) => g[statKey] ?? 0), 1);
+                  const maxVal = Math.max(...gamesList.map((g: any) => g[statKey] ?? 0), 1);
                   const height = maxVal > 0 ? (val / maxVal) * 100 : 0;
                   return (
                     <div key={gi} className="flex-1 flex flex-col items-center gap-0.5" title={`${game.opponent}: ${val}`}>
@@ -407,14 +411,14 @@ export default function PlayerProps() {
 
               {/* Game log table */}
               <div className="mt-3 space-y-0.5">
-                {searchResult.last10Games.slice(-5).reverse().map((game: any, gi: number) => {
+                {gamesList.slice(-5).reverse().map((game: any, gi: number) => {
                   const statKey = MARKET_STAT_KEY[selectedMarket] || "strikeouts";
                   const val = game[statKey] ?? 0;
                   return (
                     <div key={gi} className="flex items-center gap-2 text-[10px]">
                       <span className="text-mercury/50 w-16 truncate">{game.opponent?.split(" ").pop()}</span>
                       <div className="flex-1 h-1 bg-gunmetal rounded-full overflow-hidden">
-                        <div className="h-full bg-electric/50 rounded-full" style={{ width: `${Math.min((val / Math.max(...searchResult.last10Games.map((g: any) => g[statKey] ?? 0), 1)) * 100, 100)}%` }} />
+                        <div className="h-full bg-electric/50 rounded-full" style={{ width: `${Math.min((val / Math.max(...gamesList.map((g: any) => g[statKey] ?? 0), 1)) * 100, 100)}%` }} />
                       </div>
                       <span className="font-mono text-silver font-bold w-5 text-right">{val}</span>
                     </div>
@@ -451,7 +455,8 @@ export default function PlayerProps() {
             </div>
           )}
         </div>
-      )}
+        );
+      })()}
 
       {/* Props List */}
       <div className="divide-y divide-slate/15">
