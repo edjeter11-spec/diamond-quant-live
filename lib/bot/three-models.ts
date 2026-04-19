@@ -569,9 +569,10 @@ export async function analyzeAllGames(oddsData: any[], scores: any[]): Promise<G
 
       // Team abbrevs for bullpen fatigue + lineup injury lookup
       const awayAbbrev: string = scoreGame?.awayAbbrev ?? "";
+      const gamePk: number | null = scoreGame?.id ? Number(scoreGame.id) : null;
 
-      // Fetch pitcher profiles + weather + bullpen fatigue + team injuries in parallel
-      const [homePitcher, awayPitcher, weather, bullpenFatigue, teamInjuries] = await Promise.all([
+      // Fetch pitcher profiles + weather + bullpen + season IL + daily lineup in parallel
+      const [homePitcher, awayPitcher, weather, bullpenFatigue, teamInjuries, dailyLineups] = await Promise.all([
         buildPitcherProfile(homePitcherName, awayTeam),
         buildPitcherProfile(awayPitcherName, homeTeam),
         homeAbbrev ? import("@/lib/mlb/weather-fatigue").then(m => m.getGameWeather(homeAbbrev)).catch(() => null) : Promise.resolve(null),
@@ -596,6 +597,21 @@ export async function analyzeAllGames(oddsData: any[], scores: any[]): Promise<G
             const [home, away] = await Promise.all([
               homeId ? inj.getTeamInjuries(homeId, homeAbbrev) : Promise.resolve(null),
               awayId ? inj.getTeamInjuries(awayId, awayAbbrev) : Promise.resolve(null),
+            ]);
+            return { home, away };
+          } catch { return null; }
+        })(),
+        // Daily lineup scraper — catches late scratches ~2-3h pre-game
+        (async () => {
+          if (!gamePk) return null;
+          try {
+            const bp = await import("@/lib/mlb/bullpen-fatigue");
+            const ln = await import("@/lib/mlb/daily-lineup");
+            const homeId = homeAbbrev ? bp.getTeamIdByAbbrev(homeAbbrev) : null;
+            const awayId = awayAbbrev ? bp.getTeamIdByAbbrev(awayAbbrev) : null;
+            const [home, away] = await Promise.all([
+              homeId ? ln.getDailyLineup(gamePk, homeId, homeAbbrev, "home") : Promise.resolve(null),
+              awayId ? ln.getDailyLineup(gamePk, awayId, awayAbbrev, "away") : Promise.resolve(null),
             ]);
             return { home, away };
           } catch { return null; }
@@ -634,6 +650,24 @@ export async function analyzeAllGames(oddsData: any[], scores: any[]): Promise<G
             if (teamInjuries.away?.impactfulOut) pitcherModel.factors.push(teamInjuries.away.summary);
             // Total projection tilts down when offenses are weakened
             pitcherModel.totalProjection = Math.max(6, pitcherModel.totalProjection - (homeInjEdge + awayInjEdge) * 0.6);
+          }
+        } catch {}
+      }
+
+      // Apply daily-lineup edge — stacks on top of season IL. Catches day-of
+      // scratches (rest days, soft-tissue stuff) that IL doesn't see.
+      if (dailyLineups) {
+        try {
+          const { computeLineupEdge } = await import("@/lib/mlb/daily-lineup");
+          const homeLineupEdge = dailyLineups.home ? computeLineupEdge(dailyLineups.home) : 0;
+          const awayLineupEdge = dailyLineups.away ? computeLineupEdge(dailyLineups.away) : 0;
+          const netEdge = awayLineupEdge - homeLineupEdge;
+          if (Math.abs(netEdge) >= 0.3) {
+            const shift = netEdge * 0.04; // slightly more weight than season IL — day-of info is fresher
+            pitcherModel.homeWinProb = Math.min(0.95, Math.max(0.05, pitcherModel.homeWinProb + shift));
+            if (dailyLineups.home?.impactfulScratches) pitcherModel.factors.push(dailyLineups.home.summary);
+            if (dailyLineups.away?.impactfulScratches) pitcherModel.factors.push(dailyLineups.away.summary);
+            pitcherModel.totalProjection = Math.max(6, pitcherModel.totalProjection - (homeLineupEdge + awayLineupEdge) * 0.5);
           }
         } catch {}
       }
