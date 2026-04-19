@@ -25,6 +25,7 @@ import SnapSync from "@/components/dashboard/SnapSync";
 import { teamNameToAbbrev } from "@/lib/logos";
 import AuthButton from "@/components/auth/AuthButton";
 import UserProfile from "@/components/auth/UserProfile";
+import PushOptIn from "@/components/ui/PushOptIn";
 import { useAuth } from "@/lib/supabase/auth";
 import MigrationBanner from "@/components/auth/MigrationBanner";
 import ROIChart from "@/components/dashboard/ROIChart";
@@ -416,6 +417,7 @@ export default function WarRoom() {
           </nav>
 
           <div className="flex items-center gap-1.5 sm:gap-2">
+            <PushOptIn />
             <AuthButton />
             {isDemo && oddsData.length === 0 && (
               <span className="hidden sm:flex items-center gap-1 px-2 py-1 rounded bg-amber/10 border border-amber/20 text-[10px] text-amber font-semibold">

@@ -198,6 +198,21 @@ export async function GET(req: Request) {
                 evPercentage: p.evPercentage, fairProb: p.fairProb, confidence: p.confidence,
               }));
               await logDailyPicks(logged);
+
+              // Fire a push to subscribed users for the sharpest pick
+              try {
+                const top: any = mlbPicks[0];
+                const ev = Number(top?.evPercentage ?? logged[0]?.evPercentage ?? 0);
+                if (top && ev >= 5) {
+                  const { sendPushToAll } = await import("@/lib/push/send");
+                  await sendPushToAll({
+                    title: `MLB +${ev.toFixed(1)}% EV`,
+                    body: `${top.pick} @ ${top.odds > 0 ? "+" : ""}${top.odds} (${top.bookmaker})`,
+                    url: "/",
+                    tag: `mlb-${today}`,
+                  });
+                }
+              } catch {}
             }
           }
         }
@@ -229,6 +244,20 @@ export async function GET(req: Request) {
                 evPercentage: p.evPercentage, fairProb: p.fairProb, confidence: p.confidence,
               }));
               await logDailyPicks(logged);
+
+              try {
+                const top: any = nbaPicks[0];
+                const ev = Number(top?.evPercentage ?? logged[0]?.evPercentage ?? 0);
+                if (top && ev >= 5) {
+                  const { sendPushToAll } = await import("@/lib/push/send");
+                  await sendPushToAll({
+                    title: `NBA +${ev.toFixed(1)}% EV`,
+                    body: `${top.pick} @ ${top.odds > 0 ? "+" : ""}${top.odds} (${top.bookmaker})`,
+                    url: "/",
+                    tag: `nba-${today}`,
+                  });
+                }
+              } catch {}
             }
           }
         }
