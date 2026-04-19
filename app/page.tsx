@@ -12,6 +12,7 @@ import PlayerProps from "@/components/dashboard/PlayerProps";
 import BankrollTracker from "@/components/dashboard/BankrollTracker";
 import LineMovement from "@/components/dashboard/LineMovement";
 import SelectedGameBanner from "@/components/dashboard/SelectedGameBanner";
+import GameMatchupBrief from "@/components/dashboard/GameMatchupBrief";
 import BetSlip from "@/components/dashboard/BetSlip";
 import PicksBoard from "@/components/dashboard/PicksBoard";
 import BotChallenge from "@/components/dashboard/BotChallenge";
@@ -584,6 +585,13 @@ export default function WarRoom() {
                     {selectedGameId && selectedScore && (
                       <>
                         <SelectedGameBanner game={selectedScore} onDeselect={() => selectGame(null)} />
+                        {currentSport === "nba" && selectedOdds && (() => {
+                          const homeAbbrev = teamNameToAbbrev(selectedOdds.homeTeam, "nba");
+                          const awayAbbrev = teamNameToAbbrev(selectedOdds.awayTeam, "nba");
+                          return homeAbbrev && awayAbbrev ? (
+                            <GameMatchupBrief homeAbbrev={homeAbbrev} awayAbbrev={awayAbbrev} />
+                          ) : null;
+                        })()}
                         <QuantVerdict
                           game={{
                             homeTeam: selectedOdds?.homeTeam ?? "Select a game",
