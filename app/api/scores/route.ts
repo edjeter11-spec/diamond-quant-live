@@ -61,7 +61,10 @@ export async function GET() {
       }
     }
 
-    return NextResponse.json({ games: formatted, timestamp: new Date().toISOString() });
+    return NextResponse.json(
+      { games: formatted, timestamp: new Date().toISOString() },
+      { headers: { "Cache-Control": "public, s-maxage=30, stale-while-revalidate=300" } },
+    );
   } catch (error) {
     console.error("Scores API error:", error);
     return NextResponse.json(

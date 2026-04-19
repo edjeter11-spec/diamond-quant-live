@@ -21,7 +21,9 @@ export async function GET(req: Request) {
 
   const cached = getCached(CACHE_KEY, CACHE_TTL.ODDS);
   if (cached) {
-    return NextResponse.json(cached);
+    return NextResponse.json(cached, {
+      headers: { "Cache-Control": "public, s-maxage=30, stale-while-revalidate=300" },
+    });
   }
 
   const apiKey = getApiKey();
@@ -82,7 +84,9 @@ export async function GET(req: Request) {
 
       const response = { games, timestamp: new Date().toISOString() };
       setCache(CACHE_KEY, response);
-      return NextResponse.json(response);
+      return NextResponse.json(response, {
+        headers: { "Cache-Control": "public, s-maxage=30, stale-while-revalidate=300" },
+      });
     } catch (error: any) {
       console.error(`Odds API error (attempt ${attempt + 1}):`, error.message);
       markKeyExhausted(key);

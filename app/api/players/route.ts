@@ -42,7 +42,11 @@ export async function GET(req: Request) {
   // Check server cache (keyed by sport + market)
   const cacheKey = `props_${sport}_${market}`;
   const cached = getCached(cacheKey, CACHE_TTL.PROPS);
-  if (cached) return NextResponse.json(cached);
+  if (cached) {
+    return NextResponse.json(cached, {
+      headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=600" },
+    });
+  }
 
   const apiKey = getApiKey();
   if (!apiKey) {
@@ -80,28 +84,30 @@ export async function GET(req: Request) {
       setCache(eventsCacheKey, events);
     }
 
-    const allProps: any[] = [];
-
     // Request main + alternate markets together so we get 5-10 lines per player
     const alt = ALT_MARKETS[market];
     const marketsParam = alt ? `${market},${alt}` : market;
 
-    // Fetch props for each game — stop early if we already have enough
-    for (const game of events) {
-      try {
-        const data = await fetchPlayerProps(apiKey, game.id, marketsParam, sport);
-        const props = parsePlayerProps(data);
-        for (const prop of props) {
-          prop.team = `${game.away_team} @ ${game.home_team}`;
-          (prop as any).gameTime = game.commence_time;
+    // Fetch props for all games in parallel — sequential loop was the mobile
+    // bottleneck (5 games × ~500ms = 2.5s cold-cache). 3 games is plenty for
+    // the Board card and keeps the request tight.
+    const propGames = (events as any[]).slice(0, 3);
+    const perGameResults = await Promise.all(
+      propGames.map(async (game: any) => {
+        try {
+          const data = await fetchPlayerProps(apiKey, game.id, marketsParam, sport);
+          const props = parsePlayerProps(data);
+          for (const prop of props) {
+            prop.team = `${game.away_team} @ ${game.home_team}`;
+            (prop as any).gameTime = game.commence_time;
+          }
+          return props;
+        } catch {
+          return [];
         }
-        allProps.push(...props);
-      } catch {
-        // Game may not have props for this market
-      }
-      // If we have enough props, stop fetching more games
-      if (allProps.length >= 10) break;
-    }
+      }),
+    );
+    const allProps: any[] = perGameResults.flat();
 
     const grouped = groupByPlayer(allProps);
 
@@ -121,8 +127,11 @@ export async function GET(req: Request) {
         const brain = await loadNbaPropBrainFromCloud().catch(() => null);
         const weights = brain?.weights;
 
+        // Cap augmentation to the top 15 groups — each triggers NBA CDN
+        // lookups that add latency. Users only see ~8 picks anyway.
+        const augmentTargets = grouped.slice(0, 15);
         await Promise.all(
-          grouped.map(async (g: any) => {
+          augmentTargets.map(async (g: any) => {
             try {
               const [p, injury] = await Promise.all([
                 searchNBAPlayer(g.playerName).catch(() => null),
@@ -175,7 +184,12 @@ export async function GET(req: Request) {
     if (grouped.length > 0) {
       setCache(cacheKey, response);
     }
-    return NextResponse.json(response);
+    return NextResponse.json(response, {
+      headers: {
+        // Vercel edge CDN: fresh for 60s, serve stale up to 10min while re-fetching
+        "Cache-Control": "public, s-maxage=60, stale-while-revalidate=600",
+      },
+    });
   } catch (error) {
     console.error("Props API error:", error);
     const stale = getCached(cacheKey, CACHE_TTL.PROPS * 5);
