@@ -28,6 +28,15 @@ interface RawProp {
   brainConfidence?: number;     // 0-100
   brainProjectedValue?: number;
   injuryStatus?: "Out" | "Doubtful" | "Questionable" | "Probable" | "Day-To-Day";
+  // Best-EV alternate line from /api/players (null when main is optimal)
+  bestAlt?: {
+    line: number;
+    side: "over" | "under";
+    price: number;
+    bookmaker: string;
+    fairProb: number;
+    edgePct: number;
+  } | null;
 }
 
 interface PropPick {
@@ -46,6 +55,7 @@ interface PropPick {
   label: string;         // "Points", "Hits", etc.
   usesBrain?: boolean;   // true when probability came from the brain, not devig
   projectedValue?: number; // brain's projected stat (NBA only)
+  bestAlt?: RawProp["bestAlt"];
 }
 
 const MARKET_LABEL: Record<string, string> = {
@@ -111,6 +121,7 @@ function scoreProp(side: "over" | "under", prop: RawProp): PropPick | null {
     label: MARKET_LABEL[prop.market] ?? prop.market,
     usesBrain,
     projectedValue: prop.brainProjectedValue,
+    bestAlt: prop.bestAlt ?? null,
   };
 }
 
@@ -264,6 +275,14 @@ export default function TodayPropPicks({
                       )}
                       {p.fairProb >= 60 && (
                         <Flame className="w-3 h-3 text-danger" />
+                      )}
+                      {p.bestAlt && p.bestAlt.edgePct >= 3 && (
+                        <span
+                          className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded bg-amber/15 border border-amber/30 text-amber text-[8px] font-bold"
+                          title={`Alt line ${p.bestAlt.side} ${p.bestAlt.line} @ ${p.bestAlt.price > 0 ? "+" : ""}${p.bestAlt.price} (${p.bestAlt.bookmaker}) — +${p.bestAlt.edgePct}% edge`}
+                        >
+                          ALT {p.bestAlt.side === "over" ? "O" : "U"}{p.bestAlt.line} +{p.bestAlt.edgePct}%
+                        </span>
                       )}
                     </div>
                     <p className="text-[10px] text-mercury/60 truncate">

@@ -127,25 +127,35 @@ export function parseOddsLines(game: OddsAPIGame): OddsLine[] {
   });
 }
 
-// Parse player props from API response
+// Parse player props from API response — supports main + alternate markets.
+// Each book/market can contain many (player, point) over/under pairs (alt lines),
+// so we iterate over every Over outcome and match it to its Under counterpart.
 export function parsePlayerProps(game: OddsAPIGame): PlayerProp[] {
   const props: PlayerProp[] = [];
 
   for (const book of game.bookmakers) {
     for (const market of book.markets) {
-      const overOutcome = market.outcomes.find((o) => o.name === "Over");
-      const underOutcome = market.outcomes.find((o) => o.name === "Under");
+      const overs = market.outcomes.filter((o) => o.name === "Over");
+      const unders = market.outcomes.filter((o) => o.name === "Under");
+      // Strip _alternate suffix so main + alt collapse to the same market family
+      const marketFamily = market.key.replace(/_alternate$/, "");
 
-      if (overOutcome && underOutcome && overOutcome.description) {
+      for (const over of overs) {
+        if (!over.description) continue;
+        const under = unders.find(
+          (u) => u.description === over.description && (u.point ?? 0) === (over.point ?? 0),
+        );
+        if (!under) continue;
+
         props.push({
           bookmaker: book.title,
-          playerName: overOutcome.description,
-          playerId: overOutcome.description.toLowerCase().replace(/\s+/g, "_"),
+          playerName: over.description,
+          playerId: over.description.toLowerCase().replace(/\s+/g, "_"),
           team: "",
-          market: market.key,
-          line: overOutcome.point ?? 0,
-          overPrice: overOutcome.price,
-          underPrice: underOutcome.price,
+          market: marketFamily,
+          line: over.point ?? 0,
+          overPrice: over.price,
+          underPrice: under.price,
         });
       }
     }
