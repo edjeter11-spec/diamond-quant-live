@@ -145,23 +145,49 @@ export default function TodayPropPicks({
     const all: PropPick[] = [];
     for (const market of Object.keys(propsData)) {
       for (const prop of propsData[market] ?? []) {
-        if (!prop.playerName || !prop.line) continue;
-        // Hide props when the player is confirmed OUT or DOUBTFUL — zero edge
+        if (!prop.playerName) continue;
         if (prop.injuryStatus === "Out" || prop.injuryStatus === "Doubtful") continue;
 
-        // Score both sides and keep whichever produces a valid pick with
-        // the higher score. Home runs force Over (under is meaningless on
-        // a 0.5 line). This guarantees the board fills as long as the
-        // prop has any pricing data at all.
-        const tryOver = scoreProp("over", prop);
-        const tryUnder = OVER_ONLY_MARKETS.has(prop.market) ? null : scoreProp("under", prop);
-        const winner =
-          tryOver && tryUnder ? (tryOver.score >= tryUnder.score ? tryOver : tryUnder)
-          : tryOver ?? tryUnder;
-        if (winner) all.push(winner);
+        // Dead-simple side pick: whichever side has the better market devig
+        // (or force Over for HR / 0.5 lines where Under is meaningless).
+        const marketOver = prop.fairOverProb ?? 50;
+        const marketUnder = prop.fairUnderProb ?? 50;
+        const forceOver = OVER_ONLY_MARKETS.has(prop.market);
+        const side: "over" | "under" = forceOver || marketOver >= marketUnder ? "over" : "under";
+
+        const best = side === "over" ? prop.bestOver : prop.bestUnder;
+        if (!best?.price) continue; // truly un-priced → skip
+
+        const fair = side === "over" ? marketOver : marketUnder;
+        const implied = americanImplied(best.price) * 100;
+        const ev = fair - implied;
+
+        // Brain opinion is metadata only — it adds a badge + reasoning,
+        // never filters the row out.
+        const brainFair = side === "over" ? prop.brainOverProb : prop.brainUnderProb;
+        const usesBrain = typeof brainFair === "number" && brainFair > 0;
+
+        all.push({
+          key: `${prop.market}-${prop.playerName}-${side}`,
+          playerName: prop.playerName,
+          playerId: prop.playerId,
+          team: prop.team,
+          side,
+          line: prop.line,
+          market: prop.market,
+          odds: best.price,
+          bookmaker: best.bookmaker,
+          fairProb: Math.round(fair * 10) / 10,
+          evPercentage: Math.round(ev * 10) / 10,
+          score: (fair - 50) + ev * 0.5 + (usesBrain ? 0.5 : 0),
+          label: MARKET_LABEL[prop.market] ?? prop.market,
+          usesBrain,
+          projectedValue: prop.brainProjectedValue,
+          bestAlt: prop.bestAlt ?? null,
+        });
       }
     }
-    // Rank and dedupe by player (one pick per player across markets)
+
     all.sort((a, b) => b.score - a.score);
     const seen = new Set<string>();
     const out: PropPick[] = [];
