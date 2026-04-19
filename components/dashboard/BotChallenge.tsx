@@ -732,10 +732,11 @@ export default function BotChallenge() {
             <span className="text-xs font-bold text-silver uppercase tracking-wider">History</span>
           </div>
           <div className="divide-y divide-slate/10 max-h-[300px] overflow-y-auto">
-            {[...botState.picks].reverse().filter(p => p.date !== today).slice(0, 16).map(pick => (
+            {dedupePicks([...botState.picks].reverse().filter(p => p.date !== today)).slice(0, 16).map(({ pick, count }) => (
               <PickRow
                 key={pick.id}
                 pick={pick}
+                dupeCount={count}
                 clvRecord={clvMap.get(pick.id)}
                 isExpanded={expandedPick === pick.id}
                 onToggle={() => setExpandedPick(expandedPick === pick.id ? null : pick.id)}
@@ -750,8 +751,27 @@ export default function BotChallenge() {
   );
 }
 
-function PickRow({ pick, clvRecord, isExpanded, onToggle, formatOdds, compact }: {
-  pick: SmartBotPick; clvRecord?: CLVRecord; isExpanded: boolean; onToggle: () => void;
+// Collapse duplicate picks (same game+pick text+result) across different books
+// into one row with an ×N badge. Keeps stat counts accurate upstream — this
+// only affects display.
+function dedupePicks(picks: SmartBotPick[]): Array<{ pick: SmartBotPick; count: number }> {
+  const groups = new Map<string, { pick: SmartBotPick; count: number }>();
+  const order: string[] = [];
+  for (const p of picks) {
+    const key = `${p.date}::${p.game}::${p.pick}::${p.result}`;
+    const existing = groups.get(key);
+    if (existing) {
+      existing.count += 1;
+    } else {
+      groups.set(key, { pick: p, count: 1 });
+      order.push(key);
+    }
+  }
+  return order.map((k) => groups.get(k)!);
+}
+
+function PickRow({ pick, dupeCount, clvRecord, isExpanded, onToggle, formatOdds, compact }: {
+  pick: SmartBotPick; dupeCount?: number; clvRecord?: CLVRecord; isExpanded: boolean; onToggle: () => void;
   formatOdds: (n: number) => string; compact?: boolean;
 }) {
   const { config } = useSport();
@@ -773,6 +793,14 @@ function PickRow({ pick, clvRecord, isExpanded, onToggle, formatOdds, compact }:
           <div className="flex items-center gap-1.5">
             {pick.confidence === "HIGH" && <Crown className="w-3 h-3 text-gold flex-shrink-0" />}
             <p className="text-xs sm:text-sm font-medium text-silver truncate">{formatPickLabel(pick.pick, (config as any).key ?? "mlb")}</p>
+            {dupeCount && dupeCount > 1 && (
+              <span
+                className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-electric/15 border border-electric/30 text-electric flex-shrink-0"
+                title={`${dupeCount} picks on this game across different books`}
+              >
+                ×{dupeCount}
+              </span>
+            )}
             {/* Inline CLV badge on settled picks */}
             {clvRecord && clvRecord.closingOdds !== 0 && (
               <span className={`text-[8px] font-bold px-1 py-0.5 rounded flex-shrink-0 ${clvRecord.beatClosing ? "bg-neon/15 text-neon" : "bg-danger/15 text-danger"}`}>
