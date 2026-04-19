@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Brain, TrendingUp, TrendingDown, Minus, Activity, CheckCircle, XCircle, Sparkles, RefreshCw, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { Brain, TrendingUp, TrendingDown, Minus, Activity, CheckCircle, XCircle, Sparkles, RefreshCw, ArrowUpRight, ArrowDownRight, ExternalLink } from "lucide-react";
 import { useStore } from "@/lib/store";
 import MatchupInsights from "@/components/dashboard/MatchupInsights";
+import { getDeepLink } from "@/lib/odds/sportsbooks";
 
 export interface PropDetailProps {
   sport: "mlb" | "nba";
@@ -88,9 +89,9 @@ export default function PropDetail({
         body: JSON.stringify(prompt),
       });
       const result = await res.json();
-      setAiSummary(result.summary ?? "AI analysis unavailable.");
+      setAiSummary(result.summary ?? buildLocalAnalysis(data, sport, market, line, side, playerName));
     } catch {
-      setAiSummary("AI analysis unavailable — try again in a moment.");
+      setAiSummary(buildLocalAnalysis(data, sport, market, line, side, playerName));
     }
     setAiLoading(false);
   };
@@ -126,15 +127,69 @@ export default function PropDetail({
     : (data.recommendation?.reasons ?? []);
   const recommendation = isNBA ? null : data.recommendation;
 
+  const nbaPlayer = isNBA ? data.player ?? {} : {};
+  const brainProj = data.brainProjection ?? null;
+  const hitRateData = nbaPlayer.hitRates?.[market];
+  const effectiveHitRate = hitRate > 0 ? hitRate : (hitRateData?.rate ?? 0);
+
   return (
     <div className="p-3 space-y-3 animate-slide-up">
       {/* Key numbers */}
       <div className="grid grid-cols-4 gap-1.5">
         <StatTile label="Line" value={line.toFixed(1)} />
         <StatTile label="Season" value={seasonAvg.toFixed(1)} accent={seasonAvg > line === (side === "over") ? "good" : "neutral"} />
-        <StatTile label="Last 5" value={last5Avg.toFixed(1)} accent={last5Avg > line === (side === "over") ? "good" : "neutral"} />
-        <StatTile label="Hit %" value={`${hitRate.toFixed(0)}%`} accent={hitRate >= 60 ? "good" : hitRate <= 40 ? "bad" : "neutral"} />
+        <StatTile
+          label={gameLog.length > 0 ? "Last 5" : "Proj"}
+          value={(gameLog.length > 0 ? last5Avg : (brainProj?.projectedValue ?? seasonAvg)).toFixed(1)}
+          accent={((gameLog.length > 0 ? last5Avg : brainProj?.projectedValue ?? 0) > line) === (side === "over") ? "good" : "neutral"}
+        />
+        <StatTile label="Hit %" value={`${effectiveHitRate.toFixed(0)}%`} accent={effectiveHitRate >= 60 ? "good" : effectiveHitRate <= 40 ? "bad" : "neutral"} />
       </div>
+
+      {/* NBA extra stats — shows fg%/3pt%/ft%/mpg when game log isn't available */}
+      {isNBA && (
+        <div className="grid grid-cols-4 gap-1.5">
+          <StatTile label="PPG" value={(nbaPlayer.ppg ?? 0).toFixed(1)} />
+          <StatTile label="RPG" value={(nbaPlayer.rpg ?? 0).toFixed(1)} />
+          <StatTile label="APG" value={(nbaPlayer.apg ?? 0).toFixed(1)} />
+          <StatTile label="MPG" value={(nbaPlayer.mpg ?? 0).toFixed(1)} />
+        </div>
+      )}
+      {isNBA && (nbaPlayer.fgPct || nbaPlayer.threePct || nbaPlayer.ftPct) && (
+        <div className="grid grid-cols-3 gap-1.5">
+          <StatTile label="FG%" value={`${((nbaPlayer.fgPct ?? 0) * 100).toFixed(1)}%`} />
+          <StatTile label="3PT%" value={`${((nbaPlayer.threePct ?? 0) * 100).toFixed(1)}%`} />
+          <StatTile label="FT%" value={`${((nbaPlayer.ftPct ?? 0) * 100).toFixed(1)}%`} />
+        </div>
+      )}
+
+      {/* Brain projection card — only for NBA when brain weighed in */}
+      {isNBA && brainProj && (
+        <div className={`rounded-lg p-3 border ${brainProj.side === side ? "border-neon/25 bg-neon/5" : "border-amber/25 bg-amber/5"}`}>
+          <div className="flex items-center gap-1.5 mb-2">
+            <Brain className={`w-3.5 h-3.5 ${brainProj.side === side ? "text-neon" : "text-amber"}`} />
+            <span className={`text-[11px] font-bold uppercase tracking-wider ${brainProj.side === side ? "text-neon" : "text-amber"}`}>
+              {brainProj.side === side ? `Brain agrees — ${side.toUpperCase()}` : `Brain leans ${brainProj.side.toUpperCase()}`}
+            </span>
+            <span className="ml-auto text-[10px] text-mercury/60">{Math.round((brainProj.confidence ?? 0))}% conf</span>
+          </div>
+          <div className="grid grid-cols-3 gap-1.5 mb-2">
+            <StatTile label="Projected" value={(brainProj.projectedValue ?? 0).toFixed(1)} accent="good" />
+            <StatTile label="Probability" value={`${Math.round((brainProj.probability ?? 0) * 100)}%`} />
+            <StatTile label="Edge vs Line" value={`${((brainProj.projectedValue ?? 0) - line > 0 ? "+" : "")}${((brainProj.projectedValue ?? 0) - line).toFixed(1)}`} accent={((brainProj.projectedValue ?? 0) - line > 0) === (side === "over") ? "good" : "neutral"} />
+          </div>
+          {Array.isArray(brainProj.reasoning) && brainProj.reasoning.length > 0 && (
+            <ul className="space-y-1 mt-2 pt-2 border-t border-slate/20">
+              {brainProj.reasoning.slice(0, 4).map((r: string, i: number) => (
+                <li key={i} className="text-[10px] text-mercury/80 flex items-start gap-1">
+                  <span className="text-mercury/40 mt-0.5">·</span>
+                  <span>{r}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
 
       {/* Last N games */}
       {gameLog.length > 0 && (
@@ -258,6 +313,26 @@ export default function PropDetail({
         )}
       </div>
 
+      {/* Open-in-sportsbook deep-link row */}
+      <div className="flex items-center gap-1.5 pt-1">
+        <span className="text-[10px] text-mercury/60 uppercase tracking-wider flex-shrink-0">Bet on</span>
+        {(["draftkings", "fanduel", "betmgm"] as const).map((book) => {
+          const href = getDeepLink(book, { sport });
+          const labels: Record<string, string> = { draftkings: "DraftKings", fanduel: "FanDuel", betmgm: "BetMGM" };
+          return (
+            <a
+              key={book}
+              href={href || "#"}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded bg-gunmetal/40 border border-slate/25 hover:border-electric/40 hover:bg-electric/10 text-silver text-[10px] font-semibold transition-colors"
+            >
+              {labels[book]} <ExternalLink className="w-2.5 h-2.5" />
+            </a>
+          );
+        })}
+      </div>
+
       {/* Add to Parlay — Over only for markets where Under is dead money (HRs) */}
       {market === "batter_home_runs" ? (
         <button
@@ -356,6 +431,33 @@ function getSeasonAvg(data: any, sport: "mlb" | "nba", market: string): number {
     if (market === "batter_total_bases") return p.tbPerGame ?? 0;
   }
   return 0;
+}
+
+function buildLocalAnalysis(
+  data: any, sport: "mlb" | "nba", market: string, line: number, side: "over" | "under", playerName: string,
+): string {
+  const label = sport === "nba"
+    ? (market === "player_points" ? "points" : market === "player_rebounds" ? "rebounds" : market === "player_assists" ? "assists" : market.replace("player_", ""))
+    : (market === "pitcher_strikeouts" ? "strikeouts" : market.replace("batter_", "").replace(/_/g, " "));
+  const p = data?.player ?? {};
+  const seasonAvg = getSeasonAvg(data, sport, market);
+  const brain = data?.brainProjection;
+  const projected = brain?.projectedValue;
+  const conf = brain?.confidence ? Math.round(brain.confidence) : null;
+  const hitRate = p.hitRates?.[market]?.rate;
+  const diff = seasonAvg - line;
+  const direction = diff > 0 ? "above" : "below";
+  const abs = Math.abs(diff).toFixed(1);
+
+  const parts: string[] = [];
+  parts.push(`${playerName} averages ${seasonAvg.toFixed(1)} ${label} this season, ${abs} ${direction} the ${line} line.`);
+  if (projected != null) {
+    const brainAgree = brain.side === side;
+    parts.push(`The brain projects ${projected.toFixed(1)} (${conf ?? "—"}% confidence) — ${brainAgree ? "backing" : "fading"} the ${side}.`);
+  } else if (hitRate != null) {
+    parts.push(`Hits the ${line} line in roughly ${hitRate}% of recent games.`);
+  }
+  return parts.join(" ");
 }
 
 function computeHitRate(log: any[], market: string, line: number): number {

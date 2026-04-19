@@ -281,40 +281,41 @@ export default function TodayPropPicks({
                   }`}>
                     {p.side === "over" ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}
                   </div>
-                  <PlayerAvatar name={p.playerName} playerId={p.playerId} sport={sport} size={24} />
+                  <PlayerAvatar name={p.playerName} playerId={p.playerId} sport={sport} size={28} />
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <p className="text-xs sm:text-sm font-semibold text-silver truncate">
-                        {p.playerName} {p.side === "over" ? "Over" : "Under"} {p.line}
-                      </p>
-                      <span className="text-[9px] font-bold uppercase text-mercury/50 tracking-wider">{p.label}</span>
+                    {/* Full name — own row, wraps if needed, never truncates */}
+                    <p className="text-sm font-semibold text-silver leading-tight break-words">
+                      {p.playerName}
+                    </p>
+                    {/* The actual pick — clear and readable on mobile */}
+                    <p className={`text-xs font-bold leading-tight mt-0.5 ${p.side === "over" ? "text-neon" : "text-amber"}`}>
+                      {p.side === "over" ? "OVER" : "UNDER"} {p.line} {p.label}
+                    </p>
+                    {/* Meta + badges — allowed to wrap */}
+                    <div className="flex items-center flex-wrap gap-1.5 mt-1">
+                      <span className="text-[10px] text-mercury/60">
+                        {p.bookmaker} · {p.fairProb}%{p.usesBrain ? " brain" : " fair"}
+                        {p.projectedValue != null && p.usesBrain && ` · proj ${p.projectedValue}`}
+                      </span>
+                      <span className={`text-[10px] font-semibold ${p.evPercentage > 0 ? "text-neon" : "text-mercury/60"}`}>
+                        +{p.evPercentage}% edge
+                      </span>
                       {p.usesBrain && (
-                        <span
-                          className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded bg-purple/15 border border-purple/30 text-purple text-[8px] font-bold"
-                          title="Probability from the trained NBA Prop Brain, not market devig"
-                        >
+                        <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded bg-purple/15 border border-purple/30 text-purple text-[8px] font-bold">
                           <Brain className="w-2.5 h-2.5" />
                           BRAIN
                         </span>
                       )}
-                      {p.fairProb >= 60 && (
-                        <Flame className="w-3 h-3 text-danger" />
-                      )}
+                      {p.fairProb >= 60 && <Flame className="w-3 h-3 text-danger" />}
                       {p.bestAlt && p.bestAlt.edgePct >= 3 && (
                         <span
                           className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded bg-amber/15 border border-amber/30 text-amber text-[8px] font-bold"
-                          title={`Alt line ${p.bestAlt.side} ${p.bestAlt.line} @ ${p.bestAlt.price > 0 ? "+" : ""}${p.bestAlt.price} (${p.bestAlt.bookmaker}) — +${p.bestAlt.edgePct}% edge`}
+                          title={`Alt ${p.bestAlt.side} ${p.bestAlt.line} @ ${p.bestAlt.price > 0 ? "+" : ""}${p.bestAlt.price} (${p.bestAlt.bookmaker})`}
                         >
                           ALT {p.bestAlt.side === "over" ? "O" : "U"}{p.bestAlt.line} +{p.bestAlt.edgePct}%
                         </span>
                       )}
                     </div>
-                    <p className="text-[10px] text-mercury/60 truncate">
-                      {p.bookmaker} · {p.fairProb}% {p.usesBrain ? "brain" : "fair"}
-                      {p.projectedValue != null && p.usesBrain && ` · proj ${p.projectedValue}`}
-                      {" · "}
-                      <span className={p.evPercentage > 0 ? "text-neon" : "text-mercury/60"}>+{p.evPercentage}% edge</span>
-                    </p>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <span className="text-xs sm:text-sm font-mono font-bold text-silver">
