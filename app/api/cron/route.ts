@@ -82,15 +82,86 @@ export async function GET(req: Request) {
 
     // ── Track Record: settle yesterday's logged picks ──
     let trackSettled = 0;
+    const settleGames = completedGames.map(g => ({
+      homeTeam: g.homeTeam ?? "", awayTeam: g.awayTeam ?? "",
+      homeAbbrev: g.homeAbbrev ?? "", awayAbbrev: g.awayAbbrev ?? "",
+      homeScore: g.homeScore ?? 0, awayScore: g.awayScore ?? 0,
+    }));
     try {
-      const settleGames = completedGames.map(g => ({
-        homeTeam: g.homeTeam ?? "", awayTeam: g.awayTeam ?? "",
-        homeAbbrev: g.homeAbbrev ?? "", awayAbbrev: g.awayAbbrev ?? "",
-        homeScore: g.homeScore ?? 0, awayScore: g.awayScore ?? 0,
-      }));
       const { settled } = await settlePendingPicks(settleGames);
       trackSettled = settled;
     } catch (e) { console.error("track settle error:", e); }
+
+    // ── User Bets: auto-settle every user's pending bets ──
+    // Runs whenever there are completed games + gated by env flag for safety
+    let userBetsSettled = { users: 0, bets: 0 };
+    if (process.env.BET_AUTOSETTLE_ENABLED === "1" && completedGames.length > 0) {
+      try {
+        const { supabaseAdmin } = await import("@/lib/supabase/server-auth");
+        const { gradeBet } = await import("@/lib/bot/bet-grader");
+        if (supabaseAdmin) {
+          const { data: userRows } = await supabaseAdmin
+            .from("user_state")
+            .select("user_id,value")
+            .eq("key", "betHistory");
+
+          for (const row of userRows ?? []) {
+            const bets: any[] = Array.isArray(row.value) ? row.value : [];
+            const pending = bets.filter(b => b.result === "pending");
+            if (pending.length === 0) continue;
+
+            let changed = 0;
+            for (const bet of bets) {
+              if (bet.result !== "pending") continue;
+              const outcome = gradeBet(bet, settleGames);
+              if (outcome.result === "pending") continue;
+              bet.result = outcome.result;
+              bet.payout = outcome.payout;
+              bet.settledAt = outcome.settledAt;
+              bet.settleReason = outcome.reason;
+              changed++;
+            }
+            if (changed === 0) continue;
+
+            // Recompute bankroll totals off the full bet history
+            const { data: bankrollRow } = await supabaseAdmin
+              .from("user_state")
+              .select("value")
+              .eq("user_id", row.user_id)
+              .eq("key", "bankroll")
+              .single();
+            const br: any = bankrollRow?.value ?? { bankroll: 5000, startingBankroll: 5000 };
+            const starting = Number(br.startingBankroll ?? br.bankroll ?? 5000);
+            const wins = bets.filter(b => b.result === "win").length;
+            const losses = bets.filter(b => b.result === "loss").length;
+            const pushes = bets.filter(b => b.result === "push").length;
+            const totalStaked = bets.reduce((s, b) => s + (Number(b.stake) || 0), 0);
+            const totalReturns = bets.reduce((s, b) => s + (Number(b.payout) || 0), 0);
+            const currentBankroll = starting + totalReturns - totalStaked;
+            const newBankroll = {
+              ...br,
+              startingBankroll: starting,
+              currentBankroll: Math.round(currentBankroll * 100) / 100,
+              totalBets: bets.length,
+              totalStaked: Math.round(totalStaked * 100) / 100,
+              totalReturns: Math.round(totalReturns * 100) / 100,
+              wins, losses, pushes,
+              roi: totalStaked > 0 ? Math.round(((currentBankroll - starting) / totalStaked) * 10000) / 100 : 0,
+            };
+
+            await supabaseAdmin.from("user_state").upsert({
+              user_id: row.user_id, key: "betHistory", value: bets,
+            });
+            await supabaseAdmin.from("user_state").upsert({
+              user_id: row.user_id, key: "bankroll", value: newBankroll,
+            });
+
+            userBetsSettled.users++;
+            userBetsSettled.bets += changed;
+          }
+        }
+      } catch (e) { console.error("user bet settle error:", e); }
+    }
 
     // ── Auto-generate today's smart picks for all users ──
     // Runs in the morning hours (7-11 AM ET = 11-15 UTC) so picks are ready for the day
@@ -254,6 +325,8 @@ export async function GET(req: Request) {
       timestamp: new Date().toISOString(),
       mlb: { total: games.length, live, final, pre, completedToday: completedGames.length },
       nbaProps: { ...nbaAudit, ghostCommitted: nbaGhostCommitted },
+      trackRecord: { settled: trackSettled },
+      userBets: userBetsSettled,
     });
   } catch (error: any) {
     return NextResponse.json({ ok: false, error: error.message }, { status: 500 });

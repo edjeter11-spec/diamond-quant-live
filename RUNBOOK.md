@@ -126,7 +126,30 @@ Books without codes fall back to plain deep links (no loss). Adding
 codes is risk-free — costs nothing, potentially pays $50–$500 per
 user who deposits via your link.
 
-## 9. Things NOT live yet (by design)
+## 9. Auto-settle user bets
+
+Bets placed by users (via Snap & Sync screenshot import, PickCard
+"Log $100", Floating Parlay chip "Place Bet", or the manual BetSlip)
+are auto-graded by the cron when matching games finish. Bankroll
+updates and a toast fires on the user's next visit summarizing wins
+/losses/cash net.
+
+Gated behind a Vercel env flag so you can toggle off if it misbehaves:
+
+```
+BET_AUTOSETTLE_ENABLED = 1
+```
+
+Omit or set to `0` to disable. Cron still grades the public track
+record + bot's own picks regardless.
+
+Graded markets: moneyline, total (over/under), spread/run line.
+Parlays: ALL legs must win; any leg loss = parlay loss; any leg push
+= whole parlay pushes. Player props stay pending (insufficient data
+from final scores alone — SnapSync auto-detects status from the
+screenshot or user can still manually settle from the Bankroll tab).
+
+## 10. Things NOT live yet (by design)
 
 - Email daily recap (needs a transactional email provider like Resend — not wired)
 - Server-side push triggers (SW ready, server trigger left for manual wiring)

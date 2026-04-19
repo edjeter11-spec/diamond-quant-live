@@ -105,6 +105,15 @@ export default function BankrollTracker() {
               {isProfit ? "+" : ""}{profitLoss.toFixed(2)} ({bankroll.roi.toFixed(1)}% ROI)
             </span>
           </div>
+          {/* Pending exposure chip — at-risk amount on unsettled bets */}
+          {pendingBets.length > 0 && (
+            <div className="inline-flex items-center gap-1.5 mt-2 px-2.5 py-1 rounded-full bg-amber/10 border border-amber/30">
+              <Zap className="w-3 h-3 text-amber" />
+              <span className="text-[10px] font-mono text-amber">
+                ${pendingBets.reduce((s, b) => s + (b.stake ?? 0), 0).toFixed(2)} at risk · {pendingBets.length} pending · auto-settles when games end
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Stats Grid */}

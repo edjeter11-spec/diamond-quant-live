@@ -133,7 +133,7 @@ interface AppState {
 }
 
 // Cloud hydration helper — tries user-scoped first, falls back to global
-async function hydrateFromCloud(set: any) {
+async function hydrateFromCloud(set: any, currentBetHistory: any[] = []) {
   try {
     const { userGetAll } = await import("@/lib/supabase/user-sync");
     const userData = await userGetAll();
@@ -142,6 +142,31 @@ async function hydrateFromCloud(set: any) {
       if (userData.bankroll) updates.bankroll = userData.bankroll;
       if (userData.betHistory) updates.betHistory = userData.betHistory;
       if (userData.savedParlays) updates.savedParlays = userData.savedParlays;
+      // Detect auto-settled bets vs local snapshot — fire a toast summarizing
+      if (userData.betHistory && currentBetHistory.length > 0 && typeof window !== "undefined") {
+        const oldById = new Map(currentBetHistory.map((b: any) => [b.id, b]));
+        let wins = 0, losses = 0, pushes = 0, netCents = 0;
+        for (const bet of userData.betHistory as any[]) {
+          const prev = oldById.get(bet.id);
+          if (prev && prev.result === "pending" && bet.result !== "pending" && bet.settledAt) {
+            if (bet.result === "win") { wins++; netCents += Math.round(((bet.payout ?? 0) - (bet.stake ?? 0)) * 100); }
+            else if (bet.result === "loss") { losses++; netCents -= Math.round((bet.stake ?? 0) * 100); }
+            else if (bet.result === "push") pushes++;
+          }
+        }
+        const total = wins + losses + pushes;
+        if (total > 0) {
+          const net = netCents / 100;
+          const netStr = net >= 0 ? `+$${net.toFixed(2)}` : `-$${Math.abs(net).toFixed(2)}`;
+          window.dispatchEvent(new CustomEvent("dq-toast", {
+            detail: {
+              tone: net >= 0 ? "good" : "warn",
+              message: `${total} bet${total > 1 ? "s" : ""} settled`,
+              sub: `${wins}W ${losses}L${pushes ? ` ${pushes}P` : ""} · ${netStr}`,
+            },
+          }));
+        }
+      }
       if (Object.keys(updates).length > 0) { set(updates); return; }
     }
     const { cloudGet } = await import("@/lib/supabase/client");
@@ -194,8 +219,10 @@ export const useStore = create<AppState>((set, get) => ({
     const oddsSnapshots = loadFromStorage<OddsSnapshot[]>("dq_oddsSnapshots", []);
     set({ bankroll, betHistory, savedParlays, oddsSnapshots });
 
-    // Then try cloud (async, may override with newer data)
-    hydrateFromCloud(set);
+    // Then try cloud (async, may override with newer data). Pass current
+    // betHistory so the hydration helper can detect newly-settled bets
+    // and fire a summary toast.
+    hydrateFromCloud(set, betHistory);
   },
 
   // UI Actions
