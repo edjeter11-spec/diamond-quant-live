@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Users, ArrowUpRight, ArrowDownRight, Flame, ChevronRight, ChevronDown } from "lucide-react";
+import { Users, ArrowUpRight, ArrowDownRight, Flame, ChevronRight, ChevronDown, Brain } from "lucide-react";
 import { americanToDecimal } from "@/lib/model/kelly";
 import { useStore } from "@/lib/store";
 import { usePremium } from "@/lib/hooks/usePremium";
@@ -19,8 +19,14 @@ interface RawProp {
   gameTime?: string;
   bestOver?: { price: number; bookmaker: string };
   bestUnder?: { price: number; bookmaker: string };
-  fairOverProb: number;  // 0-100
-  fairUnderProb: number; // 0-100
+  fairOverProb: number;  // 0-100 — market devig
+  fairUnderProb: number; // 0-100 — market devig
+  // Brain projection — only set for NBA when the brain has opinion
+  brainOverProb?: number;       // 0-100 from projectProp
+  brainUnderProb?: number;      // 0-100
+  brainSide?: "over" | "under";
+  brainConfidence?: number;     // 0-100
+  brainProjectedValue?: number;
   injuryStatus?: "Out" | "Doubtful" | "Questionable" | "Probable" | "Day-To-Day";
 }
 
@@ -34,10 +40,12 @@ interface PropPick {
   market: string;
   odds: number;
   bookmaker: string;
-  fairProb: number;      // 0-100
-  evPercentage: number;  // edge over implied
+  fairProb: number;      // 0-100 — used for ranking (brain or market)
+  evPercentage: number;  // edge over implied (always vs market devig)
   score: number;
   label: string;         // "Points", "Hits", etc.
+  usesBrain?: boolean;   // true when probability came from the brain, not devig
+  projectedValue?: number; // brain's projected stat (NBA only)
 }
 
 const MARKET_LABEL: Record<string, string> = {
@@ -68,15 +76,24 @@ function americanImplied(odds: number): number {
 function scoreProp(side: "over" | "under", prop: RawProp): PropPick | null {
   const best = side === "over" ? prop.bestOver : prop.bestUnder;
   if (!best?.price) return null;
-  const fair = (side === "over" ? prop.fairOverProb : prop.fairUnderProb) ?? 0;
+
+  // Prefer brain probability when present (NBA only); fall back to market devig.
+  const brainFair = side === "over" ? prop.brainOverProb : prop.brainUnderProb;
+  const marketFair = side === "over" ? prop.fairOverProb : prop.fairUnderProb;
+  const usesBrain = typeof brainFair === "number" && brainFair > 0;
+  const fair = usesBrain ? brainFair! : (marketFair ?? 0);
+
   // Only hard-skip true coinflips; we want a populated board for today's slate
   if (fair < 50) return null;
 
   const implied = americanImplied(best.price) * 100;
-  const ev = fair - implied; // edge vs market (can be negative)
+  // EV always measured against market implied (that's what you actually bet into)
+  const ev = fair - implied;
 
   const boost = side === "over" ? OVER_DISPLAY_BOOST : 0;
-  const score = (fair - 50) + ev * 0.5 + boost;
+  // Slight score bonus when brain is behind the pick — brain picks go higher
+  const brainBonus = usesBrain ? 0.5 : 0;
+  const score = (fair - 50) + ev * 0.5 + boost + brainBonus;
 
   return {
     key: `${prop.market}-${prop.playerName}-${side}`,
@@ -92,6 +109,8 @@ function scoreProp(side: "over" | "under", prop: RawProp): PropPick | null {
     evPercentage: Math.round(ev * 10) / 10,
     score,
     label: MARKET_LABEL[prop.market] ?? prop.market,
+    usesBrain,
+    projectedValue: prop.brainProjectedValue,
   };
 }
 
@@ -234,12 +253,24 @@ export default function TodayPropPicks({
                         {p.playerName} {p.side === "over" ? "Over" : "Under"} {p.line}
                       </p>
                       <span className="text-[9px] font-bold uppercase text-mercury/50 tracking-wider">{p.label}</span>
+                      {p.usesBrain && (
+                        <span
+                          className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded bg-purple/15 border border-purple/30 text-purple text-[8px] font-bold"
+                          title="Probability from the trained NBA Prop Brain, not market devig"
+                        >
+                          <Brain className="w-2.5 h-2.5" />
+                          BRAIN
+                        </span>
+                      )}
                       {p.fairProb >= 60 && (
                         <Flame className="w-3 h-3 text-danger" />
                       )}
                     </div>
                     <p className="text-[10px] text-mercury/60 truncate">
-                      {p.bookmaker} · {p.fairProb}% fair · <span className={p.evPercentage > 0 ? "text-neon" : "text-mercury/60"}>+{p.evPercentage}% edge</span>
+                      {p.bookmaker} · {p.fairProb}% {p.usesBrain ? "brain" : "fair"}
+                      {p.projectedValue != null && p.usesBrain && ` · proj ${p.projectedValue}`}
+                      {" · "}
+                      <span className={p.evPercentage > 0 ? "text-neon" : "text-mercury/60"}>+{p.evPercentage}% edge</span>
                     </p>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">

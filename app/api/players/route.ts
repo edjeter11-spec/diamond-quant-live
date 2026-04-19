@@ -87,11 +87,21 @@ export async function GET(req: Request) {
 
     const grouped = groupByPlayer(allProps);
 
-    // Augment NBA props with playerId (headshots) + injuryStatus (filter bad props)
+    // Augment NBA props with:
+    //   - playerId (for headshots)
+    //   - injuryStatus (filter out OUT/DOUBTFUL)
+    //   - brain projection (probability/side/confidence from the trained brain,
+    //     not the market devig — surfaces brain's value on the Board)
     if (sport === "basketball_nba" && grouped.length > 0) {
       try {
         const { searchNBAPlayer } = await import("@/lib/nba/player-stats");
         const { isPlayerInjured } = await import("@/lib/nba/injuries");
+        const { loadNbaPropBrainFromCloud } = await import("@/lib/bot/nba-prop-brain");
+        const { projectProp } = await import("@/lib/bot/nba-prop-projector");
+
+        // Load the brain once for the whole batch
+        const brain = await loadNbaPropBrainFromCloud().catch(() => null);
+        const weights = brain?.weights;
 
         await Promise.all(
           grouped.map(async (g: any) => {
@@ -104,6 +114,32 @@ export async function GET(req: Request) {
               if (injury) {
                 g.injuryStatus = injury.status;
                 g.injuryNote = injury.shortComment;
+              }
+
+              // Brain projection — runs only if we have stats + weights
+              if (p && weights) {
+                // Determine if player's team is home from prop.team ("Away @ Home")
+                const teamStr: string = g.team ?? "";
+                const atIdx = teamStr.indexOf(" @ ");
+                const homeTeam = atIdx >= 0 ? teamStr.slice(atIdx + 3) : "";
+                const isHome = homeTeam.toLowerCase().includes((p.teamAbbrev ?? "").toLowerCase()) ||
+                               homeTeam.toLowerCase().includes((p.lastName ?? "").toLowerCase() ? "__disabled__" : "__disabled__");
+
+                const projection = projectProp(
+                  { ppg: p.ppg, rpg: p.rpg, apg: p.apg },
+                  g.market,
+                  g.line,
+                  weights,
+                  { isHome, isB2B: false, leagueAvgTotal: 224 },
+                );
+                g.brainSide = projection.side;
+                // Store both sides as percentages (0-100) so the UI can compare
+                // against fairOverProb/fairUnderProb which are also 0-100.
+                const probPct = projection.probability * 100;
+                g.brainOverProb = projection.side === "over" ? probPct : 100 - probPct;
+                g.brainUnderProb = projection.side === "under" ? probPct : 100 - probPct;
+                g.brainConfidence = projection.confidence;
+                g.brainProjectedValue = projection.projectedValue;
               }
             } catch {}
           })
