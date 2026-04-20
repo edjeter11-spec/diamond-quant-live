@@ -94,41 +94,41 @@ export default function PicksBoard() {
     }).catch(() => { setModelPicks([]); });
   }, [isNBA]); // re-fetch when sport changes
 
-  // Fetch props — MLB: strikeouts (shown in section). NBA: pts/reb/ast for parlay mixing.
+  // Fetch props progressively — render as each market lands rather than
+  // waiting for the slowest one. Feels instant on phone + desktop.
   useEffect(() => {
     let cancelled = false;
     setPropsLoading(true);
-    if (isNBA) {
-      Promise.all([
-        fetch("/api/players?market=player_points&sport=basketball_nba").then(r => r.json()).catch(() => ({ props: [] })),
-        fetch("/api/players?market=player_rebounds&sport=basketball_nba").then(r => r.json()).catch(() => ({ props: [] })),
-        fetch("/api/players?market=player_assists&sport=basketball_nba").then(r => r.json()).catch(() => ({ props: [] })),
-      ]).then(([pts, reb, ast]) => {
-        if (cancelled) return;
-        setPropsData({
-          player_points: pts.props ?? [],
-          player_rebounds: reb.props ?? [],
-          player_assists: ast.props ?? [],
-        });
-        setPropsLoading(false);
-      });
-    } else {
-      Promise.all([
-        fetch("/api/players?market=pitcher_strikeouts").then(r => r.json()).catch(() => ({ props: [] })),
-        fetch("/api/players?market=batter_hits").then(r => r.json()).catch(() => ({ props: [] })),
-        fetch("/api/players?market=batter_home_runs").then(r => r.json()).catch(() => ({ props: [] })),
-        fetch("/api/players?market=batter_total_bases").then(r => r.json()).catch(() => ({ props: [] })),
-      ]).then(([ks, hits, hrs, tb]) => {
-        if (cancelled) return;
-        setPropsData({
-          pitcher_strikeouts: ks.props ?? [],
-          batter_hits: hits.props ?? [],
-          batter_home_runs: hrs.props ?? [],
-          batter_total_bases: tb.props ?? [],
-        });
-        setPropsLoading(false);
-      });
-    }
+    setPropsData({});
+    const markets = isNBA
+      ? [
+          { key: "player_points", url: "/api/players?market=player_points&sport=basketball_nba" },
+          { key: "player_rebounds", url: "/api/players?market=player_rebounds&sport=basketball_nba" },
+          { key: "player_assists", url: "/api/players?market=player_assists&sport=basketball_nba" },
+        ]
+      : [
+          { key: "pitcher_strikeouts", url: "/api/players?market=pitcher_strikeouts" },
+          { key: "batter_hits", url: "/api/players?market=batter_hits" },
+          { key: "batter_home_runs", url: "/api/players?market=batter_home_runs" },
+          { key: "batter_total_bases", url: "/api/players?market=batter_total_bases" },
+        ];
+
+    let firstLanded = false;
+    const fetches = markets.map((m) =>
+      fetch(m.url)
+        .then((r) => r.json())
+        .catch(() => ({ props: [] }))
+        .then((data) => {
+          if (cancelled) return;
+          setPropsData((prev) => ({ ...prev, [m.key]: data.props ?? [] }));
+          if (!firstLanded) {
+            firstLanded = true;
+            setPropsLoading(false);
+          }
+        }),
+    );
+    Promise.all(fetches).then(() => { if (!cancelled) setPropsLoading(false); });
+
     return () => { cancelled = true; };
   }, [isNBA]);
 

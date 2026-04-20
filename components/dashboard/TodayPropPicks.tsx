@@ -148,12 +148,14 @@ export default function TodayPropPicks({
         if (!prop.playerName) continue;
         if (prop.injuryStatus === "Out" || prop.injuryStatus === "Doubtful") continue;
 
-        // Dead-simple side pick: whichever side has the better market devig
-        // (or force Over for HR / 0.5 lines where Under is meaningless).
+        // Side pick with Over preference: when both sides are within the
+        // tiebreak window, pick Over. Under still wins when the edge is
+        // clearly on that side. HR / 0.5 lines always force Over.
         const marketOver = prop.fairOverProb ?? 50;
         const marketUnder = prop.fairUnderProb ?? 50;
         const forceOver = OVER_ONLY_MARKETS.has(prop.market);
-        const side: "over" | "under" = forceOver || marketOver >= marketUnder ? "over" : "under";
+        const side: "over" | "under" =
+          forceOver || marketOver >= marketUnder - OVER_BIAS_TIE_BREAK ? "over" : "under";
 
         const best = side === "over" ? prop.bestOver : prop.bestUnder;
         if (!best?.price) continue; // truly un-priced → skip
@@ -179,7 +181,7 @@ export default function TodayPropPicks({
           bookmaker: best.bookmaker,
           fairProb: Math.round(fair * 10) / 10,
           evPercentage: Math.round(ev * 10) / 10,
-          score: (fair - 50) + ev * 0.5 + (usesBrain ? 0.5 : 0),
+          score: (fair - 50) + ev * 0.5 + (usesBrain ? 0.5 : 0) + (side === "over" ? OVER_DISPLAY_BOOST : 0),
           label: MARKET_LABEL[prop.market] ?? prop.market,
           usesBrain,
           projectedValue: prop.brainProjectedValue,

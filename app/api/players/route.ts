@@ -34,6 +34,14 @@ const ALT_MARKETS: Record<string, string> = {
 
 const BASE_URL = "https://api.the-odds-api.com/v4";
 
+// Global CDN cache so every user hits the same warm response at the edge.
+// First hit of the day primes; everyone after is instant.
+const CDN_CACHE = "public, s-maxage=300, stale-while-revalidate=1800";
+
+function todayKey() {
+  return new Date().toISOString().split("T")[0];
+}
+
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const market = searchParams.get("market") || "pitcher_strikeouts";
@@ -43,10 +51,21 @@ export async function GET(req: Request) {
   const cacheKey = `props_v3_${sport}_${market}`;
   const cached = getCached(cacheKey, CACHE_TTL.PROPS);
   if (cached) {
-    return NextResponse.json(cached, {
-      headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=600" },
-    });
+    return NextResponse.json(cached, { headers: { "Cache-Control": CDN_CACHE } });
   }
+
+  // Cold server cache — check Supabase snapshot next (shared across serverless
+  // instances, persists across deploys). Lets a newly-spun Vercel region serve
+  // instantly instead of hitting the Odds API cold.
+  const snapshotKey = `props_snap_${sport}_${market}_${todayKey()}`;
+  try {
+    const { cloudGet } = await import("@/lib/supabase/client");
+    const snapshot = await cloudGet<any>(snapshotKey, null);
+    if (snapshot && Array.isArray(snapshot.props) && snapshot.props.length > 0) {
+      setCache(cacheKey, snapshot); // warm the server cache too
+      return NextResponse.json(snapshot, { headers: { "Cache-Control": CDN_CACHE } });
+    }
+  } catch {}
 
   const apiKey = getApiKey();
   if (!apiKey) {
@@ -203,13 +222,14 @@ export async function GET(req: Request) {
 
     if (grouped.length > 0) {
       setCache(cacheKey, response);
+      // Persist to Supabase so any serverless cold start or new region can
+      // serve the same picks instantly. Fire-and-forget.
+      try {
+        const { cloudSet } = await import("@/lib/supabase/client");
+        cloudSet(snapshotKey, response).catch(() => {});
+      } catch {}
     }
-    return NextResponse.json(response, {
-      headers: {
-        // Vercel edge CDN: fresh for 60s, serve stale up to 10min while re-fetching
-        "Cache-Control": "public, s-maxage=60, stale-while-revalidate=600",
-      },
-    });
+    return NextResponse.json(response, { headers: { "Cache-Control": CDN_CACHE } });
   } catch (error) {
     console.error("Props API error:", error);
     const stale = getCached(cacheKey, CACHE_TTL.PROPS * 5);
