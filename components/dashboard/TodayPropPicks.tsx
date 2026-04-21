@@ -278,6 +278,29 @@ export default function TodayPropPicks({
   const lockedCount = picks.length - visible.length;
   const overCount = picks.filter(p => p.side === "over").length;
 
+  // Running W/L tally across all visible picks — updates live as games grade.
+  const tally = visible.reduce(
+    (acc, p) => {
+      const rows = resultsMap[p.playerName.toLowerCase()] ?? [];
+      const row = rows.find((r) => r.market === p.market);
+      if (!row) return acc;
+      const isFinal = row.gameStatus === "final";
+      const actual = row.actual;
+      const hit = (p.side === "over" && actual > p.line) || (p.side === "under" && actual < p.line);
+      const push = actual === p.line;
+      if (isFinal) {
+        if (push) acc.pushes++;
+        else if (hit) acc.wins++;
+        else acc.losses++;
+      } else if (row.gameStatus === "live") {
+        acc.live++;
+      }
+      return acc;
+    },
+    { wins: 0, losses: 0, pushes: 0, live: 0 },
+  );
+  const hasTally = tally.wins + tally.losses + tally.pushes + tally.live > 0;
+
   return (
     <div className="glass rounded-xl overflow-hidden border border-purple/15">
       {/* Header */}
@@ -294,6 +317,19 @@ export default function TodayPropPicks({
           <p className="text-[9px] text-mercury/60 mt-0.5">
             {picks.length} picks · {overCount} Over{overCount !== 1 ? "s" : ""} · ranked by edge
           </p>
+          {hasTally && (
+            <div className="flex items-center gap-2 mt-1 text-[10px] font-semibold">
+              <span className="text-neon">{tally.wins}W</span>
+              <span className="text-danger">{tally.losses}L</span>
+              {tally.pushes > 0 && <span className="text-mercury/70">{tally.pushes}P</span>}
+              {tally.live > 0 && <span className="text-electric animate-pulse">{tally.live} live</span>}
+              {tally.wins + tally.losses > 0 && (
+                <span className="text-silver">
+                  {Math.round((tally.wins / (tally.wins + tally.losses)) * 100)}%
+                </span>
+              )}
+            </div>
+          )}
         </div>
         {sport === "nba" && (
           <Link
