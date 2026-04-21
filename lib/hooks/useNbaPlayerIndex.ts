@@ -115,3 +115,68 @@ export function useWarmNbaPlayerIndex(): void {
     loadIndex().catch(() => {});
   }, []);
 }
+
+// ── MLB parallel ──────────────────────────────────────────
+const MLB_CACHE_KEY = "dq_mlb_player_index_v1";
+const MLB_ENDPOINT = "/api/mlb-player-index";
+let mlbMemoryCache: { byNameLower: Map<string, number> } | null = null;
+let mlbInflight: Promise<Map<string, number>> | null = null;
+
+async function loadMlbIndex(): Promise<Map<string, number>> {
+  if (mlbMemoryCache) return mlbMemoryCache.byNameLower;
+  if (mlbInflight) return mlbInflight;
+  mlbInflight = (async () => {
+    if (typeof window !== "undefined") {
+      try {
+        const raw = localStorage.getItem(MLB_CACHE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw) as { ts: number; entries: PlayerEntry[] };
+          if (parsed.ts && Date.now() - parsed.ts < CACHE_TTL_MS && parsed.entries?.length > 0) {
+            const byNameLower = buildMap(parsed.entries);
+            mlbMemoryCache = { byNameLower };
+            return byNameLower;
+          }
+        }
+      } catch {}
+    }
+    try {
+      const res = await fetch(MLB_ENDPOINT);
+      if (!res.ok) return new Map();
+      const data = await res.json();
+      const entries: PlayerEntry[] = data?.players ?? [];
+      if (entries.length === 0) return new Map();
+      if (typeof window !== "undefined") {
+        try { localStorage.setItem(MLB_CACHE_KEY, JSON.stringify({ ts: Date.now(), entries })); } catch {}
+      }
+      const byNameLower = buildMap(entries);
+      mlbMemoryCache = { byNameLower };
+      return byNameLower;
+    } catch {
+      return new Map();
+    } finally {
+      mlbInflight = null;
+    }
+  })();
+  return mlbInflight;
+}
+
+export function useMlbPlayerId(name: string | undefined | null): number | null {
+  const [id, setId] = useState<number | null>(null);
+  useEffect(() => {
+    if (!name) { setId(null); return; }
+    let cancelled = false;
+    loadMlbIndex().then((map) => {
+      if (cancelled) return;
+      const key = name.toLowerCase().trim();
+      let found = map.get(key);
+      if (!found) {
+        const parts = key.split(/\s+/);
+        const last = parts[parts.length - 1];
+        if (last) found = map.get(last);
+      }
+      setId(found ?? null);
+    });
+    return () => { cancelled = true; };
+  }, [name]);
+  return id;
+}

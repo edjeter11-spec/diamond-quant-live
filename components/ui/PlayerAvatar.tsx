@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useNbaPlayerId } from "@/lib/hooks/useNbaPlayerIndex";
+import { useNbaPlayerId, useMlbPlayerId } from "@/lib/hooks/useNbaPlayerIndex";
 
 interface PlayerAvatarProps {
   name: string;
@@ -31,10 +31,10 @@ function buildHeadshotUrl(playerId: string | number, sport: "mlb" | "nba"): stri
 export default function PlayerAvatar({ name, photo, playerId, sport, size = 20, className = "" }: PlayerAvatarProps) {
   const [imgError, setImgError] = useState(false);
 
-  // Auto-resolve NBA player id from the shared client-side index when none was passed.
-  // Returns null for MLB or missing name — no-op cost.
+  // Auto-resolve player id from the shared client-side index when none was passed.
   const autoNbaId = useNbaPlayerId(sport === "nba" ? name : null);
-  const effectiveId = playerId ?? (sport === "nba" ? autoNbaId : null);
+  const autoMlbId = useMlbPlayerId(sport === "mlb" ? name : null);
+  const effectiveId = playerId ?? (sport === "nba" ? autoNbaId : sport === "mlb" ? autoMlbId : null);
 
   // Prefer an explicit photo URL. Fall back to auto-built URL when we have id + sport.
   const resolved = photo ?? (effectiveId && sport ? buildHeadshotUrl(effectiveId, sport) : null);
