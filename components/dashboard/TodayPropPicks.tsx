@@ -37,6 +37,7 @@ interface RawProp {
     fairProb: number;
     edgePct: number;
   } | null;
+  isSynthesized?: boolean;
 }
 
 interface PropPick {
@@ -56,6 +57,7 @@ interface PropPick {
   usesBrain?: boolean;   // true when probability came from the brain, not devig
   projectedValue?: number; // brain's projected stat (NBA only)
   bestAlt?: RawProp["bestAlt"];
+  isSynthesized?: boolean;
 }
 
 const MARKET_LABEL: Record<string, string> = {
@@ -185,6 +187,7 @@ export default function TodayPropPicks({
         usesBrain,
         projectedValue: prop.brainProjectedValue,
         bestAlt: prop.bestAlt ?? null,
+        isSynthesized: prop.isSynthesized,
       };
     };
 
@@ -420,6 +423,14 @@ export default function TodayPropPicks({
                         <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded bg-purple/15 border border-purple/30 text-purple text-[8px] font-bold">
                           <Brain className="w-2.5 h-2.5" />
                           BRAIN
+                        </span>
+                      )}
+                      {p.isSynthesized && (
+                        <span
+                          className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded bg-electric/15 border border-electric/30 text-electric text-[8px] font-bold"
+                          title="Projected pick — books haven't posted lines yet. Estimated from season stats + brain."
+                        >
+                          PROJECTED
                         </span>
                       )}
                       {p.fairProb >= 60 && <Flame className="w-3 h-3 text-danger" />}

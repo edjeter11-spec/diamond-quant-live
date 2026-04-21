@@ -48,7 +48,7 @@ export async function GET(req: Request) {
   const sport = searchParams.get("sport") || "baseball_mlb";
 
   // Check server cache (keyed by sport + market)
-  const cacheKey = `props_v4_${sport}_${market}`;
+  const cacheKey = `props_v5_${sport}_${market}`;
   const cached = getCached(cacheKey, CACHE_TTL.PROPS);
   if (cached) {
     return NextResponse.json(cached, { headers: { "Cache-Control": CDN_CACHE } });
@@ -142,7 +142,16 @@ export async function GET(req: Request) {
     );
     const allProps: any[] = perGameResults.flat();
 
-    const grouped = groupByPlayer(allProps);
+    let grouped = groupByPlayer(allProps);
+
+    // FALLBACK — when books haven't posted yet but games exist, synthesize
+    // "Brain projection" picks from the NBA player index + season stats so
+    // the board never goes dark 5h before tip-off.
+    if (grouped.length === 0 && sport === "basketball_nba" && events.length > 0 && market.startsWith("player_")) {
+      try {
+        grouped = await synthesizeNbaBrainPicks(market, events);
+      } catch (e) { console.error("nba synth error:", e); }
+    }
 
     // Augment NBA props with:
     //   - playerId (for headshots)
@@ -239,6 +248,7 @@ export async function GET(req: Request) {
           brainProjectedValue: g.brainProjectedValue,
           injuryStatus: g.injuryStatus,
           bestAlt: g.bestAlt,
+          isSynthesized: g.isSynthesized,
         }));
 
     const response = {
@@ -315,6 +325,110 @@ function getEtOffsetMinutes(d: Date): number {
   const hours = Number(m[1]);
   const mins = Number(m[2] ?? "0");
   return -(hours * 60 + Math.sign(hours) * mins);
+}
+
+// Build projected picks when no books have posted props yet.
+// Uses the NBA player index to find each team's top contributors,
+// runs them through the brain with the season avg as the implied line.
+async function synthesizeNbaBrainPicks(market: string, games: any[]): Promise<any[]> {
+  const statKey = market === "player_points" ? "ppg"
+    : market === "player_rebounds" ? "rpg"
+    : market === "player_assists" ? "apg" : "ppg";
+
+  // Pull the shared NBA player index
+  const base = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://diamond-quant-live.vercel.app";
+  const idxRes = await fetch(`${base}/api/nba-player-index`, { next: { revalidate: 3600 } });
+  if (!idxRes.ok) return [];
+  const idxData = await idxRes.json();
+  const allPlayers: any[] = idxData.players ?? [];
+
+  // Normalize team names in events → abbreviations
+  const { teamNameToAbbrev } = await import("@/lib/logos");
+  const abbrevsInGames = new Set<string>();
+  for (const g of games) {
+    const home = teamNameToAbbrev(g.home_team ?? "", "nba");
+    const away = teamNameToAbbrev(g.away_team ?? "", "nba");
+    if (home) abbrevsInGames.add(home);
+    if (away) abbrevsInGames.add(away);
+  }
+  if (abbrevsInGames.size === 0) return [];
+
+  // Enrich player entries with season stats (search each — cached)
+  const { searchNBAPlayer } = await import("@/lib/nba/player-stats");
+  const candidateNames: string[] = allPlayers
+    .filter((p) => abbrevsInGames.has((p.teamAbbrev ?? "").toUpperCase()))
+    .map((p) => `${p.firstName} ${p.lastName}`)
+    .slice(0, 60); // cap lookup count
+
+  const enriched = await Promise.all(
+    candidateNames.map((n) => searchNBAPlayer(n).catch(() => null)),
+  );
+  const withStats = enriched
+    .filter((p): p is NonNullable<typeof p> => !!p && Number((p as any)[statKey]) > 0)
+    .map((p: any) => ({
+      ...p,
+      stat: Number(p[statKey]),
+    }))
+    .sort((a, b) => b.stat - a.stat);
+
+  // Take top 3 per team
+  const perTeam = new Map<string, number>();
+  const chosen = [] as typeof withStats;
+  for (const p of withStats) {
+    const tm = (p.teamAbbrev ?? "").toUpperCase();
+    const c = perTeam.get(tm) ?? 0;
+    if (c >= 3) continue;
+    perTeam.set(tm, c + 1);
+    chosen.push(p);
+    if (chosen.length >= 12) break;
+  }
+
+  // Load brain for projections
+  const { loadNbaPropBrainFromCloud } = await import("@/lib/bot/nba-prop-brain");
+  const { projectProp } = await import("@/lib/bot/nba-prop-projector");
+  const brain = await loadNbaPropBrainFromCloud().catch(() => null);
+  const weights = brain?.weights;
+
+  // For each player, match to the game they're in and build a projected pick
+  return chosen.map((p: any) => {
+    const game = games.find((g) => {
+      const home = teamNameToAbbrev(g.home_team ?? "", "nba");
+      const away = teamNameToAbbrev(g.away_team ?? "", "nba");
+      return home === p.teamAbbrev || away === p.teamAbbrev;
+    });
+    const line = Math.round(p.stat * 2) / 2 - 0.5; // season avg minus a half-step for Over lean
+    const stats = { ppg: p.ppg ?? 0, rpg: p.rpg ?? 0, apg: p.apg ?? 0 };
+    let brainOverProb = 60, brainUnderProb = 40, brainSide: "over" | "under" = "over", brainConfidence = 60, brainProjectedValue = p.stat;
+    if (weights) {
+      const proj = projectProp(stats, market, line, weights, { isHome: false, isB2B: false, leagueAvgTotal: 224 });
+      const pct = proj.probability * 100;
+      brainSide = proj.side;
+      brainOverProb = proj.side === "over" ? pct : 100 - pct;
+      brainUnderProb = proj.side === "under" ? pct : 100 - pct;
+      brainConfidence = proj.confidence;
+      brainProjectedValue = proj.projectedValue;
+    }
+    return {
+      playerName: `${p.firstName} ${p.lastName}`,
+      playerId: p.id,
+      team: game ? `${game.away_team} @ ${game.home_team}` : "",
+      market,
+      line,
+      gameTime: game?.commence_time,
+      bestOver: { bookmaker: "Projected", price: -110 },
+      bestUnder: { bookmaker: "Projected", price: -110 },
+      fairOverProb: 50,
+      fairUnderProb: 50,
+      altLines: [],
+      bestAlt: null,
+      brainSide,
+      brainOverProb,
+      brainUnderProb,
+      brainConfidence,
+      brainProjectedValue,
+      isSynthesized: true,
+    };
+  });
 }
 
 function groupByPlayer(props: ReturnType<typeof parsePlayerProps>) {

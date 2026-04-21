@@ -404,17 +404,19 @@ export default function PicksBoard() {
 
   // Build all sections in one stable useMemo
   const { topLocks, longshots } = useMemo(() => {
-    // Detect Under-side total picks so we can cap them per section.
-    // Users bias heavily toward Overs; Unders should only surface when
-    // they're among the sharpest plays.
     const isUnderTotal = (p: Pick) => /\bunder\b/i.test(p.pick);
+    // Today's/live games ONLY — tomorrow's games are hidden while tonight
+    // has anything live or upcoming.
+    const todayOnly = combinedPicks.filter((p) => p.gameStatus === "live" || p.gameStatus === "pre");
+    const hasToday = todayOnly.length > 0;
+    const workingPool = hasToday ? todayOnly : combinedPicks;
 
     function takeUniqueWithOverBias(
       pool: Pick[],
       count: number,
       extraFilter?: (p: Pick) => boolean,
     ): Pick[] {
-      const maxUnders = Math.max(1, Math.floor(count / 4)); // ~25% cap
+      const maxUnders = Math.max(1, Math.floor(count / 4));
       const used = new Set<string>();
       const result: Pick[] = [];
       let underCount = 0;
@@ -431,8 +433,8 @@ export default function PicksBoard() {
       return result;
     }
     return {
-      topLocks: takeUniqueWithOverBias(combinedPicks, 6, (p) => p.confidence === "HIGH" || p.confidence === "MEDIUM"),
-      longshots: takeUniqueWithOverBias(combinedPicks, 5, (p) => p.odds >= 150),
+      topLocks: takeUniqueWithOverBias(workingPool, 6, (p) => p.confidence === "HIGH" || p.confidence === "MEDIUM"),
+      longshots: takeUniqueWithOverBias(workingPool, 5, (p) => p.odds >= 150),
     };
   }, [combinedPicks]);
 
