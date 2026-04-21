@@ -229,6 +229,12 @@ export default function TodayPropPicks({
         <div className="px-4 py-6 text-center">
           <p className="text-xs text-mercury/60">No {sport.toUpperCase()} player prop lines posted yet</p>
           <p className="text-[10px] text-mercury/40 mt-1">Books typically post props 4–8 hours before tip-off. Check back closer to game time.</p>
+          <button
+            onClick={() => { try { window.location.reload(); } catch {} }}
+            className="mt-3 inline-flex items-center gap-1 px-3 py-1.5 rounded bg-purple/10 border border-purple/25 text-purple text-[10px] font-semibold hover:bg-purple/20 transition-colors"
+          >
+            Force refresh
+          </button>
         </div>
       </div>
     );
