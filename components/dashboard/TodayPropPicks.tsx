@@ -142,64 +142,81 @@ export default function TodayPropPicks({
   const { isPremium } = usePremium();
 
   const picks = useMemo<PropPick[]>(() => {
-    const all: PropPick[] = [];
+    const build = (prop: RawProp, side: "over" | "under"): PropPick | null => {
+      const best = side === "over" ? prop.bestOver : prop.bestUnder;
+      if (!best?.price) return null;
+      const marketFair = side === "over" ? (prop.fairOverProb ?? 50) : (prop.fairUnderProb ?? 50);
+      const brainFair = side === "over" ? prop.brainOverProb : prop.brainUnderProb;
+      const usesBrain = typeof brainFair === "number" && brainFair > 0;
+      const fair = usesBrain ? brainFair! : marketFair;
+      const implied = americanImplied(best.price) * 100;
+      const ev = fair - implied;
+      return {
+        key: `${prop.market}-${prop.playerName}-${side}`,
+        playerName: prop.playerName,
+        playerId: prop.playerId,
+        team: prop.team,
+        side,
+        line: prop.line,
+        market: prop.market,
+        odds: best.price,
+        bookmaker: best.bookmaker,
+        fairProb: Math.round(fair * 10) / 10,
+        evPercentage: Math.round(ev * 10) / 10,
+        score: (fair - 50) + ev * 0.5 + (usesBrain ? 0.5 : 0),
+        label: MARKET_LABEL[prop.market] ?? prop.market,
+        usesBrain,
+        projectedValue: prop.brainProjectedValue,
+        bestAlt: prop.bestAlt ?? null,
+      };
+    };
+
+    // Score each prop's strongest side, but split pools so we can enforce
+    // an Over-majority board. Users want Overs; Unders only surface when
+    // they're clearly the better pick.
+    const overs: PropPick[] = [];
+    const unders: PropPick[] = [];
+    const seenPlayer = new Set<string>();
     for (const market of Object.keys(propsData)) {
       for (const prop of propsData[market] ?? []) {
         if (!prop.playerName) continue;
         if (prop.injuryStatus === "Out" || prop.injuryStatus === "Doubtful") continue;
+        if (seenPlayer.has(prop.playerName)) continue;
+        seenPlayer.add(prop.playerName);
 
-        // Side pick with Over preference: when both sides are within the
-        // tiebreak window, pick Over. Under still wins when the edge is
-        // clearly on that side. HR / 0.5 lines always force Over.
-        const marketOver = prop.fairOverProb ?? 50;
-        const marketUnder = prop.fairUnderProb ?? 50;
         const forceOver = OVER_ONLY_MARKETS.has(prop.market);
-        const side: "over" | "under" =
-          forceOver || marketOver >= marketUnder - OVER_BIAS_TIE_BREAK ? "over" : "under";
+        const tryOver = build(prop, "over");
+        const tryUnder = forceOver ? null : build(prop, "under");
 
-        const best = side === "over" ? prop.bestOver : prop.bestUnder;
-        if (!best?.price) continue; // truly un-priced → skip
-
-        const fair = side === "over" ? marketOver : marketUnder;
-        const implied = americanImplied(best.price) * 100;
-        const ev = fair - implied;
-
-        // Brain opinion is metadata only — it adds a badge + reasoning,
-        // never filters the row out.
-        const brainFair = side === "over" ? prop.brainOverProb : prop.brainUnderProb;
-        const usesBrain = typeof brainFair === "number" && brainFair > 0;
-
-        all.push({
-          key: `${prop.market}-${prop.playerName}-${side}`,
-          playerName: prop.playerName,
-          playerId: prop.playerId,
-          team: prop.team,
-          side,
-          line: prop.line,
-          market: prop.market,
-          odds: best.price,
-          bookmaker: best.bookmaker,
-          fairProb: Math.round(fair * 10) / 10,
-          evPercentage: Math.round(ev * 10) / 10,
-          score: (fair - 50) + ev * 0.5 + (usesBrain ? 0.5 : 0) + (side === "over" ? OVER_DISPLAY_BOOST : 0),
-          label: MARKET_LABEL[prop.market] ?? prop.market,
-          usesBrain,
-          projectedValue: prop.brainProjectedValue,
-          bestAlt: prop.bestAlt ?? null,
-        });
+        // Decide which side this player's best edge is on. Over wins ties
+        // within 3 points (stronger bias than before).
+        const pickSide = forceOver
+          ? "over"
+          : tryOver && tryUnder
+            ? tryOver.score >= tryUnder.score - 3 ? "over" : "under"
+            : tryOver ? "over" : "under";
+        const winner = pickSide === "over" ? tryOver : tryUnder;
+        if (!winner) continue;
+        if (pickSide === "over") overs.push(winner);
+        else unders.push(winner);
       }
     }
 
-    all.sort((a, b) => b.score - a.score);
-    const seen = new Set<string>();
-    const out: PropPick[] = [];
-    for (const p of all) {
-      if (seen.has(p.playerName)) continue;
-      seen.add(p.playerName);
-      out.push(p);
-      if (out.length >= 8) break;
-    }
-    return out;
+    overs.sort((a, b) => b.score - a.score);
+    unders.sort((a, b) => b.score - a.score);
+
+    // Build an 8-pick board weighted heavily Over: take up to 6 Overs, then
+    // at most 2 Unders — but only the strongest Unders. If we have fewer
+    // than 6 Overs, backfill with Unders so the board still fills.
+    const TARGET = 8;
+    const MAX_UNDERS = 2;
+    const out: PropPick[] = [...overs.slice(0, TARGET - MAX_UNDERS)];
+    const underSlots = Math.max(0, TARGET - out.length - 0);
+    out.push(...unders.slice(0, Math.min(MAX_UNDERS, underSlots)));
+    // Backfill remaining from leftover Overs first, then Unders
+    if (out.length < TARGET) out.push(...overs.slice(out.length - unders.slice(0, MAX_UNDERS).length, TARGET));
+    if (out.length < TARGET) out.push(...unders.slice(MAX_UNDERS, MAX_UNDERS + (TARGET - out.length)));
+    return out.slice(0, TARGET);
   }, [propsData]);
 
   if (loading) {

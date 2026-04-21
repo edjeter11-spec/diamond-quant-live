@@ -404,25 +404,35 @@ export default function PicksBoard() {
 
   // Build all sections in one stable useMemo
   const { topLocks, longshots } = useMemo(() => {
-    const usedIds = new Set<string>();
-    function takeUnique(pool: Pick[], count: number, extraFilter?: (p: Pick) => boolean): Pick[] {
+    // Detect Under-side total picks so we can cap them per section.
+    // Users bias heavily toward Overs; Unders should only surface when
+    // they're among the sharpest plays.
+    const isUnderTotal = (p: Pick) => /\bunder\b/i.test(p.pick);
+
+    function takeUniqueWithOverBias(
+      pool: Pick[],
+      count: number,
+      extraFilter?: (p: Pick) => boolean,
+    ): Pick[] {
+      const maxUnders = Math.max(1, Math.floor(count / 4)); // ~25% cap
+      const used = new Set<string>();
       const result: Pick[] = [];
+      let underCount = 0;
       for (const p of pool) {
-        // Normalize key to catch duplicates with slight text differences
         const key = p.pick.toLowerCase().replace(/\s+/g, " ").trim();
-        if (usedIds.has(key)) continue;
+        if (used.has(key)) continue;
         if (extraFilter && !extraFilter(p)) continue;
-        usedIds.add(key);
+        if (isUnderTotal(p) && underCount >= maxUnders) continue;
+        used.add(key);
         result.push(p);
+        if (isUnderTotal(p)) underCount++;
         if (result.length >= count) break;
       }
       return result;
     }
     return {
-      // Locks — highest-confidence across ANY market
-      topLocks: takeUnique(combinedPicks, 6, (p) => p.confidence === "HIGH" || p.confidence === "MEDIUM"),
-      // Longshots — plus-money value plays across ANY market
-      longshots: takeUnique(combinedPicks, 5, (p) => p.odds >= 150),
+      topLocks: takeUniqueWithOverBias(combinedPicks, 6, (p) => p.confidence === "HIGH" || p.confidence === "MEDIUM"),
+      longshots: takeUniqueWithOverBias(combinedPicks, 5, (p) => p.odds >= 150),
     };
   }, [combinedPicks]);
 
