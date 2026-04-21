@@ -85,14 +85,24 @@ export async function GET(req: Request) {
       if (!eventsRes.ok) throw new Error(`Events API error: ${eventsRes.status}`);
       const allEvents = await eventsRes.json();
 
-      // Only include games happening TODAY (sports day = 4 AM ET → 4 AM ET next day).
-      // This filter applies to both NBA and MLB props.
+      // Only include TONIGHT's games — upcoming or recently live. Finished
+      // games drop off after 4h so users don't see stale props. If nothing
+      // in today's window, fall through to tomorrow.
+      const now = Date.now();
       const { start: dayStart, end: dayEnd } = getSportsDayWindowET();
-      events = allEvents
-        .filter((e: any) => {
-          const gameTime = new Date(e.commence_time).getTime();
-          return gameTime >= dayStart && gameTime < dayEnd;
-        })
+      const inTodayWindow = (allEvents as any[]).filter((e: any) => {
+        const t = new Date(e.commence_time).getTime();
+        const startedRecently = t >= now - 4 * 60 * 60 * 1000; // ≤4h past tipoff
+        return t >= dayStart && t < dayEnd && startedRecently;
+      });
+      // If there's nothing live or upcoming today, roll forward to tomorrow.
+      const pool = inTodayWindow.length > 0
+        ? inTodayWindow
+        : (allEvents as any[]).filter((e: any) => {
+            const t = new Date(e.commence_time).getTime();
+            return t >= dayEnd && t < dayEnd + 36 * 60 * 60 * 1000;
+          });
+      events = pool
         .sort((a: any, b: any) => {
           // Soonest games first — they're most likely to have props posted
           return new Date(a.commence_time).getTime() - new Date(b.commence_time).getTime();
