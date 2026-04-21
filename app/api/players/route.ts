@@ -48,7 +48,7 @@ export async function GET(req: Request) {
   const sport = searchParams.get("sport") || "baseball_mlb";
 
   // Check server cache (keyed by sport + market)
-  const cacheKey = `props_v3_${sport}_${market}`;
+  const cacheKey = `props_v4_${sport}_${market}`;
   const cached = getCached(cacheKey, CACHE_TTL.PROPS);
   if (cached) {
     return NextResponse.json(cached, { headers: { "Cache-Control": CDN_CACHE } });
@@ -85,23 +85,15 @@ export async function GET(req: Request) {
       if (!eventsRes.ok) throw new Error(`Events API error: ${eventsRes.status}`);
       const allEvents = await eventsRes.json();
 
-      // Only include TONIGHT's games — upcoming or recently live. Finished
-      // games drop off after 4h so users don't see stale props. If nothing
-      // in today's window, fall through to tomorrow.
+      // Rolling window: games starting in the next 28 hours OR that started
+      // within the last 4 hours (still live / recently final). Handles every
+      // hour of the day — late-night, early morning, day games — without
+      // the calendar-day edge cases the old 4AM ET window had.
       const now = Date.now();
-      const { start: dayStart, end: dayEnd } = getSportsDayWindowET();
-      const inTodayWindow = (allEvents as any[]).filter((e: any) => {
+      const pool = (allEvents as any[]).filter((e: any) => {
         const t = new Date(e.commence_time).getTime();
-        const startedRecently = t >= now - 4 * 60 * 60 * 1000; // ≤4h past tipoff
-        return t >= dayStart && t < dayEnd && startedRecently;
+        return t >= now - 4 * 60 * 60 * 1000 && t <= now + 28 * 60 * 60 * 1000;
       });
-      // If there's nothing live or upcoming today, roll forward to tomorrow.
-      const pool = inTodayWindow.length > 0
-        ? inTodayWindow
-        : (allEvents as any[]).filter((e: any) => {
-            const t = new Date(e.commence_time).getTime();
-            return t >= dayEnd && t < dayEnd + 36 * 60 * 60 * 1000;
-          });
       events = pool
         .sort((a: any, b: any) => {
           // Soonest games first — they're most likely to have props posted
