@@ -156,7 +156,7 @@ export default function PlayerProps() {
     // DON'T clear existing props while loading — show stale data until new arrives
     setLoading(true);
     try {
-      const res = await fetch(`/api/players?market=${selectedMarket}&sport=${config.oddsApiKey}`);
+      const res = await fetch(`/api/players?market=${selectedMarket}&sport=${config.oddsApiKey}&full=1`);
       const data = await res.json();
       const newProps = data.props ?? [];
       // Only update if we actually got data (don't replace good data with empty)

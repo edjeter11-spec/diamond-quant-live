@@ -213,14 +213,40 @@ export async function GET(req: Request) {
       } catch {}
     }
 
+    // Strip heavy per-book arrays from the default response — they balloon
+    // payload 3-4x (110KB → 25KB) and mobile doesn't need them for the Board.
+    // Callers that want full book coverage pass ?full=1.
+    const wantsFull = searchParams.get("full") === "1";
+    const slim = wantsFull
+      ? grouped
+      : grouped.map((g: any) => ({
+          playerName: g.playerName,
+          playerId: g.playerId,
+          team: g.team,
+          market: g.market,
+          line: g.line,
+          gameTime: g.gameTime,
+          bestOver: g.bestOver,
+          bestUnder: g.bestUnder,
+          fairOverProb: g.fairOverProb,
+          fairUnderProb: g.fairUnderProb,
+          brainSide: g.brainSide,
+          brainOverProb: g.brainOverProb,
+          brainUnderProb: g.brainUnderProb,
+          brainConfidence: g.brainConfidence,
+          brainProjectedValue: g.brainProjectedValue,
+          injuryStatus: g.injuryStatus,
+          bestAlt: g.bestAlt,
+        }));
+
     const response = {
-      props: grouped,
+      props: slim,
       markets: PROP_MARKETS,
       events: events.map((g: any) => ({ id: g.id, game: `${g.away_team} @ ${g.home_team}` })),
-      message: grouped.length === 0 ? "No props available yet for this market" : undefined,
+      message: slim.length === 0 ? "No props available yet for this market" : undefined,
     };
 
-    if (grouped.length > 0) {
+    if (slim.length > 0) {
       setCache(cacheKey, response);
       // Persist to Supabase so any serverless cold start or new region can
       // serve the same picks instantly. Fire-and-forget.
