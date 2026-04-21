@@ -293,6 +293,7 @@ export async function GET(req: Request) {
     }
 
     // ── NBA final games from ESPN scoreboard (MLB already in `completedGames`) ──
+    // Fetch every date that has a pending NBA pick so none stay un-graded.
     const nbaCompletedGames: any[] = [];
     try {
       const yyyymmdd = (offset: number) => {
@@ -303,8 +304,17 @@ export async function GET(req: Request) {
         const day = String(d.getUTCDate()).padStart(2, "0");
         return `${y}${m}${day}`;
       };
-      const nbaDates = [yyyymmdd(0), yyyymmdd(-1)];
-      for (const d of nbaDates) {
+      // Always pull today + yesterday (late games). Plus any dates referenced
+      // by pending NBA picks so we can clean up the backlog.
+      const dateSet = new Set<string>([yyyymmdd(0), yyyymmdd(-1)]);
+      try {
+        const nbaState = await cloudGet("smart_bot_nba", { picks: [] }) as any;
+        for (const p of (nbaState.picks ?? [])) {
+          if (p.result !== "pending" || !p.date) continue;
+          dateSet.add(p.date.replace(/-/g, "")); // YYYY-MM-DD → YYYYMMDD
+        }
+      } catch {}
+      for (const d of Array.from(dateSet)) {
         const sbRes = await fetch(`https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=${d}`, { next: { revalidate: 60 } });
         if (!sbRes.ok) continue;
         const sb = await sbRes.json();
@@ -329,7 +339,7 @@ export async function GET(req: Request) {
     } catch (e) { console.error("nba scoreboard error:", e); }
 
     // ── MLB + NBA Bot Settlement ──
-    // Runs every tick; each sport gets only its own completed games to match against.
+    const botSettle = { mlb: 0, nba: 0, nbaFeed: nbaCompletedGames.length, mlbFeed: completedGames.length };
     try {
       const { settleAndLearn } = await import("@/lib/bot/smart-picks");
 
@@ -345,7 +355,11 @@ export async function GET(req: Request) {
         const newlySettled = settled.picks.filter(
           (p: any, i: number) => state.picks[i]?.result === "pending" && p.result !== "pending",
         ).length;
-        if (newlySettled > 0) await cloudSet(key, settled);
+        if (newlySettled > 0) {
+          await cloudSet(key, settled);
+          if (sport === "mlb") botSettle.mlb = newlySettled;
+          else botSettle.nba = newlySettled;
+        }
       }
     } catch (e) { console.error("bot settle error:", e); }
 
@@ -392,6 +406,7 @@ export async function GET(req: Request) {
       nbaProps: { ...nbaAudit, ghostCommitted: nbaGhostCommitted },
       trackRecord: { settled: trackSettled },
       userBets: userBetsSettled,
+      botSettle,
     });
   } catch (error: any) {
     return NextResponse.json({ ok: false, error: error.message }, { status: 500 });

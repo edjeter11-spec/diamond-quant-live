@@ -205,21 +205,24 @@ export function settleAndLearn(
   const updatedPicks = botState.picks.map(pick => {
     if (pick.result !== "pending") return pick;
 
+    const norm = (s: string | undefined | null) => (s ?? "").toLowerCase().trim();
+    const teamMatch = (pickTeam: string, fullName: string, abbrev: string) => {
+      const a = norm(pickTeam), f = norm(fullName), ab = norm(abbrev);
+      if (!a) return false;
+      if (ab && a === ab) return true;
+      if (f && (f.includes(a) || a.includes(f))) return true;
+      // Last-word (nickname) match: "Lakers" vs "Los Angeles Lakers"
+      const lastWord = f.split(/\s+/).pop() ?? "";
+      if (lastWord && a.includes(lastWord)) return true;
+      return false;
+    };
     const score = scores.find((s: any) => {
       if (s.status !== "final") return false;
-      // Prefer exact gameId match (reliable, no ambiguity)
       if (pick.gameId && s.id && pick.gameId === String(s.id)) return true;
-      // Fallback: require BOTH teams to appear in the game string (prevents false matches)
       const [pickAway, pickHome] = pick.game.split(" @ ");
-      const awayMatch = pickAway && (
-        s.awayTeam?.includes(pickAway.trim()) || pickAway.trim().includes(s.awayTeam ?? "") ||
-        s.awayAbbrev === pickAway.trim()
-      );
-      const homeMatch = pickHome && (
-        s.homeTeam?.includes(pickHome.trim()) || pickHome.trim().includes(s.homeTeam ?? "") ||
-        s.homeAbbrev === pickHome.trim()
-      );
-      return !!(awayMatch && homeMatch);
+      const awayHit = pickAway && teamMatch(pickAway, s.awayTeam, s.awayAbbrev);
+      const homeHit = pickHome && teamMatch(pickHome, s.homeTeam, s.homeAbbrev);
+      return !!(awayHit && homeHit);
     });
     if (!score) return pick;
 
