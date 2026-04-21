@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Users, ArrowUpRight, ArrowDownRight, Flame, ChevronRight, ChevronDown, Brain } from "lucide-react";
 import { americanToDecimal } from "@/lib/model/kelly";
@@ -140,6 +140,23 @@ export default function TodayPropPicks({
   const [openPick, setOpenPick] = useState<string | null>(null);
   const { addParlayLeg } = useStore();
   const { isPremium } = usePremium();
+
+  // Live grading: fetch box-score actuals and paint picks green/red when
+  // their games are live or final. Refreshes every 60s in-game.
+  const [resultsMap, setResultsMap] = useState<Record<string, Array<{ market: string; actual: number; gameStatus: string }>>>({});
+  useEffect(() => {
+    let cancelled = false;
+    const load = () => {
+      const sportParam = sport === "nba" ? "basketball_nba" : "baseball_mlb";
+      fetch(`/api/prop-results?sport=${sportParam}`)
+        .then((r) => r.json())
+        .then((d) => { if (!cancelled && d?.results) setResultsMap(d.results); })
+        .catch(() => {});
+    };
+    load();
+    const interval = setInterval(load, 60_000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [sport]);
 
   const picks = useMemo<PropPick[]>(() => {
     const build = (prop: RawProp, side: "over" | "under"): PropPick | null => {
@@ -295,11 +312,33 @@ export default function TodayPropPicks({
         <div className="divide-y divide-slate/10">
           {visible.map((p) => {
             const isOpen = openPick === p.key;
+            // Grade this pick against box score actuals if available
+            const boxRows = resultsMap[p.playerName.toLowerCase()] ?? [];
+            const boxRow = boxRows.find((r) => r.market === p.market);
+            let result: "win" | "loss" | "push" | "live" | null = null;
+            let actual: number | null = null;
+            if (boxRow) {
+              actual = boxRow.actual;
+              const isFinal = boxRow.gameStatus === "final";
+              const over = actual > p.line;
+              const push = actual === p.line;
+              if (push) result = "push";
+              else if ((p.side === "over" && over) || (p.side === "under" && !over)) result = isFinal ? "win" : "live";
+              else result = isFinal ? "loss" : "live";
+            }
+
+            // Row tinting based on settled result
+            const rowTint =
+              result === "win" ? "bg-neon/5 border-l-2 border-neon/60"
+              : result === "loss" ? "bg-danger/5 border-l-2 border-danger/60"
+              : result === "push" ? "bg-mercury/5 border-l-2 border-mercury/40"
+              : "";
+
             return (
               <div key={p.key}>
                 <button
                   onClick={() => setOpenPick(isOpen ? null : p.key)}
-                  className="w-full px-3 sm:px-4 py-2.5 flex items-center gap-2.5 hover:bg-gunmetal/20 transition-colors text-left"
+                  className={`w-full px-3 sm:px-4 py-2.5 flex items-center gap-2.5 hover:bg-gunmetal/20 transition-colors text-left ${rowTint}`}
                 >
                   <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${
                     p.side === "over" ? "bg-neon/10 text-neon" : "bg-amber/10 text-amber"
@@ -311,10 +350,17 @@ export default function TodayPropPicks({
                     {/* Full name — own row, wraps if needed, never truncates */}
                     <p className="text-sm font-semibold text-silver leading-tight break-words">
                       {p.playerName}
+                      {result === "win" && <span className="ml-1.5 text-[10px] font-bold text-neon">✓ WIN</span>}
+                      {result === "loss" && <span className="ml-1.5 text-[10px] font-bold text-danger">✗ LOSS</span>}
+                      {result === "push" && <span className="ml-1.5 text-[10px] font-bold text-mercury">= PUSH</span>}
+                      {result === "live" && actual != null && <span className="ml-1.5 text-[10px] font-bold text-electric">LIVE {actual}</span>}
                     </p>
                     {/* The actual pick — clear and readable on mobile */}
                     <p className={`text-xs font-bold leading-tight mt-0.5 ${p.side === "over" ? "text-neon" : "text-amber"}`}>
                       {p.side === "over" ? "OVER" : "UNDER"} {p.line} {p.label}
+                      {actual != null && boxRow?.gameStatus === "final" && (
+                        <span className="ml-1.5 text-mercury/70 font-normal">(final: {actual})</span>
+                      )}
                     </p>
                     {/* Meta + badges — allowed to wrap */}
                     <div className="flex items-center flex-wrap gap-1.5 mt-1">
