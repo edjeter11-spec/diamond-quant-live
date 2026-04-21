@@ -292,26 +292,62 @@ export async function GET(req: Request) {
       } catch (e) { console.error("email recap error:", e); }
     }
 
-    // ── MLB Bot Settlement ──
-    // When games are finishing at night (3-7 UTC = 11PM-3AM ET)
-    if (final > 0 && hour >= 3 && hour <= 7) {
-      try {
-        const { settleAndLearn, saveSmartBot } = await import("@/lib/bot/smart-picks");
-        const { cloudGet } = await import("@/lib/supabase/client");
-        const mlbBotState = await cloudGet("smart_bot", { bankroll: 5000, picks: [], dailyPnL: {} }) as any;
-
-        const pendingCount = (mlbBotState.picks ?? []).filter((p: any) => p.result === "pending").length;
-        if (pendingCount > 0) {
-          const { botState: settled } = settleAndLearn(mlbBotState, completedGames, "mlb");
-          const newlySettled = settled.picks.filter((p: any, i: number) =>
-            mlbBotState.picks[i]?.result === "pending" && p.result !== "pending"
-          ).length;
-          if (newlySettled > 0) {
-            await cloudSet("smart_bot", settled);
-          }
+    // ── NBA final games from ESPN scoreboard (MLB already in `completedGames`) ──
+    const nbaCompletedGames: any[] = [];
+    try {
+      const yyyymmdd = (offset: number) => {
+        const d = new Date();
+        d.setUTCDate(d.getUTCDate() + offset);
+        const y = d.getUTCFullYear();
+        const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+        const day = String(d.getUTCDate()).padStart(2, "0");
+        return `${y}${m}${day}`;
+      };
+      const nbaDates = [yyyymmdd(0), yyyymmdd(-1)];
+      for (const d of nbaDates) {
+        const sbRes = await fetch(`https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=${d}`, { next: { revalidate: 60 } });
+        if (!sbRes.ok) continue;
+        const sb = await sbRes.json();
+        for (const ev of sb.events ?? []) {
+          const comp = ev.competitions?.[0];
+          if (comp?.status?.type?.name !== "STATUS_FINAL") continue;
+          const home = comp.competitors?.find((c: any) => c.homeAway === "home");
+          const away = comp.competitors?.find((c: any) => c.homeAway === "away");
+          if (!home || !away) continue;
+          nbaCompletedGames.push({
+            id: String(ev.id),
+            status: "final",
+            homeTeam: home.team?.displayName ?? "",
+            awayTeam: away.team?.displayName ?? "",
+            homeAbbrev: home.team?.abbreviation ?? "",
+            awayAbbrev: away.team?.abbreviation ?? "",
+            homeScore: Number(home.score ?? 0),
+            awayScore: Number(away.score ?? 0),
+          });
         }
-      } catch {}
-    }
+      }
+    } catch (e) { console.error("nba scoreboard error:", e); }
+
+    // ── MLB + NBA Bot Settlement ──
+    // Runs every tick; each sport gets only its own completed games to match against.
+    try {
+      const { settleAndLearn } = await import("@/lib/bot/smart-picks");
+
+      for (const { key, sport, feed } of [
+        { key: "smart_bot", sport: "mlb", feed: completedGames },
+        { key: "smart_bot_nba", sport: "nba", feed: nbaCompletedGames },
+      ]) {
+        if (feed.length === 0) continue;
+        const state = await cloudGet(key, { bankroll: 5000, picks: [], dailyPnL: {} }) as any;
+        const pending = (state.picks ?? []).filter((p: any) => p.result === "pending");
+        if (pending.length === 0) continue;
+        const { botState: settled } = settleAndLearn(state, feed, sport);
+        const newlySettled = settled.picks.filter(
+          (p: any, i: number) => state.picks[i]?.result === "pending" && p.result !== "pending",
+        ).length;
+        if (newlySettled > 0) await cloudSet(key, settled);
+      }
+    } catch (e) { console.error("bot settle error:", e); }
 
     // ── Weekly Calibration (Sunday 2-3 UTC = Sat 10-11 PM ET) ──
     // Recompute the "predicted prob vs actual hit rate" curve.
