@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Users, ArrowUpRight, ArrowDownRight, Flame, ChevronRight, ChevronDown, Brain, Clock } from "lucide-react";
+import { Users, ArrowUpRight, ArrowDownRight, Flame, ChevronRight, ChevronDown, Brain, Clock, Plus, Check } from "lucide-react";
 import { americanToDecimal } from "@/lib/model/kelly";
 import { useStore } from "@/lib/store";
 import { usePremium } from "@/lib/hooks/usePremium";
@@ -140,8 +140,9 @@ export default function TodayPropPicks({
 }) {
   const [expanded, setExpanded] = useState(true);
   const [openPick, setOpenPick] = useState<string | null>(null);
-  const { addParlayLeg } = useStore();
+  const { addParlayLeg, parlayLegs } = useStore();
   const { isPremium } = usePremium();
+  const [justAdded, setJustAdded] = useState<Record<string, boolean>>({});
 
   // Track when prop data was last refreshed — updates whenever a new
   // non-empty propsData payload arrives. Re-renders every 30s so the
@@ -430,86 +431,133 @@ export default function TodayPropPicks({
               <div key={p.key}>
                 <button
                   onClick={() => setOpenPick(isOpen ? null : p.key)}
-                  className={`w-full px-3 sm:px-4 py-2.5 flex items-center gap-2.5 hover:bg-gunmetal/20 transition-colors text-left ${rowTint}`}
+                  className={`w-full px-3 sm:px-4 py-3 sm:py-2.5 min-h-[64px] sm:min-h-0 flex items-center gap-3 sm:gap-2.5 hover:bg-gunmetal/20 active:bg-slate/50 active:scale-[0.98] transition-all text-left touch-manipulation ${rowTint}`}
                 >
-                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                  {/* Player photo — left, 40px mobile, 28px desktop */}
+                  <div className="flex-shrink-0">
+                    <span className="sm:hidden"><PlayerAvatar name={p.playerName} playerId={p.playerId} sport={sport} size={40} /></span>
+                    <span className="hidden sm:inline"><PlayerAvatar name={p.playerName} playerId={p.playerId} sport={sport} size={28} /></span>
+                  </div>
+                  {/* Side icon — smaller, secondary on mobile */}
+                  <div className={`hidden sm:flex w-7 h-7 rounded-lg items-center justify-center flex-shrink-0 ${
                     p.side === "over" ? "bg-neon/10 text-neon" : "bg-amber/10 text-amber"
                   }`}>
                     {p.side === "over" ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}
                   </div>
-                  <PlayerAvatar name={p.playerName} playerId={p.playerId} sport={sport} size={28} />
                   <div className="flex-1 min-w-0">
-                    {/* Full name — own row, wraps if needed, never truncates */}
-                    <p className="text-sm font-semibold text-silver leading-tight break-words">
+                    {/* Player name — text-sm mobile (was xs), prominent */}
+                    <p className="text-sm sm:text-sm font-semibold text-silver leading-tight break-words">
                       {p.playerName}
                       {result === "win" && <span className="ml-1.5 text-[10px] font-bold text-neon">✓ WIN</span>}
                       {result === "loss" && <span className="ml-1.5 text-[10px] font-bold text-danger">✗ LOSS</span>}
                       {result === "push" && <span className="ml-1.5 text-[10px] font-bold text-mercury">= PUSH</span>}
                       {result === "live" && actual != null && <span className="ml-1.5 text-[10px] font-bold text-electric">LIVE {actual}</span>}
                     </p>
-                    {/* The actual pick — clear and readable on mobile */}
-                    <p className={`text-xs font-bold leading-tight mt-0.5 ${p.side === "over" ? "text-neon" : "text-amber"}`}>
+                    {/* Pick — bold, mobile gets inline side icon for hierarchy */}
+                    <p className={`text-sm sm:text-xs font-bold leading-tight mt-1 sm:mt-0.5 flex items-center gap-1 ${p.side === "over" ? "text-neon" : "text-amber"}`}>
+                      {p.side === "over"
+                        ? <ArrowUpRight className="w-3.5 h-3.5 sm:hidden" />
+                        : <ArrowDownRight className="w-3.5 h-3.5 sm:hidden" />}
                       {p.side === "over" ? "OVER" : "UNDER"} {p.line} {p.label}
                       {actual != null && boxRow?.gameStatus === "final" && (
-                        <span className="ml-1.5 text-mercury/70 font-normal">(final: {actual})</span>
+                        <span className="ml-1 text-mercury/70 font-normal">(final: {actual})</span>
                       )}
                     </p>
-                    {/* Meta + badges — allowed to wrap */}
-                    <div className="flex items-center flex-wrap gap-1.5 mt-1">
-                      <span className="text-[10px] text-mercury/60">
-                        {p.bookmaker} · {p.fairProb}%{p.usesBrain ? " brain" : " fair"}
-                        {p.projectedValue != null && p.usesBrain && ` · proj ${p.projectedValue}`}
-                      </span>
-                      <span className={`text-[10px] font-semibold ${p.evPercentage > 0 ? "text-neon" : "text-mercury/60"}`}>
-                        +{p.evPercentage}% edge
-                      </span>
-                      {p.usesBrain && (
-                        <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded bg-purple/15 border border-purple/30 text-purple text-[8px] font-bold">
-                          <Brain className="w-2.5 h-2.5" />
-                          BRAIN
+                    {/* Mobile: stack book + edge vertically; Desktop: inline wrap */}
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:flex-wrap gap-1 sm:gap-1.5 mt-1.5 sm:mt-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[11px] sm:text-[10px] text-mercury/70 sm:text-mercury/60">
+                          {p.bookmaker} · {p.fairProb}%{p.usesBrain ? " brain" : " fair"}
+                          {p.projectedValue != null && p.usesBrain && ` · proj ${p.projectedValue}`}
                         </span>
-                      )}
-                      {p.isSynthesized && (
-                        <span
-                          className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded bg-electric/15 border border-electric/30 text-electric text-[8px] font-bold"
-                          title="Projected pick — books haven't posted lines yet. Estimated from season stats + brain."
-                        >
-                          PROJECTED
+                        <span className={`text-[11px] sm:text-[10px] font-semibold ${p.evPercentage > 0 ? "text-neon" : "text-mercury/60"}`}>
+                          +{p.evPercentage}% edge
                         </span>
-                      )}
-                      {p.fairProb >= 60 && <Flame className="w-3 h-3 text-danger" />}
-                      {p.bestAlt && p.bestAlt.edgePct >= 3 && (
-                        <span
-                          className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded bg-amber/15 border border-amber/30 text-amber text-[8px] font-bold"
-                          title={`Alt ${p.bestAlt.side} ${p.bestAlt.line} @ ${p.bestAlt.price > 0 ? "+" : ""}${p.bestAlt.price} (${p.bestAlt.bookmaker})`}
-                        >
-                          ALT {p.bestAlt.side === "over" ? "O" : "U"}{p.bestAlt.line} +{p.bestAlt.edgePct}%
-                        </span>
-                      )}
+                      </div>
+                      <div className="flex items-center gap-1 flex-wrap">
+                        {p.usesBrain && (
+                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-purple/15 border border-purple/30 text-purple text-[9px] sm:text-[8px] font-bold">
+                            <Brain className="w-2.5 h-2.5" />
+                            BRAIN
+                          </span>
+                        )}
+                        {p.isSynthesized && (
+                          <span
+                            className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-electric/15 border border-electric/30 text-electric text-[9px] sm:text-[8px] font-bold"
+                            title="Projected pick — books haven't posted lines yet. Estimated from season stats + brain."
+                          >
+                            PROJECTED
+                          </span>
+                        )}
+                        {p.fairProb >= 60 && <Flame className="w-3 h-3 text-danger" />}
+                        {p.bestAlt && p.bestAlt.edgePct >= 3 && (
+                          <span
+                            className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-amber/15 border border-amber/30 text-amber text-[9px] sm:text-[8px] font-bold"
+                            title={`Alt ${p.bestAlt.side} ${p.bestAlt.line} @ ${p.bestAlt.price > 0 ? "+" : ""}${p.bestAlt.price} (${p.bestAlt.bookmaker})`}
+                          >
+                            ALT {p.bestAlt.side === "over" ? "O" : "U"}{p.bestAlt.line} +{p.bestAlt.edgePct}%
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <span className="text-xs sm:text-sm font-mono font-bold text-silver">
+                  {/* Right rail — odds stacked over Parlay on mobile for 44px+ targets */}
+                  <div className="flex flex-col sm:flex-row items-end sm:items-center gap-1.5 sm:gap-2 flex-shrink-0">
+                    <span className="text-base sm:text-sm font-mono font-bold text-silver leading-none">
                       {p.odds > 0 ? "+" : ""}{p.odds}
                     </span>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
+                    {(() => {
+                      const pickLabel = `${p.playerName} ${p.side === "over" ? "Over" : "Under"} ${p.line} ${p.label}`;
+                      const inParlay = parlayLegs.some(
+                        (l) => l.pick === pickLabel && l.bookmaker === (p.bookmaker ?? "") && l.odds === p.odds,
+                      );
+                      const showCheck = !!justAdded[p.key];
+                      const handleAdd = () => {
+                        if (inParlay) return;
                         addParlayLeg({
                           game: p.playerName,
                           market: "player_prop" as any,
-                          pick: `${p.playerName} ${p.side === "over" ? "Over" : "Under"} ${p.line} ${p.label}`,
+                          pick: pickLabel,
                           odds: p.odds,
                           fairProb: p.fairProb / 100,
                           bookmaker: p.bookmaker ?? "",
                         });
-                      }}
-                      className="px-2 py-1 rounded bg-neon/10 border border-neon/20 text-neon text-[10px] font-bold hover:bg-neon/20 transition-colors"
-                      title="Add to parlay builder"
-                    >
-                      + Parlay
-                    </button>
-                    <ChevronDown className={`w-3.5 h-3.5 text-mercury/50 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+                        setJustAdded((m) => ({ ...m, [p.key]: true }));
+                        setTimeout(() => {
+                          setJustAdded((m) => {
+                            const { [p.key]: _gone, ...rest } = m;
+                            return rest;
+                          });
+                        }, 1500);
+                      };
+                      return (
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          aria-label={inParlay ? "Already in parlay" : "Add to parlay"}
+                          aria-pressed={inParlay || showCheck}
+                          onClick={(e) => { e.stopPropagation(); handleAdd(); }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleAdd();
+                            }
+                          }}
+                          className={`w-8 h-8 inline-flex items-center justify-center rounded-full border transition-all touch-manipulation cursor-pointer select-none active:scale-90 ${
+                            showCheck
+                              ? "bg-neon/30 border-neon/60 text-neon"
+                              : inParlay
+                                ? "bg-neon/20 border-neon/50 text-neon"
+                                : "bg-neon/10 border-neon/25 text-neon hover:bg-neon/20 active:bg-neon/30"
+                          }`}
+                          title={inParlay ? "In parlay" : "Add to parlay"}
+                        >
+                          {showCheck || inParlay ? <Check className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                        </span>
+                      );
+                    })()}
+                    <ChevronDown className={`w-5 h-5 sm:w-3.5 sm:h-3.5 text-mercury/60 sm:text-mercury/50 transition-transform ${isOpen ? "rotate-180" : ""}`} />
                   </div>
                 </button>
                 {isOpen && (

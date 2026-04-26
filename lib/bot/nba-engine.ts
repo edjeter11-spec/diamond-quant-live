@@ -1,7 +1,9 @@
 // ──────────────────────────────────────────────────────────
 // NBA ENGINE — Basketball-specific prediction model
-// Net Rating, Home Court, Rest/B2B, Form, Injuries, Pace
+// Net Rating, Home Court, Rest/B2B, Form, Injuries, Pace, Refs
 // ──────────────────────────────────────────────────────────
+
+import { aggregateCrew, type RefereeData } from "@/lib/nba/referees";
 
 export interface NBAWeights {
   netRating: number;     // 30% — Off Rating - Def Rating
@@ -37,7 +39,8 @@ export interface NBAModelPrediction {
 export function runNetRatingModel(
   homeTeam: string,
   awayTeam: string,
-  oddsLines: any[]
+  oddsLines: any[],
+  refs?: RefereeData[]
 ): NBAModelPrediction {
   const factors: string[] = [];
 
@@ -58,8 +61,16 @@ export function runNetRatingModel(
   // Convert to probability (NBA: ~2.5 points per 10% win probability)
   const prob = Math.min(0.85, Math.max(0.15, 0.50 + homeEdge / 50));
 
-  // Total projection (NBA average is ~224)
-  const totalProjection = 224;
+  // Total projection (NBA average is ~224, ref crew shifts it)
+  let totalProjection = 224;
+  if (refs && refs.length > 0) {
+    const crew = aggregateCrew(refs);
+    // Half-weight the ref signal (other factors set the baseline)
+    const refShift = (crew.totalPointsBoost - 225) * 0.5;
+    totalProjection += refShift;
+    const dir = refShift > 0 ? "+" : "";
+    factors.push(`Officials: ${crew.names.join(", ")} (${dir}${refShift.toFixed(1)} total, ${crew.foulRatePerGame.toFixed(0)} fouls/G avg)`);
+  }
 
   return {
     homeWinProb: prob,

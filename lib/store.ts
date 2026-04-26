@@ -217,7 +217,9 @@ export const useStore = create<AppState>((set, get) => ({
     const betHistory = loadFromStorage<BetRecord[]>("dq_betHistory", []);
     const savedParlays = loadFromStorage<ParlaySlip[]>("dq_savedParlays", []);
     const oddsSnapshots = loadFromStorage<OddsSnapshot[]>("dq_oddsSnapshots", []);
-    set({ bankroll, betHistory, savedParlays, oddsSnapshots });
+    const parlayLegs = loadFromStorage<ParlayLeg[]>("dq_parlay_picks", []);
+    const currentParlay = parlayLegs.length >= 2 ? buildParlay(parlayLegs, bankroll.currentBankroll) : null;
+    set({ bankroll, betHistory, savedParlays, oddsSnapshots, parlayLegs, currentParlay });
 
     // Then try cloud (async, may override with newer data). Pass current
     // betHistory so the hydration helper can detect newly-settled bets
@@ -262,6 +264,7 @@ export const useStore = create<AppState>((set, get) => ({
     set((s) => {
       const legs = [...s.parlayLegs, newLeg];
       const currentParlay = legs.length >= 2 ? buildParlay(legs, s.bankroll.currentBankroll) : null;
+      saveToStorage("dq_parlay_picks", legs);
       return { parlayLegs: legs, currentParlay };
     });
 
@@ -283,17 +286,22 @@ export const useStore = create<AppState>((set, get) => ({
     set((s) => {
       const legs = s.parlayLegs.filter((l) => l.id !== legId);
       const currentParlay = legs.length >= 2 ? buildParlay(legs, s.bankroll.currentBankroll) : null;
+      saveToStorage("dq_parlay_picks", legs);
       return { parlayLegs: legs, currentParlay };
     });
   },
 
-  clearParlay: () => set({ parlayLegs: [], currentParlay: null }),
+  clearParlay: () => {
+    saveToStorage("dq_parlay_picks", []);
+    set({ parlayLegs: [], currentParlay: null });
+  },
 
   saveParlay: () => {
     const { currentParlay, savedParlays } = get();
     if (currentParlay) {
       const updated = [...savedParlays, currentParlay];
       saveToStorage("dq_savedParlays", updated);
+      saveToStorage("dq_parlay_picks", []);
       set({ savedParlays: updated, parlayLegs: [], currentParlay: null });
     }
   },

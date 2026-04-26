@@ -5,6 +5,7 @@ import { getApiKey, markKeyExhausted, getActiveKeyCount } from "@/lib/odds/api-k
 import { getCached, setCache, CACHE_TTL, stampEdge, getEdgeAge, cleanEdges } from "@/lib/odds/server-cache";
 import { filterRealArbs, filterRealEV } from "@/lib/odds/sportsbooks";
 import { checkRateLimit, getUserIdFromRequest } from "@/lib/supabase/rate-limit";
+import { snapshotGameMarkets } from "@/lib/odds/line-movement";
 
 export const revalidate = 60;
 
@@ -53,6 +54,8 @@ export async function GET(req: Request) {
 
       const games = freshGames.map((game) => {
         const oddsLines = parseOddsLines(game);
+        // Fire-and-forget: persist a per-market snapshot for line-movement / steam detection
+        try { snapshotGameMarkets(game.id, oddsLines); } catch {}
         // Arbitrage + EV computed here — no need for separate /api/arbitrage call
         const rawArbitrage = findArbitrage(oddsLines, `${game.away_team} @ ${game.home_team}`);
         const rawEvBets = findEVBets(oddsLines, `${game.away_team} @ ${game.home_team}`);

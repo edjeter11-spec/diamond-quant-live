@@ -5,6 +5,7 @@
 // ──────────────────────────────────────────────────────────
 
 import { americanToImpliedProb, americanToDecimal, devig, kellyStake } from "@/lib/model/kelly";
+import { getLineMovement } from "@/lib/odds/line-movement";
 
 const MLB_API = "https://statsapi.mlb.com/api/v1";
 
@@ -691,6 +692,32 @@ export async function analyzeAllGames(oddsData: any[], scores: any[]): Promise<G
 
       const marketModel = runMarketModel(oddsLines);
       const trendModel = await runEloPowerModel(homeTeam, awayTeam);
+
+      // ── Steam-move signal: when sharp money has hammered a side since open,
+      // boost that side's probability ~3%. Best-effort; failures are non-fatal.
+      try {
+        const firstLine = oddsLines[0];
+        if (firstLine) {
+          const [mlMove, totalMove] = await Promise.all([
+            getLineMovement(game.id, "ml", { homeML: firstLine.homeML, awayML: firstLine.awayML }),
+            getLineMovement(game.id, "total", { total: firstLine.total, overPrice: firstLine.overPrice, underPrice: firstLine.underPrice }),
+          ]);
+          if (mlMove.isSteam && mlMove.direction === "home") {
+            marketModel.homeWinProb = Math.min(0.95, marketModel.homeWinProb + 0.03);
+            marketModel.factors.push(`STEAM: sharp money on ${homeTeam} (${mlMove.movement})`);
+          } else if (mlMove.isSteam && mlMove.direction === "away") {
+            marketModel.homeWinProb = Math.max(0.05, marketModel.homeWinProb - 0.03);
+            marketModel.factors.push(`STEAM: sharp money on ${awayTeam} (${mlMove.movement})`);
+          }
+          if (totalMove.isSteam && totalMove.direction === "over") {
+            marketModel.totalProjection = marketModel.totalProjection + 0.4;
+            marketModel.factors.push(`STEAM: sharp money on Over (${totalMove.movement})`);
+          } else if (totalMove.isSteam && totalMove.direction === "under") {
+            marketModel.totalProjection = Math.max(6, marketModel.totalProjection - 0.4);
+            marketModel.factors.push(`STEAM: sharp money on Under (${totalMove.movement})`);
+          }
+        }
+      } catch {}
 
       // Consensus
       const consensus = buildConsensus(pitcherModel, marketModel, trendModel);

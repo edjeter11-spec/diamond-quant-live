@@ -8,6 +8,7 @@ import { getNBATeamAbbrev } from "@/lib/nba/stats-api";
 import { getRestState, computeRestEdge } from "@/lib/nba/rest-fatigue";
 import { getTeamInjuries } from "@/lib/nba/injuries";
 import { projectGameTotal, getTeamRating } from "@/lib/nba/pace-ratings";
+import { getNBALineup, computeNBALineupEdge } from "@/lib/nba/daily-lineup";
 
 export const dynamic = "force-dynamic";
 
@@ -33,13 +34,31 @@ export async function GET() {
       // Rest/B2B fatigue lookup (parallel — each cached for 2h)
       const homeAbbrev = getNBATeamAbbrev(homeTeam);
       const awayAbbrev = getNBATeamAbbrev(awayTeam);
-      const [homeRest, awayRest, homeInjuries, awayInjuries] = await Promise.all([
+      const [homeRest, awayRest, homeInjuries, awayInjuries, homeLineup, awayLineup] = await Promise.all([
         getRestState(homeAbbrev).catch(() => null),
         getRestState(awayAbbrev).catch(() => null),
         getTeamInjuries(homeAbbrev).catch(() => []),
         getTeamInjuries(awayAbbrev).catch(() => []),
+        getNBALineup(game.id, homeAbbrev).catch(() => null),
+        getNBALineup(game.id, awayAbbrev).catch(() => null),
       ]);
       const restEdge = homeRest && awayRest ? computeRestEdge(homeRest, awayRest) : { edge: 0, factors: [] };
+
+      // ── Confirmed-lineup edge ────────────────────────────────────────
+      // Surfaces the case where a 20+ ppg star is unexpectedly OUT/DNP
+      // and books haven't moved. Edge is in projected points (home POV).
+      let lineupEdge = 0;
+      const lineupFactors: string[] = [];
+      if (homeLineup && (homeLineup.confirmed || homeLineup.inactiveStars.length > 0)) {
+        lineupEdge += computeNBALineupEdge(homeLineup);
+        if (homeLineup.inactiveStars.length > 0) lineupFactors.push(homeLineup.summary);
+      }
+      if (awayLineup && (awayLineup.confirmed || awayLineup.inactiveStars.length > 0)) {
+        // Inactives on AWAY help HOME — flip sign
+        lineupEdge -= computeNBALineupEdge(awayLineup);
+        if (awayLineup.inactiveStars.length > 0) lineupFactors.push(awayLineup.summary);
+      }
+      lineupEdge = Math.max(-12, Math.min(12, lineupEdge));
 
       // Star-out impact: each OUT player = -1.5 pts for their team;
       // DOUBTFUL = -1.0; QUESTIONABLE = -0.4 (partial impact factor)
@@ -94,6 +113,19 @@ export async function GET() {
         netRatingModel.homeWinProb = Math.min(0.95, Math.max(0.05, netRatingModel.homeWinProb + probShift));
         netRatingModel.factors.push(...injuryFactors.slice(0, 4));
         netRatingModel.confidence = Math.min(80, netRatingModel.confidence + Math.abs(injuryEdge) * 3);
+      }
+
+      // Confirmed-lineup edge: bigger nudge than season-IL because books haven't fully moved
+      // Scale: ~3% home win-prob shift per net point; bumps confidence when a confirmed lineup
+      // exposes a star DNP that the market is sleeping on.
+      if (lineupEdge !== 0) {
+        const probShift = lineupEdge * 0.03;
+        netRatingModel.homeWinProb = Math.min(0.95, Math.max(0.05, netRatingModel.homeWinProb + probShift));
+        netRatingModel.factors.push(...lineupFactors.slice(0, 2));
+        netRatingModel.confidence = Math.min(85, netRatingModel.confidence + Math.abs(lineupEdge) * 2);
+        // Also tilt the projected total — fewer stars means fewer points
+        const totalDrop = Math.abs(lineupEdge) * 0.5;
+        netRatingModel.totalProjection = Math.max(180, netRatingModel.totalProjection - totalDrop);
       }
 
       // Pace × ratings → projected total (replaces the old hard-coded 224 baseline)

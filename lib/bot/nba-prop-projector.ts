@@ -4,6 +4,8 @@
 // ──────────────────────────────────────────────────────────
 
 import type { NbaPropWeights } from "./nba-prop-brain";
+import type { RefereeData } from "@/lib/nba/referees";
+import { aggregateCrew } from "@/lib/nba/referees";
 
 export interface ProjectionContext {
   isHome: boolean;
@@ -14,6 +16,7 @@ export interface ProjectionContext {
   leagueAvgTotal?: number;      // ~224
   eloGap?: number;              // home Elo - away Elo (blowout risk)
   lineOpenVsCurrent?: number;   // positive = line moved up (sharp over)
+  refCrew?: RefereeData[];      // game officials — boosts FT-related props
 }
 
 export interface ProjectionFactor {
@@ -28,6 +31,7 @@ export interface PropProjection {
   confidence: number;     // 0-100
   factors: ProjectionFactor[];
   projectedValue: number; // brain's estimated actual stat
+  reasoning?: string[];   // human-readable notes (e.g. ref crew impact)
 }
 
 // ── Normal CDF approximation (same approach as player-stats.ts) ──
@@ -153,7 +157,29 @@ export function projectProp(
   const weightedSum = factors.reduce((s, f) => s + f.contribution, 0);
 
   // Convert weighted signal to adjusted z-score
-  const adjustedAvg = avg + weightedSum * stdDev;
+  let adjustedAvg = avg + weightedSum * stdDev;
+
+  // ── Referee Crew Boost (FT-affected props) ──
+  // High-foul crews boost points/PRA via free throws (~75% of FTA convert).
+  // No effect on rebounds/assists/threes (FT outcomes don't change those).
+  const reasoning: string[] = [];
+  if (context.refCrew && context.refCrew.length > 0 && (statKey === "ppg" || statKey === "pra")) {
+    const crew = aggregateCrew(context.refCrew);
+    const ftaDelta = crew.ftAttemptsBoost - 46; // league avg combined FTA/G
+    if (Math.abs(ftaDelta) >= 1) {
+      // Roughly 8% of a team's FTA goes to one star * 0.75 conversion
+      // ftaDelta is for both teams, so per-player share ≈ ftaDelta * 0.04 pts
+      const ptsImpact = ftaDelta * 0.04;
+      adjustedAvg += ptsImpact;
+      const dir = ptsImpact > 0 ? "+" : "";
+      reasoning.push(
+        `Refs ${crew.names.slice(0, 3).join(", ")} (${crew.foulRatePerGame.toFixed(0)} fouls/G): ${dir}${ptsImpact.toFixed(2)} pts FT impact`
+      );
+    } else {
+      reasoning.push(`Refs ${crew.names.slice(0, 3).join(", ")}: neutral FT impact`);
+    }
+  }
+
   const zScore = (adjustedAvg - line) / stdDev;
   const overProb = normalCDF(zScore);
 
@@ -172,5 +198,6 @@ export function projectProp(
     confidence,
     factors,
     projectedValue: Math.round(adjustedAvg * 10) / 10,
+    reasoning: reasoning.length > 0 ? reasoning : undefined,
   };
 }
