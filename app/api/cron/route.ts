@@ -15,6 +15,7 @@ import { logDailyPicks, settlePendingPicks, etDateString, type LoggedPick } from
 // This just ensures we have fresh score data cached
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 120;
 
 export async function GET(req: Request) {
   // Verify cron secret (optional security)

@@ -4,6 +4,7 @@ import { loadLearningState, saveLearningState, type LearningState } from "@/lib/
 
 // Training is expensive — don't cache aggressively
 export const dynamic = "force-dynamic";
+export const maxDuration = 300;
 
 const DEFAULT_STATE: LearningState = {
   version: "v1.0.0",

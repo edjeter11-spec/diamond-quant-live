@@ -18,17 +18,22 @@ export async function GET() {
       return NextResponse.json({ entries: [] });
     }
 
-    // Get bet history for each user
+    // Batch-fetch all bet histories in one query (was N+1)
+    const userIds = profiles.map(p => p.id);
+    const { data: states } = await supabase
+      .from("user_state")
+      .select("user_id, value")
+      .in("user_id", userIds)
+      .eq("key", "betHistory");
+
+    const betsByUser = new Map<string, any[]>();
+    for (const row of states ?? []) {
+      betsByUser.set(row.user_id, (row.value as any[]) ?? []);
+    }
+
     const entries = [];
     for (const profile of profiles) {
-      const { data: state } = await supabase
-        .from("user_state")
-        .select("value")
-        .eq("user_id", profile.id)
-        .eq("key", "betHistory")
-        .single();
-
-      const bets = (state?.value as any[]) ?? [];
+      const bets = betsByUser.get(profile.id) ?? [];
       const settled = bets.filter((b: any) => b.result && b.result !== "pending");
       if (settled.length < 10) continue; // Min 10 bets to qualify
 
