@@ -5,6 +5,7 @@ import { Brain, TrendingUp, TrendingDown, Minus, Activity, CheckCircle, XCircle,
 import { useStore } from "@/lib/store";
 import MatchupInsights from "@/components/dashboard/MatchupInsights";
 import { getDeepLink } from "@/lib/odds/sportsbooks";
+import { getConfidenceTier } from "@/lib/ui/confidence-tier";
 
 export interface PropDetailProps {
   sport: "mlb" | "nba";
@@ -171,7 +172,13 @@ export default function PropDetail({
             <span className={`text-[11px] font-bold uppercase tracking-wider ${brainProj.side === side ? "text-neon" : "text-amber"}`}>
               {brainProj.side === side ? `Brain agrees — ${side.toUpperCase()}` : `Brain leans ${brainProj.side.toUpperCase()}`}
             </span>
-            <span className="ml-auto text-[10px] text-mercury/60">{Math.round((brainProj.confidence ?? 0))}% conf</span>
+            {(() => {
+              const conf = Math.round(brainProj.confidence ?? 0);
+              const tier = getConfidenceTier(conf);
+              return (
+                <span className={`ml-auto text-[10px] px-1.5 py-0.5 rounded border ${tier.text} ${tier.bg} ${tier.border}`}>{conf}% conf</span>
+              );
+            })()}
           </div>
           <div className="grid grid-cols-3 gap-1.5 mb-2">
             <StatTile label="Projected" value={(brainProj.projectedValue ?? 0).toFixed(1)} accent="good" />
@@ -253,9 +260,15 @@ export default function PropDetail({
                 ? `Model agrees with this ${side}`
                 : `Model leans ${recommendation.side.replace("_", " ")}`}
             </p>
-            <span className="ml-auto text-[10px] text-mercury/60">
-              {Math.round((recommendation.confidence ?? 0) * 100)}% conf
-            </span>
+            {(() => {
+              const conf = Math.round((recommendation.confidence ?? 0) * 100);
+              const tier = getConfidenceTier(conf);
+              return (
+                <span className={`ml-auto text-[10px] px-1.5 py-0.5 rounded border ${tier.text} ${tier.bg} ${tier.border}`}>
+                  {conf}% conf
+                </span>
+              );
+            })()}
           </div>
           <ul className="space-y-1">
             {recommendation.reasons.slice(0, 4).map((r: string, i: number) => (

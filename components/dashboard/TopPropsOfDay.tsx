@@ -8,6 +8,7 @@ import {
   Star, Flame, CircleDot, TrendingUp, Clock, RefreshCw, Zap,
 } from "lucide-react";
 import { getDeepLink } from "@/lib/odds/sportsbooks";
+import { getConfidenceTier } from "@/lib/ui/confidence-tier";
 
 interface PropAnalysis {
   rank: number;
@@ -244,12 +245,17 @@ export default function TopPropsOfDay() {
                   <p className={`text-xs font-mono font-bold ${isOver ? "text-neon" : "text-purple"}`}>
                     {pick.recommendation} {formatOdds(pick.bestOdds)}
                   </p>
-                  <div className="flex items-center gap-1 justify-end">
-                    <div className="w-8 h-1 bg-gunmetal rounded-full overflow-hidden">
-                      <div className={`h-full rounded-full ${pick.confidence > 50 ? "bg-neon" : "bg-amber"}`} style={{ width: `${pick.confidence}%` }} />
-                    </div>
-                    <span className="text-[9px] text-mercury">{pick.confidence}%</span>
-                  </div>
+                  {(() => {
+                    const tier = getConfidenceTier(pick.confidence);
+                    return (
+                      <div className="flex items-center gap-1 justify-end">
+                        <div className="w-8 h-1 bg-gunmetal rounded-full overflow-hidden">
+                          <div className={`h-full rounded-full ${tier.bar}`} style={{ width: `${pick.confidence}%` }} />
+                        </div>
+                        <span className={`text-[9px] ${tier.text}`}>{pick.confidence}%</span>
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 <ChevronDown className={`w-3.5 h-3.5 text-mercury/40 flex-shrink-0 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
@@ -282,10 +288,16 @@ export default function TopPropsOfDay() {
                       </p>
                       <p className="text-[8px] text-mercury uppercase">EV Edge</p>
                     </div>
-                    <div className="text-center p-1.5 rounded bg-gunmetal/40">
-                      <p className="text-sm font-bold font-mono text-electric">{(pick.fairProb ?? 50).toFixed(0)}%</p>
-                      <p className="text-[8px] text-mercury uppercase">Fair Prob</p>
-                    </div>
+                    {(() => {
+                      const fp = pick.fairProb ?? 50;
+                      const tier = getConfidenceTier(fp);
+                      return (
+                        <div className={`text-center p-1.5 rounded border ${tier.bg} ${tier.border}`}>
+                          <p className={`text-sm font-bold font-mono ${tier.text}`}>{fp.toFixed(0)}%</p>
+                          <p className="text-[8px] text-mercury uppercase">Fair Prob</p>
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   {/* Trend */}

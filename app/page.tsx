@@ -523,11 +523,70 @@ export default function WarRoom() {
       {/* Main Content */}
       <main className="max-w-[1800px] mx-auto px-2 sm:px-4 py-3 sm:py-4 pb-20 md:pb-4">
         {isLoading ? (
-          <div className="flex items-center justify-center min-h-[60vh]">
-            <div className="text-center">
-              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full border-2 border-neon/20 border-t-neon animate-spin mx-auto mb-4" />
-              <p className="text-sm text-mercury">Loading live data...</p>
-              <p className="text-xs text-mercury/50 mt-1 font-mono">Connecting to MLB + sportsbook feeds</p>
+          <div className="flex gap-4" aria-label="Loading dashboard" role="status">
+            {/* Left sidebar skeleton (desktop) */}
+            <div className="hidden lg:block w-72 flex-shrink-0">
+              <div className="h-3 w-24 bg-slate/20 rounded animate-pulse mb-3" />
+              <div className="space-y-2">
+                {[0, 1, 2, 3, 4].map((i) => (
+                  <div key={i} className="rounded-xl border border-slate/20 bg-gunmetal/20 p-3 animate-pulse">
+                    <div className="h-3 w-1/2 bg-slate/20 rounded mb-2" />
+                    <div className="h-4 w-3/4 bg-slate/20 rounded" />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Center column skeleton */}
+            <div className="flex-1 min-w-0 space-y-3 sm:space-y-4">
+              {/* Streak banner */}
+              <div className="rounded-xl glass p-3 animate-pulse">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-slate/20 flex-shrink-0" />
+                  <div className="flex-1 space-y-1.5">
+                    <div className="h-3 w-2/3 bg-slate/20 rounded" />
+                    <div className="h-2.5 w-1/2 bg-slate/15 rounded" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Tonight's plays — 3 cards */}
+              <div className="rounded-xl glass overflow-hidden">
+                <div className="px-3 sm:px-4 py-2.5 border-b border-slate/20 animate-pulse">
+                  <div className="h-3 w-32 bg-slate/20 rounded" />
+                </div>
+                <div className="p-2 sm:p-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {[0, 1, 2].map((i) => (
+                    <div key={i} className="rounded-lg border border-slate/20 bg-gunmetal/20 p-3 space-y-2 animate-pulse">
+                      <div className="h-3 w-1/3 bg-slate/20 rounded" />
+                      <div className="h-4 w-2/3 bg-slate/20 rounded" />
+                      <div className="h-2.5 w-1/2 bg-slate/15 rounded" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Picks board — 2 sections, 3 rows each */}
+              {[0, 1].map((s) => (
+                <div key={s} className="rounded-xl glass overflow-hidden">
+                  <div className="px-3 sm:px-4 py-2.5 border-b border-slate/20 animate-pulse">
+                    <div className="h-3 w-40 bg-slate/20 rounded mb-1.5" />
+                    <div className="h-2.5 w-24 bg-slate/15 rounded" />
+                  </div>
+                  <div className="divide-y divide-slate/10">
+                    {[0, 1, 2].map((i) => (
+                      <div key={i} className="px-3 sm:px-4 py-3 flex items-center gap-2 animate-pulse">
+                        <div className="w-7 h-7 rounded-full bg-slate/20 flex-shrink-0" />
+                        <div className="flex-1 min-w-0 space-y-1.5">
+                          <div className="h-3 w-2/3 bg-slate/20 rounded" />
+                          <div className="h-2.5 w-1/3 bg-slate/15 rounded" />
+                        </div>
+                        <div className="h-5 w-12 bg-slate/20 rounded" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         ) : (

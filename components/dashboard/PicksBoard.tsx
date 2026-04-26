@@ -18,6 +18,7 @@ import TodayPropPicks from "@/components/dashboard/TodayPropPicks";
 import PropDetail from "@/components/dashboard/PropDetail";
 import LineMovementBadge from "@/components/ui/LineMovementBadge";
 import { formatPickLabel } from "@/lib/display";
+import { getConfidenceTier } from "@/lib/ui/confidence-tier";
 
 interface Pick {
   id: string;
@@ -806,10 +807,15 @@ function PickCard({ pick, isExpanded, onToggle, onAddToParlay, formatOdds }: {
             </div>
           )}
           <div className="grid grid-cols-3 gap-1.5">
-            <div className="text-center p-1.5 rounded bg-gunmetal/40">
-              <p className="text-sm font-bold font-mono text-silver">{pick.fairProb.toFixed(0)}%</p>
-              <p className="text-[8px] text-mercury uppercase">Fair Prob</p>
-            </div>
+            {(() => {
+              const tier = getConfidenceTier(pick.fairProb);
+              return (
+                <div className={`text-center p-1.5 rounded border ${tier.bg} ${tier.border}`}>
+                  <p className={`text-sm font-bold font-mono ${tier.text}`}>{pick.fairProb.toFixed(0)}%</p>
+                  <p className="text-[8px] text-mercury uppercase">Fair Prob</p>
+                </div>
+              );
+            })()}
             <div className="text-center p-1.5 rounded bg-gunmetal/40">
               <p className="text-sm font-bold font-mono text-neon">+{pick.evPercentage.toFixed(1)}%</p>
               <p className="text-[8px] text-mercury uppercase">EV Edge</p>
@@ -991,7 +997,18 @@ function PropSection({ title, subtitle, icon: Icon, iconColor, props, loading, e
         {props.length > 0 && <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-gunmetal text-mercury">{props.length}</span>}
       </div>
       {loading ? (
-        <div className="p-5 text-center"><Activity className="w-4 h-4 text-mercury/30 animate-spin mx-auto" /></div>
+        <div className="divide-y divide-slate/10" aria-label="Loading props" role="status">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="px-3 sm:px-4 py-2.5 flex items-center gap-2 animate-pulse">
+              <div className="w-7 h-7 rounded-full bg-slate/20 flex-shrink-0" />
+              <div className="flex-1 min-w-0 space-y-1.5">
+                <div className="h-3 w-2/3 bg-slate/20 rounded" />
+                <div className="h-2.5 w-1/3 bg-slate/15 rounded" />
+              </div>
+              <div className="h-4 w-10 bg-slate/20 rounded" />
+            </div>
+          ))}
+        </div>
       ) : props.length === 0 ? (
         <div className="px-4 py-5 text-center"><p className="text-xs text-mercury/50">No {title.toLowerCase()} props posted yet</p></div>
       ) : (

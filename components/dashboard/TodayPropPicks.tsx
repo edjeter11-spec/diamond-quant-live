@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Users, ArrowUpRight, ArrowDownRight, Flame, ChevronRight, ChevronDown, Brain } from "lucide-react";
+import { Users, ArrowUpRight, ArrowDownRight, Flame, ChevronRight, ChevronDown, Brain, Clock } from "lucide-react";
 import { americanToDecimal } from "@/lib/model/kelly";
 import { useStore } from "@/lib/store";
 import { usePremium } from "@/lib/hooks/usePremium";
@@ -143,6 +143,29 @@ export default function TodayPropPicks({
   const { addParlayLeg } = useStore();
   const { isPremium } = usePremium();
 
+  // Track when prop data was last refreshed — updates whenever a new
+  // non-empty propsData payload arrives. Re-renders every 30s so the
+  // "Updated Xm ago" label stays current without re-fetching.
+  const [lastUpdated, setLastUpdated] = useState<number | null>(null);
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const hasData = Object.values(propsData).some((arr) => (arr?.length ?? 0) > 0);
+    if (hasData) setLastUpdated(Date.now());
+  }, [propsData]);
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), 30_000);
+    return () => clearInterval(id);
+  }, []);
+  const relativeTime = (ts: number | null): string => {
+    if (!ts) return "";
+    const sec = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+    if (sec < 60) return "just now";
+    const min = Math.floor(sec / 60);
+    if (min < 60) return `${min}m ago`;
+    const hr = Math.floor(min / 60);
+    return `${hr}h ago`;
+  };
+
   // Live grading: fetch box-score actuals and paint picks green/red when
   // their games are live or final. Refreshes every 60s in-game.
   const [resultsMap, setResultsMap] = useState<Record<string, Array<{ market: string; actual: number; gameStatus: string }>>>({});
@@ -241,13 +264,25 @@ export default function TodayPropPicks({
 
   if (loading) {
     return (
-      <div className="glass rounded-xl overflow-hidden">
+      <div className="glass rounded-xl overflow-hidden" aria-label="Loading player props" role="status">
         <div className="px-3 sm:px-4 py-2.5 border-b border-purple/15 bg-purple/5 flex items-center gap-2">
           <Users className="w-4 h-4 text-purple" />
           <h2 className="text-xs sm:text-sm font-bold text-silver uppercase tracking-wider">Today&apos;s Player Props</h2>
         </div>
         <div className="divide-y divide-slate/10">
-          {[0, 1, 2].map(i => <div key={i} className="px-4 py-3 h-12 animate-pulse bg-gunmetal/10" />)}
+          {[0, 1, 2, 3, 4].map((i) => (
+            <div key={i} className="px-3 sm:px-4 py-3 flex items-center gap-2 animate-pulse">
+              <div className="w-8 h-8 rounded-full bg-slate/20 flex-shrink-0" />
+              <div className="flex-1 min-w-0 space-y-1.5">
+                <div className="h-3 w-2/3 bg-slate/20 rounded" />
+                <div className="h-2.5 w-1/3 bg-slate/15 rounded" />
+              </div>
+              <div className="text-right space-y-1">
+                <div className="h-3 w-10 bg-slate/20 rounded ml-auto" />
+                <div className="h-2.5 w-8 bg-slate/15 rounded ml-auto" />
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     );
@@ -343,6 +378,15 @@ export default function TodayPropPicks({
             </div>
           )}
         </div>
+        {lastUpdated && (
+          <span
+            className="hidden sm:flex items-center gap-1 text-[10px] text-mercury/50 font-mono flex-shrink-0"
+            title={new Date(lastUpdated).toLocaleString()}
+          >
+            <Clock className="w-3 h-3" />
+            Updated {relativeTime(lastUpdated)}
+          </span>
+        )}
         {sport === "nba" && (
           <Link
             href="/?tab=props"

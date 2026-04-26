@@ -571,11 +571,12 @@ export async function analyzeAllGames(oddsData: any[], scores: any[]): Promise<G
       const awayAbbrev: string = scoreGame?.awayAbbrev ?? "";
       const gamePk: number | null = scoreGame?.id ? Number(scoreGame.id) : null;
 
-      // Fetch pitcher profiles + weather + bullpen + season IL + daily lineup in parallel
-      const [homePitcher, awayPitcher, weather, bullpenFatigue, teamInjuries, dailyLineups] = await Promise.all([
+      // Fetch pitcher profiles + weather + ump + bullpen + season IL + daily lineup in parallel
+      const [homePitcher, awayPitcher, weather, hpUmpire, bullpenFatigue, teamInjuries, dailyLineups] = await Promise.all([
         buildPitcherProfile(homePitcherName, awayTeam),
         buildPitcherProfile(awayPitcherName, homeTeam),
         homeAbbrev ? import("@/lib/mlb/weather-fatigue").then(m => m.getGameWeather(homeAbbrev)).catch(() => null) : Promise.resolve(null),
+        gamePk ? import("@/lib/mlb/umpires").then(m => m.getHomePlateUmpire(gamePk)).catch(() => null) : Promise.resolve(null),
         (async () => {
           try {
             const mod = await import("@/lib/mlb/bullpen-fatigue");
@@ -632,6 +633,22 @@ export async function analyzeAllGames(oddsData: any[], scores: any[]): Promise<G
 
       // Run 3 models
       const pitcherModel = runPitcherModel(homePitcher, awayPitcher, homeTeam, awayTeam, weather, parkData, bullpenFatigue);
+
+      // Apply HP umpire tendency to pitcher model + total projection.
+      // Hitter-friendly umps (>8.5 R/G) → boost total + slight nudge to higher-scoring side.
+      // Pitcher-friendly umps (<8.5) → drop total, no team-side bias (zone affects both).
+      if (hpUmpire) {
+        const dev = hpUmpire.runScoringIndex - 8.5;
+        if (Math.abs(dev) >= 0.3) {
+          // Total projection shifts ~60% of the deviation from league-avg
+          pitcherModel.totalProjection = Math.max(6, pitcherModel.totalProjection + dev * 0.6);
+          // Home-team historic edge under this ump (small effect)
+          const homeWinShift = (hpUmpire.homeTeamWinRate - 53) / 100 * 0.4;
+          pitcherModel.homeWinProb = Math.min(0.95, Math.max(0.05, pitcherModel.homeWinProb + homeWinShift));
+          const tag = dev > 0 ? "hitter-friendly" : "pitcher-friendly";
+          pitcherModel.factors.push(`HP Ump ${hpUmpire.name}: ${tag} zone (${hpUmpire.runScoringIndex.toFixed(1)} R/G avg)`);
+        }
+      }
 
       // Apply team-injury (lineup) edge — key hitters out make the opposing
       // pitcher's job easier. Away IL → boosts home side; home IL → boosts away.
