@@ -3,6 +3,12 @@ import { fetchPlayerProps, parsePlayerProps } from "@/lib/odds/the-odds-api";
 import { devig } from "@/lib/model/kelly";
 import { getApiKey } from "@/lib/odds/api-keys";
 import { getCached, setCache, CACHE_TTL } from "@/lib/odds/server-cache";
+import { searchNBAPlayer } from "@/lib/nba/player-stats";
+import { isPlayerInjured } from "@/lib/nba/injuries";
+import { loadNbaPropBrainFromCloud } from "@/lib/bot/nba-prop-brain";
+import { projectProp } from "@/lib/bot/nba-prop-projector";
+import { cloudGet, cloudSet } from "@/lib/supabase/client";
+import { teamNameToAbbrev } from "@/lib/logos";
 
 export const revalidate = 120;
 
@@ -61,7 +67,6 @@ export async function GET(req: Request) {
   // instantly instead of hitting the Odds API cold.
   const snapshotKey = `props_snap_${sport}_${market}_${todayKey()}`;
   try {
-    const { cloudGet } = await import("@/lib/supabase/client");
     const snapshot = await cloudGet<any>(snapshotKey, null);
     if (snapshot && Array.isArray(snapshot.props) && snapshot.props.length > 0) {
       setCache(cacheKey, snapshot); // warm the server cache too
@@ -164,11 +169,6 @@ export async function GET(req: Request) {
     //     not the market devig — surfaces brain's value on the Board)
     if (sport === "basketball_nba" && grouped.length > 0) {
       try {
-        const { searchNBAPlayer } = await import("@/lib/nba/player-stats");
-        const { isPlayerInjured } = await import("@/lib/nba/injuries");
-        const { loadNbaPropBrainFromCloud } = await import("@/lib/bot/nba-prop-brain");
-        const { projectProp } = await import("@/lib/bot/nba-prop-projector");
-
         // Load the brain once for the whole batch
         const brain = await loadNbaPropBrainFromCloud().catch(() => null);
         const weights = brain?.weights;
@@ -293,10 +293,7 @@ export async function GET(req: Request) {
       setCache(cacheKey, response);
       // Persist to Supabase so any serverless cold start or new region can
       // serve the same picks instantly. Fire-and-forget.
-      try {
-        const { cloudSet } = await import("@/lib/supabase/client");
-        cloudSet(snapshotKey, response).catch(() => {});
-      } catch {}
+      cloudSet(snapshotKey, response).catch(() => {});
     }
     return NextResponse.json(response, { headers: { "Cache-Control": CDN_CACHE } });
   } catch (error) {
@@ -374,7 +371,6 @@ async function synthesizeNbaBrainPicks(market: string, games: any[]): Promise<an
   const allPlayers: any[] = idxData.players ?? [];
 
   // Normalize team names in events → abbreviations
-  const { teamNameToAbbrev } = await import("@/lib/logos");
   const abbrevsInGames = new Set<string>();
   for (const g of games) {
     const home = teamNameToAbbrev(g.home_team ?? "", "nba");
@@ -385,7 +381,6 @@ async function synthesizeNbaBrainPicks(market: string, games: any[]): Promise<an
   if (abbrevsInGames.size === 0) return [];
 
   // Enrich player entries with season stats (search each — cached)
-  const { searchNBAPlayer } = await import("@/lib/nba/player-stats");
   const candidateNames: string[] = allPlayers
     .filter((p) => abbrevsInGames.has((p.teamAbbrev ?? "").toUpperCase()))
     .map((p) => `${p.firstName} ${p.lastName}`)
@@ -415,8 +410,6 @@ async function synthesizeNbaBrainPicks(market: string, games: any[]): Promise<an
   }
 
   // Load brain for projections
-  const { loadNbaPropBrainFromCloud } = await import("@/lib/bot/nba-prop-brain");
-  const { projectProp } = await import("@/lib/bot/nba-prop-projector");
   const brain = await loadNbaPropBrainFromCloud().catch(() => null);
   const weights = brain?.weights;
 

@@ -5,6 +5,9 @@ import { getCached, setCache } from "@/lib/odds/server-cache";
 import { devig } from "@/lib/model/kelly";
 import { runNetRatingModel, runFormModel, buildNBAConsensus } from "@/lib/bot/nba-engine";
 import { getNBATeamAbbrev } from "@/lib/nba/stats-api";
+import { getRestState, computeRestEdge } from "@/lib/nba/rest-fatigue";
+import { getTeamInjuries } from "@/lib/nba/injuries";
+import { projectGameTotal, getTeamRating } from "@/lib/nba/pace-ratings";
 
 export const dynamic = "force-dynamic";
 
@@ -21,10 +24,6 @@ export async function GET() {
 
     // Filter to upcoming games only
     const futureGames = rawGames.filter(g => new Date(g.commence_time).getTime() > now - 30 * 60 * 1000);
-
-    const { getRestState, computeRestEdge } = await import("@/lib/nba/rest-fatigue");
-    const { getTeamInjuries } = await import("@/lib/nba/injuries");
-    const { projectGameTotal, getTeamRating } = await import("@/lib/nba/pace-ratings");
 
     const analyses = await Promise.all(futureGames.slice(0, 12).map(async (game) => {
       const oddsLines = parseOddsLines(game);

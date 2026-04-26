@@ -272,15 +272,26 @@ export async function GET(req: Request) {
         // Check user preferences for Discord webhooks
         const { supabase: sb } = await import("@/lib/supabase/client");
         if (sb) {
-          const { data: prefs } = await sb.from("user_preferences").select("discord_webhook").neq("discord_webhook", "");
-          for (const pref of prefs ?? []) {
-            if (pref.discord_webhook) {
-              await buildAndSendRecap(pref.discord_webhook, "mlb");
-              await buildAndSendRecap(pref.discord_webhook, "nba");
-            }
-          }
+          const { data: prefs } = await sb
+            .from("user_preferences")
+            .select("discord_webhook")
+            .neq("discord_webhook", "")
+            .limit(500);
+          // Parallelize webhook sends so cron doesn't serialize O(n) network calls
+          await Promise.all(
+            (prefs ?? []).flatMap((pref: any) =>
+              pref.discord_webhook
+                ? [
+                    buildAndSendRecap(pref.discord_webhook, "mlb").catch(() => {}),
+                    buildAndSendRecap(pref.discord_webhook, "nba").catch(() => {}),
+                  ]
+                : [],
+            ),
+          );
         }
-      } catch {}
+      } catch (e) {
+        console.error("Discord recap error:", e instanceof Error ? e.message : e);
+      }
     }
 
     // ── Daily Email Recap (8am ET = 12-13 UTC) ──
