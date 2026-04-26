@@ -630,13 +630,16 @@ export default function PicksBoard() {
       {combinedPicks.length === 0 && allEV.length === 0 && (
         <div className="glass rounded-xl p-8 text-center">
           <Activity className="w-8 h-8 text-mercury/20 mx-auto mb-3" />
-          <p className="text-sm text-mercury font-semibold">No picks available yet</p>
-          <p className="text-xs text-mercury/50 mt-1 mb-4">Odds data may be loading or outside peak hours. Requires 2+ books on active games.</p>
+          <p className="text-sm text-mercury font-semibold">Odds feed temporarily unavailable</p>
+          <p className="text-xs text-mercury/50 mt-1 mb-4 max-w-md mx-auto">
+            Monthly Odds API quota has been reached. Live picks will return automatically when credits refresh,
+            or sooner if a new key is added. Scores and brain projections still update.
+          </p>
           <button
             onClick={() => window.dispatchEvent(new CustomEvent("dq-refresh"))}
             className="inline-flex items-center gap-1.5 px-4 py-2 bg-neon/10 border border-neon/25 text-neon text-xs font-semibold rounded-lg hover:bg-neon/20 transition-colors"
           >
-            <RefreshCw className="w-3.5 h-3.5" /> Refresh Data
+            <RefreshCw className="w-3.5 h-3.5" /> Try Again
           </button>
         </div>
       )}
