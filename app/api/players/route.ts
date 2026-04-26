@@ -45,7 +45,9 @@ function todayKey() {
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const market = searchParams.get("market") || "pitcher_strikeouts";
-  const sport = searchParams.get("sport") || "baseball_mlb";
+  let sport = searchParams.get("sport") || "baseball_mlb";
+  // Normalize sport strings: "nba" → "basketball_nba"
+  if (sport === "nba") sport = "basketball_nba";
 
   // Check server cache (keyed by sport + market)
   const cacheKey = `props_v5_${sport}_${market}`;
