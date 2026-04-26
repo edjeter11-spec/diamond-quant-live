@@ -8,7 +8,8 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const name = searchParams.get("name");
   const market = searchParams.get("market") || "player_points";
-  const line = parseFloat(searchParams.get("line") || "0");
+  const lineRaw = parseFloat(searchParams.get("line") || "0");
+  const line = Number.isFinite(lineRaw) && lineRaw > 0 && lineRaw < 100 ? lineRaw : 0;
 
   if (!name) return NextResponse.json({ error: "Player name required" }, { status: 400 });
 

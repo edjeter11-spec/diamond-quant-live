@@ -152,7 +152,9 @@ export async function GET(req: Request) {
     if (grouped.length === 0 && sport === "basketball_nba" && events.length > 0 && market.startsWith("player_")) {
       try {
         grouped = await synthesizeNbaBrainPicks(market, events);
-      } catch (e) { console.error("nba synth error:", e); }
+      } catch (e) {
+        console.error(`NBA synthesis failed for ${market}:`, e instanceof Error ? e.message : e);
+      }
     }
 
     // Augment NBA props with:
@@ -174,13 +176,36 @@ export async function GET(req: Request) {
         // Cap augmentation to top 30 — enough for the full props page while
         // keeping cold-cache latency bounded (all lookups run in parallel).
         const augmentTargets = grouped.slice(0, 30);
+
+        // Deduplicate player names to avoid N+1 queries (60 calls → one per unique name)
+        const uniquePlayerNames = [...new Set(augmentTargets.map((g: any) => g.playerName))];
+        const playerCache = new Map();
+        const injuryCache = new Map();
+
+        // Batch lookup all unique players
+        await Promise.all([
+          Promise.all(
+            uniquePlayerNames.map(name =>
+              searchNBAPlayer(name)
+                .then(p => playerCache.set(name, p))
+                .catch(() => playerCache.set(name, null))
+            )
+          ),
+          Promise.all(
+            uniquePlayerNames.map(name =>
+              isPlayerInjured(name)
+                .then(inj => injuryCache.set(name, inj))
+                .catch(() => injuryCache.set(name, null))
+            )
+          ),
+        ]);
+
+        // Now augment using cached results
         await Promise.all(
           augmentTargets.map(async (g: any) => {
             try {
-              const [p, injury] = await Promise.all([
-                searchNBAPlayer(g.playerName).catch(() => null),
-                isPlayerInjured(g.playerName).catch(() => null),
-              ]);
+              const p = playerCache.get(g.playerName);
+              const injury = injuryCache.get(g.playerName);
               if (p?.id) g.playerId = p.id;
               if (injury) {
                 g.injuryStatus = injury.status;
@@ -220,10 +245,14 @@ export async function GET(req: Request) {
                 g.brainConfidence = projection.confidence;
                 g.brainProjectedValue = projection.projectedValue;
               }
-            } catch {}
+            } catch (e) {
+              console.error(`Failed to augment ${g.playerName}:`, e instanceof Error ? e.message : e);
+            }
           })
         );
-      } catch {}
+      } catch (e) {
+        console.error("NBA prop augmentation failed:", e instanceof Error ? e.message : e);
+      }
     }
 
     // Strip heavy per-book arrays from the default response — they balloon

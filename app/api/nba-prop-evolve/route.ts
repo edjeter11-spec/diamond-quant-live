@@ -18,7 +18,8 @@ export async function GET(req: NextRequest) {
   }
 
   const { searchParams } = new URL(req.url);
-  const generations = Math.min(2, parseInt(searchParams.get("generations") || "2"));
+  const genRaw = parseInt(searchParams.get("generations") || "2");
+  const generations = Math.min(3, Math.max(1, Number.isFinite(genRaw) ? genRaw : 2));
 
   try {
     // Load current brain weights as starting point
