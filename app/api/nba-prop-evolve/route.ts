@@ -6,7 +6,7 @@ import { cloudGet, cloudSet } from "@/lib/supabase/client";
 import { getUserFromRequest } from "@/lib/supabase/server-auth";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 300;
+export const maxDuration = 600;
 
 export async function GET(req: NextRequest) {
   // Lock down: admin-only OR cron secret. 5-min compute job — DOS vector if open.
