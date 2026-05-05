@@ -9,10 +9,11 @@ import { loadNbaPropBrainFromCloud } from "@/lib/bot/nba-prop-brain";
 import { projectProp } from "@/lib/bot/nba-prop-projector";
 import { cloudGet, cloudSet } from "@/lib/supabase/client";
 import { teamNameToAbbrev } from "@/lib/logos";
+import { getFreeEvents } from "@/lib/odds/free-events";
 
 export const revalidate = 120;
 
-const PROP_MARKETS = [
+const MLB_PROP_MARKETS = [
   "pitcher_strikeouts",
   "batter_hits",
   "batter_total_bases",
@@ -22,6 +23,21 @@ const PROP_MARKETS = [
   "batter_stolen_bases",
   "pitcher_outs",
 ];
+
+const NBA_PROP_MARKETS = [
+  "player_points",
+  "player_rebounds",
+  "player_assists",
+  "player_threes",
+  "player_pra",
+];
+
+function marketsFor(sport: string): string[] {
+  return sport === "basketball_nba" ? NBA_PROP_MARKETS : MLB_PROP_MARKETS;
+}
+
+// Back-compat alias used by older fallback paths in this file
+const PROP_MARKETS = MLB_PROP_MARKETS;
 
 // Markets that have alternate-line variants on The Odds API.
 // Requesting both gives 5-10x more line options per player.
@@ -75,9 +91,6 @@ export async function GET(req: Request) {
   } catch {}
 
   const apiKey = getApiKey();
-  if (!apiKey) {
-    return NextResponse.json({ props: [], markets: PROP_MARKETS, error: "No API keys available" });
-  }
 
   try {
     // Fetch event list for the right sport
@@ -85,27 +98,40 @@ export async function GET(req: Request) {
     let events = getCached(eventsCacheKey, CACHE_TTL.EVENTS);
 
     if (!events) {
-      const eventsRes = await fetch(
-        `${BASE_URL}/sports/${sport}/events?apiKey=${apiKey}`,
-        { next: { revalidate: 300 } }
-      );
-      if (!eventsRes.ok) throw new Error(`Events API error: ${eventsRes.status}`);
-      const allEvents = await eventsRes.json();
+      let allEvents: any[] = [];
+      // Try Odds API events first if a key exists
+      if (apiKey) {
+        try {
+          const eventsRes = await fetch(
+            `${BASE_URL}/sports/${sport}/events?apiKey=${apiKey}`,
+            { next: { revalidate: 300 } }
+          );
+          if (eventsRes.ok) {
+            allEvents = await eventsRes.json();
+          }
+        } catch (e) {
+          console.error("Odds API events fetch failed, falling back to free source:", e instanceof Error ? e.message : e);
+        }
+      }
+      // Fallback: ESPN (NBA) / MLB Stats API (MLB) — no key needed
+      if (!Array.isArray(allEvents) || allEvents.length === 0) {
+        try {
+          allEvents = await getFreeEvents(sport);
+        } catch (e) {
+          console.error("Free events fallback failed:", e instanceof Error ? e.message : e);
+          allEvents = [];
+        }
+      }
 
       // Rolling window: games starting in the next 28 hours OR that started
-      // within the last 4 hours (still live / recently final). Handles every
-      // hour of the day — late-night, early morning, day games — without
-      // the calendar-day edge cases the old 4AM ET window had.
+      // within the last 4 hours (still live / recently final).
       const now = Date.now();
-      const pool = (allEvents as any[]).filter((e: any) => {
+      const pool = allEvents.filter((e: any) => {
         const t = new Date(e.commence_time).getTime();
         return t >= now - 4 * 60 * 60 * 1000 && t <= now + 28 * 60 * 60 * 1000;
       });
       events = pool
-        .sort((a: any, b: any) => {
-          // Soonest games first — they're most likely to have props posted
-          return new Date(a.commence_time).getTime() - new Date(b.commence_time).getTime();
-        })
+        .sort((a: any, b: any) => new Date(a.commence_time).getTime() - new Date(b.commence_time).getTime())
         .slice(0, 5)
         .map((e: any) => ({ id: e.id, away_team: e.away_team, home_team: e.home_team, commence_time: e.commence_time }));
 
@@ -116,49 +142,57 @@ export async function GET(req: Request) {
     const alt = ALT_MARKETS[market];
     const marketsParam = alt ? `${market},${alt}` : market;
 
-    // Fetch props for all games in parallel. If the combined main+alt call
-    // is rejected (some sports/events don't support alt markets), retry with
-    // the main market alone so the board stays populated.
-    const propGames = (events as any[]).slice(0, 5);
-    const perGameResults = await Promise.all(
-      propGames.map(async (game: any) => {
-        const attempt = async (mkt: string) => {
-          const data = await fetchPlayerProps(apiKey, game.id, mkt, sport);
-          const props = parsePlayerProps(data);
-          for (const prop of props) {
-            prop.team = `${game.away_team} @ ${game.home_team}`;
-            (prop as any).gameTime = game.commence_time;
+    // Fetch props from Odds API if a key is available. Skip entirely when
+    // not — we'll fall through to brain synthesis below.
+    let allProps: any[] = [];
+    if (apiKey) {
+      const propGames = (events as any[]).slice(0, 5);
+      const perGameResults = await Promise.all(
+        propGames.map(async (game: any) => {
+          const attempt = async (mkt: string) => {
+            const data = await fetchPlayerProps(apiKey, game.id, mkt, sport);
+            const props = parsePlayerProps(data);
+            for (const prop of props) {
+              prop.team = `${game.away_team} @ ${game.home_team}`;
+              (prop as any).gameTime = game.commence_time;
+            }
+            return props;
+          };
+          try {
+            const primary = await attempt(marketsParam);
+            if (primary.length > 0) return primary;
+            if (alt) {
+              try { return await attempt(market); } catch {}
+            }
+            return primary;
+          } catch {
+            if (alt) {
+              try { return await attempt(market); } catch {}
+            }
+            return [];
           }
-          return props;
-        };
-        try {
-          const primary = await attempt(marketsParam);
-          if (primary.length > 0) return primary;
-          // No props parsed — try main-only in case alt was rejected silently
-          if (alt) {
-            try { return await attempt(market); } catch {}
-          }
-          return primary;
-        } catch {
-          if (alt) {
-            try { return await attempt(market); } catch {}
-          }
-          return [];
-        }
-      }),
-    );
-    const allProps: any[] = perGameResults.flat();
+        }),
+      );
+      allProps = perGameResults.flat();
+    }
 
     let grouped = groupByPlayer(allProps);
+    let isSynthesized = false;
 
-    // FALLBACK — when books haven't posted yet but games exist, synthesize
-    // "Brain projection" picks from the NBA player index + season stats so
-    // the board never goes dark 5h before tip-off.
-    if (grouped.length === 0 && sport === "basketball_nba" && events.length > 0 && market.startsWith("player_")) {
+    // FALLBACK — when books haven't posted yet (or Odds API is exhausted),
+    // synthesize "Brain projection" picks so the board never goes dark.
+    // Triggers for both NBA and MLB whenever we have games but no real props.
+    if (grouped.length === 0 && events.length > 0) {
       try {
-        grouped = await synthesizeNbaBrainPicks(market, events);
+        if (sport === "basketball_nba" && market.startsWith("player_")) {
+          grouped = await synthesizeNbaBrainPicks(market, events);
+          isSynthesized = grouped.length > 0;
+        } else if (sport === "baseball_mlb") {
+          grouped = await synthesizeMlbBrainPicks(market, events);
+          isSynthesized = grouped.length > 0;
+        }
       } catch (e) {
-        console.error(`NBA synthesis failed for ${market}:`, e instanceof Error ? e.message : e);
+        console.error(`Synthesis failed for ${sport}/${market}:`, e instanceof Error ? e.message : e);
       }
     }
 
@@ -284,8 +318,10 @@ export async function GET(req: Request) {
 
     const response = {
       props: slim,
-      markets: PROP_MARKETS,
+      markets: marketsFor(sport),
       events: events.map((g: any) => ({ id: g.id, game: `${g.away_team} @ ${g.home_team}` })),
+      isSynthesized,
+      source: isSynthesized ? "brain_projection" : (allProps.length > 0 ? "live_books" : "empty"),
       message: slim.length === 0 ? "No props available yet for this market" : undefined,
     };
 
@@ -300,7 +336,7 @@ export async function GET(req: Request) {
     console.error("Props API error:", error);
     const stale = getCached(cacheKey, CACHE_TTL.PROPS * 5);
     if (stale) return NextResponse.json(stale);
-    return NextResponse.json({ props: [], markets: PROP_MARKETS, error: "Failed to fetch props" });
+    return NextResponse.json({ props: [], markets: marketsFor(sport), error: "Failed to fetch props" });
   }
 }
 
@@ -453,6 +489,85 @@ async function synthesizeNbaBrainPicks(market: string, games: any[]): Promise<an
       isSynthesized: true,
     };
   });
+}
+
+// MLB brain-projection synthesis. Builds picks from probable pitchers when
+// books haven't posted props yet (or when Odds API is exhausted). Pitcher
+// markets only — batter props need confirmed lineups which often aren't out.
+async function synthesizeMlbBrainPicks(market: string, games: any[]): Promise<any[]> {
+  const isPitcherMarket = market === "pitcher_strikeouts" || market === "pitcher_outs";
+  if (!isPitcherMarket) return []; // batter props need lineups — skip for now
+
+  const MLB_API = "https://statsapi.mlb.com/api/v1";
+  const out: any[] = [];
+
+  // Pull probable pitchers for each upcoming game from MLB Stats API
+  for (const game of games) {
+    try {
+      const gamePk = game.id;
+      const url = `${MLB_API}/schedule?sportId=1&gamePk=${gamePk}&hydrate=probablePitcher`;
+      const res = await fetch(url, { next: { revalidate: 600 } });
+      if (!res.ok) continue;
+      const data = await res.json();
+      for (const dateEntry of data.dates ?? []) {
+        for (const g of dateEntry.games ?? []) {
+          for (const side of ["home", "away"] as const) {
+            const pitcher = g.teams?.[side]?.probablePitcher;
+            if (!pitcher?.id) continue;
+
+            // Fetch career K/9 + IP/start as basis for projection
+            try {
+              const statsUrl = `${MLB_API}/people/${pitcher.id}/stats?stats=season&group=pitching`;
+              const sRes = await fetch(statsUrl, { next: { revalidate: 3600 } });
+              if (!sRes.ok) continue;
+              const sData = await sRes.json();
+              const stat = sData.stats?.[0]?.splits?.[0]?.stat;
+              if (!stat) continue;
+
+              const ip = parseFloat(stat.inningsPitched ?? "0");
+              const so = Number(stat.strikeOuts ?? 0);
+              const games = Number(stat.gamesPlayed ?? 1);
+              if (ip < 10 || games < 2) continue; // need a sample size
+
+              const ipPerStart = ip / games;
+              const k9 = ip > 0 ? (so / ip) * 9 : 6;
+              const projectedKs = (ipPerStart * k9) / 9;
+              const projectedOuts = ipPerStart * 3;
+
+              const projectedValue = market === "pitcher_strikeouts" ? projectedKs : projectedOuts;
+              if (!Number.isFinite(projectedValue) || projectedValue <= 0) continue;
+
+              const line = Math.round(projectedValue * 2) / 2 - 0.5;
+              const overProb = Math.min(70, 50 + Math.max(0, projectedValue - line) * 10);
+
+              out.push({
+                playerName: pitcher.fullName ?? "Unknown",
+                playerId: pitcher.id,
+                team: `${g.teams?.away?.team?.name ?? game.away_team} @ ${g.teams?.home?.team?.name ?? game.home_team}`,
+                market,
+                line,
+                gameTime: g.gameDate ?? game.commence_time,
+                bestOver: { bookmaker: "Projected", price: -110 },
+                bestUnder: { bookmaker: "Projected", price: -110 },
+                fairOverProb: 50,
+                fairUnderProb: 50,
+                altLines: [],
+                bestAlt: null,
+                brainSide: "over" as const,
+                brainOverProb: overProb,
+                brainUnderProb: 100 - overProb,
+                brainConfidence: Math.round(overProb),
+                brainProjectedValue: Math.round(projectedValue * 10) / 10,
+                isSynthesized: true,
+              });
+            } catch {}
+          }
+        }
+      }
+    } catch {}
+  }
+
+  return out.slice(0, 20);
 }
 
 function groupByPlayer(props: ReturnType<typeof parsePlayerProps>) {
