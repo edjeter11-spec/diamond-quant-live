@@ -63,8 +63,10 @@ export async function GET() {
 
     return NextResponse.json({ entries: entries.slice(0, 50) });
   } catch (err) {
-    return NextResponse.json({ entries: [], error: "Failed to load leaderboard" }, { status: 500 });
+    console.error("leaderboard error:", err);
+    return NextResponse.json({ entries: [], message: "Leaderboard temporarily unavailable" });
   }
 }
 
 export const revalidate = 1800; // Cache for 30 min
+export const maxDuration = 30;

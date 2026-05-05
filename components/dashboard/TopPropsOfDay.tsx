@@ -25,6 +25,7 @@ interface PropAnalysis {
   evEdge: number;
   reasoning: string[];
   aiSummary: string;
+  isSynthesized?: boolean;
   stats: {
     seasonAvg: number;
     last10Avg: number;
@@ -231,12 +232,20 @@ export default function TopPropsOfDay() {
                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-electric/15 text-electric font-bold flex-shrink-0">{getTeamAbbrev(pick.playerName, pick.team)}</span>
                     <p className="text-xs sm:text-sm font-semibold text-silver truncate">{pick.playerName}</p>
                   </div>
-                  <p className="text-[9px] sm:text-[10px] text-mercury/60">
+                  <p className="text-[9px] sm:text-[10px] text-mercury/60 flex items-center gap-1.5 flex-wrap">
                     {pick.gameTime && (
                       <span className="text-mercury/80">
                         {new Date(pick.gameTime).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} — </span>
                     )}
-                    {MARKET_LABELS[pick.market] ?? pick.market} — {pick.recommendation} {pick.line}
+                    <span>{MARKET_LABELS[pick.market] ?? pick.market} — {pick.recommendation} {pick.line}</span>
+                    {pick.isSynthesized && (
+                      <span
+                        className="inline-flex items-center px-1 py-0.5 rounded bg-electric/15 border border-electric/30 text-electric text-[8px] font-bold"
+                        title="Projected pick — books haven't posted lines yet. Estimated from season stats + brain."
+                      >
+                        PROJECTED
+                      </span>
+                    )}
                   </p>
                 </div>
 
@@ -416,6 +425,7 @@ function scoreAndAnalyzeProp(prop: any, market: string): PropAnalysis | null {
     bestBook,
     fairProb: Math.round(fairProb * 1000) / 10,
     evEdge: Math.round(evEdge * 100) / 100,
+    isSynthesized: !!prop.isSynthesized,
     reasoning: [
       `Fair probability: ${(fairProb * 100).toFixed(1)}% ${side} (de-vigged from ${bookCount} books)`,
       `Best price: ${bestOdds > 0 ? "+" : ""}${bestOdds} at ${bestBook}`,

@@ -3,6 +3,7 @@ import { getGameWeather } from "@/lib/mlb/weather-fatigue";
 import { getCached, setCache } from "@/lib/odds/server-cache";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 15;
 
 // Simple weather endpoint for the game-card badge.
 // Caches per-team for 10 minutes (weather doesn't change that fast).

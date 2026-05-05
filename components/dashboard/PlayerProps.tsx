@@ -239,15 +239,17 @@ export default function PlayerProps() {
   };
 
   const handleAddProp = (prop: PropLine, side: "over" | "under") => {
-    const odds = side === "over" ? prop.bestOver.price : prop.bestUnder.price;
+    // Guard: synthesized/incomplete props can ship without bestOver/bestUnder.
+    const best = side === "over" ? prop.bestOver : prop.bestUnder;
+    if (!best || typeof best.price !== "number") return;
     const fairProb = side === "over" ? prop.fairOverProb / 100 : prop.fairUnderProb / 100;
     addParlayLeg({
       game: prop.playerName,
       market: "player_prop",
       pick: `${prop.playerName} ${side === "over" ? "Over" : "Under"} ${prop.line} ${MARKET_LABELS[prop.market] ?? prop.market}`,
-      odds,
+      odds: best.price,
       fairProb,
-      bookmaker: side === "over" ? prop.bestOver.bookmaker : prop.bestUnder.bookmaker,
+      bookmaker: best.bookmaker ?? "",
     });
   };
 
@@ -565,9 +567,9 @@ export default function PlayerProps() {
                         <div className="rounded-lg bg-gunmetal/30 p-3">
                           <p className="text-[11px] text-mercury uppercase tracking-wider mb-2 font-semibold">Odds by Sportsbook</p>
                           <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
-                            {prop.books.map((book, bi) => {
-                              const isBestOver = book.bookmaker === prop.bestOver.bookmaker && book.overPrice === prop.bestOver.price;
-                              const isBestUnder = book.bookmaker === prop.bestUnder.bookmaker && book.underPrice === prop.bestUnder.price;
+                            {(prop.books ?? []).map((book, bi) => {
+                              const isBestOver = book.bookmaker === prop.bestOver?.bookmaker && book.overPrice === prop.bestOver?.price;
+                              const isBestUnder = book.bookmaker === prop.bestUnder?.bookmaker && book.underPrice === prop.bestUnder?.price;
                               return (
                                 <div key={bi} className="flex items-center justify-between px-2.5 py-2 rounded bg-bunker/60 border border-slate/20">
                                   <span className="text-[11px] font-medium text-mercury truncate mr-2">
@@ -798,26 +800,29 @@ export default function PlayerProps() {
                         {prop.market === "batter_home_runs" ? (
                           <button
                             onClick={() => handleAddProp(prop, "over")}
-                            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-neon/10 border border-neon/20 text-neon text-sm font-semibold hover:bg-neon/20 active:scale-[0.98] transition-all"
+                            disabled={typeof prop.bestOver?.price !== "number"}
+                            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-neon/10 border border-neon/20 text-neon text-sm font-semibold hover:bg-neon/20 active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                           >
                             <ArrowUpRight className="w-4 h-4" />
-                            Over {prop.line} ({formatOdds(prop.bestOver.price)})
+                            Over {prop.line} {typeof prop.bestOver?.price === "number" ? `(${formatOdds(prop.bestOver.price)})` : "(—)"}
                           </button>
                         ) : (
                           <div className="grid grid-cols-2 gap-2">
                             <button
                               onClick={() => handleAddProp(prop, "over")}
-                              className="flex items-center justify-center gap-2 py-2.5 rounded-lg bg-neon/10 border border-neon/20 text-neon text-sm font-semibold hover:bg-neon/20 active:scale-[0.98] transition-all"
+                              disabled={typeof prop.bestOver?.price !== "number"}
+                              className="flex items-center justify-center gap-2 py-2.5 rounded-lg bg-neon/10 border border-neon/20 text-neon text-sm font-semibold hover:bg-neon/20 active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                             >
                               <ArrowUpRight className="w-4 h-4" />
-                              Over {prop.line} ({formatOdds(prop.bestOver.price)})
+                              Over {prop.line} {typeof prop.bestOver?.price === "number" ? `(${formatOdds(prop.bestOver.price)})` : "(—)"}
                             </button>
                             <button
                               onClick={() => handleAddProp(prop, "under")}
-                              className="flex items-center justify-center gap-2 py-2.5 rounded-lg bg-purple/10 border border-purple/20 text-purple text-sm font-semibold hover:bg-purple/20 active:scale-[0.98] transition-all"
+                              disabled={typeof prop.bestUnder?.price !== "number"}
+                              className="flex items-center justify-center gap-2 py-2.5 rounded-lg bg-purple/10 border border-purple/20 text-purple text-sm font-semibold hover:bg-purple/20 active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                             >
                               <ArrowDownRight className="w-4 h-4" />
-                              Under {prop.line} ({formatOdds(prop.bestUnder.price)})
+                              Under {prop.line} {typeof prop.bestUnder?.price === "number" ? `(${formatOdds(prop.bestUnder.price)})` : "(—)"}
                             </button>
                           </div>
                         )}

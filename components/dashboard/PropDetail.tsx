@@ -261,7 +261,10 @@ export default function PropDetail({
                 : `Model leans ${recommendation.side.replace("_", " ")}`}
             </p>
             {(() => {
-              const conf = Math.round((recommendation.confidence ?? 0) * 100);
+              // recommendation.confidence is already 0-100 from the API.
+              // (Older code multiplied by 100 — that produced 2000%-style labels.)
+              const raw = Number(recommendation.confidence ?? 0);
+              const conf = Math.round(raw <= 1 ? raw * 100 : raw);
               const tier = getConfidenceTier(conf);
               return (
                 <span className={`ml-auto text-[10px] px-1.5 py-0.5 rounded border ${tier.text} ${tier.bg} ${tier.border}`}>

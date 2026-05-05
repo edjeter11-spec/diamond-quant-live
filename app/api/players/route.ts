@@ -12,6 +12,7 @@ import { teamNameToAbbrev } from "@/lib/logos";
 import { getFreeEvents } from "@/lib/odds/free-events";
 
 export const revalidate = 120;
+export const maxDuration = 30;
 
 const MLB_PROP_MARKETS = [
   "pitcher_strikeouts",
@@ -336,7 +337,16 @@ export async function GET(req: Request) {
     console.error("Props API error:", error);
     const stale = getCached(cacheKey, CACHE_TTL.PROPS * 5);
     if (stale) return NextResponse.json(stale);
-    return NextResponse.json({ props: [], markets: marketsFor(sport), error: "Failed to fetch props" });
+    // Empty array (not error) so the UI renders the empty-state with the
+    // "no props yet" message rather than a red toast.
+    return NextResponse.json({
+      props: [],
+      markets: marketsFor(sport),
+      events: [],
+      isSynthesized: false,
+      source: "empty",
+      message: "Props temporarily unavailable",
+    });
   }
 }
 

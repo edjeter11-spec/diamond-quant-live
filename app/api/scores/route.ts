@@ -41,10 +41,7 @@ export async function GET(req: Request) {
     return getMlbScores();
   } catch (error) {
     console.error("Scores API error:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch scores", games: [] },
-      { status: 500 }
-    );
+    return NextResponse.json({ games: [], message: "Scores temporarily unavailable" });
   }
 }
 
@@ -106,10 +103,7 @@ async function getMlbScores() {
     );
   } catch (error) {
     console.error("MLB Scores API error:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch scores", games: [] },
-      { status: 500 }
-    );
+    return NextResponse.json({ games: [], message: "Scores temporarily unavailable" });
   }
 }
 

@@ -27,6 +27,7 @@ export async function GET(req: NextRequest) {
       injuries: all,
     });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error("nba-injuries error:", error);
+    return NextResponse.json({ teams: 0, totalInjured: 0, injuries: [] });
   }
 }

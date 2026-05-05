@@ -95,10 +95,11 @@ export async function GET(req: Request) {
   const sport = searchParams.get("sport") || "baseball_mlb";
   const CACHE_KEY = `sharp_movements_${sport}`;
 
-  const cached = getCached(CACHE_KEY, 60); // 60s cache so we don't hammer DB
+  // server-cache TTL is in milliseconds — 60_000 = 60s
+  const cached = getCached(CACHE_KEY, 60_000);
   if (cached) return NextResponse.json(cached);
 
-  if (!supabase) return NextResponse.json({ movements: [], error: "No DB" });
+  if (!supabase) return NextResponse.json({ movements: [], count: 0, sport });
 
   const since = new Date(Date.now() - 60 * 60 * 1000).toISOString();
   const { data, error } = await supabase
@@ -108,7 +109,10 @@ export async function GET(req: Request) {
     .gte("captured_at", since)
     .order("captured_at", { ascending: true });
 
-  if (error || !data) return NextResponse.json({ movements: [], error: error?.message });
+  if (error || !data) {
+    if (error) console.error("sharp-money db error:", error.message);
+    return NextResponse.json({ movements: [], count: 0, sport });
+  }
 
   const movements = computeMovements(data);
   const result = { movements, count: movements.length, sport };
