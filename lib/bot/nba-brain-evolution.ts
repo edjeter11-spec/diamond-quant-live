@@ -4,7 +4,6 @@
 // tests on held-out set, promotes the winner. Repeats per generation.
 // ──────────────────────────────────────────────────────────
 
-import { deepTrainNbaProps } from "./nba-prop-deep-trainer";
 import { projectProp, type ProjectionContext, type RecentFormData } from "./nba-prop-projector";
 import {
   type NbaPropBrainState, type NbaPropWeights,
@@ -25,6 +24,7 @@ export interface BrainVariant {
   trainAccuracy: Record<string, { total: number; hits: number; winRate: number }>;
   testAccuracy: Record<string, { total: number; hits: number; winRate: number }>;
   overallTestWinRate: number;
+  brierScore: number;
 }
 
 export interface EvolutionState {
@@ -115,6 +115,7 @@ export function generateVariants(
         strategy: strat.desc,
         trainAccuracy: {}, testAccuracy: {},
         overallTestWinRate: 0,
+        brierScore: 0.25,
       });
     }
     // Add one random mutation
@@ -154,6 +155,7 @@ function createMutation(
     strategy: `±${(magnitude * 100).toFixed(0)}% mutation from winner`,
     trainAccuracy: {}, testAccuracy: {},
     overallTestWinRate: 0,
+    brierScore: 0.25,
   };
 }
 
@@ -176,6 +178,7 @@ function createRandomMutant(
     strategy: "Random exploration — entirely new weight config",
     trainAccuracy: {}, testAccuracy: {},
     overallTestWinRate: 0,
+    brierScore: 0.25,
   };
 }
 
@@ -216,11 +219,7 @@ export async function trainAndEvaluate(
   };
 
   // Phase 1: Train on training data (brain LEARNS)
-  const trainResult = await deepTrainNbaProps(brain, [], onProgress, undefined, undefined);
-  // We can't use deepTrainNbaProps directly since it fetches its own data.
-  // Instead, inline the quiz logic for the provided data.
-
-  // Actually, let's use a simpler direct approach: quiz the brain on the data manually
+  // Quiz the brain on the training data (with learning enabled)
   const trained = await runQuizOnData(brain, trainData, true, onProgress);
   variant.trainAccuracy = trained.accuracy;
 
@@ -229,6 +228,7 @@ export async function trainAndEvaluate(
   // Phase 2: Test on test data (brain does NOT learn — pure evaluation)
   const tested = await runQuizOnData(trained.brain, testData, false);
   variant.testAccuracy = tested.accuracy;
+  variant.brierScore = tested.brierScore;
 
   // Overall test win rate (average across prop types)
   const types = Object.values(tested.accuracy);
@@ -236,7 +236,7 @@ export async function trainAndEvaluate(
   const totalTests = types.reduce((s, t) => s + t.total, 0);
   variant.overallTestWinRate = totalTests > 0 ? Math.round((totalHits / totalTests) * 1000) / 10 : 0;
 
-  onProgress?.(`${variant.name}: ${variant.overallTestWinRate}% on test set`);
+  onProgress?.(`${variant.name}: ${variant.overallTestWinRate}% on test set (Brier: ${variant.brierScore})`);
   return variant;
 }
 
@@ -246,13 +246,15 @@ async function runQuizOnData(
   data: NbaPlayerGameLog[],
   learn: boolean,
   onProgress?: (msg: string) => void
-): Promise<{ brain: NbaPropBrainState; accuracy: Record<string, { total: number; hits: number; winRate: number }> }> {
+): Promise<{ brain: NbaPropBrainState; accuracy: Record<string, { total: number; hits: number; winRate: number }>; brierScore: number }> {
   let updated = { ...brain };
   const accuracy: Record<string, { total: number; hits: number }> = {
     player_points: { total: 0, hits: 0 },
     player_rebounds: { total: 0, hits: 0 },
     player_assists: { total: 0, hits: 0 },
   };
+  let brierSum = 0;
+  let brierCount = 0;
 
   // Build rolling player states
   const playerStates = new Map<number, { gamesPlayed: number; ptsSum: number; rebSum: number; astSum: number; last5: Array<{ pts: number; reb: number; ast: number; date: string }> ; lastDate: string }>();
@@ -304,6 +306,11 @@ async function runQuizOnData(
         accuracy[type].total++;
         if (hit) accuracy[type].hits++;
 
+        // Accumulate Brier score: (predicted_prob - outcome)^2
+        const outcome = hit ? 1 : 0;
+        brierSum += Math.pow(proj.probability - outcome, 2);
+        brierCount++;
+
         if (learn) {
           updated = learnFromPropResult(updated, {
             playerName: log.playerName, playerId: log.playerId, team: log.team,
@@ -335,7 +342,8 @@ async function runQuizOnData(
     result[key] = { ...val, winRate: val.total > 0 ? Math.round((val.hits / val.total) * 1000) / 10 : 0 };
   }
 
-  return { brain: updated, accuracy: result };
+  const avgBrier = brierCount > 0 ? Math.round((brierSum / brierCount) * 10000) / 10000 : 0.25;
+  return { brain: updated, accuracy: result, brierScore: avgBrier };
 }
 
 function daysBetween(d1: string, d2: string): number {

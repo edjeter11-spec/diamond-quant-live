@@ -1,48 +1,80 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Trophy, Crown, TrendingUp, TrendingDown, Diamond, ArrowLeft, Flame, Medal } from "lucide-react";
+import { Trophy, Crown, TrendingUp, Diamond, ArrowLeft, Flame, Medal } from "lucide-react";
 import Link from "next/link";
+
+interface LeaderboardStats {
+  wins: number;
+  losses: number;
+  roi: number;
+  profit: number;
+  winRate: number;
+  totalBets: number;
+  bestStreak: number;
+}
 
 interface LeaderboardEntry {
   id: string;
   display_name: string;
   avatar_url: string;
-  stats: {
-    wins: number;
-    losses: number;
-    roi: number;
-    profit: number;
-    winRate: number;
-    totalBets: number;
-  };
+  stats: LeaderboardStats;
+}
+
+type Period = "all" | "month" | "week";
+
+const PERIOD_LABELS: Record<Period, string> = {
+  all: "All Time",
+  month: "This Month",
+  week: "This Week",
+};
+
+function RankBadge({ rank }: { rank: number }) {
+  if (rank === 0)
+    return (
+      <div className="w-8 h-8 rounded-full bg-gold/20 flex items-center justify-center flex-shrink-0">
+        <Medal className="w-4 h-4 text-gold" />
+      </div>
+    );
+  if (rank === 1)
+    return (
+      <div className="w-8 h-8 rounded-full bg-[#c0c0c0]/15 flex items-center justify-center flex-shrink-0">
+        <Medal className="w-4 h-4 text-[#c0c0c0]" />
+      </div>
+    );
+  if (rank === 2)
+    return (
+      <div className="w-8 h-8 rounded-full bg-[#cd7f32]/15 flex items-center justify-center flex-shrink-0">
+        <Medal className="w-4 h-4 text-[#cd7f32]" />
+      </div>
+    );
+  return (
+    <div className="w-8 h-8 rounded-full bg-gunmetal/60 flex items-center justify-center flex-shrink-0">
+      <span className="text-xs font-bold text-mercury">#{rank + 1}</span>
+    </div>
+  );
+}
+
+function rowBg(rank: number) {
+  if (rank === 0) return "bg-gold/5 border-gold/20";
+  if (rank === 1) return "bg-[#c0c0c0]/5 border-[#c0c0c0]/15";
+  if (rank === 2) return "bg-[#cd7f32]/5 border-[#cd7f32]/15";
+  return "bg-bunker border-slate/40";
 }
 
 export default function LeaderboardPage() {
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [sortBy, setSortBy] = useState<"roi" | "profit" | "winRate" | "totalBets">("roi");
+  const [period, setPeriod] = useState<Period>("all");
 
   useEffect(() => {
-    async function load() {
-      try {
-        const res = await fetch("/api/leaderboard");
-        if (res.ok) {
-          const data = await res.json();
-          setEntries(data.entries ?? []);
-        }
-      } catch {}
-      setLoading(false);
-    }
-    load();
-  }, []);
-
-  const sorted = [...entries].sort((a, b) => {
-    if (sortBy === "roi") return b.stats.roi - a.stats.roi;
-    if (sortBy === "profit") return b.stats.profit - a.stats.profit;
-    if (sortBy === "winRate") return b.stats.winRate - a.stats.winRate;
-    return b.stats.totalBets - a.stats.totalBets;
-  });
+    setLoading(true);
+    fetch(`/api/leaderboard?period=${period}`)
+      .then(r => r.ok ? r.json() : { entries: [] })
+      .then(data => setEntries(data.entries ?? []))
+      .catch(() => setEntries([]))
+      .finally(() => setLoading(false));
+  }, [period]);
 
   return (
     <div className="min-h-screen bg-void text-silver">
@@ -57,24 +89,36 @@ export default function LeaderboardPage() {
           </div>
           <div>
             <h1 className="text-xl font-bold text-white">Leaderboard</h1>
-            <p className="text-xs text-mercury font-mono">TOP BETTORS — RANKED BY PERFORMANCE</p>
+            <p className="text-xs text-mercury font-mono">TOP BETTORS — RANKED BY WIN RATE</p>
           </div>
         </div>
 
-        {/* Sort Tabs */}
+        {/* Period Tabs */}
         <div className="flex gap-1 mb-4 bg-bunker rounded-lg p-1 border border-slate/40">
-          {(["roi", "profit", "winRate", "totalBets"] as const).map(key => (
+          {(["all", "month", "week"] as Period[]).map(p => (
             <button
-              key={key}
-              onClick={() => setSortBy(key)}
+              key={p}
+              onClick={() => setPeriod(p)}
               className={`flex-1 py-2 rounded-md text-[11px] font-semibold transition-all ${
-                sortBy === key ? "bg-neon/10 text-neon" : "text-mercury hover:text-white"
+                period === p ? "bg-neon/10 text-neon" : "text-mercury hover:text-white"
               }`}
             >
-              {key === "roi" ? "ROI" : key === "profit" ? "Profit" : key === "winRate" ? "Win %" : "Volume"}
+              {PERIOD_LABELS[p]}
             </button>
           ))}
         </div>
+
+        {/* Column headers */}
+        {!loading && entries.length > 0 && (
+          <div className="grid grid-cols-[2.5rem_1fr_auto_auto_auto_auto] gap-2 px-4 pb-1 text-[9px] text-mercury/50 uppercase font-semibold tracking-wider">
+            <span>Rank</span>
+            <span>User</span>
+            <span className="text-right">Record</span>
+            <span className="text-right">Win%</span>
+            <span className="text-right">ROI</span>
+            <span className="text-right">Streak</span>
+          </div>
+        )}
 
         {/* Entries */}
         {loading ? (
@@ -82,63 +126,67 @@ export default function LeaderboardPage() {
             <Diamond className="w-8 h-8 text-mercury/20 mx-auto animate-pulse" />
             <p className="text-sm text-mercury mt-3">Loading rankings...</p>
           </div>
-        ) : sorted.length === 0 ? (
-          <div className="text-center py-12">
+        ) : entries.length === 0 ? (
+          <div className="text-center py-12 glass rounded-xl border border-slate/30 px-6">
             <Trophy className="w-8 h-8 text-mercury/20 mx-auto" />
-            <p className="text-sm text-mercury mt-3">No ranked bettors yet</p>
-            <p className="text-xs text-mercury/50 mt-1">Sign up and log bets to appear on the leaderboard</p>
+            <p className="text-sm text-silver mt-3 font-semibold">No ranked bettors yet</p>
+            <p className="text-xs text-mercury/60 mt-1 max-w-xs mx-auto">
+              Be the first on the leaderboard — track your picks in the app
+            </p>
+            <Link
+              href="/"
+              className="mt-4 inline-block text-[11px] text-electric hover:text-neon transition-colors"
+            >
+              Start tracking picks →
+            </Link>
           </div>
         ) : (
           <div className="space-y-2">
-            {sorted.map((entry, i) => (
+            {entries.map((entry, i) => (
               <div
                 key={entry.id}
-                className={`rounded-xl border p-4 flex items-center gap-3 transition-colors ${
-                  i === 0 ? "bg-gold/5 border-gold/20" :
-                  i === 1 ? "bg-[#c0c0c0]/5 border-[#c0c0c0]/15" :
-                  i === 2 ? "bg-[#cd7f32]/5 border-[#cd7f32]/15" :
-                  "bg-bunker border-slate/40"
-                }`}
+                className={`rounded-xl border p-3 grid grid-cols-[2.5rem_1fr_auto_auto_auto_auto] items-center gap-2 transition-colors ${rowBg(i)}`}
               >
-                {/* Rank */}
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                  i === 0 ? "bg-gold/20" : i === 1 ? "bg-[#c0c0c0]/15" : i === 2 ? "bg-[#cd7f32]/15" : "bg-gunmetal/60"
-                }`}>
-                  {i < 3 ? (
-                    <Medal className={`w-4 h-4 ${i === 0 ? "text-gold" : i === 1 ? "text-[#c0c0c0]" : "text-[#cd7f32]"}`} />
-                  ) : (
-                    <span className="text-xs font-bold text-mercury">{i + 1}</span>
-                  )}
-                </div>
+                <RankBadge rank={i} />
 
                 {/* Avatar + Name */}
-                {entry.avatar_url ? (
-                  <img src={entry.avatar_url} alt="" className="w-8 h-8 rounded-full" />
-                ) : (
-                  <div className="w-8 h-8 rounded-full bg-neon/10 flex items-center justify-center text-neon text-sm font-bold">
-                    {(entry.display_name?.[0] || "?").toUpperCase()}
+                <div className="flex items-center gap-2 min-w-0">
+                  {entry.avatar_url ? (
+                    <img src={entry.avatar_url} alt="" className="w-7 h-7 rounded-full flex-shrink-0" />
+                  ) : (
+                    <div className="w-7 h-7 rounded-full bg-neon/10 flex items-center justify-center text-neon text-xs font-bold flex-shrink-0">
+                      {(entry.display_name?.[0] || "?").toUpperCase()}
+                    </div>
+                  )}
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1">
+                      <p className="text-xs font-semibold text-white truncate">{entry.display_name}</p>
+                      {i === 0 && <Crown className="w-3 h-3 text-gold flex-shrink-0" />}
+                      {entry.stats.roi > 15 && <Flame className="w-3 h-3 text-danger flex-shrink-0" />}
+                    </div>
+                    <p className="text-[9px] text-mercury/50">{entry.stats.totalBets} bets</p>
                   </div>
-                )}
-
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <p className="text-sm font-semibold text-white truncate">{entry.display_name}</p>
-                    {i === 0 && <Crown className="w-3.5 h-3.5 text-gold" />}
-                    {entry.stats.roi > 10 && <Flame className="w-3 h-3 text-danger" />}
-                  </div>
-                  <p className="text-[10px] text-mercury">
-                    {entry.stats.wins}W-{entry.stats.losses}L • {entry.stats.totalBets} bets
-                  </p>
                 </div>
 
-                {/* Stats */}
-                <div className="text-right flex-shrink-0">
-                  <p className={`text-sm font-bold font-mono ${entry.stats.roi > 0 ? "text-neon" : "text-danger"}`}>
-                    {entry.stats.roi >= 0 ? "+" : ""}{entry.stats.roi.toFixed(1)}%
-                  </p>
-                  <p className={`text-[10px] font-mono ${entry.stats.profit >= 0 ? "text-neon/70" : "text-danger/70"}`}>
-                    {entry.stats.profit >= 0 ? "+" : ""}${entry.stats.profit.toFixed(0)}
-                  </p>
+                {/* Record */}
+                <span className="text-[10px] text-mercury font-mono text-right">
+                  {entry.stats.wins}W-{entry.stats.losses}L
+                </span>
+
+                {/* Win% */}
+                <span className={`text-[11px] font-bold font-mono text-right ${entry.stats.winRate >= 55 ? "text-neon" : "text-silver"}`}>
+                  {entry.stats.winRate.toFixed(1)}%
+                </span>
+
+                {/* ROI */}
+                <span className={`text-[11px] font-bold font-mono text-right ${entry.stats.roi >= 0 ? "text-neon" : "text-danger"}`}>
+                  {entry.stats.roi >= 0 ? "+" : ""}{entry.stats.roi.toFixed(1)}%
+                </span>
+
+                {/* Best Streak */}
+                <div className="flex items-center gap-0.5 justify-end">
+                  <TrendingUp className="w-3 h-3 text-mercury/50" />
+                  <span className="text-[10px] text-mercury font-mono">{entry.stats.bestStreak}</span>
                 </div>
               </div>
             ))}
@@ -146,8 +194,10 @@ export default function LeaderboardPage() {
         )}
 
         {/* Footer */}
-        <div className="text-center mt-8">
-          <p className="text-[10px] text-mercury/50">Rankings update every 30 minutes • Min 10 settled bets to qualify</p>
+        <div className="text-center mt-8 space-y-1">
+          <p className="text-[10px] text-mercury/50">
+            Rankings update every 30 min • Min 5 settled bets to qualify
+          </p>
           <Link href="/" className="text-[10px] text-electric hover:text-neon transition-colors">
             ← Back to Dashboard
           </Link>

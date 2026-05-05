@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Layers, X, Trash2, Send, Share2, Check, DollarSign } from "lucide-react";
 import { useStore } from "@/lib/store";
+import ParlayBuilder from "@/components/dashboard/ParlayBuilder";
 import { useSport } from "@/lib/sport-context";
 import { formatPickLabel } from "@/lib/display";
 import { americanToDecimal } from "@/lib/model/kelly";
@@ -16,7 +17,7 @@ interface Props {
 }
 
 export default function FloatingParlayChip({ activeTab: _activeTab, onOpenBuilder }: Props) {
-  const { parlayLegs, currentParlay, removeParlayLeg, clearParlay, addBet } = useStore();
+  const { parlayLegs, currentParlay, removeParlayLeg, clearParlay, addBet, setParlayBuilderOpen } = useStore();
   const { currentSport } = useSport();
   const [open, setOpen] = useState(false);
   const [pulse, setPulse] = useState(false);
@@ -97,13 +98,16 @@ export default function FloatingParlayChip({ activeTab: _activeTab, onOpenBuilde
 
   return (
     <>
+      {/* ParlayBuilder slide-in panel */}
+      <ParlayBuilder />
+
       {/* Chip */}
       <button
-        onClick={() => setOpen(true)}
+        onClick={() => setParlayBuilderOpen(true)}
         className={`fixed z-[60] bottom-20 md:bottom-6 right-3 sm:right-6 flex items-center gap-2 px-3 py-2.5 rounded-full border border-neon/30 bg-bunker/95 backdrop-blur-md text-neon shadow-xl hover:bg-neon/15 active:scale-[0.98] transition-all ${
           pulse ? "animate-pulse ring-2 ring-neon/40" : ""
         }`}
-        aria-label="Open parlay slip"
+        aria-label="Open parlay builder"
       >
         <Layers className="w-4 h-4" />
         <span className="text-xs font-bold font-mono">

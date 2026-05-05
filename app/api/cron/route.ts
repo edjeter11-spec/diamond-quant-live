@@ -262,6 +262,33 @@ export async function GET(req: Request) {
             }
           }
         }
+        // ── High-confidence picks push (sent once per day, all sports combined) ──
+        try {
+          const pushSentKey = `push_sent_today_${today}`;
+          const alreadySent = await cloudGet(pushSentKey, null);
+          if (!alreadySent) {
+            // Collect all picks generated this run from cache
+            const mlbCache = await cloudGet(mlbTodayKey, null) as any;
+            const nbaCache = await cloudGet(nbaTodayKey, null) as any;
+            const allPicks: any[] = [
+              ...(mlbCache?.picks ?? []),
+              ...(nbaCache?.picks ?? []),
+            ];
+            const highConf = allPicks.filter((p: any) => p.confidence === "HIGH");
+            if (highConf.length >= 3) {
+              const sports = [...new Set(highConf.map((p: any) => p.sport ?? "").filter(Boolean))];
+              const sportLabel = sports.length > 0 ? sports.join("/").toUpperCase() : "MLB/NBA";
+              const { sendPushToAll } = await import("@/lib/push/send");
+              await sendPushToAll({
+                title: `🔥 ${highConf.length} high-confidence picks today — ${sportLabel}`,
+                body: `Diamond Quant has locked in ${highConf.length} HIGH confidence plays for today.`,
+                url: "/",
+                tag: `high-conf-${today}`,
+              });
+              await cloudSet(pushSentKey, { sentAt: new Date().toISOString(), count: highConf.length });
+            }
+          }
+        } catch {}
       } catch (e) { console.error("pick gen/log error:", e); }
     }
 

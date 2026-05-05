@@ -1,30 +1,24 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, lazy, Suspense } from "react";
 import { useStore } from "@/lib/store";
 import { useSport } from "@/lib/sport-context";
 import LiveTicker from "@/components/dashboard/LiveTicker";
 import GameCard from "@/components/dashboard/GameCard";
+import GameDetailModal from "@/components/dashboard/GameDetailModal";
 import OddsGrid from "@/components/dashboard/OddsGrid";
 import QuantVerdict from "@/components/dashboard/QuantVerdict";
 import ArbitrageAlert from "@/components/dashboard/ArbitrageAlert";
 import PlayerProps from "@/components/dashboard/PlayerProps";
-import BankrollTracker from "@/components/dashboard/BankrollTracker";
 import LineMovement from "@/components/dashboard/LineMovement";
 import SelectedGameBanner from "@/components/dashboard/SelectedGameBanner";
 import GameMatchupBrief from "@/components/dashboard/GameMatchupBrief";
 import BetSlip from "@/components/dashboard/BetSlip";
 import PicksBoard from "@/components/dashboard/PicksBoard";
-import BotChallenge from "@/components/dashboard/BotChallenge";
-import ThreeModelBot from "@/components/dashboard/ThreeModelBot";
-import BrainViz from "@/components/dashboard/BrainViz";
-import ModelLogs from "@/components/dashboard/ModelLogs";
-import GhostBots from "@/components/dashboard/GhostBots";
 import TopPropsOfDay from "@/components/dashboard/TopPropsOfDay";
 import SnapSync from "@/components/dashboard/SnapSync";
 import { teamNameToAbbrev } from "@/lib/logos";
 import AuthButton from "@/components/auth/AuthButton";
-import UserProfile from "@/components/auth/UserProfile";
 import PushOptIn from "@/components/dashboard/PushOptIn";
 import { useAuth } from "@/lib/supabase/auth";
 import MigrationBanner from "@/components/auth/MigrationBanner";
@@ -39,6 +33,25 @@ import { backupOddsToStorage, getOddsBackup } from "@/lib/odds/cache";
 import { sendDiscordAlert } from "@/lib/odds/sportsbooks";
 import { getDiscordWebhook, setDiscordWebhook } from "@/lib/store";
 import NRFITab from "@/components/dashboard/NRFITab";
+
+// Lazy-load heavy tabs — not needed on first paint
+const BankrollTracker = lazy(() => import("@/components/dashboard/BankrollTracker"));
+const BotChallenge = lazy(() => import("@/components/dashboard/BotChallenge"));
+const ThreeModelBot = lazy(() => import("@/components/dashboard/ThreeModelBot"));
+const BrainViz = lazy(() => import("@/components/dashboard/BrainViz"));
+const ModelLogs = lazy(() => import("@/components/dashboard/ModelLogs"));
+const GhostBots = lazy(() => import("@/components/dashboard/GhostBots"));
+const UserProfile = lazy(() => import("@/components/auth/UserProfile"));
+
+function TabSkeleton() {
+  return (
+    <div className="space-y-3 animate-pulse">
+      <div className="h-24 rounded-xl bg-gunmetal/20 border border-slate/10" />
+      <div className="h-40 rounded-xl bg-gunmetal/20 border border-slate/10" />
+      <div className="h-32 rounded-xl bg-gunmetal/20 border border-slate/10" />
+    </div>
+  );
+}
 import {
   Diamond, BarChart3, User, UserCircle, Wallet, RefreshCw, Shield,
   Radio, ChevronLeft, ChevronRight, X, HelpCircle, Volume2, VolumeX, AlertTriangle,
@@ -135,6 +148,7 @@ export default function WarRoom() {
   const [arbFlash, setArbFlash] = useState(false);
   const [prevArbCount, setPrevArbCount] = useState(0);
   const [isDemo, setIsDemo] = useState(false);
+  const [modalGameId, setModalGameId] = useState<string | null>(null);
   // Track which EV bets we've already alerted on to prevent spam every 3 min
   const alertedEvIds = useRef<Set<string>>(new Set());
 
@@ -420,16 +434,25 @@ export default function WarRoom() {
             (o: any) => o.homeTeam?.includes(game.homeAbbrev) || o.homeTeam === game.homeTeam
           );
           return (
-            <GameCard
-              key={game.id}
-              game={game}
-              oddsInfo={{
-                bestHomeML: odds?.bestLines?.bestHomeML,
-                bestAwayML: odds?.bestLines?.bestAwayML,
-                arbCount: odds?.arbitrage?.length ?? 0,
-                topEV: odds?.evBets?.[0]?.evPercentage ?? 0,
-              }}
-            />
+            <div key={game.id} className="relative group">
+              <GameCard
+                game={game}
+                oddsInfo={{
+                  bestHomeML: odds?.bestLines?.bestHomeML,
+                  bestAwayML: odds?.bestLines?.bestAwayML,
+                  arbCount: odds?.arbitrage?.length ?? 0,
+                  topEV: odds?.evBets?.[0]?.evPercentage ?? 0,
+                }}
+              />
+              {/* Detail button — appears on hover (desktop) or always (mobile) */}
+              <button
+                onClick={(e) => { e.stopPropagation(); setModalGameId(game.id); }}
+                className="absolute top-2 right-8 sm:right-10 z-10 px-1.5 py-0.5 rounded text-[9px] font-bold text-electric/70 border border-electric/20 bg-bunker/80 opacity-0 group-hover:opacity-100 transition-opacity hover:text-electric hover:border-electric/40"
+                title="View game details"
+              >
+                DETAIL
+              </button>
+            </div>
           );
         })
       )}
@@ -785,15 +808,17 @@ export default function WarRoom() {
 
             {activeTab === "bot" && (
               <div className="max-w-3xl mx-auto space-y-4">
-                <BotChallenge />
-                {currentSport === "mlb" && isAdmin && (
-                  <>
-                    <ThreeModelBot />
-                    <BrainViz />
-                    <GhostBots />
-                    <ModelLogs />
-                  </>
-                )}
+                <Suspense fallback={<TabSkeleton />}>
+                  <BotChallenge />
+                  {currentSport === "mlb" && isAdmin && (
+                    <>
+                      <ThreeModelBot />
+                      <BrainViz />
+                      <GhostBots />
+                      <ModelLogs />
+                    </>
+                  )}
+                </Suspense>
               </div>
             )}
 
@@ -801,7 +826,9 @@ export default function WarRoom() {
               <div className="max-w-2xl mx-auto space-y-4">
                 <ROIChart />
                 <SnapSync />
-                <BankrollTracker />
+                <Suspense fallback={<TabSkeleton />}>
+                  <BankrollTracker />
+                </Suspense>
                 <button
                   onClick={() => openBetSlip()}
                   className="w-full py-3 rounded-xl bg-neon/15 text-neon border border-neon/30 font-semibold text-sm hover:bg-neon/25 transition-colors"
@@ -814,13 +841,25 @@ export default function WarRoom() {
 
             {activeTab === "profile" && (
               <div className="max-w-lg mx-auto space-y-4">
-                <UserProfile />
+                <Suspense fallback={<TabSkeleton />}>
+                  <UserProfile />
+                </Suspense>
                 <DiscordSettings />
               </div>
             )}
           </>
         )}
       </main>
+
+      {/* Game Detail Modal */}
+      {modalGameId && (
+        <GameDetailModal
+          gameId={modalGameId}
+          analyses={analyses}
+          onClose={() => setModalGameId(null)}
+          onAddToParlay={() => openBetSlip()}
+        />
+      )}
 
       {/* Global UI: ephemeral toasts + floating parlay slip */}
       <Toaster />
