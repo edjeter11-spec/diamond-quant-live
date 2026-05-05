@@ -1,12 +1,141 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/supabase/auth";
 import { useStore } from "@/lib/store";
 import {
-  User, Mail, Shield, Bell, BellOff, Globe, Download,
+  User, Bell, Download,
   Save, Loader2, Smartphone, Crown, Ticket, Copy, Check, Pause, Play,
+  BarChart2, TrendingUp, Flame, Target, Activity,
 } from "lucide-react";
+import { Skeleton } from "@/components/ui/Skeleton";
+import Link from "next/link";
+
+// ── My Stats data shape returned by /api/leaderboard?userId=... ──
+interface UserStatsData {
+  wins: number;
+  losses: number;
+  roi: number;
+  profit: number;
+  winRate: number;
+  totalBets: number;
+  bestStreak: number;
+  favoriteMarket: string | null;
+  mlbPct: number;
+  nbaPct: number;
+}
+
+// ── My Stats section ──
+function MyStats({ userId }: { userId: string }) {
+  const [stats, setStats] = useState<UserStatsData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch(`/api/leaderboard?userId=${userId}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => setStats(d?.userStats ?? null))
+      .catch(() => setStats(null))
+      .finally(() => setLoading(false));
+  }, [userId]);
+
+  const isEmpty = !loading && (!stats || stats.totalBets === 0);
+
+  return (
+    <div className="glass rounded-xl overflow-hidden border border-neon/15">
+      <div className="px-4 py-3 bg-neon/5 border-b border-neon/15 flex items-center gap-2">
+        <BarChart2 className="w-3.5 h-3.5 text-neon" />
+        <h3 className="text-xs font-bold text-silver uppercase tracking-wider">My Stats</h3>
+      </div>
+
+      {loading ? (
+        <div className="p-4 space-y-2.5">
+          <Skeleton className="h-3 w-1/2" rounded="rounded" />
+          <Skeleton className="h-3 w-2/3" rounded="rounded" />
+          <Skeleton className="h-3 w-1/3" rounded="rounded" />
+          <div className="grid grid-cols-4 gap-2 mt-3">
+            {[...Array(4)].map((_, i) => (
+              <Skeleton key={i} className="h-12" rounded="rounded-lg" />
+            ))}
+          </div>
+        </div>
+      ) : isEmpty ? (
+        <div className="p-6 text-center">
+          <Activity className="w-6 h-6 text-mercury/20 mx-auto mb-2" />
+          <p className="text-xs text-mercury">Start tracking picks to see your stats</p>
+          <Link
+            href="/?tab=bankroll"
+            className="mt-2 inline-block text-[10px] text-electric hover:text-neon transition-colors"
+          >
+            Go to Picks tab →
+          </Link>
+        </div>
+      ) : stats ? (
+        <div className="p-4 space-y-4">
+          {/* Stat grid */}
+          <div className="grid grid-cols-4 gap-px bg-slate/10 rounded-lg overflow-hidden">
+            <StatsCell label="Picks" value={String(stats.totalBets)} color="text-silver" />
+            <StatsCell
+              label="Win Rate"
+              value={`${stats.winRate.toFixed(1)}%`}
+              color={stats.winRate >= 55 ? "text-neon" : "text-silver"}
+            />
+            <StatsCell
+              label="ROI"
+              value={`${stats.roi >= 0 ? "+" : ""}${stats.roi.toFixed(1)}%`}
+              color={stats.roi >= 0 ? "text-neon" : "text-danger"}
+            />
+            <StatsCell
+              label="Best Streak"
+              value={`${stats.bestStreak}W`}
+              color="text-amber"
+            />
+          </div>
+
+          {/* Favorite market */}
+          {stats.favoriteMarket && (
+            <div className="flex items-center gap-2">
+              <Target className="w-3.5 h-3.5 text-electric flex-shrink-0" />
+              <span className="text-[10px] text-mercury">Favorite market:</span>
+              <span className="text-[10px] font-semibold text-silver">{stats.favoriteMarket}</span>
+            </div>
+          )}
+
+          {/* Sport breakdown bar */}
+          {(stats.mlbPct > 0 || stats.nbaPct > 0) && (
+            <div className="space-y-1.5">
+              <div className="flex justify-between text-[9px] text-mercury/60 uppercase">
+                <span className="flex items-center gap-1">
+                  <TrendingUp className="w-2.5 h-2.5" /> MLB {stats.mlbPct}%
+                </span>
+                <span className="flex items-center gap-1">
+                  NBA {stats.nbaPct}% <Flame className="w-2.5 h-2.5" />
+                </span>
+              </div>
+              <div className="h-1.5 rounded-full bg-gunmetal/50 overflow-hidden flex">
+                <div
+                  className="bg-electric transition-all"
+                  style={{ width: `${stats.mlbPct}%` }}
+                />
+                <div
+                  className="bg-purple transition-all flex-1"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function StatsCell({ label, value, color }: { label: string; value: string; color: string }) {
+  return (
+    <div className="text-center py-2.5 px-1 bg-bunker/50">
+      <p className={`text-sm font-bold font-mono ${color}`}>{value}</p>
+      <p className="text-[8px] text-mercury/50 uppercase">{label}</p>
+    </div>
+  );
+}
 
 export default function UserProfile() {
   const { user, profile, preferences, isAdmin, updateProfile, updatePreferences } = useAuth();
@@ -119,6 +248,9 @@ export default function UserProfile() {
           <StatBox label="Profit" value={`${profit >= 0 ? "+" : ""}$${profit.toFixed(0)}`} color={profit >= 0 ? "text-neon" : "text-danger"} />
         </div>
       </div>
+
+      {/* My Stats */}
+      <MyStats userId={user.id} />
 
       {/* Subscription status + pause */}
       {(profile as any)?.stripe_customer_id && (
