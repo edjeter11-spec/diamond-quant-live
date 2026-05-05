@@ -32,6 +32,19 @@ export default function NRFITab() {
   const isNBA = currentSport === "nba";
   const [games, setGames] = useState<NRFIGame[]>([]);
   const [loading, setLoading] = useState(true);
+  const [expandedGame, setExpandedGame] = useState<string | null>(null);
+  const [hasLoaded, setHasLoaded] = useState(false);
+
+  useEffect(() => {
+    if (isNBA) return;
+    if (scores.length === 0 || hasLoaded) return;
+    setLoading(true);
+    analyzeNRFI(scores).then(results => {
+      setGames(results);
+      setLoading(false);
+      setHasLoaded(true);
+    }).catch(() => { setLoading(false); setHasLoaded(true); });
+  }, [scores, hasLoaded, isNBA]);
 
   // NBA Q1 analysis — show placeholder until Q1 engine is built
   if (isNBA) {
@@ -55,19 +68,6 @@ export default function NRFITab() {
       </div>
     );
   }
-  const [expandedGame, setExpandedGame] = useState<string | null>(null);
-
-  const [hasLoaded, setHasLoaded] = useState(false);
-
-  useEffect(() => {
-    if (scores.length === 0 || hasLoaded) return;
-    setLoading(true);
-    analyzeNRFI(scores).then(results => {
-      setGames(results);
-      setLoading(false);
-      setHasLoaded(true);
-    }).catch(() => { setLoading(false); setHasLoaded(true); });
-  }, [scores, hasLoaded]);
 
   // Separate upcoming from live/settled
   const upcoming = games.filter(g => g.status === "pre");
@@ -77,13 +77,35 @@ export default function NRFITab() {
   const topNRFI = upcoming.filter(g => g.recommendation.includes("NRFI")).slice(0, 3);
   const topYRFI = upcoming.filter(g => g.recommendation.includes("YRFI")).slice(0, 3);
 
-  if (loading) {
+  if (loading && scores.length > 0) {
     return (
       <div className="max-w-4xl mx-auto">
         <div className="glass rounded-xl p-8 text-center">
           <RefreshCw className="w-6 h-6 text-electric animate-spin mx-auto mb-2" />
           <p className="text-sm text-mercury">Analyzing first inning matchups...</p>
           <p className="text-[10px] text-mercury/50 mt-1">Checking pitcher NRFI rates, park factors, and K rates</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (scores.length === 0 || games.length === 0) {
+    return (
+      <div className="max-w-4xl mx-auto space-y-4">
+        <div className="glass rounded-xl p-4 border border-electric/15">
+          <div className="flex items-center gap-2 mb-2">
+            <Shield className="w-5 h-5 text-electric" />
+            <h2 className="text-sm font-bold text-silver uppercase tracking-wider">First Inning Analysis</h2>
+          </div>
+          <p className="text-xs text-mercury">
+            NRFI (No Run First Inning) and YRFI (Yes Run) predictions based on pitcher ERA, WHIP, K/9,
+            park factors, and historical first inning performance.
+          </p>
+        </div>
+        <div className="glass rounded-xl p-8 text-center">
+          <Shield className="w-6 h-6 text-mercury/30 mx-auto mb-2" />
+          <p className="text-sm text-mercury">No MLB games available right now</p>
+          <p className="text-[10px] text-mercury/50 mt-1">Check back closer to first pitch — NRFI picks generate when probable pitchers are posted</p>
         </div>
       </div>
     );

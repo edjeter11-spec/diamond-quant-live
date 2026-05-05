@@ -591,7 +591,7 @@ export default function BotChallenge() {
               <h3 className="text-xs font-bold text-silver uppercase tracking-wider">Today's Prop Picks</h3>
               <p className="text-[9px] text-mercury/50">
                 {propPicksUpdatedAt
-                  ? `Updated ${Math.round((Date.now() - new Date(propPicksUpdatedAt).getTime()) / 60000)}m ago • auto-refreshes every 2h`
+                  ? `Updated ${Math.max(0, Math.round((Date.now() - new Date(propPicksUpdatedAt).getTime()) / 60000))}m ago • auto-refreshes every 2h`
                   : "Brain selects 4 best props each morning, updates lines hourly"}
               </p>
             </div>

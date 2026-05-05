@@ -8,13 +8,14 @@ import { formatPickLabel } from "@/lib/display";
 import { americanToDecimal } from "@/lib/model/kelly";
 
 interface Props {
-  /** Hide when the full parlay tab is the active view (avoids redundancy). */
+  /** Reserved — currently no tab hides the chip; the dedicated parlays tab was
+   *  removed in favor of routing this chip directly to the BetSlip modal. */
   activeTab?: string;
   /** Navigate to the full Parlays tab */
   onOpenBuilder?: () => void;
 }
 
-export default function FloatingParlayChip({ activeTab, onOpenBuilder }: Props) {
+export default function FloatingParlayChip({ activeTab: _activeTab, onOpenBuilder }: Props) {
   const { parlayLegs, currentParlay, removeParlayLeg, clearParlay, addBet } = useStore();
   const { currentSport } = useSport();
   const [open, setOpen] = useState(false);
@@ -28,14 +29,13 @@ export default function FloatingParlayChip({ activeTab, onOpenBuilder }: Props) 
   useEffect(() => {
     if (parlayLegs.length > prevCount) {
       setPulse(true);
+      setPrevCount(parlayLegs.length);
       const t = setTimeout(() => setPulse(false), 700);
       return () => clearTimeout(t);
     }
-    setPrevCount(parlayLegs.length);
+    if (parlayLegs.length !== prevCount) setPrevCount(parlayLegs.length);
   }, [parlayLegs.length, prevCount]);
 
-  // Hide when on parlays tab (redundant with full builder)
-  if (activeTab === "parlays") return null;
   if (parlayLegs.length === 0) return null;
 
   const totalOdds = currentParlay?.combinedOdds;

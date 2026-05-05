@@ -130,16 +130,7 @@ export default function PushOptIn() {
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-silver">Notifications on</p>
           <p className="text-[11px] text-mercury/70">
-            We'll ping you when sharp picks drop.{" "}
-            <button
-              type="button"
-              onClick={() => {
-                /* TODO: open preferences modal */
-              }}
-              className="text-neon hover:underline"
-            >
-              Manage preferences
-            </button>
+            We&apos;ll ping you when sharp picks drop.
           </p>
         </div>
       </div>

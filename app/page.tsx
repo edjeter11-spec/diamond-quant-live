@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useStore } from "@/lib/store";
-import { useSport, SPORT_CONFIGS, type Sport } from "@/lib/sport-context";
+import { useSport } from "@/lib/sport-context";
 import LiveTicker from "@/components/dashboard/LiveTicker";
 import GameCard from "@/components/dashboard/GameCard";
 import OddsGrid from "@/components/dashboard/OddsGrid";
@@ -72,16 +72,15 @@ function sendNotification(title: string, body: string) {
   } catch {}
 }
 
-function requestNotificationPermission() {
+function registerServiceWorker() {
+  // Register the SW so it can receive push messages once the user opts in
+  // through PushOptIn (which gates Notification.requestPermission behind a
+  // real user gesture). Auto-prompting on page-load is bad UX and is
+  // ignored by Safari/iOS anyway.
   try {
     if (typeof window === "undefined") return;
-    // Register service worker for push notifications
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js").catch(() => {});
-    }
-    if (!("Notification" in window)) return;
-    if (Notification.permission === "default") {
-      Notification.requestPermission();
     }
   } catch {}
 }
@@ -136,10 +135,12 @@ export default function WarRoom() {
   const [arbFlash, setArbFlash] = useState(false);
   const [prevArbCount, setPrevArbCount] = useState(0);
   const [isDemo, setIsDemo] = useState(false);
+  // Track which EV bets we've already alerted on to prevent spam every 3 min
+  const alertedEvIds = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     hydrate();
-    requestNotificationPermission();
+    registerServiceWorker();
   }, [hydrate]);
 
   const fetchData = useCallback(async () => {
@@ -304,21 +305,28 @@ export default function WarRoom() {
       setTimeout(() => setArbFlash(false), 3000);
     }
 
-    // High EV Discord alert
+    // High EV alert — fire ONCE per unique pick. Without dedupe, the every-3-min
+    // poll re-fired the same alert (the prevArbCount===0 gate was a no-op once
+    // arb count stabilized at 0, so it triggered on every refresh).
     const bigEV = oddsData.flatMap((g: any) => g.evBets ?? []).filter((b: any) => b.evPercentage > 6 && !b.isSuspicious);
-    if (bigEV.length > 0 && prevArbCount === 0 && !isLoading) {
-      sendNotification("High EV Alert", `${bigEV[0].pick} at ${bigEV[0].bookmaker} — +${bigEV[0].evPercentage.toFixed(1)}% edge`);
-      const webhook = getDiscordWebhook();
-      if (webhook) {
-        sendDiscordAlert(webhook, {
-          title: "TOP LOCK ALERT",
-          description: `${bigEV[0].pick}\n${bigEV[0].game} @ ${bigEV[0].bookmaker}`,
-          color: 0x00ff88,
-          fields: [
-            { name: "Odds", value: `${bigEV[0].odds > 0 ? "+" : ""}${bigEV[0].odds}`, inline: true },
-            { name: "EV Edge", value: `+${bigEV[0].evPercentage.toFixed(1)}%`, inline: true },
-          ],
-        });
+    if (bigEV.length > 0 && !isLoading) {
+      const top = bigEV[0];
+      const evKey = `${top.pick}|${top.bookmaker}|${top.odds}`;
+      if (!alertedEvIds.current.has(evKey)) {
+        alertedEvIds.current.add(evKey);
+        sendNotification("High EV Alert", `${top.pick} at ${top.bookmaker} — +${top.evPercentage.toFixed(1)}% edge`);
+        const webhook = getDiscordWebhook();
+        if (webhook) {
+          sendDiscordAlert(webhook, {
+            title: "TOP LOCK ALERT",
+            description: `${top.pick}\n${top.game} @ ${top.bookmaker}`,
+            color: 0x00ff88,
+            fields: [
+              { name: "Odds", value: `${top.odds > 0 ? "+" : ""}${top.odds}`, inline: true },
+              { name: "EV Edge", value: `+${top.evPercentage.toFixed(1)}%`, inline: true },
+            ],
+          });
+        }
       }
     }
     setPrevArbCount(currentArbCount);
