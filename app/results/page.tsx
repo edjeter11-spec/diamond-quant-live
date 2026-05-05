@@ -30,16 +30,31 @@ interface ResultsData {
 }
 
 const CATEGORY_LABEL: Record<string, string> = {
-  parlay: "Parlay of the Day",
-  lock: "Top Locks",
-  longshot: "Longshots",
-  prop: "Player Props",
+  parlay: "Parlay",
+  lock: "Lock",
+  longshot: "Longshot",
+  prop: "Prop",
 };
+
+type FilterKey = "all" | "mlb" | "nba" | "ml" | "spread" | "total" | "HIGH" | "MEDIUM" | "LOW";
+
+const FILTERS: { key: FilterKey; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "mlb", label: "MLB" },
+  { key: "nba", label: "NBA" },
+  { key: "ml", label: "ML" },
+  { key: "spread", label: "Spread" },
+  { key: "total", label: "Total" },
+  { key: "HIGH", label: "HIGH" },
+  { key: "MEDIUM", label: "MED" },
+  { key: "LOW", label: "LOW" },
+];
 
 export default function ResultsPage() {
   const [data, setData] = useState<ResultsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [days, setDays] = useState(30);
+  const [filter, setFilter] = useState<FilterKey>("all");
 
   useEffect(() => {
     setLoading(true);
@@ -48,6 +63,25 @@ export default function ResultsPage() {
       .then(d => { setData(d.ok ? d : null); setLoading(false); })
       .catch(() => setLoading(false));
   }, [days]);
+
+  // Derived ROI
+  const roi = data && data.overall.total > 0
+    ? (data.overall.profitUnits / data.overall.total) * 100
+    : null;
+
+  // Filtered recent rows
+  const filteredRecent = (data?.recent ?? []).filter(r => {
+    if (filter === "all") return true;
+    if (filter === "mlb") return r.sport === "mlb";
+    if (filter === "nba") return r.sport === "nba";
+    if (filter === "ml") return r.category?.toLowerCase().includes("ml") || r.pick_text?.toLowerCase().includes(" ml");
+    if (filter === "spread") return r.pick_text?.toLowerCase().includes("spread") || r.pick_text?.match(/[+-]\d+\.5/);
+    if (filter === "total") return r.pick_text?.toLowerCase().match(/over|under/);
+    if (filter === "HIGH" || filter === "MEDIUM" || filter === "LOW") {
+      return r.category?.toUpperCase() === filter;
+    }
+    return true;
+  });
 
   return (
     <div className="min-h-screen bg-void text-silver">
@@ -90,6 +124,7 @@ export default function ResultsPage() {
             <p className="text-sm text-mercury">Loading track record...</p>
           </div>
         ) : !data || data.overall.total === 0 ? (
+          /* ── Empty State ── */
           <div className="glass rounded-xl p-10 text-center">
             <Target className="w-10 h-10 text-mercury/30 mx-auto mb-3" />
             <p className="text-base font-semibold text-silver">Building our track record</p>
@@ -99,10 +134,53 @@ export default function ResultsPage() {
           </div>
         ) : (
           <>
+            {/* ── Hero Record + ROI strip ── */}
+            <section className="glass rounded-xl p-4 sm:p-5">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                {/* Record */}
+                <div>
+                  <p className="text-[10px] font-semibold text-mercury/50 uppercase tracking-wider mb-1">
+                    Last {data.days} days
+                  </p>
+                  <p className="text-3xl font-bold font-mono text-silver">
+                    W {data.overall.wins}
+                    <span className="text-mercury/30 mx-2">—</span>
+                    L {data.overall.losses}
+                    {data.overall.pushes > 0 && (
+                      <>
+                        <span className="text-mercury/30 mx-2">—</span>
+                        P {data.overall.pushes}
+                      </>
+                    )}
+                  </p>
+                  <p className="text-sm text-mercury/60 mt-1">
+                    {data.overall.total} settled picks ·{" "}
+                    <span className={data.overall.winRate > 52.4 ? "text-neon" : "text-mercury/60"}>
+                      {data.overall.winRate.toFixed(1)}% win rate
+                    </span>
+                  </p>
+                </div>
+
+                {/* ROI badge */}
+                {roi !== null && (
+                  <div className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border font-bold ${
+                    roi >= 0
+                      ? "bg-neon/10 border-neon/25 text-neon"
+                      : "bg-danger/10 border-danger/25 text-danger"
+                  }`}>
+                    {roi >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
+                    <span className="text-lg font-mono">
+                      {roi >= 0 ? "+" : ""}{roi.toFixed(1)}% ROI
+                    </span>
+                  </div>
+                )}
+              </div>
+            </section>
+
             {/* Overall stats */}
             <section>
               <h2 className="text-[10px] font-semibold text-mercury/60 uppercase tracking-wider mb-2">
-                Last {data.days} days · {data.overall.total} settled picks
+                Performance breakdown
               </h2>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <StatCard
@@ -124,7 +202,7 @@ export default function ResultsPage() {
                 />
                 <StatCard
                   label="ROI"
-                  value={`${data.overall.total > 0 ? ((data.overall.profitUnits / data.overall.total) * 100).toFixed(1) : "0.0"}%`}
+                  value={`${roi !== null ? (roi >= 0 ? "+" : "") + roi.toFixed(1) : "0.0"}%`}
                   tone={data.overall.profitUnits > 0 ? "good" : "bad"}
                   sub="per pick"
                 />
@@ -218,26 +296,72 @@ export default function ResultsPage() {
               </section>
             )}
 
-            {/* Recent settled */}
-            {data.recent.length > 0 && (
-              <section>
-                <h2 className="text-[10px] font-semibold text-mercury/60 uppercase tracking-wider mb-2">Most recent settled picks</h2>
+            {/* Recent settled — with filter row */}
+            <section>
+              <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+                <h2 className="text-[10px] font-semibold text-mercury/60 uppercase tracking-wider">
+                  Recent settled picks
+                </h2>
+                {/* Filter chips */}
+                <div className="flex items-center gap-1 flex-wrap">
+                  {FILTERS.map(f => (
+                    <button
+                      key={f.key}
+                      onClick={() => setFilter(f.key)}
+                      className={`px-2 py-0.5 rounded text-[10px] font-semibold transition-colors ${
+                        filter === f.key
+                          ? "bg-neon/15 text-neon border border-neon/25"
+                          : "text-mercury/50 hover:text-mercury border border-transparent"
+                      }`}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {filteredRecent.length === 0 ? (
+                <div className="glass rounded-xl p-8 text-center">
+                  <Target className="w-8 h-8 text-mercury/20 mx-auto mb-2" />
+                  <p className="text-sm text-mercury/50">No picks match this filter yet.</p>
+                </div>
+              ) : (
                 <div className="glass rounded-xl overflow-hidden divide-y divide-slate/20">
-                  {data.recent.slice(0, 15).map((r, i) => (
-                    <div key={i} className="px-3 py-2.5 flex items-center gap-2">
-                      <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${
+                  {filteredRecent.slice(0, 20).map((r, i) => (
+                    <div key={i} className="px-3 py-2.5 flex items-center gap-2.5">
+                      {/* Result badge */}
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${
                         r.result === "win" ? "bg-neon/15" : r.result === "loss" ? "bg-danger/15" : "bg-mercury/15"
                       }`}>
-                        {r.result === "win" ? <CheckCircle className="w-3 h-3 text-neon" /> :
-                         r.result === "loss" ? <XCircle className="w-3 h-3 text-danger" /> :
-                         <Minus className="w-3 h-3 text-mercury" />}
+                        {r.result === "win" ? (
+                          <CheckCircle className="w-3.5 h-3.5 text-neon" />
+                        ) : r.result === "loss" ? (
+                          <XCircle className="w-3.5 h-3.5 text-danger" />
+                        ) : (
+                          <Minus className="w-3.5 h-3.5 text-mercury" />
+                        )}
                       </div>
+
+                      {/* Pick info */}
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-medium text-silver truncate">{r.pick_text}</p>
                         <p className="text-[10px] text-mercury/50 truncate">
-                          {r.pick_date} · {r.sport.toUpperCase()} · {CATEGORY_LABEL[r.category] ?? r.category}
+                          {r.game} · {r.pick_date} · {r.sport?.toUpperCase()}
                         </p>
                       </div>
+
+                      {/* Result label */}
+                      <span className={`flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                        r.result === "win"
+                          ? "bg-neon/10 text-neon"
+                          : r.result === "loss"
+                          ? "bg-danger/10 text-danger"
+                          : "bg-mercury/10 text-mercury"
+                      }`}>
+                        {r.result === "win" ? "W" : r.result === "loss" ? "L" : "P"}
+                      </span>
+
+                      {/* Odds + P/L */}
                       <div className="text-right flex-shrink-0">
                         <p className="text-xs font-mono text-silver">{r.odds > 0 ? "+" : ""}{r.odds}</p>
                         <p className={`text-[10px] font-mono ${Number(r.profit_units) >= 0 ? "text-neon/80" : "text-danger/80"}`}>
@@ -247,8 +371,8 @@ export default function ResultsPage() {
                     </div>
                   ))}
                 </div>
-              </section>
-            )}
+              )}
+            </section>
 
             {/* Transparency note */}
             <section>
