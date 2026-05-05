@@ -44,8 +44,16 @@ export default function QuantVerdict({ game, analysis, onPlaceBet }: QuantVerdic
     NO_EDGE: { bg: "bg-mercury/10", border: "border-mercury/30", text: "text-mercury", glow: "" },
   };
 
-  const conf = confidenceColors[analysis.confidence];
+  const conf = confidenceColors[analysis.confidence] ?? confidenceColors.NO_EDGE;
   const formatOdds = (odds: number) => (odds > 0 ? `+${odds}` : `${odds}`);
+  // Safe accessors — buildVerdict can sometimes hand back undefined fields
+  // when the odds API returns sparse data.
+  const winProb = analysis.winProb ?? 0;
+  const evPercentage = analysis.evPercentage ?? 0;
+  const kellyStake = analysis.kellyStake ?? 0;
+  const fairOdds = analysis.fairOdds ?? 0;
+  const marketOdds = analysis.marketOdds ?? 0;
+  const reasoning = analysis.reasoning ?? [];
 
   return (
     <div className={`glass rounded-xl overflow-hidden ${analysis.confidence === "HIGH" ? "glow-neon" : ""}`}>
@@ -76,7 +84,7 @@ export default function QuantVerdict({ game, analysis, onPlaceBet }: QuantVerdic
           <div className="text-center p-2 sm:p-3 rounded-lg bg-gunmetal/50">
             <Target className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-electric mx-auto mb-1" />
             <p className="text-lg sm:text-2xl font-bold font-mono text-silver">
-              {(analysis.winProb * 100).toFixed(1)}%
+              {(winProb * 100).toFixed(1)}%
             </p>
             <p className="text-[9px] sm:text-[10px] text-mercury uppercase tracking-wider mt-0.5">Win Prob</p>
           </div>
@@ -84,8 +92,8 @@ export default function QuantVerdict({ game, analysis, onPlaceBet }: QuantVerdic
           {/* EV */}
           <div className="text-center p-2 sm:p-3 rounded-lg bg-gunmetal/50">
             <TrendingUp className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-neon mx-auto mb-1" />
-            <p className={`text-lg sm:text-2xl font-bold font-mono ${analysis.evPercentage > 0 ? "text-neon" : "text-danger"}`}>
-              {analysis.evPercentage > 0 ? "+" : ""}{analysis.evPercentage.toFixed(1)}%
+            <p className={`text-lg sm:text-2xl font-bold font-mono ${evPercentage > 0 ? "text-neon" : "text-danger"}`}>
+              {evPercentage > 0 ? "+" : ""}{evPercentage.toFixed(1)}%
             </p>
             <p className="text-[9px] sm:text-[10px] text-mercury uppercase tracking-wider mt-0.5">EV Edge</p>
           </div>
@@ -94,7 +102,7 @@ export default function QuantVerdict({ game, analysis, onPlaceBet }: QuantVerdic
           <div className="text-center p-2 sm:p-3 rounded-lg bg-gunmetal/50">
             <DollarSign className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gold mx-auto mb-1" />
             <p className="text-lg sm:text-2xl font-bold font-mono text-gold">
-              ${analysis.kellyStake.toFixed(0)}
+              ${kellyStake.toFixed(0)}
             </p>
             <p className="text-[9px] sm:text-[10px] text-mercury uppercase tracking-wider mt-0.5">Kelly</p>
           </div>
@@ -104,17 +112,17 @@ export default function QuantVerdict({ game, analysis, onPlaceBet }: QuantVerdic
         <div className="flex items-center justify-between px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg bg-gunmetal/30 mb-3 sm:mb-4">
           <div className="text-center">
             <p className="text-xs text-mercury">Market</p>
-            <p className="text-lg font-mono font-bold text-silver">{formatOdds(analysis.marketOdds)}</p>
+            <p className="text-lg font-mono font-bold text-silver">{formatOdds(marketOdds)}</p>
           </div>
           <div className="flex flex-col items-center">
-            <span className={`text-xs ${analysis.evPercentage > 0 ? "text-neon" : "text-danger"}`}>
-              {analysis.evPercentage > 0 ? "VALUE" : "NO EDGE"}
+            <span className={`text-xs ${evPercentage > 0 ? "text-neon" : "text-danger"}`}>
+              {evPercentage > 0 ? "VALUE" : "NO EDGE"}
             </span>
             <div className="w-8 h-px bg-slate mt-1" />
           </div>
           <div className="text-center">
             <p className="text-xs text-mercury">Fair</p>
-            <p className="text-lg font-mono font-bold text-electric">{formatOdds(analysis.fairOdds)}</p>
+            <p className="text-lg font-mono font-bold text-electric">{formatOdds(fairOdds)}</p>
           </div>
         </div>
 
@@ -133,17 +141,20 @@ export default function QuantVerdict({ game, analysis, onPlaceBet }: QuantVerdic
 
         {showReasoning && (
           <div className="mt-2 px-4 py-3 rounded-lg bg-gunmetal/20 space-y-2 animate-slide-up">
-            {analysis.reasoning.map((reason, i) => (
+            {reasoning.map((reason, i) => (
               <div key={i} className="flex items-start gap-2">
                 <span className="text-neon mt-0.5 text-xs">{'>'}</span>
                 <p className="text-sm text-mercury">{reason}</p>
               </div>
             ))}
+            {reasoning.length === 0 && (
+              <p className="text-sm text-mercury/60 italic">No reasoning available — pick is based on raw market mispricing.</p>
+            )}
           </div>
         )}
 
         {/* Place Bet button */}
-        {onPlaceBet && analysis.evPercentage > 0 && (
+        {onPlaceBet && evPercentage > 0 && (
           <button
             onClick={onPlaceBet}
             className="w-full mt-4 py-2.5 rounded-lg bg-neon/15 border border-neon/30 text-neon font-semibold text-sm hover:bg-neon/25 active:scale-[0.98] transition-all"

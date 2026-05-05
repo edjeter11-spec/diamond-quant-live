@@ -42,12 +42,17 @@ export default function GameMatchupBrief({ homeAbbrev, awayAbbrev }: Props) {
   }, [homeAbbrev, awayAbbrev]);
 
   if (loading || !data) return null;
+  // Crash-proof against partial API responses (NBA endpoint occasionally
+  // returns just rest data without ratings/total/takeaways).
+  if (!data.rest?.home || !data.rest?.away || !data.ratings?.home || !data.ratings?.away) return null;
 
   const impactful = (list: Array<{ name: string; status: string }>) =>
     list.filter((p) => p.status === "Out" || p.status === "Doubtful" || p.status === "Questionable");
 
-  const homeOuts = impactful(data.injuries.home);
-  const awayOuts = impactful(data.injuries.away);
+  const homeOuts = impactful(data.injuries?.home ?? []);
+  const awayOuts = impactful(data.injuries?.away ?? []);
+  const takeaways = data.takeaways ?? [];
+  const projectedTotal = data.total?.projectedTotal ?? null;
 
   return (
     <div className="bg-gradient-to-br from-purple-950/40 to-slate-900/60 border border-purple-500/30 rounded-xl p-5 space-y-4">
@@ -56,9 +61,9 @@ export default function GameMatchupBrief({ homeAbbrev, awayAbbrev }: Props) {
         <h3 className="text-sm font-semibold text-purple-300 uppercase tracking-wider">Matchup Brief</h3>
       </div>
 
-      {data.takeaways.length > 0 && (
+      {takeaways.length > 0 && (
         <div className="space-y-1.5">
-          {data.takeaways.map((t, i) => (
+          {takeaways.map((t, i) => (
             <div key={i} className="flex items-start gap-2 text-xs text-slate-200">
               <Zap className="w-3 h-3 text-amber-400 mt-0.5 flex-shrink-0" />
               <span>{t}</span>
@@ -107,10 +112,12 @@ export default function GameMatchupBrief({ homeAbbrev, awayAbbrev }: Props) {
         </div>
       </div>
 
-      <div className="flex items-center justify-between pt-2 border-t border-slate-800 text-xs">
-        <span className="text-slate-400">Projected Total</span>
-        <span className="font-mono font-semibold text-purple-300">{data.total.projectedTotal.toFixed(1)}</span>
-      </div>
+      {projectedTotal != null && (
+        <div className="flex items-center justify-between pt-2 border-t border-slate-800 text-xs">
+          <span className="text-slate-400">Projected Total</span>
+          <span className="font-mono font-semibold text-purple-300">{projectedTotal.toFixed(1)}</span>
+        </div>
+      )}
     </div>
   );
 }

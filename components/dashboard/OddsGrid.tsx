@@ -74,7 +74,7 @@ export default function OddsGrid({ gameId }: OddsGridProps) {
                 Moneyline
               </th>
               <th className="px-3 py-2 text-center text-xs text-mercury font-medium uppercase tracking-wider" colSpan={2}>
-                Run Line
+                {currentSport === "nba" ? "Spread" : "Run Line"}
               </th>
               <th className="px-3 py-2 text-center text-xs text-mercury font-medium uppercase tracking-wider" colSpan={2}>
                 Total
@@ -141,10 +141,10 @@ export default function OddsGrid({ gameId }: OddsGridProps) {
                 </td>
                 <td className="px-1 py-1.5 text-center">
                   <button
-                    onClick={() => handleClickOdds(line.bookmaker, line.spreadPrice, "spread", `${homeTeam} ${line.homeSpread}`, 0.5)}
+                    onClick={() => handleClickOdds(line.bookmaker, line.spreadPrice, "spread", `${homeTeam} ${line.homeSpread > 0 ? "+" : ""}${line.homeSpread}`, 0.5)}
                     className="inline-block px-2 py-1.5 rounded font-mono text-xs text-mercury hover:bg-slate/30 transition-all"
                   >
-                    <span className="text-electric">{line.homeSpread}</span>{" "}
+                    <span className="text-electric">{line.homeSpread > 0 ? "+" : ""}{line.homeSpread}</span>{" "}
                     <span className="text-silver">{formatOdds(line.spreadPrice)}</span>
                   </button>
                 </td>
@@ -210,12 +210,12 @@ export default function OddsGrid({ gameId }: OddsGridProps) {
             {/* Spread + Total row */}
             <div className="grid grid-cols-2 gap-2">
               <button
-                onClick={() => handleClickOdds(line.bookmaker, line.spreadPrice, "spread", `${homeTeam} ${line.homeSpread}`, 0.5)}
+                onClick={() => handleClickOdds(line.bookmaker, line.spreadPrice, "spread", `${homeTeam} ${line.homeSpread > 0 ? "+" : ""}${line.homeSpread}`, 0.5)}
                 className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-gunmetal/25 text-mercury transition-all active:scale-95"
               >
-                <span className="text-[10px]">RL</span>
+                <span className="text-[10px]">{currentSport === "nba" ? "SP" : "RL"}</span>
                 <span className="font-mono text-xs">
-                  <span className="text-electric">{line.homeSpread}</span>{" "}
+                  <span className="text-electric">{line.homeSpread > 0 ? "+" : ""}{line.homeSpread}</span>{" "}
                   {formatOdds(line.spreadPrice)}
                 </span>
               </button>
