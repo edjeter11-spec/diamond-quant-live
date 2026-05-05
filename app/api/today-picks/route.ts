@@ -18,10 +18,17 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const baseUrl = `https://${process.env.VERCEL_URL || "diamond-quant-live.vercel.app"}`;
+    // Always hit the public alias — VERCEL_URL points at the per-deploy URL
+    // which can sit behind Vercel's auth wall on preview branches.
+    const baseUrl = "https://diamond-quant-live.vercel.app";
     const analysisUrl = isNBA ? `${baseUrl}/api/nba-analysis` : `${baseUrl}/api/analysis`;
-    const res = await fetch(analysisUrl, { signal: AbortSignal.timeout(15000) });
-    if (!res.ok) return NextResponse.json({ ok: false, picks: [], error: "analysis fetch failed" });
+    const res = await fetch(analysisUrl, { signal: AbortSignal.timeout(18000) });
+    if (!res.ok) {
+      // Serve last-known cache instead of failing to a blank state
+      const stale = await cloudGet<{ picks: any[]; generatedAt: string } | null>(cacheKey, null);
+      if (stale?.picks?.length) return NextResponse.json({ ok: true, picks: stale.picks, cached: true, stale: true, generatedAt: stale.generatedAt });
+      return NextResponse.json({ ok: false, picks: [], error: `analysis HTTP ${res.status}` });
+    }
 
     const data = await res.json();
     const picks = generateSmartPicks(data.analyses ?? [], 5000);
@@ -31,6 +38,9 @@ export async function GET(req: NextRequest) {
     await cloudSet(cacheKey, result);
     return NextResponse.json({ ok: true, picks, cached: false, generatedAt: result.generatedAt });
   } catch (error: any) {
+    // Final safety net: serve stale cache if present
+    const stale = await cloudGet<{ picks: any[]; generatedAt: string } | null>(cacheKey, null);
+    if (stale?.picks?.length) return NextResponse.json({ ok: true, picks: stale.picks, cached: true, stale: true, generatedAt: stale.generatedAt });
     return NextResponse.json({ ok: false, picks: [], error: error.message }, { status: 500 });
   }
 }

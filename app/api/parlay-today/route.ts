@@ -68,14 +68,21 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const baseUrl = `https://${process.env.VERCEL_URL || "diamond-quant-live.vercel.app"}`;
+    // Hit the public alias — VERCEL_URL can sit behind preview auth.
+    const baseUrl = "https://diamond-quant-live.vercel.app";
     const sportKey = isNBA ? "basketball_nba" : "baseball_mlb";
 
-    // Fetch odds (contains evBets with confidence/EV)
-    const oddsRes = await fetch(`${baseUrl}/api/odds?sport=${sportKey}`, { signal: AbortSignal.timeout(15000) });
-    if (!oddsRes.ok) return NextResponse.json({ ok: false, error: "odds fetch failed", legs: [] });
-    const oddsData = await oddsRes.json();
-    const games = oddsData.games ?? [];
+    // Fetch odds (contains evBets with confidence/EV). When the odds source
+    // is empty (Odds API exhausted), we fall through to the player-prop
+    // candidates below — a parlay built entirely from props is still a parlay.
+    let games: any[] = [];
+    try {
+      const oddsRes = await fetch(`${baseUrl}/api/odds?sport=${sportKey}`, { signal: AbortSignal.timeout(15000) });
+      if (oddsRes.ok) {
+        const oddsData = await oddsRes.json();
+        games = oddsData.games ?? [];
+      }
+    } catch {}
 
     // Build candidate picks from evBets, carrying commenceTime for day filtering
     type Candidate = ParlayLeg & { day: string };
@@ -112,48 +119,51 @@ export async function GET(req: NextRequest) {
       .filter(c => c.confidence === "HIGH" || c.confidence === "MEDIUM" || c.evPercentage > 1)
       .sort((a, b) => scorePick(b) - scorePick(a));
 
-    // Fetch NBA player props as additional mixed candidates
+    // Fetch player props as additional mixed candidates (NBA + MLB now).
+    // When the odds-side games list is empty, props become the entire parlay.
     const propCandidates: Candidate[] = [];
-    if (isNBA) {
-      const markets = [
-        { key: "player_points", label: "Points" },
-        { key: "player_rebounds", label: "Rebounds" },
-        { key: "player_assists", label: "Assists" },
-      ];
-      await Promise.all(markets.map(async ({ key, label }) => {
-        try {
-          const r = await fetch(`${baseUrl}/api/players?sport=basketball_nba&market=${key}`, { signal: AbortSignal.timeout(8000) });
-          if (!r.ok) return;
-          const data = await r.json();
-          for (const prop of data.props ?? []) {
-            if (!prop.playerName || !prop.line) continue;
-            const gameDay = prop.gameTime ? etDateOf(prop.gameTime) : today;
-            if (gameDay !== targetDay) continue;
-            const overProb = prop.fairOverProb ?? 50;
-            const underProb = prop.fairUnderProb ?? 50;
-            const favourOver = overProb >= underProb;
-            const best = favourOver ? prop.bestOver : prop.bestUnder;
-            if (!best?.price) continue;
-            const topProb = Math.max(overProb, underProb);
-            if (topProb < 55) continue;
-            propCandidates.push({
-              id: `prop-${key}-${prop.playerName}`,
-              game: prop.playerName,
-              pick: `${prop.playerName} ${favourOver ? "Over" : "Under"} ${prop.line} ${label}`,
-              market: "player_prop",
-              odds: best.price,
-              bookmaker: best.bookmaker,
-              evPercentage: Math.round((topProb - 50) * 2 * 10) / 10,
-              fairProb: topProb,
-              confidence: topProb >= 65 ? "HIGH" : topProb >= 58 ? "MEDIUM" : "LOW",
-              commenceTime: prop.gameTime,
-              day: gameDay,
-            });
-          }
-        } catch {}
-      }));
-      propCandidates.sort((a, b) => scorePick(b) - scorePick(a));
-    }
+    const markets = isNBA ? [
+      { key: "player_points", label: "Points" },
+      { key: "player_rebounds", label: "Rebounds" },
+      { key: "player_assists", label: "Assists" },
+    ] : [
+      { key: "pitcher_strikeouts", label: "Ks" },
+      { key: "batter_hits", label: "Hits" },
+      { key: "batter_total_bases", label: "Total Bases" },
+    ];
+    await Promise.all(markets.map(async ({ key, label }) => {
+      try {
+        const r = await fetch(`${baseUrl}/api/players?sport=${sportKey}&market=${key}`, { signal: AbortSignal.timeout(8000) });
+        if (!r.ok) return;
+        const data = await r.json();
+        for (const prop of data.props ?? []) {
+          if (!prop.playerName || !prop.line) continue;
+          const gameDay = prop.gameTime ? etDateOf(prop.gameTime) : today;
+          if (gameDay !== targetDay) continue;
+          const overProb = prop.fairOverProb ?? 50;
+          const underProb = prop.fairUnderProb ?? 50;
+          const favourOver = overProb >= underProb;
+          const best = favourOver ? prop.bestOver : prop.bestUnder;
+          if (!best?.price) continue;
+          const topProb = Math.max(overProb, underProb);
+          if (topProb < 55) continue;
+          propCandidates.push({
+            id: `prop-${key}-${prop.playerName}`,
+            game: prop.playerName,
+            pick: `${prop.playerName} ${favourOver ? "Over" : "Under"} ${prop.line} ${label}`,
+            market: "player_prop",
+            odds: best.price,
+            bookmaker: best.bookmaker,
+            evPercentage: Math.round((topProb - 50) * 2 * 10) / 10,
+            fairProb: topProb,
+            confidence: topProb >= 65 ? "HIGH" : topProb >= 58 ? "MEDIUM" : "LOW",
+            commenceTime: prop.gameTime,
+            day: gameDay,
+          });
+        }
+      } catch {}
+    }));
+    propCandidates.sort((a, b) => scorePick(b) - scorePick(a));
 
     // Mixed-type builder: one per market when possible
     const legs: ParlayLeg[] = [];
