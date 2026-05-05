@@ -32,7 +32,7 @@ import ROIChart from "@/components/dashboard/ROIChart";
 import { matchGames } from "@/lib/mlb/match-games";
 import TonightsPlays from "@/components/dashboard/TonightsPlays";
 import StreakBanner from "@/components/dashboard/StreakBanner";
-import { useWarmNbaPlayerIndex } from "@/lib/hooks/useNbaPlayerIndex";
+import { useWarmNbaPlayerIndex, useWarmMlbPlayerIndex } from "@/lib/hooks/useNbaPlayerIndex";
 import FloatingParlayChip from "@/components/dashboard/FloatingParlayChip";
 import Toaster from "@/components/ui/Toaster";
 import { backupOddsToStorage, getOddsBackup } from "@/lib/odds/cache";
@@ -95,8 +95,10 @@ export default function WarRoom() {
   } = useStore();
   const { currentSport, config, setSport } = useSport();
   const { isAdmin } = useAuth();
-  // Pre-load NBA player index on app start — makes headshots instant on Props tab
+  // Pre-load NBA + MLB player indexes on app start so headshots resolve
+  // synchronously (no blank → photo flicker) when tabs remount.
   useWarmNbaPlayerIndex();
+  useWarmMlbPlayerIndex();
 
   const [refreshing, setRefreshing] = useState(false);
   const [mobileGamesOpen, setMobileGamesOpen] = useState(false);
@@ -748,7 +750,7 @@ export default function WarRoom() {
 
       {/* Global UI: ephemeral toasts + floating parlay slip */}
       <Toaster />
-      <FloatingParlayChip activeTab={activeTab} onOpenBuilder={() => setActiveTab("parlays")} />
+      <FloatingParlayChip activeTab={activeTab} onOpenBuilder={() => openBetSlip()} />
 
       {/* Mobile bottom nav bar */}
       <nav className="md:hidden fixed bottom-0 inset-x-0 z-50 bg-bunker/95 backdrop-blur-lg border-t border-slate/30 flex items-stretch">

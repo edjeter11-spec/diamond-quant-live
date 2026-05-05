@@ -77,27 +77,38 @@ async function loadIndex(): Promise<Map<string, number>> {
   return inflight;
 }
 
+function resolveSync(name: string, map: Map<string, number>): number | null {
+  const key = name.toLowerCase().trim();
+  let found = map.get(key);
+  if (!found) {
+    const parts = key.split(/\s+/);
+    const last = parts[parts.length - 1];
+    if (last) found = map.get(last);
+  }
+  return found ?? null;
+}
+
 /**
  * Resolve a player name to their NBA player ID.
- * Returns null if not found.
+ * Returns the cached value SYNCHRONOUSLY on first render when the index is
+ * already in memory — eliminates the "blank avatar → real photo" flicker that
+ * users see every time a tab unmounts and remounts.
  */
 export function useNbaPlayerId(name: string | undefined | null): number | null {
-  const [id, setId] = useState<number | null>(null);
+  const initial = name && memoryCache ? resolveSync(name, memoryCache.byNameLower) : null;
+  const [id, setId] = useState<number | null>(initial);
 
   useEffect(() => {
     if (!name) { setId(null); return; }
+    if (memoryCache) {
+      const sync = resolveSync(name, memoryCache.byNameLower);
+      setId(sync);
+      return;
+    }
     let cancelled = false;
     loadIndex().then(map => {
       if (cancelled) return;
-      const key = name.toLowerCase().trim();
-      // Try exact full name first, then last-name fallback
-      let found = map.get(key);
-      if (!found) {
-        const parts = key.split(/\s+/);
-        const last = parts[parts.length - 1];
-        if (last) found = map.get(last);
-      }
-      setId(found ?? null);
+      setId(resolveSync(name, map));
     });
     return () => { cancelled = true; };
   }, [name]);
@@ -161,22 +172,28 @@ async function loadMlbIndex(): Promise<Map<string, number>> {
 }
 
 export function useMlbPlayerId(name: string | undefined | null): number | null {
-  const [id, setId] = useState<number | null>(null);
+  const initial = name && mlbMemoryCache ? resolveSync(name, mlbMemoryCache.byNameLower) : null;
+  const [id, setId] = useState<number | null>(initial);
   useEffect(() => {
     if (!name) { setId(null); return; }
+    if (mlbMemoryCache) {
+      setId(resolveSync(name, mlbMemoryCache.byNameLower));
+      return;
+    }
     let cancelled = false;
     loadMlbIndex().then((map) => {
       if (cancelled) return;
-      const key = name.toLowerCase().trim();
-      let found = map.get(key);
-      if (!found) {
-        const parts = key.split(/\s+/);
-        const last = parts[parts.length - 1];
-        if (last) found = map.get(last);
-      }
-      setId(found ?? null);
+      setId(resolveSync(name, map));
     });
     return () => { cancelled = true; };
   }, [name]);
   return id;
+}
+
+// Also pre-warm the MLB index alongside the NBA one so MLB avatars don't
+// flicker on tab switch either. Called from app/page.tsx via useWarmNbaPlayerIndex.
+export function useWarmMlbPlayerIndex(): void {
+  useEffect(() => {
+    loadMlbIndex().catch(() => {});
+  }, []);
 }

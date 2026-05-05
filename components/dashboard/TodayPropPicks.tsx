@@ -148,7 +148,9 @@ export default function TodayPropPicks({
   // non-empty propsData payload arrives. Re-renders every 30s so the
   // "Updated Xm ago" label stays current without re-fetching.
   const [lastUpdated, setLastUpdated] = useState<number | null>(null);
-  const [, setTick] = useState(0);
+  const [tick, setTick] = useState(0);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
   useEffect(() => {
     const hasData = Object.values(propsData).some((arr) => (arr?.length ?? 0) > 0);
     if (hasData) setLastUpdated(Date.now());
@@ -158,7 +160,9 @@ export default function TodayPropPicks({
     return () => clearInterval(id);
   }, []);
   const relativeTime = (ts: number | null): string => {
-    if (!ts) return "";
+    if (!ts || !mounted) return "";
+    // tick is read here so changes trigger recompute via the 30s interval
+    void tick;
     const sec = Math.max(0, Math.floor((Date.now() - ts) / 1000));
     if (sec < 60) return "just now";
     const min = Math.floor(sec / 60);
@@ -166,6 +170,14 @@ export default function TodayPropPicks({
     const hr = Math.floor(min / 60);
     return `${hr}h ago`;
   };
+
+  // Tip-off label — computed client-side only to avoid SSR/client locale mismatch.
+  const [tipoffLabel, setTipoffLabel] = useState<string>("");
+  useEffect(() => {
+    const times = Object.values(propsData).flat().map((p: any) => p.gameTime).filter(Boolean).sort() as string[];
+    if (!times[0]) { setTipoffLabel(""); return; }
+    setTipoffLabel(new Date(times[0]).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }));
+  }, [propsData]);
 
   // Live grading: fetch box-score actuals and paint picks green/red when
   // their games are live or final. Refreshes every 60s in-game.
@@ -254,12 +266,14 @@ export default function TodayPropPicks({
     // than 6 Overs, backfill with Unders so the board still fills.
     const TARGET = 8;
     const MAX_UNDERS = 2;
-    const out: PropPick[] = [...overs.slice(0, TARGET - MAX_UNDERS)];
-    const underSlots = Math.max(0, TARGET - out.length - 0);
-    out.push(...unders.slice(0, Math.min(MAX_UNDERS, underSlots)));
-    // Backfill remaining from leftover Overs first, then Unders
-    if (out.length < TARGET) out.push(...overs.slice(out.length - unders.slice(0, MAX_UNDERS).length, TARGET));
-    if (out.length < TARGET) out.push(...unders.slice(MAX_UNDERS, MAX_UNDERS + (TARGET - out.length)));
+    const oversTaken = Math.min(overs.length, TARGET - MAX_UNDERS);
+    const out: PropPick[] = [...overs.slice(0, oversTaken)];
+    const underSlots = Math.max(0, TARGET - out.length);
+    const undersTaken = Math.min(MAX_UNDERS, underSlots, unders.length);
+    out.push(...unders.slice(0, undersTaken));
+    // Backfill remaining from leftover Overs first (start past oversTaken), then Unders
+    if (out.length < TARGET) out.push(...overs.slice(oversTaken, oversTaken + (TARGET - out.length)));
+    if (out.length < TARGET) out.push(...unders.slice(undersTaken, undersTaken + (TARGET - out.length)));
     return out.slice(0, TARGET);
   }, [propsData]);
 
@@ -303,13 +317,7 @@ export default function TodayPropPicks({
           <p className="text-xs text-mercury/60">No {sport.toUpperCase()} player prop lines posted yet</p>
           <p className="text-[10px] text-mercury/40 mt-1">Books usually post props 4–6 hours before tip-off.</p>
           <p className="text-[10px] text-mercury/40 mt-0.5">
-            {(() => {
-              const times = Object.values(propsData).flat().map((p: any) => p.gameTime).filter(Boolean).sort() as string[];
-              if (times.length === 0) return "Check back closer to game time.";
-              const next = new Date(times[0]);
-              const local = next.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-              return `Next tip-off: ${local}`;
-            })()}
+            {tipoffLabel ? `Next tip-off: ${tipoffLabel}` : "Check back closer to game time."}
           </p>
           <button
             onClick={() => { try { window.location.reload(); } catch {} }}

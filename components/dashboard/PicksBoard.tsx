@@ -656,8 +656,19 @@ function PickCard({ pick, isExpanded, onToggle, onAddToParlay, formatOdds }: {
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [shared, setShared] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [commenceLabel, setCommenceLabel] = useState<string>("");
   const { bankroll, scores } = useStore();
   const { currentSport } = useSport();
+
+  // Format commenceTime client-only to avoid SSR/CSR locale+timezone hydration mismatch.
+  useEffect(() => {
+    if (!pick.commenceTime) { setCommenceLabel(""); return; }
+    setCommenceLabel(
+      new Date(pick.commenceTime).toLocaleString("en-US", {
+        month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
+      })
+    );
+  }, [pick.commenceTime]);
 
   // Close overflow menu on outside click
   useEffect(() => {
@@ -764,9 +775,9 @@ function PickCard({ pick, isExpanded, onToggle, onAddToParlay, formatOdds }: {
             <p className="text-xs sm:text-sm font-medium text-silver truncate">{formatPickLabel(pick.pick, currentSport as any)}</p>
           </div>
           <p className="text-[9px] sm:text-[10px] text-mercury/60 truncate flex items-center gap-1">
-            {pick.commenceTime && (
-              <span className="text-mercury/80">
-                {new Date(pick.commenceTime).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+            {pick.commenceTime && commenceLabel && (
+              <span className="text-mercury/80" suppressHydrationWarning>
+                {commenceLabel}
                 {" — "}
               </span>
             )}
@@ -1040,8 +1051,16 @@ function PropSection({ title, subtitle, icon: Icon, iconColor, props, loading, e
                     })()}
                   </div>
                   <span className="text-sm font-bold font-mono text-electric flex-shrink-0">{p.line}</span>
-                  <span className="text-[10px] font-mono text-neon bg-neon/10 px-1 py-0.5 rounded">O{fmt(p.bestOver?.price ?? 0)}</span>
-                  <span className="text-[10px] font-mono text-purple bg-purple/10 px-1 py-0.5 rounded">U{fmt(p.bestUnder?.price ?? 0)}</span>
+                  {typeof p.bestOver?.price === "number" && Number.isFinite(p.bestOver.price) ? (
+                    <span className="text-[10px] font-mono text-neon bg-neon/10 px-1 py-0.5 rounded">O{fmt(p.bestOver.price)}</span>
+                  ) : (
+                    <span className="text-[10px] font-mono text-mercury/40 bg-gunmetal/40 px-1 py-0.5 rounded">O —</span>
+                  )}
+                  {typeof p.bestUnder?.price === "number" && Number.isFinite(p.bestUnder.price) ? (
+                    <span className="text-[10px] font-mono text-purple bg-purple/10 px-1 py-0.5 rounded">U{fmt(p.bestUnder.price)}</span>
+                  ) : (
+                    <span className="text-[10px] font-mono text-mercury/40 bg-gunmetal/40 px-1 py-0.5 rounded">U —</span>
+                  )}
                   <ChevronDown className={`w-3.5 h-3.5 text-mercury/40 transition-transform ${open ? "rotate-180" : ""}`} />
                 </button>
                 {open && (
