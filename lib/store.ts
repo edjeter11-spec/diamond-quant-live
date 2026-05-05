@@ -76,6 +76,7 @@ interface AppState {
   selectedGameId: string | null;
   activeTab: "dashboard" | "nrfi" | "bot" | "props" | "bankroll" | "profile";
   sidebarOpen: boolean;
+  parlayBuilderOpen: boolean;
 
   // Live Data
   games: any[];
@@ -104,6 +105,7 @@ interface AppState {
   selectGame: (id: string | null) => void;
   setActiveTab: (tab: AppState["activeTab"]) => void;
   toggleSidebar: () => void;
+  setParlayBuilderOpen: (open: boolean) => void;
   setGames: (games: any[]) => void;
   setOddsData: (odds: any[]) => void;
   setScores: (scores: any[]) => void;
@@ -188,6 +190,7 @@ export const useStore = create<AppState>((set, get) => ({
   selectedGameId: null,
   activeTab: "dashboard",
   sidebarOpen: true,
+  parlayBuilderOpen: false,
   games: [],
   oddsData: [],
   scores: [],
@@ -231,6 +234,7 @@ export const useStore = create<AppState>((set, get) => ({
   selectGame: (id) => set({ selectedGameId: id }),
   setActiveTab: (tab) => set({ activeTab: tab }),
   toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
+  setParlayBuilderOpen: (open) => set({ parlayBuilderOpen: open }),
   setGames: (games) => set({ games, lastUpdate: new Date().toISOString() }),
   setOddsData: (odds) => set({ oddsData: odds }),
   setScores: (scores) => set({ scores }),
