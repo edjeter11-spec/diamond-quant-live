@@ -21,7 +21,10 @@ export async function GET(req: NextRequest) {
     // Always hit the public alias — VERCEL_URL points at the per-deploy URL
     // which can sit behind Vercel's auth wall on preview branches.
     const baseUrl = "https://diamond-quant-live.vercel.app";
-    const analysisUrl = isNBA ? `${baseUrl}/api/nba-analysis` : `${baseUrl}/api/analysis`;
+    // bot-analysis (MLB three-models) returns the {consensus, pitcherModel, marketModel}
+    // shape that smart-picks expects. The plain /api/analysis is a simpler
+    // flat-shape route used elsewhere — would crash generateSmartPicks.
+    const analysisUrl = isNBA ? `${baseUrl}/api/nba-analysis` : `${baseUrl}/api/bot-analysis`;
     const res = await fetch(analysisUrl, { signal: AbortSignal.timeout(18000) });
     if (!res.ok) {
       // Serve last-known cache instead of failing to a blank state
