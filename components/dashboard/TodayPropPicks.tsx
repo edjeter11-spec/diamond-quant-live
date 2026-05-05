@@ -286,15 +286,17 @@ export default function TodayPropPicks({
         </div>
         <div className="divide-y divide-slate/10">
           {[0, 1, 2, 3, 4].map((i) => (
-            <div key={i} className="px-3 sm:px-4 py-3 flex items-center gap-2 animate-pulse">
-              <div className="w-8 h-8 rounded-full bg-slate/20 flex-shrink-0" />
+            <div key={i} className="px-3 sm:px-4 py-3 sm:py-2.5 min-h-[64px] sm:min-h-0 flex items-center gap-3 sm:gap-2.5 animate-pulse">
+              {/* Match real row sizing: 40px avatar mobile, 28px desktop */}
+              <div className="w-10 h-10 sm:w-7 sm:h-7 rounded-full bg-slate/20 flex-shrink-0" />
               <div className="flex-1 min-w-0 space-y-1.5">
-                <div className="h-3 w-2/3 bg-slate/20 rounded" />
+                <div className="h-3.5 w-2/3 bg-slate/20 rounded" />
+                <div className="h-3 w-1/2 bg-slate/20 rounded" />
                 <div className="h-2.5 w-1/3 bg-slate/15 rounded" />
               </div>
-              <div className="text-right space-y-1">
-                <div className="h-3 w-10 bg-slate/20 rounded ml-auto" />
-                <div className="h-2.5 w-8 bg-slate/15 rounded ml-auto" />
+              <div className="flex flex-col sm:flex-row items-end sm:items-center gap-1.5 sm:gap-2 flex-shrink-0">
+                <div className="h-4 w-10 bg-slate/20 rounded" />
+                <div className="w-8 h-8 rounded-full bg-slate/15" />
               </div>
             </div>
           ))}
@@ -552,7 +554,7 @@ export default function TodayPropPicks({
                               handleAdd();
                             }
                           }}
-                          className={`w-8 h-8 inline-flex items-center justify-center rounded-full border transition-all touch-manipulation cursor-pointer select-none active:scale-90 ${
+                          className={`w-11 h-11 sm:w-8 sm:h-8 inline-flex items-center justify-center rounded-full border transition-all touch-manipulation cursor-pointer select-none active:scale-90 ${
                             showCheck
                               ? "bg-neon/30 border-neon/60 text-neon"
                               : inParlay
