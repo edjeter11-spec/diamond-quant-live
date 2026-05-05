@@ -61,6 +61,14 @@ export async function GET(req: Request) {
       takeaways,
     });
   } catch (e: any) {
-    return NextResponse.json({ error: e?.message ?? "failed" }, { status: 500 });
+    console.error("game-matchup error:", e);
+    return NextResponse.json({
+      home, away,
+      rest: { home: null, away: null, edge: 0, factors: [] },
+      injuries: { home: [], away: [] },
+      ratings: { home: null, away: null, netGap: 0 },
+      total: null,
+      takeaways: [],
+    });
   }
 }

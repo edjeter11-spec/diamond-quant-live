@@ -35,6 +35,6 @@ export async function GET() {
     });
   } catch (error) {
     console.error("Arbitrage scan error:", error);
-    return NextResponse.json({ error: "Scan failed", arbitrage: [], evBets: [] }, { status: 500 });
+    return NextResponse.json({ arbitrage: [], evBets: [], message: "Scan temporarily unavailable" });
   }
 }

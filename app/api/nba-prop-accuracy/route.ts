@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
 
   // Cache key based on player names
   const cacheKey = `nba_prop_acc_${players.slice(0, 50)}`;
-  const cached = getCached(cacheKey, 300); // 5 min cache
+  const cached = getCached(cacheKey, 5 * 60_000); // 5 min (server-cache TTL is ms)
   if (cached) return NextResponse.json(cached);
 
   try {
@@ -68,7 +68,8 @@ export async function GET(req: NextRequest) {
     const result = { accuracy };
     setCache(cacheKey, result);
     return NextResponse.json(result);
-  } catch {
-    return NextResponse.json({ accuracy: {}, error: "Failed" }, { status: 500 });
+  } catch (e) {
+    console.error("nba-prop-accuracy error:", e);
+    return NextResponse.json({ accuracy: {} });
   }
 }

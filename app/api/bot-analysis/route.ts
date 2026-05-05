@@ -7,6 +7,7 @@ import { filterRealArbs, filterRealEV } from "@/lib/odds/sportsbooks";
 import { fetchTodayGames, getGameStatus, getTeamAbbrev } from "@/lib/mlb/stats-api";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 export async function GET() {
   const cached = getCached("bot_analysis", 600_000); // 10 min cache
@@ -78,6 +79,6 @@ export async function GET() {
     return NextResponse.json(response);
   } catch (error: any) {
     console.error("Bot analysis error:", error);
-    return NextResponse.json({ error: error.message, analyses: [] }, { status: 500 });
+    return NextResponse.json({ analyses: [], message: "Analysis temporarily unavailable" });
   }
 }

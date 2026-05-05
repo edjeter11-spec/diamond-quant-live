@@ -5,6 +5,7 @@ import { calculateLiveEdge, generateReasoning } from "@/lib/model/engine";
 import { getGameWeather, getTeamFatigue } from "@/lib/mlb/weather-fatigue";
 
 export const revalidate = 60;
+export const maxDuration = 60;
 
 // Team ID lookup for MLB Stats API
 const TEAM_IDS: Record<string, number> = {
@@ -101,6 +102,6 @@ export async function GET() {
     });
   } catch (error) {
     console.error("Analysis API error:", error);
-    return NextResponse.json({ error: "Analysis failed", analyses: [] }, { status: 500 });
+    return NextResponse.json({ analyses: [], message: "Analysis temporarily unavailable" });
   }
 }

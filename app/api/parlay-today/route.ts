@@ -195,7 +195,9 @@ export async function GET(req: NextRequest) {
     }
 
     if (legs.length < 2) {
-      return NextResponse.json({ ok: false, error: "not enough qualifying picks", legs: [] });
+      // 200 with empty legs so the UI renders the "checking back later" empty
+      // state instead of an error toast — happens nightly when slates are thin.
+      return NextResponse.json({ ok: true, legs: [], message: "Not enough qualifying picks yet" });
     }
 
     const result: PinnedParlay = {
@@ -211,6 +213,7 @@ export async function GET(req: NextRequest) {
     await cloudSet(cacheKey, result);
     return NextResponse.json({ ok: true, ...result, cached: false });
   } catch (error: any) {
-    return NextResponse.json({ ok: false, error: error.message, legs: [] }, { status: 500 });
+    console.error("parlay-today error:", error);
+    return NextResponse.json({ ok: true, legs: [], message: "Parlay temporarily unavailable" });
   }
 }

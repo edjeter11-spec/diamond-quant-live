@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const stats = await getTrackRecordStats(days);
-    if (!stats) return NextResponse.json({ ok: false, error: "No track record yet" });
+    if (!stats) return NextResponse.json({ ok: true, days, recent: [], message: "No track record yet" });
 
     // Also fetch last 20 settled picks for a details table
     let recent: any[] = [];
@@ -27,6 +27,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ ok: true, days, ...stats, recent });
   } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e.message });
+    console.error("results error:", e);
+    return NextResponse.json({ ok: true, days, recent: [], message: "Results temporarily unavailable" });
   }
 }

@@ -8,6 +8,7 @@ import { checkRateLimit, getUserIdFromRequest } from "@/lib/supabase/rate-limit"
 import { snapshotGameMarkets } from "@/lib/odds/line-movement";
 
 export const revalidate = 60;
+export const maxDuration = 30;
 
 export async function GET(req: Request) {
   const userId = getUserIdFromRequest(req);
@@ -29,7 +30,10 @@ export async function GET(req: Request) {
 
   const apiKey = getApiKey();
   if (!apiKey) {
-    return NextResponse.json({ games: [], error: "No API keys configured" });
+    // Serve stale snapshot if any so the board never goes blank when keys are out
+    const stale = getCached(CACHE_KEY, CACHE_TTL.ODDS * 20);
+    if (stale) return NextResponse.json({ ...stale, stale: true });
+    return NextResponse.json({ games: [], message: "Odds feed temporarily unavailable" });
   }
 
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -100,5 +104,6 @@ export async function GET(req: Request) {
   const stale = getCached(CACHE_KEY, CACHE_TTL.ODDS * 10);
   if (stale) return NextResponse.json({ ...stale, stale: true });
 
-  return NextResponse.json({ error: "All API keys exhausted", games: [] }, { status: 503 });
+  // Return 200 with empty array — UI renders empty state cleanly instead of error toast
+  return NextResponse.json({ games: [], message: "Odds feed temporarily unavailable" });
 }

@@ -9,18 +9,38 @@ import { getRestState, computeRestEdge } from "@/lib/nba/rest-fatigue";
 import { getTeamInjuries } from "@/lib/nba/injuries";
 import { projectGameTotal, getTeamRating } from "@/lib/nba/pace-ratings";
 import { getNBALineup, computeNBALineupEdge } from "@/lib/nba/daily-lineup";
+import { getFreeEvents } from "@/lib/odds/free-events";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 export async function GET() {
   const cached = getCached("nba_analysis", 600_000);
   if (cached) return NextResponse.json(cached);
 
   const apiKey = getApiKey();
-  if (!apiKey) return NextResponse.json({ analyses: [], error: "No API key" });
 
   try {
-    const rawGames = await fetchOdds(apiKey, "basketball_nba");
+    // Fetch odds when a key exists; otherwise build skeleton games from the
+    // free ESPN events feed so the UI still gets analyses (book-less).
+    let rawGames: any[] = [];
+    if (apiKey) {
+      try {
+        rawGames = await fetchOdds(apiKey, "basketball_nba");
+      } catch (e) {
+        console.error("NBA odds fetch failed, falling back to free events:", e instanceof Error ? e.message : e);
+      }
+    }
+    if (rawGames.length === 0) {
+      const events = await getFreeEvents("basketball_nba").catch(() => []);
+      rawGames = events.map((e: any) => ({
+        id: e.id,
+        commence_time: e.commence_time,
+        home_team: e.home_team,
+        away_team: e.away_team,
+        bookmakers: [],
+      }));
+    }
     const now = Date.now();
 
     // Filter to upcoming games only

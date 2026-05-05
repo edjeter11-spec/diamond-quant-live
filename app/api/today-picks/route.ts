@@ -3,7 +3,7 @@ import { cloudGet, cloudSet } from "@/lib/supabase/client";
 import { generateSmartPicks } from "@/lib/bot/smart-picks";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 20;
+export const maxDuration = 60;
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -25,12 +25,13 @@ export async function GET(req: NextRequest) {
     // shape that smart-picks expects. The plain /api/analysis is a simpler
     // flat-shape route used elsewhere — would crash generateSmartPicks.
     const analysisUrl = isNBA ? `${baseUrl}/api/nba-analysis` : `${baseUrl}/api/bot-analysis`;
-    const res = await fetch(analysisUrl, { signal: AbortSignal.timeout(18000) });
+    const res = await fetch(analysisUrl, { signal: AbortSignal.timeout(45000) });
     if (!res.ok) {
       // Serve last-known cache instead of failing to a blank state
       const stale = await cloudGet<{ picks: any[]; generatedAt: string } | null>(cacheKey, null);
       if (stale?.picks?.length) return NextResponse.json({ ok: true, picks: stale.picks, cached: true, stale: true, generatedAt: stale.generatedAt });
-      return NextResponse.json({ ok: false, picks: [], error: `analysis HTTP ${res.status}` });
+      // 200 with empty picks so the UI shows the "no picks yet" empty state cleanly
+      return NextResponse.json({ ok: true, picks: [], message: "Picks temporarily unavailable" });
     }
 
     const data = await res.json();
@@ -44,6 +45,6 @@ export async function GET(req: NextRequest) {
     // Final safety net: serve stale cache if present
     const stale = await cloudGet<{ picks: any[]; generatedAt: string } | null>(cacheKey, null);
     if (stale?.picks?.length) return NextResponse.json({ ok: true, picks: stale.picks, cached: true, stale: true, generatedAt: stale.generatedAt });
-    return NextResponse.json({ ok: false, picks: [], error: error.message }, { status: 500 });
+    return NextResponse.json({ ok: true, picks: [], message: "Picks temporarily unavailable" });
   }
 }

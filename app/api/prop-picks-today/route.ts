@@ -89,7 +89,8 @@ export async function GET(req: NextRequest) {
     const brain = await loadNbaPropBrainFromCloud();
     const weights = brain?.weights;
     if (!weights) {
-      return NextResponse.json({ ok: false, error: "Brain weights missing", picks: [] });
+      // 200 with empty picks — UI shows empty state instead of red error.
+      return NextResponse.json({ ok: true, picks: [], message: "Brain not yet trained" });
     }
 
     const allProjections: Array<PropPickOfDay & { score: number }> = [];
@@ -109,7 +110,7 @@ export async function GET(req: NextRequest) {
       for (const market of markets) {
         try {
           const res = await fetch(`${baseUrl}/api/players?sport=basketball_nba&market=${market}`, {
-            signal: AbortSignal.timeout(7000),
+            signal: AbortSignal.timeout(20000),
           });
           if (!res.ok) continue;
           const data = await res.json();
@@ -252,6 +253,7 @@ export async function GET(req: NextRequest) {
     if (top4.length > 0) await cloudSet(cacheKey, result);
     return NextResponse.json({ ok: true, ...result, cached: false });
   } catch (error: any) {
-    return NextResponse.json({ ok: false, error: error.message, picks: [] }, { status: 500 });
+    console.error("prop-picks-today error:", error);
+    return NextResponse.json({ ok: true, picks: [], message: "Picks temporarily unavailable" });
   }
 }
