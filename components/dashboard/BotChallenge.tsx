@@ -93,6 +93,7 @@ export default function BotChallenge() {
   // Evolution state
   const [evolving, setEvolving] = useState(false);
   const [evolutionResult, setEvolutionResult] = useState<any>(null);
+  const [evolutionProgress, setEvolutionProgress] = useState<any>(null);
 
   // Load persisted brain, training, and evolution results on mount (NBA only)
   useEffect(() => {
@@ -161,6 +162,23 @@ export default function BotChallenge() {
     }, 5000);
     return () => clearInterval(interval);
   }, [training]);
+
+  // Poll evolution progress while evolving
+  useEffect(() => {
+    if (!evolving) return;
+    const interval = setInterval(async () => {
+      try {
+        const { cloudGet } = await import("@/lib/supabase/client");
+        const data = await cloudGet("nba_evolution_progress", null) as any;
+        if (data) setEvolutionProgress(data);
+        if (data?.status === "complete" || data?.status === "error") {
+          clearInterval(interval);
+          // final result is set by startEvolution handler
+        }
+      } catch {}
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [evolving]);
 
   // Fetch server-generated prop picks (refreshed every 2 hrs by the API)
   useEffect(() => {
@@ -471,18 +489,14 @@ export default function BotChallenge() {
                   : "AI-powered player prop predictions"}
               </p>
             </div>
-            {/* Admin-only: Training + Evolution buttons */}
+            {/* Admin-only: Training button */}
             {isAdmin && !training && !evolving && (
-              <div className="flex gap-1">
-                <button onClick={startTraining} className="px-2 py-1 rounded-lg bg-purple/15 border border-purple/25 text-purple text-[9px] font-semibold hover:bg-purple/25 transition-all">
-                  Train
-                </button>
-                <button onClick={startEvolution} className="px-2 py-1 rounded-lg bg-neon/15 border border-neon/25 text-neon text-[9px] font-semibold hover:bg-neon/25 transition-all">
-                  Evolve
-                </button>
-              </div>
+              <button onClick={startTraining} className="px-2 py-1 rounded-lg bg-purple/15 border border-purple/25 text-purple text-[9px] font-semibold hover:bg-purple/25 transition-all">
+                Train Brain
+              </button>
             )}
           </div>
+
           {/* Training progress (admin only) */}
           {training && trainingProgress && (
             <div className="px-4 py-3 space-y-2">
@@ -497,14 +511,8 @@ export default function BotChallenge() {
               )}
             </div>
           )}
-          {/* Evolution progress */}
-          {evolving && (
-            <div className="px-4 py-3 flex items-center gap-2">
-              <RefreshCw className="w-3.5 h-3.5 text-neon animate-spin" />
-              <p className="text-xs text-neon">Evolving — breeding variants, testing on held-out data...</p>
-            </div>
-          )}
-          {/* Training/Evolution results — visible to all */}
+
+          {/* Training results — visible to all */}
           {(trainingProgress?.status === "complete" && trainingProgress.accuracy) && (
             <div className="px-4 py-2.5 border-t border-slate/10">
               <div className="grid grid-cols-3 gap-2">
@@ -520,17 +528,131 @@ export default function BotChallenge() {
               )}
             </div>
           )}
-          {/* Evolution results */}
-          {evolutionResult?.ok && (
-            <div className="px-4 py-2.5 border-t border-slate/10 space-y-2">
+
+          {/* ── Evolve Brain Section ── */}
+          {isAdmin && (
+            <div className="px-4 py-3 border-t border-slate/10 space-y-3">
+              <div className="flex items-center gap-2">
+                <Zap className="w-3.5 h-3.5 text-neon" />
+                <p className="text-[10px] text-silver font-semibold uppercase tracking-wider flex-1">Evolve Brain</p>
+                {!evolving && (
+                  <button
+                    onClick={startEvolution}
+                    className="px-3 py-1.5 rounded-lg bg-neon/15 border border-neon/25 text-neon text-[10px] font-bold hover:bg-neon/25 transition-all flex items-center gap-1.5"
+                  >
+                    <TrendingUp className="w-3 h-3" />
+                    Evolve Brain (3 Gen)
+                  </button>
+                )}
+              </div>
+
+              {/* Evolution progress */}
+              {evolving && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <RefreshCw className="w-3.5 h-3.5 text-neon animate-spin" />
+                    <p className="text-xs text-neon font-medium">
+                      {evolutionProgress?.message
+                        ? evolutionProgress.message.length > 60
+                          ? evolutionProgress.message.slice(0, 60) + "..."
+                          : evolutionProgress.message
+                        : "Breeding variants, testing on held-out data..."}
+                    </p>
+                  </div>
+                  {evolutionProgress?.generation > 0 && (
+                    <div className="w-full bg-gunmetal/50 rounded-full h-1">
+                      <div
+                        className="bg-neon h-1 rounded-full transition-all"
+                        style={{ width: `${Math.min(100, (evolutionProgress.generation / Math.max(evolutionProgress.totalGenerations, 1)) * 100)}%` }}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Evolution results table */}
+              {evolutionResult?.ok && !evolving && (
+                <div className="space-y-3">
+                  {/* Winner banner */}
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gold/10 border border-gold/20">
+                    <Crown className="w-3.5 h-3.5 text-gold flex-shrink-0" />
+                    <p className="text-[10px] text-silver font-semibold flex-1">
+                      Best: <span className="text-gold">{evolutionResult.bestVariant}</span>
+                      {" — "}
+                      <span className="text-neon font-mono">{evolutionResult.bestWinRate}%</span> test accuracy
+                    </p>
+                  </div>
+
+                  {/* Per-generation variant table */}
+                  {evolutionResult.history?.length > 0 && (
+                    <div className="space-y-2">
+                      {/* Group variants by generation */}
+                      {evolutionResult.history.map((h: any, gi: number) => {
+                        const genVariants = (evolutionResult.allVariants ?? []).filter((v: any) => v.generation === h.generation);
+                        return (
+                          <div key={gi} className="space-y-1">
+                            <p className="text-[8px] text-mercury/50 uppercase tracking-wider font-semibold">Generation {h.generation}</p>
+                            {genVariants.length > 0 ? (
+                              <div className="rounded-lg overflow-hidden border border-slate/15">
+                                {genVariants.map((v: any, vi: number) => {
+                                  const isWinner = v.id === h.winnerId || v.name === h.winnerName;
+                                  return (
+                                    <div
+                                      key={vi}
+                                      className={`flex items-center gap-2 px-3 py-1.5 text-[10px] border-b border-slate/10 last:border-0 ${isWinner ? "bg-neon/8" : "bg-transparent"}`}
+                                    >
+                                      {isWinner
+                                        ? <Crown className="w-3 h-3 text-neon flex-shrink-0" />
+                                        : <span className="w-3 h-3 flex-shrink-0" />
+                                      }
+                                      <span className={`flex-1 truncate ${isWinner ? "text-silver font-semibold" : "text-mercury/70"}`}>{v.name}</span>
+                                      <span className={`font-mono font-bold ${(v.testWinRate ?? 0) > 52 ? "text-neon" : (v.testWinRate ?? 0) > 48 ? "text-electric" : "text-danger"}`}>
+                                        {v.testWinRate ?? 0}%
+                                      </span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2 px-3 py-1.5 text-[10px] rounded-lg bg-neon/8 border border-neon/15">
+                                <Crown className="w-3 h-3 text-neon flex-shrink-0" />
+                                <span className="flex-1 text-silver font-semibold">{h.winnerName}</span>
+                                <span className={`font-mono font-bold ${h.winRate > 52 ? "text-neon" : h.winRate > 48 ? "text-electric" : "text-danger"}`}>{h.winRate}%</span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Run another generation button */}
+                  <button
+                    onClick={startEvolution}
+                    className="w-full px-3 py-1.5 rounded-lg bg-gunmetal/40 border border-slate/20 text-mercury/60 text-[9px] font-semibold hover:text-neon hover:border-neon/25 transition-all"
+                  >
+                    Run Another Generation
+                  </button>
+                </div>
+              )}
+
+              {/* Evolution error */}
+              {evolutionResult?.ok === false && !evolving && (
+                <p className="text-[10px] text-danger">{evolutionResult.error ?? "Evolution failed"}</p>
+              )}
+            </div>
+          )}
+
+          {/* Public evolution results (non-admin) */}
+          {!isAdmin && evolutionResult?.ok && (
+            <div className="px-4 py-2.5 border-t border-slate/10 space-y-1.5">
               <div className="flex items-center gap-2">
                 <Crown className="w-3.5 h-3.5 text-gold" />
                 <p className="text-xs text-silver font-semibold">
                   Best: {evolutionResult.bestVariant} — <span className="text-neon font-mono">{evolutionResult.bestWinRate}%</span> test accuracy
                 </p>
               </div>
-              {/* Generation history */}
-              {evolutionResult.history?.map((h: any, i: number) => (
+              {evolutionResult.history?.slice(-5).map((h: any, i: number) => (
                 <div key={i} className="flex items-center gap-2 text-[10px] text-mercury/60">
                   <span className="w-12 text-mercury/40">Gen {h.generation}</span>
                   <span className="flex-1 truncate">{h.winnerName}</span>
