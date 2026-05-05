@@ -100,6 +100,32 @@ export default function WarRoom() {
   useWarmNbaPlayerIndex();
   useWarmMlbPlayerIndex();
 
+  // Pre-warm the OTHER sport's data in the background so the very first
+  // sport-tab switch is also instant (not just subsequent switches).
+  useEffect(() => {
+    const otherSport = currentSport === "nba" ? "mlb" : "nba";
+    const isOtherNBA = otherSport === "nba";
+    const oddsKey = isOtherNBA ? "basketball_nba" : "baseball_mlb";
+    const t = setTimeout(() => {
+      Promise.all([
+        fetch(isOtherNBA ? "/api/nba-scores" : "/api/scores").then(r => r.json()).catch(() => ({ games: [] })),
+        fetch(`/api/odds?sport=${oddsKey}`).then(r => r.json()).catch(() => ({ games: [] })),
+        fetch(isOtherNBA ? "/api/nba-analysis" : "/api/analysis").then(r => r.json()).catch(() => ({ analyses: [] })),
+      ]).then(([scoresRes, oddsRes, analysisRes]) => {
+        try {
+          localStorage.setItem(`dq_sport_cache_${otherSport}`, JSON.stringify({
+            ts: Date.now(),
+            scores: scoresRes.games ?? [],
+            odds: oddsRes.games ?? [],
+            analyses: analysisRes.analyses ?? [],
+            merged: scoresRes.games ?? [],
+          }));
+        } catch {}
+      }).catch(() => {});
+    }, 4000); // wait for primary sport to settle first
+    return () => clearTimeout(t);
+  }, [currentSport]);
+
   const [refreshing, setRefreshing] = useState(false);
   const [mobileGamesOpen, setMobileGamesOpen] = useState(false);
   const [betSlipOpen, setBetSlipOpen] = useState(false);
@@ -120,6 +146,7 @@ export default function WarRoom() {
     setRefreshing(true);
     const isNBA = currentSport === "nba";
     const sportKey = config.oddsApiKey;
+    const cacheKey = `dq_sport_cache_${currentSport}`;
     try {
       // Scores load first — unblocks the UI immediately
       const scoresP = isNBA
@@ -169,6 +196,21 @@ export default function WarRoom() {
         return { ...score, odds };
       });
       setGames(merged);
+
+      // Persist a per-sport snapshot so that flipping sport tabs hydrates
+      // INSTANTLY from cache (no empty screen) while a fresh fetch runs in
+      // the background. Keeps the UI populated even on slow Vercel cold starts.
+      try {
+        if (typeof window !== "undefined" && (scoreGames.length || oddsGames.length || analysisRes.analyses?.length)) {
+          localStorage.setItem(cacheKey, JSON.stringify({
+            ts: Date.now(),
+            scores: scoreGames,
+            odds: oddsGames,
+            analyses: analysisRes.analyses ?? [],
+            merged,
+          }));
+        }
+      } catch {}
     } catch (e) {
       console.error("Fetch error:", e);
       setLoading(false);
@@ -191,15 +233,39 @@ export default function WarRoom() {
     return () => clearInterval(interval);
   }, [fetchData]);
 
-  // Clear ALL data when sport switches — full isolation
+  // Sport switch: hydrate INSTANTLY from per-sport localStorage cache (so the
+  // UI never goes blank), then trigger a background refresh. This eliminates
+  // the "switch tab → empty screen for 5s → reload" pattern users were seeing.
   const { clearParlay } = useStore();
   useEffect(() => {
-    setOddsData([]);
-    setScores([]);
-    setGames([]);
     selectGame(null);
-    clearParlay(); // remove MLB legs from parlay builder
-    setLoading(true);
+    clearParlay(); // strip prior-sport legs from parlay builder
+    let hydratedFromCache = false;
+    try {
+      if (typeof window !== "undefined") {
+        const raw = localStorage.getItem(`dq_sport_cache_${currentSport}`);
+        if (raw) {
+          const cached = JSON.parse(raw);
+          // Trust caches up to 30 min old — gives instant pop-in then refresh
+          if (cached?.ts && Date.now() - cached.ts < 30 * 60 * 1000) {
+            setScores(cached.scores ?? []);
+            setOddsData(cached.odds ?? []);
+            setAnalyses(cached.analyses ?? []);
+            setGames(cached.merged ?? cached.scores ?? []);
+            setLoading(false);
+            hydratedFromCache = true;
+          }
+        }
+      }
+    } catch {}
+    if (!hydratedFromCache) {
+      // No cache for this sport — clear stale prior-sport data so we don't
+      // briefly show MLB games on the NBA tab.
+      setOddsData([]);
+      setScores([]);
+      setGames([]);
+      setLoading(true);
+    }
     fetchData();
   }, [currentSport]); // eslint-disable-line react-hooks/exhaustive-deps
 
