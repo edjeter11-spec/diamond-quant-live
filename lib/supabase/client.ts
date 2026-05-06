@@ -49,7 +49,7 @@ export async function cloudGet<T>(key: string, fallback: T): Promise<T> {
 
 // ── Write to cloud + localStorage ──
 
-export async function cloudSet(key: string, value: any): Promise<void> {
+export async function cloudSet(key: string, value: any): Promise<{ ok: boolean; error?: string }> {
   // Always write to localStorage as backup
   if (typeof window !== "undefined") {
     try {
@@ -58,29 +58,39 @@ export async function cloudSet(key: string, value: any): Promise<void> {
   }
 
   // Write to Supabase
-  if (supabase) {
-    try {
-      const { error } = await supabase
-        .from(TABLE)
-        .upsert(
-          { key, value, updated_at: new Date().toISOString() },
-          { onConflict: "key" }
-        );
+  if (!supabase) return { ok: false, error: "no supabase client" };
 
-      if (error) {
-        // Table might not exist yet — try to create it
-        if (error.code === "42P01" || error.message?.includes("does not exist")) {
-          await createTable();
-          // Retry
-          await supabase
-            .from(TABLE)
-            .upsert(
-              { key, value, updated_at: new Date().toISOString() },
-              { onConflict: "key" }
-            );
+  try {
+    const { error } = await supabase
+      .from(TABLE)
+      .upsert(
+        { key, value, updated_at: new Date().toISOString() },
+        { onConflict: "key" }
+      );
+
+    if (error) {
+      // Table might not exist yet — try to create it
+      if (error.code === "42P01" || error.message?.includes("does not exist")) {
+        await createTable();
+        const retry = await supabase
+          .from(TABLE)
+          .upsert(
+            { key, value, updated_at: new Date().toISOString() },
+            { onConflict: "key" }
+          );
+        if (retry.error) {
+          console.error(`[cloudSet] retry failed for "${key}":`, retry.error.message);
+          return { ok: false, error: retry.error.message };
         }
+        return { ok: true };
       }
-    } catch {}
+      console.error(`[cloudSet] upsert failed for "${key}":`, error.message, error.code);
+      return { ok: false, error: error.message };
+    }
+    return { ok: true };
+  } catch (e: any) {
+    console.error(`[cloudSet] exception for "${key}":`, e?.message ?? e);
+    return { ok: false, error: e?.message ?? String(e) };
   }
 }
 
