@@ -82,8 +82,8 @@ export async function GET(req: Request) {
   // Cold server cache — check Supabase snapshot next (shared across serverless
   // instances, persists across deploys). Lets a newly-spun Vercel region serve
   // instantly instead of hitting the Odds API cold.
-  // v2: today-only game filter active
-  const snapshotKey = `props_snap_v2_${sport}_${market}_${todayKey()}`;
+  // v3: re-filter also applied post-cache-read
+  const snapshotKey = `props_snap_v3_${sport}_${market}_${todayKey()}`;
   try {
     const snapshot = await cloudGet<any>(snapshotKey, null);
     if (snapshot && Array.isArray(snapshot.props) && snapshot.props.length > 0) {
