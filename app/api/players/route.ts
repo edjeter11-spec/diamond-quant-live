@@ -59,7 +59,7 @@ const BASE_URL = "https://api.the-odds-api.com/v4";
 
 // Global CDN cache so every user hits the same warm response at the edge.
 // First hit of the day primes; everyone after is instant.
-const CDN_CACHE = "public, s-maxage=300, stale-while-revalidate=1800";
+const CDN_CACHE = "public, s-maxage=60, stale-while-revalidate=120";
 
 function todayKey() {
   return new Date().toISOString().split("T")[0];

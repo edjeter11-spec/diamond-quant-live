@@ -110,8 +110,10 @@ export async function GET(req: NextRequest) {
 
       for (const market of markets) {
         try {
-          const res = await fetch(`${baseUrl}/api/players?sport=basketball_nba&market=${market}`, {
+          const today = new Date().toISOString().split("T")[0];
+          const res = await fetch(`${baseUrl}/api/players?sport=basketball_nba&market=${market}&date=${today}`, {
             signal: AbortSignal.timeout(20000),
+            cache: "no-store",
           });
           if (!res.ok) continue;
           const data = await res.json();
