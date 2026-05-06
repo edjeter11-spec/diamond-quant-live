@@ -61,17 +61,32 @@ export async function GET(req: NextRequest) {
     });
 
     // Promote winner: update the live brain with winning weights
+    let savedToCloud = false;
+    let saveError: string | null = null;
     if (evolutionState.bestEverWinRate > 0) {
       brain.weights = { ...evolutionState.liveWeights };
       brain.isPreTrained = true;
       brain.lastTrainedAt = new Date().toISOString();
       brain.version = `evolved-gen${evolutionState.totalGenerationsRun}`;
+      brain.logs = brain.logs ?? [];
       brain.logs.push({
         timestamp: new Date().toISOString(),
         type: "EVOLUTION",
         message: `Evolved through ${generations} generations. Best: ${evolutionState.bestEverVariantId} at ${evolutionState.bestEverWinRate}%`,
       });
-      await saveNbaPropBrainToCloud(brain);
+      // Save explicitly (bypass the silent-catch in saveNbaPropBrainToCloud) so we can see errors
+      try {
+        const trimmedBrain = {
+          ...brain,
+          logs: (brain.logs ?? []).slice(-30),
+          recentAudits: (brain.recentAudits ?? []).slice(-20),
+        };
+        await cloudSet("nba_prop_brain", trimmedBrain);
+        savedToCloud = true;
+      } catch (e: any) {
+        saveError = e?.message ?? String(e);
+        console.error("Evolve brain save failed:", saveError);
+      }
     }
 
     // Save evolution state
@@ -94,6 +109,8 @@ export async function GET(req: NextRequest) {
       bestWinRate: evolutionState.bestEverWinRate,
       bestVariant: evolutionState.bestEverVariantId,
       finalWeights: evolutionState.liveWeights,
+      brainSaved: savedToCloud,
+      saveError,
       history: evolutionState.history,
       allVariants: evolutionState.variants.map(v => ({
         id: v.id, name: v.name, generation: v.generation,
