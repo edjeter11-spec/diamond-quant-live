@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { cloudGet } from "@/lib/supabase/client";
-import type { NbaPropBrainState } from "@/lib/bot/nba-prop-brain";
+import { loadNbaPropBrainFromCloud } from "@/lib/bot/nba-prop-brain";
 import type { EvolutionState } from "@/lib/bot/nba-brain-evolution";
 
 export const dynamic = "force-dynamic";
@@ -9,13 +9,9 @@ export const revalidate = 300;
 export async function GET() {
   try {
     const [brain, evolution] = await Promise.all([
-      cloudGet<NbaPropBrainState | null>("nba_prop_brain", null),
+      loadNbaPropBrainFromCloud(),
       cloudGet<EvolutionState | null>("nba_brain_evolution", null),
     ]);
-
-    if (!brain) {
-      return NextResponse.json({ ok: false, error: "Brain not initialized" });
-    }
 
     // Top players by win rate (min 5 picks)
     const players = Object.values(brain.playerMemory ?? {})
