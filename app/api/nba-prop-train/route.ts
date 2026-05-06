@@ -8,10 +8,13 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 300; // 5 min max on Vercel Pro
 
 export async function GET(req: NextRequest) {
-  // Lock down: admin-only (5-min compute job is expensive — DOS vector if open)
-  const user = await getUserFromRequest(req);
-  if (!user) return NextResponse.json({ ok: false, error: "Auth required" }, { status: 401 });
-  if (!user.isAdmin) return NextResponse.json({ ok: false, error: "Admin only" }, { status: 403 });
+  // Lock down: admin-only OR cron secret. 5-min compute job — DOS vector if open.
+  const cronSecret = req.headers.get("x-cron-secret");
+  if (cronSecret !== process.env.CRON_SECRET) {
+    const user = await getUserFromRequest(req);
+    if (!user) return NextResponse.json({ ok: false, error: "Auth required" }, { status: 401 });
+    if (!user.isAdmin) return NextResponse.json({ ok: false, error: "Admin only" }, { status: 403 });
+  }
 
   const { searchParams } = new URL(req.url);
   const reset = searchParams.get("reset") === "true";

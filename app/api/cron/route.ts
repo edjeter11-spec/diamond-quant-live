@@ -20,6 +20,9 @@ export const maxDuration = 120;
 export async function GET(req: Request) {
   // Verify cron secret (optional security)
   const authHeader = req.headers.get("authorization");
+  const url = new URL(req.url);
+  const forceTrain = url.searchParams.get("forceTrain") === "true";
+  const forceEvolve = url.searchParams.get("forceEvolve") === "true";
 
   try {
     const games = await fetchTodayGames();
@@ -471,9 +474,33 @@ export async function GET(req: Request) {
       } catch (e) { console.error("calibration error:", e); }
     }
 
+    // ── Daily Brain Training (auto-trigger when stale) ──
+    // Fires once per day in the 4-5 UTC window (12-1 AM ET, after games settle).
+    // Re-trains if brain has never been trained OR last training is >7 days old.
+    if (forceTrain || (utcHour >= 4 && utcHour <= 5)) {
+      try {
+        const lastTrainKey = "nba_brain_last_trained";
+        const lastTrained = await cloudGet<string | null>(lastTrainKey, null);
+        const brain = await loadNbaPropBrainFromCloud();
+        const neverTrained = !brain.isPreTrained || brain.totalGamesProcessed === 0;
+        const daysSinceTrain = lastTrained
+          ? (Date.now() - new Date(lastTrained).getTime()) / (1000 * 60 * 60 * 24)
+          : 999;
+
+        if (neverTrained || daysSinceTrain >= 7) {
+          // Fire-and-forget — training takes ~5 min, cron has 120s
+          const baseUrl = `https://${process.env.VERCEL_URL || "diamond-quant-live.vercel.app"}`;
+          fetch(`${baseUrl}/api/nba-prop-train?seasons=2022,2023,2024${neverTrained ? "&reset=true" : ""}`, {
+            headers: { "x-cron-secret": process.env.CRON_SECRET ?? "" },
+          }).catch(() => {});
+          await cloudSet(lastTrainKey, new Date().toISOString());
+        }
+      } catch {}
+    }
+
     // ── Weekly Brain Evolution (Sunday midnight UTC = Sunday 8PM ET) ──
     // Uses dayOfWeek from calibration block above.
-    if (dayOfWeek === 0 && utcHour >= 0 && utcHour <= 2) {
+    if (forceEvolve || (dayOfWeek === 0 && utcHour >= 0 && utcHour <= 2)) {
       try {
         const lastEvolvedKey = "nba_brain_last_evolved";
         const lastEvolved = await cloudGet<string | null>(lastEvolvedKey, null);
