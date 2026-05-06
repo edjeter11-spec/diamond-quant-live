@@ -25,9 +25,9 @@ export function setCache(key: string, data: any) {
 
 // Cache TTLs
 export const CACHE_TTL = {
-  ODDS: 300_000,        // 5 minutes — saves API calls
-  PROPS: 600_000,       // 10 minutes — props move slow
-  EVENTS: 900_000,      // 15 minutes
+  ODDS: 600_000,        // 10 minutes
+  PROPS: 1_800_000,     // 30 minutes — filterTodayOnly handles staleness, saves credits
+  EVENTS: 1_800_000,    // 30 minutes
   ANALYSIS: 600_000,    // 10 minutes
 };
 

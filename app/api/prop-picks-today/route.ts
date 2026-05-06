@@ -111,9 +111,9 @@ export async function GET(req: NextRequest) {
       for (const market of markets) {
         try {
           const today = new Date().toISOString().split("T")[0];
-          const res = await fetch(`${baseUrl}/api/players?sport=basketball_nba&market=${market}&date=${today}`, {
+          const res = await fetch(`${baseUrl}/api/players?sport=basketball_nba&market=${market}`, {
             signal: AbortSignal.timeout(20000),
-            cache: "no-store",
+            next: { revalidate: 600 }, // use CDN/fetch cache to avoid redundant Odds API hits
           });
           if (!res.ok) continue;
           const data = await res.json();
