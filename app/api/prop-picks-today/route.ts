@@ -105,7 +105,8 @@ export async function GET(req: NextRequest) {
 
     try {
       const markets = ["player_points", "player_rebounds", "player_assists"];
-      const baseUrl = `https://${process.env.VERCEL_URL || "diamond-quant-live.vercel.app"}`;
+      // Always use the production alias — VERCEL_URL is a per-deploy URL that may lag
+      const baseUrl = "https://diamond-quant-live.vercel.app";
 
       for (const market of markets) {
         try {
@@ -212,7 +213,32 @@ export async function GET(req: NextRequest) {
           }
         }
       }
-      const healthyFallback = NBA_STAR_FALLBACK.filter(p => !injuredNames.has(p.playerName.toLowerCase()));
+
+      // Only project for players whose teams are actually playing today
+      let teamsPlayingToday: Set<string> | null = null;
+      try {
+        const evRes = await fetch("https://diamond-quant-live.vercel.app/api/players?sport=basketball_nba&market=player_points", { signal: AbortSignal.timeout(8000) });
+        if (evRes.ok) {
+          const evData = await evRes.json();
+          const todayET = new Date().toLocaleDateString("en-US", { timeZone: "America/New_York" });
+          teamsPlayingToday = new Set<string>();
+          for (const ev of (evData.events ?? [])) {
+            // events has shape { id, game: "Away @ Home" }
+            const [away, home] = (ev.game ?? "").split(" @ ");
+            if (away) teamsPlayingToday.add(away.trim().toUpperCase());
+            if (home) teamsPlayingToday.add(home.trim().toUpperCase());
+          }
+        }
+      } catch {}
+
+      const healthyFallback = NBA_STAR_FALLBACK.filter(p => {
+        if (injuredNames.has(p.playerName.toLowerCase())) return false;
+        // If we know today's teams, restrict to only those
+        if (teamsPlayingToday && teamsPlayingToday.size > 0) {
+          return teamsPlayingToday.has(p.team.toUpperCase());
+        }
+        return true;
+      });
 
       for (const player of healthyFallback) {
         for (const { market, label, line, stat } of getFallbackLines(player)) {
