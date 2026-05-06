@@ -58,6 +58,7 @@ interface PropPick {
   projectedValue?: number; // brain's projected stat (NBA only)
   bestAlt?: RawProp["bestAlt"];
   isSynthesized?: boolean;
+  gameTime?: string;
 }
 
 const MARKET_LABEL: Record<string, string> = {
@@ -125,6 +126,7 @@ function scoreProp(side: "over" | "under", prop: RawProp): PropPick | null {
     label: MARKET_LABEL[prop.market] ?? prop.market,
     usesBrain,
     projectedValue: prop.brainProjectedValue,
+    gameTime: prop.gameTime,
     bestAlt: prop.bestAlt ?? null,
   };
 }
@@ -485,6 +487,15 @@ export default function TodayPropPicks({
                         </span>
                       </div>
                       <div className="flex items-center gap-1 flex-wrap">
+                        {p.gameTime && (() => {
+                          const gameDay = new Date(p.gameTime).toLocaleDateString("en-US", { timeZone: "America/New_York" });
+                          const today = new Date().toLocaleDateString("en-US", { timeZone: "America/New_York" });
+                          return gameDay !== today ? (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-amber/15 border border-amber/30 text-amber text-[9px] font-bold">
+                              TOMORROW
+                            </span>
+                          ) : null;
+                        })()}
                         {p.usesBrain && (
                           <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-purple/15 border border-purple/30 text-purple text-[9px] sm:text-[8px] font-bold">
                             <Brain className="w-2.5 h-2.5" />

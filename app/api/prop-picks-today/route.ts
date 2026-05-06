@@ -116,8 +116,14 @@ export async function GET(req: NextRequest) {
           const data = await res.json();
           const props = data.props ?? [];
           livePropsFound += props.length;
+          const todayET = new Date().toLocaleDateString("en-US", { timeZone: "America/New_York" });
           for (const prop of props) {
             if (!prop.playerName || !prop.line || prop.line <= 0) continue;
+            // Skip props for tomorrow's games — only surface tonight's slate
+            if (prop.gameTime) {
+              const gameDay = new Date(prop.gameTime).toLocaleDateString("en-US", { timeZone: "America/New_York" });
+              if (gameDay !== todayET) continue;
+            }
             allLiveProps.push({ ...prop, market });
           }
         } catch {}

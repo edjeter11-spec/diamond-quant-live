@@ -778,24 +778,25 @@ export default function BotChallenge() {
                           )}
                         </div>
                         <p className="text-[9px] text-mercury/60">
-                          {prop.team} • {prop.propType}
-                          {prop.gameTime ? ` • ${new Date(prop.gameTime).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}` : " • Brain projection"}
+                          {prop.team}
+                          {prop.gameTime ? (() => {
+                            const gameDay = new Date(prop.gameTime).toLocaleDateString("en-US", { timeZone: "America/New_York" });
+                            const today = new Date().toLocaleDateString("en-US", { timeZone: "America/New_York" });
+                            const isTomorrow = gameDay !== today;
+                            return ` • ${isTomorrow ? "🟡 TOMORROW " : ""}${new Date(prop.gameTime).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" })}`;
+                          })() : " • Brain projection"}
                         </p>
                       </div>
 
                       {/* Pick */}
                       <div className="flex flex-col items-end flex-shrink-0 gap-0.5">
-                        <div className="flex items-center gap-1">
-                          <span className={`text-xs font-bold font-mono ${prop.side === "over" ? "text-neon" : "text-purple"}`}>
-                            {prop.side === "over" ? "OVER" : "UNDER"} {prop.line}
-                          </span>
-                          {prop.odds !== 0 && (
-                            <span className="text-[9px] text-mercury/70 font-mono">
-                              ({prop.odds > 0 ? "+" : ""}{prop.odds})
-                            </span>
-                          )}
-                        </div>
-                        <span className="text-[8px] text-mercury/50">Proj: {prop.projectedValue} • {prop.brainConfidence}% conf</span>
+                        <span className={`text-xs font-bold font-mono ${prop.side === "over" ? "text-neon" : "text-purple"}`}>
+                          {prop.side === "over" ? "OVER" : "UNDER"} {prop.line} {prop.propType}
+                        </span>
+                        <span className="text-[9px] text-mercury/60 font-mono">
+                          {prop.odds !== 0 ? `${prop.odds > 0 ? "+" : ""}${prop.odds}` : ""}
+                          {prop.odds !== 0 && " · "}proj {prop.projectedValue} · {prop.brainConfidence}%
+                        </span>
                       </div>
                       <button
                         onClick={(e) => {
