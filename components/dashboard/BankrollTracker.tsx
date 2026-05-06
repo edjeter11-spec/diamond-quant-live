@@ -1,7 +1,7 @@
 "use client";
 
 import { useStore } from "@/lib/store";
-import { Wallet, TrendingUp, TrendingDown, Check, XCircle, Minus, Zap } from "lucide-react";
+import { Wallet, TrendingUp, TrendingDown, Check, XCircle, Minus, Zap, Download } from "lucide-react";
 import { useState } from "react";
 import { americanToDecimal, americanToImpliedProb } from "@/lib/model/kelly";
 import { loadBrain, saveBrain, learnFromResult } from "@/lib/bot/brain";
@@ -60,12 +60,40 @@ export default function BankrollTracker() {
           <Wallet className="w-5 h-5 text-gold" />
           <h3 className="text-sm font-semibold text-silver uppercase tracking-wide">Bankroll</h3>
         </div>
-        <button
-          onClick={() => setEditingBankroll(!editingBankroll)}
-          className="text-xs text-mercury hover:text-silver transition-colors"
-        >
-          {editingBankroll ? "Cancel" : "Edit"}
-        </button>
+        <div className="flex items-center gap-2">
+          {betHistory.length > 0 && (
+            <button
+              onClick={() => {
+                const headers = ["Date", "Game", "Pick", "Market", "Bookmaker", "Odds", "Stake", "Result", "Payout", "Profit"];
+                const rows = betHistory.map((b: any) => [
+                  b.date ?? "", b.game ?? "", b.pick ?? "", b.market ?? "",
+                  b.bookmaker ?? "", b.odds ?? 0, b.stake ?? 0, b.result ?? "pending",
+                  b.payout ?? 0, ((b.payout ?? 0) - (b.stake ?? 0)).toFixed(2),
+                ]);
+                const csv = [headers, ...rows].map(r =>
+                  r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")
+                ).join("\n");
+                const blob = new Blob([csv], { type: "text/csv" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `dq-bets-${new Date().toISOString().split("T")[0]}.csv`;
+                a.click();
+                URL.revokeObjectURL(url);
+              }}
+              title="Export bet history as CSV"
+              className="flex items-center gap-1 text-xs text-mercury hover:text-electric transition-colors"
+            >
+              <Download className="w-3 h-3" />CSV
+            </button>
+          )}
+          <button
+            onClick={() => setEditingBankroll(!editingBankroll)}
+            className="text-xs text-mercury hover:text-silver transition-colors"
+          >
+            {editingBankroll ? "Cancel" : "Edit"}
+          </button>
+        </div>
       </div>
 
       {/* Bankroll Input */}
