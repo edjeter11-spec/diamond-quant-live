@@ -36,10 +36,15 @@ export async function GET() {
       awayPitcher: game.teams?.away?.probablePitcher?.fullName ?? "TBD",
     }));
 
-    // Build odds - filter stale games
+    // Build odds - filter to TODAY's games only (ET)
     const now = Date.now();
+    const todayET = new Date().toLocaleDateString("en-US", { timeZone: "America/New_York" });
     const oddsGames = oddsRaw
-      .filter((g: any) => new Date(g.commence_time).getTime() > now - 4 * 60 * 60 * 1000)
+      .filter((g: any) => {
+        const t = new Date(g.commence_time).getTime();
+        const gameDay = new Date(g.commence_time).toLocaleDateString("en-US", { timeZone: "America/New_York" });
+        return t > now - 4 * 60 * 60 * 1000 && gameDay === todayET;
+      })
       .map((game: any) => {
         const oddsLines = parseOddsLines(game);
         const evBets = filterRealEV(

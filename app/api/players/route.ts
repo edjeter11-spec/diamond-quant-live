@@ -127,9 +127,12 @@ export async function GET(req: Request) {
       // Rolling window: games starting in the next 28 hours OR that started
       // within the last 4 hours (still live / recently final).
       const now = Date.now();
+      // Today's games only (ET) — started within 4h ago or up to midnight ET + 2h buffer
+      const todayET = new Date().toLocaleDateString("en-US", { timeZone: "America/New_York" });
       const pool = allEvents.filter((e: any) => {
         const t = new Date(e.commence_time).getTime();
-        return t >= now - 4 * 60 * 60 * 1000 && t <= now + 28 * 60 * 60 * 1000;
+        const gameDay = new Date(e.commence_time).toLocaleDateString("en-US", { timeZone: "America/New_York" });
+        return t >= now - 4 * 60 * 60 * 1000 && gameDay === todayET;
       });
       events = pool
         .sort((a: any, b: any) => new Date(a.commence_time).getTime() - new Date(b.commence_time).getTime())

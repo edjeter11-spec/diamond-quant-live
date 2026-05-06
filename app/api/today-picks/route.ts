@@ -8,13 +8,17 @@ export const maxDuration = 60;
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const sport = (searchParams.get("sport") ?? "mlb").toLowerCase();
+  const force = searchParams.get("force") === "true";
   const isNBA = sport === "nba";
   const today = new Date().toISOString().split("T")[0];
-  const cacheKey = isNBA ? `smart_bot_today_nba_${today}` : `smart_bot_today_mlb_${today}`;
+  // v3: today-only filter active
+  const cacheKey = isNBA ? `smart_bot_today_nba_v3_${today}` : `smart_bot_today_mlb_v3_${today}`;
 
-  const cached = await cloudGet<{ picks: any[]; generatedAt: string } | null>(cacheKey, null);
-  if (cached?.picks?.length) {
-    return NextResponse.json({ ok: true, picks: cached.picks, cached: true, generatedAt: cached.generatedAt });
+  if (!force) {
+    const cached = await cloudGet<{ picks: any[]; generatedAt: string } | null>(cacheKey, null);
+    if (cached?.picks?.length) {
+      return NextResponse.json({ ok: true, picks: cached.picks, cached: true, generatedAt: cached.generatedAt });
+    }
   }
 
   try {

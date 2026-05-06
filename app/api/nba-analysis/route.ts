@@ -42,9 +42,14 @@ export async function GET() {
       }));
     }
     const now = Date.now();
+    const todayET = new Date().toLocaleDateString("en-US", { timeZone: "America/New_York" });
 
-    // Filter to upcoming games only
-    const futureGames = rawGames.filter(g => new Date(g.commence_time).getTime() > now - 30 * 60 * 1000);
+    // Filter to TODAY's games only (ET). Don't include tomorrow's games in picks.
+    const futureGames = rawGames.filter(g => {
+      const t = new Date(g.commence_time).getTime();
+      const gameDay = new Date(g.commence_time).toLocaleDateString("en-US", { timeZone: "America/New_York" });
+      return t > now - 30 * 60 * 1000 && gameDay === todayET;
+    });
 
     const analyses = await Promise.all(futureGames.slice(0, 12).map(async (game) => {
       const oddsLines = parseOddsLines(game);
