@@ -65,6 +65,21 @@ function todayKey() {
   return new Date().toISOString().split("T")[0];
 }
 
+function filterTodayOnly(response: any): any {
+  if (!response?.props) return response;
+  const todayET = new Date().toLocaleDateString("en-US", { timeZone: "America/New_York" });
+  const filteredProps = response.props.filter((p: any) => {
+    if (!p.gameTime) return true; // synthesized/fallback — keep
+    const gameDay = new Date(p.gameTime).toLocaleDateString("en-US", { timeZone: "America/New_York" });
+    return gameDay === todayET;
+  });
+  const filteredEvents = (response.events ?? []).filter((e: any) => {
+    // events have no gameTime, but we can map via the props
+    return filteredProps.some((p: any) => p.team?.includes(e.game?.split(" @ ")[0]?.trim() ?? "___") || p.team?.includes(e.game?.split(" @ ")[1]?.trim() ?? "___"));
+  });
+  return { ...response, props: filteredProps, events: filteredEvents };
+}
+
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const market = searchParams.get("market") || "pitcher_strikeouts";
@@ -76,7 +91,7 @@ export async function GET(req: Request) {
   const cacheKey = `props_v5_${sport}_${market}`;
   const cached = getCached(cacheKey, CACHE_TTL.PROPS);
   if (cached) {
-    return NextResponse.json(cached, { headers: { "Cache-Control": CDN_CACHE } });
+    return NextResponse.json(filterTodayOnly(cached), { headers: { "Cache-Control": CDN_CACHE } });
   }
 
   // Cold server cache — check Supabase snapshot next (shared across serverless
@@ -87,8 +102,9 @@ export async function GET(req: Request) {
   try {
     const snapshot = await cloudGet<any>(snapshotKey, null);
     if (snapshot && Array.isArray(snapshot.props) && snapshot.props.length > 0) {
-      setCache(cacheKey, snapshot); // warm the server cache too
-      return NextResponse.json(snapshot, { headers: { "Cache-Control": CDN_CACHE } });
+      const filtered = filterTodayOnly(snapshot);
+      setCache(cacheKey, filtered); // warm the server cache too
+      return NextResponse.json(filtered, { headers: { "Cache-Control": CDN_CACHE } });
     }
   } catch {}
 
