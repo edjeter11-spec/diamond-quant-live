@@ -74,11 +74,13 @@ export async function fetchOdds(apiKey: string, sportKey: string = SPORT): Promi
   }
   if (remaining !== null) {
     const { setCache } = await import("./server-cache");
-    setCache("odds_api_usage", {
+    const usage = {
       remaining: parseInt(remaining),
       used: used ? parseInt(used) : undefined,
       updatedAt: new Date().toISOString(),
-    });
+    };
+    setCache("odds_api_usage", usage);
+    import("@/lib/supabase/client").then(({ cloudSet }) => cloudSet("odds_api_usage", usage)).catch(() => {});
   }
   if (!res.ok) throw new Error(`Odds API error: ${res.status} ${res.statusText}`);
   return res.json();
@@ -103,11 +105,13 @@ export async function fetchPlayerProps(
   const used = res.headers.get("x-requests-used");
   if (remaining !== null) {
     const { setCache } = await import("./server-cache");
-    setCache("odds_api_usage", {
+    const usage = {
       remaining: parseInt(remaining),
       used: used ? parseInt(used) : undefined,
       updatedAt: new Date().toISOString(),
-    });
+    };
+    setCache("odds_api_usage", usage);
+    import("@/lib/supabase/client").then(({ cloudSet }) => cloudSet("odds_api_usage", usage)).catch(() => {});
   }
   if (!res.ok) {
     throw new Error(`Props API error: ${res.status}`);
