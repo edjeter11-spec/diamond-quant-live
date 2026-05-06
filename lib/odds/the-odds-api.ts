@@ -67,9 +67,18 @@ export async function fetchOdds(apiKey: string, sportKey: string = SPORT): Promi
 
   const res = await fetch(url, { next: { revalidate: 30 } });
   const remaining = res.headers.get("x-requests-remaining");
+  const used = res.headers.get("x-requests-used");
   if (remaining !== null && parseInt(remaining) <= 0) {
     const { markKeyExhausted } = await import("./api-keys");
     markKeyExhausted(apiKey);
+  }
+  if (remaining !== null) {
+    const { setCache } = await import("./server-cache");
+    setCache("odds_api_usage", {
+      remaining: parseInt(remaining),
+      used: used ? parseInt(used) : undefined,
+      updatedAt: new Date().toISOString(),
+    });
   }
   if (!res.ok) throw new Error(`Odds API error: ${res.status} ${res.statusText}`);
   return res.json();
@@ -90,6 +99,16 @@ export async function fetchPlayerProps(
   const url = `${BASE_URL}/sports/${sportKey}/events/${eventId}/odds?apiKey=${apiKey}&regions=us&markets=${market}&oddsFormat=american&bookmakers=${BOOKMAKERS.join(",")}`;
 
   const res = await fetch(url, { next: { revalidate: 60 } });
+  const remaining = res.headers.get("x-requests-remaining");
+  const used = res.headers.get("x-requests-used");
+  if (remaining !== null) {
+    const { setCache } = await import("./server-cache");
+    setCache("odds_api_usage", {
+      remaining: parseInt(remaining),
+      used: used ? parseInt(used) : undefined,
+      updatedAt: new Date().toISOString(),
+    });
+  }
   if (!res.ok) {
     throw new Error(`Props API error: ${res.status}`);
   }

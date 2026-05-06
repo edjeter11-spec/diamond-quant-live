@@ -402,6 +402,60 @@ export async function GET(req: Request) {
       }
     } catch (e) { console.error("bot settle error:", e); }
 
+    // ── Grade today's NBA prop picks against box scores ──
+    if (nbaCompletedGames.length > 0) {
+      try {
+        const { gradePropPick } = await import("@/lib/bot/prop-grader");
+        const today = new Date().toISOString().split("T")[0];
+        const propCacheKey = `prop_picks_today_nba_${today}`;
+        const propData = await cloudGet<any>(propCacheKey, null);
+        if (propData?.picks?.length > 0) {
+          let changed = false;
+          for (const pick of propData.picks) {
+            if (pick.result) continue; // already graded
+            for (const game of nbaCompletedGames) {
+              try {
+                const boxRes = await fetch(
+                  `https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary?event=${game.id}`,
+                  { next: { revalidate: 300 } },
+                );
+                if (!boxRes.ok) continue;
+                const boxData = await boxRes.json();
+                const players: Array<{ playerName: string; pts: number; reb: number; ast: number; minutes: number }> = [];
+                for (const team of boxData.boxscore?.players ?? []) {
+                  for (const stat of team.statistics ?? []) {
+                    const labels: string[] = stat.labels ?? [];
+                    const minIdx = labels.indexOf("MIN");
+                    const ptsIdx = labels.indexOf("PTS");
+                    const rebIdx = labels.indexOf("REB");
+                    const astIdx = labels.indexOf("AST");
+                    for (const athlete of stat.athletes ?? []) {
+                      const stats: string[] = athlete.stats ?? [];
+                      const mins = minIdx >= 0 ? parseInt(stats[minIdx] ?? "0") : 0;
+                      const pts = ptsIdx >= 0 ? parseInt(stats[ptsIdx] ?? "0") : 0;
+                      const reb = rebIdx >= 0 ? parseInt(stats[rebIdx] ?? "0") : 0;
+                      const ast = astIdx >= 0 ? parseInt(stats[astIdx] ?? "0") : 0;
+                      players.push({ playerName: athlete.athlete?.displayName ?? "", pts, reb, ast, minutes: mins });
+                    }
+                  }
+                }
+                const grade = gradePropPick(pick, players);
+                if (grade) {
+                  pick.result = grade.result;
+                  pick.actualValue = grade.actualValue;
+                  changed = true;
+                  break;
+                }
+              } catch {}
+            }
+          }
+          if (changed) {
+            await cloudSet(propCacheKey, { ...propData, gradedAt: new Date().toISOString() });
+          }
+        }
+      } catch (e) { console.error("prop grading error:", e); }
+    }
+
     // ── Weekly Calibration (Sunday 2-3 UTC = Sat 10-11 PM ET) ──
     // Recompute the "predicted prob vs actual hit rate" curve.
     let calibrationSample = 0;

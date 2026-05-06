@@ -63,9 +63,12 @@ export default function BotChallenge() {
     projectedValue: number; odds: number; bookmaker: string;
     gameTime: string; brainConfidence: number;
     reasoning?: BrainReasoning; seasonAvg?: number; last5Avg?: number;
+    result?: "win" | "loss" | "push"; actualValue?: number;
   }>>([]);
   const [propPicksLoading, setPropPicksLoading] = useState(false);
   const [propPicksUpdatedAt, setPropPicksUpdatedAt] = useState<string | null>(null);
+
+  const [oddsUsage, setOddsUsage] = useState<{ remaining?: number; used?: number; updatedAt?: string } | null>(null);
 
   // Training state
   const [training, setTraining] = useState(false);
@@ -126,6 +129,11 @@ export default function BotChallenge() {
       });
     }).catch(() => {});
   }, [isNBA]);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    fetch("/api/odds-usage").then(r => r.json()).then(d => setOddsUsage(d)).catch(() => {});
+  }, [isAdmin]);
 
   const startEvolution = async () => {
     setEvolving(true);
@@ -324,9 +332,11 @@ export default function BotChallenge() {
         saveEloState(eloState);
 
         // --- Fetch closing odds and update CLV for settled picks ---
-        fetch("/api/odds")
+        fetch(isNBA ? "/api/nba-analysis" : "/api/odds")
           .then(r => r.json())
-          .then((oddsGames: any[]) => {
+          .then((rawData: any) => {
+            const oddsGames: any[] = isNBA ? (rawData.analyses ?? []) : rawData;
+            if (isNBA && oddsGames.length === 0) return;
             // Build closing-odds map: "Team ML" → current odds
             const allClosingOdds: Record<string, number> = {};
             for (const game of oddsGames) {
@@ -491,9 +501,16 @@ export default function BotChallenge() {
             </div>
             {/* Admin-only: Training button */}
             {isAdmin && !training && !evolving && (
-              <button onClick={startTraining} className="px-2 py-1 rounded-lg bg-purple/15 border border-purple/25 text-purple text-[9px] font-semibold hover:bg-purple/25 transition-all">
-                Train Brain
-              </button>
+              <>
+                {oddsUsage?.remaining !== undefined && (
+                  <span className={`text-[9px] font-mono ${oddsUsage.remaining < 50 ? "text-danger" : oddsUsage.remaining < 200 ? "text-amber" : "text-neon"}`}>
+                    {oddsUsage.remaining} credits
+                  </span>
+                )}
+                <button onClick={startTraining} className="px-2 py-1 rounded-lg bg-purple/15 border border-purple/25 text-purple text-[9px] font-semibold hover:bg-purple/25 transition-all">
+                  Train Brain
+                </button>
+              </>
             )}
           </div>
 
@@ -797,6 +814,15 @@ export default function BotChallenge() {
                           {prop.odds !== 0 ? `${prop.odds > 0 ? "+" : ""}${prop.odds}` : ""}
                           {prop.odds !== 0 && " · "}proj {prop.projectedValue} · {prop.brainConfidence}%
                         </span>
+                        {prop.result && (
+                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                            prop.result === "win" ? "bg-neon/20 text-neon" :
+                            prop.result === "loss" ? "bg-danger/20 text-danger" :
+                            "bg-mercury/20 text-mercury"
+                          }`}>
+                            {prop.result === "win" ? `✓ ${prop.actualValue}` : prop.result === "loss" ? `✗ ${prop.actualValue}` : "PUSH"}
+                          </span>
+                        )}
                       </div>
                       <button
                         onClick={(e) => {
