@@ -143,6 +143,16 @@ export async function GET(req: Request) {
       setCache(eventsCacheKey, events);
     }
 
+    // Always re-filter to today's ET date — in case the cached events include
+    // tomorrow's games (cached before this filter was added).
+    const nowMs = Date.now();
+    const todayFilterET = new Date().toLocaleDateString("en-US", { timeZone: "America/New_York" });
+    events = (events as any[]).filter((e: any) => {
+      const t = new Date(e.commence_time).getTime();
+      const gameDay = new Date(e.commence_time).toLocaleDateString("en-US", { timeZone: "America/New_York" });
+      return t >= nowMs - 4 * 60 * 60 * 1000 && gameDay === todayFilterET;
+    });
+
     // Request main + alternate markets together so we get 5-10 lines per player
     const alt = ALT_MARKETS[market];
     const marketsParam = alt ? `${market},${alt}` : market;
