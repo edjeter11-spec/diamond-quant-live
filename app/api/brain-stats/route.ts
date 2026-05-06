@@ -4,7 +4,6 @@ import { loadNbaPropBrainFromCloud } from "@/lib/bot/nba-prop-brain";
 import type { EvolutionState } from "@/lib/bot/nba-brain-evolution";
 
 export const dynamic = "force-dynamic";
-export const revalidate = 300;
 
 export async function GET() {
   try {
