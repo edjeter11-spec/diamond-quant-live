@@ -480,9 +480,8 @@ export default function WarRoom() {
               <Diamond className={`w-4 h-4 sm:w-5 sm:h-5 ${currentSport === "nba" ? "text-orange-500" : "text-neon"}`} />
             </div>
             <div>
-              <h1 className="text-base sm:text-lg font-bold text-silver tracking-tight leading-tight">
-                DQ <span className={`hidden sm:inline ${currentSport === "nba" ? "text-orange-500" : "text-neon"}`}>Live</span>
-                <span className={`sm:hidden ${currentSport === "nba" ? "text-orange-500" : "text-neon"}`}>L</span>
+              <h1 className="text-base sm:text-lg font-bold text-silver tracking-tight leading-tight whitespace-nowrap">
+                DQ<span className={`ml-1 hidden sm:inline ${currentSport === "nba" ? "text-orange-500" : "text-neon"}`}>Live</span>
               </h1>
               <p className="text-[9px] sm:text-[10px] text-mercury/60 -mt-0.5 font-mono hidden sm:block">
                 {currentSport === "nba" ? "NBA" : "MLB"} BETTING INTELLIGENCE
