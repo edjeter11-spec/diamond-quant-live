@@ -41,7 +41,7 @@ export default function AuthButton() {
       <>
         <button
           onClick={() => setShowModal(true)}
-          className="flex items-center gap-1.5 px-3 min-h-[36px] rounded-lg bg-electric/10 border border-electric/20 text-electric text-[12px] font-semibold hover:bg-electric/20 transition-all"
+          className="flex items-center justify-center gap-1.5 min-w-[44px] min-h-[36px] px-3 rounded-lg bg-electric/10 border border-electric/20 text-electric text-[12px] font-semibold hover:bg-electric/20 transition-all"
         >
           <User className="w-4 h-4" />
           <span className="hidden sm:inline">Sign In</span>

@@ -56,16 +56,16 @@ export default function ConversionBanner() {
         </div>
         <Link
           href={user ? "/pricing" : "/pricing"}
-          className="px-3 py-1.5 rounded-lg bg-gold text-bunker text-[11px] font-bold hover:bg-gold/90 transition-all flex-shrink-0"
+          className="flex items-center justify-center min-h-[36px] px-3.5 rounded-lg bg-gold text-bunker text-[12px] font-bold hover:bg-gold/90 transition-all flex-shrink-0"
         >
           Try Pro Free
         </Link>
         <button
           onClick={handleDismiss}
-          className="p-1 text-mercury/50 hover:text-silver transition-colors flex-shrink-0"
+          className="flex items-center justify-center min-w-[36px] min-h-[36px] rounded text-mercury/50 hover:text-silver hover:bg-gunmetal/30 transition-colors flex-shrink-0"
           aria-label="Dismiss"
         >
-          <X className="w-3.5 h-3.5" />
+          <X className="w-4 h-4" />
         </button>
       </div>
     </div>
