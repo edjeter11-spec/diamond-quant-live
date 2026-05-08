@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Brain, ArrowLeft, TrendingUp, Crown, Activity, RefreshCw, Award, BarChart3 } from "lucide-react";
 import Link from "next/link";
+import Paywall from "@/components/Paywall";
 
 interface BrainStats {
   ok: boolean;
@@ -97,6 +98,12 @@ export default function BrainPage() {
       </div>
 
       <div className="max-w-5xl mx-auto px-4 py-4 space-y-4">
+        {/* Paywall gate — only Pro users see the full brain stats */}
+        <Paywall
+          feature="NBA Prop Brain — Pro Only"
+          description="See decision weights, evolution history, top players the brain hits 60%+ on, and recent game audits. The brain auto-trains nightly and auto-evolves weekly."
+          variant="blur"
+        >
         {/* Per-market accuracy */}
         <div className="glass rounded-xl p-4 border border-purple/15">
           <div className="flex items-center gap-2 mb-3">
@@ -226,6 +233,7 @@ export default function BrainPage() {
             </div>
           </div>
         )}
+        </Paywall>
       </div>
     </div>
   );

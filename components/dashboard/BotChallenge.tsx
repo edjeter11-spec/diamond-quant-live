@@ -28,7 +28,8 @@ import { formatPickLabel } from "@/lib/display";
 export default function BotChallenge() {
   const { scores } = useStore();
   const { currentSport, config } = useSport();
-  const { isAdmin } = useAuth();
+  const { isAdmin, profile } = useAuth();
+  const isPro = !!(profile?.is_premium || isAdmin);
   const isNBA = currentSport === "nba";
 
   // Sport-specific storage keys
@@ -786,7 +787,7 @@ export default function BotChallenge() {
             </div>
           ) : (
             <div className="divide-y divide-slate/10">
-              {todayPropPicks.map((prop, i) => {
+              {(isPro ? todayPropPicks : todayPropPicks.slice(0, 2)).map((prop, i) => {
                 const tier = (prop as any).tier as "HIGH" | "MEDIUM" | "LEAN" | undefined;
                 const tierColor = tier === "HIGH" ? "bg-neon/15 text-neon border-neon/20"
                   : tier === "MEDIUM" ? "bg-amber/15 text-amber border-amber/20"
@@ -890,6 +891,21 @@ export default function BotChallenge() {
               {todayPropPicks.length === 0 && (
                 <div className="px-4 py-5 text-center">
                   <p className="text-[10px] text-mercury/50">Odds not yet posted for today — picks generate at tip-off</p>
+                </div>
+              )}
+              {!isPro && todayPropPicks.length > 2 && (
+                <div className="px-4 py-3 bg-gradient-to-r from-gold/10 to-electric/5 border-t border-gold/25 flex items-center gap-3">
+                  <Crown className="w-4 h-4 text-gold flex-shrink-0" />
+                  <p className="text-[11px] text-silver flex-1">
+                    <span className="font-bold">+{todayPropPicks.length - 2} more picks</span> locked
+                    <span className="text-mercury/60"> • includes our HIGH-confidence plays</span>
+                  </p>
+                  <a
+                    href="/pricing"
+                    className="px-3 py-1.5 rounded-lg bg-gold text-bunker text-[11px] font-bold hover:bg-gold/90 transition-all flex-shrink-0"
+                  >
+                    Unlock
+                  </a>
                 </div>
               )}
             </div>

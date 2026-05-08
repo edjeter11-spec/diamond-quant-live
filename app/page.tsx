@@ -22,6 +22,7 @@ import AuthButton from "@/components/auth/AuthButton";
 import PushOptIn from "@/components/dashboard/PushOptIn";
 import { useAuth } from "@/lib/supabase/auth";
 import MigrationBanner from "@/components/auth/MigrationBanner";
+import ConversionBanner from "@/components/ConversionBanner";
 import ROIChart from "@/components/dashboard/ROIChart";
 import { matchGames } from "@/lib/mlb/match-games";
 import TonightsPlays from "@/components/dashboard/TonightsPlays";
@@ -566,6 +567,7 @@ export default function WarRoom() {
       </header>
 
       <MigrationBanner />
+      <ConversionBanner />
 
       {/* Help Panel */}
       {showHelp && (

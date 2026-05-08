@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { X, Layers, Trash2, Copy, AlertTriangle, Check } from "lucide-react";
+import { X, Layers, Trash2, Copy, AlertTriangle, Check, Crown } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { useSport } from "@/lib/sport-context";
 import { formatPickLabel } from "@/lib/display";
 import { americanToDecimal, decimalToAmerican } from "@/lib/model/kelly";
+import { useAuth } from "@/lib/supabase/auth";
+import Link from "next/link";
 
 function computeCombinedOdds(legs: { odds: number }[]): number | null {
   if (legs.length === 0) return null;
@@ -22,6 +24,8 @@ export default function ParlayBuilder() {
     clearParlay,
   } = useStore();
   const { currentSport } = useSport();
+  const { profile } = useAuth();
+  const isPro = profile?.is_premium || profile?.is_admin;
   const [copied, setCopied] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -119,6 +123,22 @@ export default function ParlayBuilder() {
             <X className="w-4 h-4" />
           </button>
         </div>
+
+        {/* Pro paywall — show for free users with 2+ legs (1 leg slip is free) */}
+        {!isPro && legCount >= 2 && (
+          <div className="px-4 py-4 bg-gradient-to-br from-gold/10 to-electric/5 border-b border-gold/25 text-center space-y-2">
+            <Crown className="w-6 h-6 mx-auto text-gold" />
+            <p className="text-xs text-silver font-semibold">Multi-leg parlays are a Pro feature</p>
+            <p className="text-[10px] text-mercury/70">Free tier: 1-leg slip view. Pro: full parlay builder + combined odds + same-game alerts.</p>
+            <Link
+              href="/pricing"
+              onClick={() => setParlayBuilderOpen(false)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gold text-bunker text-[11px] font-bold hover:bg-gold/90 transition-all"
+            >
+              Upgrade to Pro — $15/mo
+            </Link>
+          </div>
+        )}
 
         {/* Scrollable leg list */}
         <div className="flex-1 overflow-y-auto">

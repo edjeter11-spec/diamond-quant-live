@@ -15,6 +15,9 @@ export interface UserProfile {
   avatar_url: string;
   email: string;
   is_admin: boolean;
+  is_premium?: boolean;
+  subscription_status?: "active" | "canceled" | "trialing" | null;
+  stripe_customer_id?: string | null;
   invite_code: string;
   invites_remaining: number;
   last_active: string;
