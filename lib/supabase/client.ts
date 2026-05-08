@@ -8,10 +8,20 @@ import { createClient } from "@supabase/supabase-js";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 
 export const supabase = SUPABASE_URL && SUPABASE_KEY
   ? createClient(SUPABASE_URL, SUPABASE_KEY)
   : null;
+
+// Server-side admin client — bypasses RLS. Use for trusted writes from API
+// routes/cron. Falls back to the anon client if SERVICE_KEY isn't set, so
+// the surface stays the same (just RLS-restricted).
+const supabaseWriter = typeof window === "undefined" && SUPABASE_URL && SERVICE_KEY
+  ? createClient(SUPABASE_URL, SERVICE_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    })
+  : supabase;
 
 // Key-value store using a single "app_state" table
 // This avoids needing to create complex table schemas
@@ -57,11 +67,12 @@ export async function cloudSet(key: string, value: any): Promise<{ ok: boolean; 
     } catch {}
   }
 
-  // Write to Supabase
-  if (!supabase) return { ok: false, error: "no supabase client" };
+  // Write to Supabase using the writer client (admin server-side, anon client-side)
+  const writer = supabaseWriter ?? supabase;
+  if (!writer) return { ok: false, error: "no supabase client" };
 
   try {
-    const { error } = await supabase
+    const { error } = await writer
       .from(TABLE)
       .upsert(
         { key, value, updated_at: new Date().toISOString() },
@@ -72,7 +83,7 @@ export async function cloudSet(key: string, value: any): Promise<{ ok: boolean; 
       // Table might not exist yet — try to create it
       if (error.code === "42P01" || error.message?.includes("does not exist")) {
         await createTable();
-        const retry = await supabase
+        const retry = await writer
           .from(TABLE)
           .upsert(
             { key, value, updated_at: new Date().toISOString() },
