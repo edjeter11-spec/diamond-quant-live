@@ -64,7 +64,7 @@ export default function InfoTip({
         onClick={(e) => { e.stopPropagation(); setOpen(o => !o); }}
         onMouseEnter={() => setOpen(true)}
         onMouseLeave={() => setOpen(false)}
-        className="inline-flex items-center justify-center min-w-[28px] min-h-[28px] -m-1 p-1 text-mercury/40 hover:text-electric transition-colors"
+        className="inline-flex items-center justify-center min-w-[44px] min-h-[32px] -mx-2 -my-1 px-2 py-1 text-mercury/40 hover:text-electric transition-colors"
         aria-label={`What is ${entry.title}?`}
       >
         <HelpCircle className={`w-3 h-3 ${iconClassName}`} />

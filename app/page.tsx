@@ -531,7 +531,7 @@ export default function WarRoom() {
             )}
             <button
               onClick={() => setSoundEnabled(!soundEnabled)}
-              className="flex items-center justify-center min-w-[36px] min-h-[36px] sm:min-w-[40px] sm:min-h-[40px] rounded-lg hover:bg-gunmetal/50 transition-colors"
+              className="flex items-center justify-center min-w-[44px] min-h-[36px] rounded-lg hover:bg-gunmetal/50 transition-colors"
               title={soundEnabled ? "Mute alerts" : "Enable alert sounds"}
             >
               {soundEnabled ? (
@@ -542,7 +542,7 @@ export default function WarRoom() {
             </button>
             <button
               onClick={() => setShowHelp(!showHelp)}
-              className="flex items-center justify-center min-w-[36px] min-h-[36px] sm:min-w-[40px] sm:min-h-[40px] rounded-lg hover:bg-gunmetal/50 transition-colors"
+              className="flex items-center justify-center min-w-[44px] min-h-[36px] rounded-lg hover:bg-gunmetal/50 transition-colors"
               title="What do these terms mean?"
             >
               <HelpCircle className="w-4 h-4 text-mercury" />
@@ -550,7 +550,7 @@ export default function WarRoom() {
             <button
               onClick={fetchData}
               disabled={refreshing}
-              className="flex items-center justify-center min-w-[36px] min-h-[36px] sm:min-w-[40px] sm:min-h-[40px] rounded-lg hover:bg-gunmetal/50 transition-colors"
+              className="flex items-center justify-center min-w-[44px] min-h-[36px] rounded-lg hover:bg-gunmetal/50 transition-colors"
               title="Refresh data"
             >
               <RefreshCw className={`w-4 h-4 text-mercury ${refreshing ? "animate-spin" : ""}`} />
