@@ -414,6 +414,7 @@ export async function GET(req: Request) {
     } catch (e) { console.error("bot settle error:", e); }
 
     // ── Grade today's NBA prop picks against box scores ──
+    let propsGraded = 0;
     if (nbaCompletedGames.length > 0) {
       try {
         const { gradePropPick } = await import("@/lib/bot/prop-grader");
@@ -422,6 +423,7 @@ export async function GET(req: Request) {
         const propData = await cloudGet<any>(propCacheKey, null);
         if (propData?.picks?.length > 0) {
           let changed = false;
+          const newlyGraded: any[] = [];
           for (const pick of propData.picks) {
             if (pick.result) continue; // already graded
             for (const game of nbaCompletedGames) {
@@ -454,6 +456,9 @@ export async function GET(req: Request) {
                 if (grade) {
                   pick.result = grade.result;
                   pick.actualValue = grade.actualValue;
+                  pick.gradedAt = new Date().toISOString();
+                  newlyGraded.push({ ...pick, date: today, sport: "nba" });
+                  propsGraded++;
                   changed = true;
                   break;
                 }
@@ -462,10 +467,45 @@ export async function GET(req: Request) {
           }
           if (changed) {
             await cloudSet(propCacheKey, { ...propData, gradedAt: new Date().toISOString() });
+            // Append to cumulative history (cap at 500 most recent)
+            if (newlyGraded.length > 0) {
+              const histKey = "prop_pick_history_nba";
+              const existing = await cloudGet<any[]>(histKey, []) ?? [];
+              const merged = [...newlyGraded, ...existing].slice(0, 500);
+              await cloudSet(histKey, merged);
+            }
           }
         }
       } catch (e) { console.error("prop grading error:", e); }
     }
+
+    // ── Clean stale pending bot picks (>7 days old) ──
+    let stalePruned = { mlb: 0, nba: 0 };
+    try {
+      const cutoffMs = Date.now() - 7 * 24 * 60 * 60 * 1000;
+      for (const { key, sport } of [
+        { key: "smart_bot", sport: "mlb" as const },
+        { key: "smart_bot_nba", sport: "nba" as const },
+      ]) {
+        const state = await cloudGet(key, { bankroll: 5000, picks: [], dailyPnL: {} }) as any;
+        const before = state.picks?.length ?? 0;
+        if (before === 0) continue;
+        // Drop picks that are pending AND older than 7 days
+        state.picks = (state.picks ?? []).filter((p: any) => {
+          if (p.result !== "pending") return true;
+          const pickMs = new Date(p.date ?? 0).getTime();
+          return pickMs > cutoffMs;
+        });
+        const removed = before - state.picks.length;
+        if (removed > 0) {
+          await cloudSet(key, state);
+          stalePruned[sport] = removed;
+        }
+      }
+    } catch (e) { console.error("stale prune error:", e); }
+    // Make these visible in the response
+    (botSettle as any).propsGraded = propsGraded;
+    (botSettle as any).stalePruned = stalePruned;
 
     // ── Weekly Calibration (Sunday 2-3 UTC = Sat 10-11 PM ET) ──
     // Recompute the "predicted prob vs actual hit rate" curve.

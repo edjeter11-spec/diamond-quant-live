@@ -68,6 +68,16 @@ export default function BotChallenge() {
   const [propPicksLoading, setPropPicksLoading] = useState(false);
   const [propPicksUpdatedAt, setPropPicksUpdatedAt] = useState<string | null>(null);
 
+  // Cumulative prop pick history (graded over time)
+  const [propHistory, setPropHistory] = useState<Array<{
+    playerName: string; team: string; propType: string; line: number;
+    side: "over" | "under"; odds: number; bookmaker: string; date: string;
+    result?: "pending" | "win" | "loss" | "push"; actualValue?: number;
+  }>>([]);
+  const [propHistoryStats, setPropHistoryStats] = useState<{
+    graded: number; wins: number; losses: number; pushes: number; pending: number; winRate: number;
+  } | null>(null);
+
   const [oddsUsage, setOddsUsage] = useState<{ remaining?: number; used?: number; updatedAt?: string } | null>(null);
 
   // Training state
@@ -187,6 +197,20 @@ export default function BotChallenge() {
     }, 4000);
     return () => clearInterval(interval);
   }, [evolving]);
+
+  // Fetch cumulative prop pick history (graded W/L over time)
+  useEffect(() => {
+    if (!isNBA) { setPropHistory([]); setPropHistoryStats(null); return; }
+    fetch("/api/prop-history?sport=nba&limit=50")
+      .then(r => r.json())
+      .then(d => {
+        if (d.ok) {
+          setPropHistory(d.picks ?? []);
+          setPropHistoryStats(d.stats ?? null);
+        }
+      })
+      .catch(() => {});
+  }, [isNBA]);
 
   // Fetch server-generated prop picks (refreshed every 2 hrs by the API)
   useEffect(() => {
@@ -868,6 +892,41 @@ export default function BotChallenge() {
                   <p className="text-[10px] text-mercury/50">Odds not yet posted for today — picks generate at tip-off</p>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* ── Prop Pick History (graded over time) ── */}
+          {isNBA && propHistory.length > 0 && (
+            <div className="border-t border-slate/15">
+              <div className="px-4 py-2.5 flex items-center gap-2">
+                <Activity className="w-3.5 h-3.5 text-electric" />
+                <p className="text-[10px] text-silver font-semibold uppercase tracking-wider">Prop Pick History</p>
+                {propHistoryStats && propHistoryStats.graded > 0 && (
+                  <span className={`ml-auto text-[10px] font-mono font-bold ${propHistoryStats.winRate >= 55 ? "text-neon" : propHistoryStats.winRate >= 50 ? "text-electric" : "text-amber"}`}>
+                    {propHistoryStats.wins}W-{propHistoryStats.losses}L • {propHistoryStats.winRate}%
+                  </span>
+                )}
+              </div>
+              <div className="divide-y divide-slate/10 max-h-80 overflow-y-auto">
+                {propHistory.slice(0, 20).map((p, i) => {
+                  const resultColor = p.result === "win" ? "text-neon" : p.result === "loss" ? "text-danger" : p.result === "push" ? "text-amber" : "text-mercury/50";
+                  const resultIcon = p.result === "win" ? "✓" : p.result === "loss" ? "✗" : p.result === "push" ? "—" : "•";
+                  return (
+                    <div key={`${p.playerName}-${p.date}-${i}`} className="px-4 py-2 flex items-center gap-2 text-[10px]">
+                      <span className={`w-4 ${resultColor} font-bold`}>{resultIcon}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-silver truncate">{p.playerName}</p>
+                        <p className="text-mercury/50 truncate">
+                          {p.side?.toUpperCase()} {p.line} {p.propType} • {p.date}
+                        </p>
+                      </div>
+                      <span className="text-mercury/60 font-mono text-[9px]">
+                        {p.actualValue !== undefined ? `actual ${p.actualValue}` : "pending"}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>
