@@ -5,6 +5,7 @@
 // remembered for the rest of the process lifetime.
 // ──────────────────────────────────────────────────────────
 
+// Trim whitespace/newlines — env vars sometimes have trailing \n that breaks the URL
 const ALL_KEYS: string[] = [
   process.env.THE_ODDS_API_KEY_PAID,
   process.env.THE_ODDS_API_KEY,
@@ -16,7 +17,9 @@ const ALL_KEYS: string[] = [
   process.env.THE_ODDS_API_KEY_7,
   process.env.THE_ODDS_API_KEY_8,
   process.env.THE_ODDS_API_KEY_9,
-].filter((k): k is string => !!k && k.length > 10);
+]
+  .map((k) => (typeof k === "string" ? k.trim() : k))
+  .filter((k): k is string => !!k && k.length > 10);
 
 const exhausted = new Set<string>();
 

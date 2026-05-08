@@ -4,6 +4,7 @@ import { loadNbaPropBrainFromCloud } from "@/lib/bot/nba-prop-brain";
 import { projectProp } from "@/lib/bot/nba-prop-projector";
 import { buildReasoning, type BrainReasoning } from "@/lib/bot/prop-reasoning";
 import { fetchNBAInjuries } from "@/lib/nba/injuries";
+import { getNBATeamAbbrev } from "@/lib/nba/stats-api";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -175,7 +176,22 @@ export async function GET(req: NextRequest) {
 
     // ── Step 3: Run projections for all live props ──
     if (livePropsFound > 0) {
+      // Build injury set once so we can drop OUT/DOUBTFUL players from live props too
+      const livePropInjuredNames = new Set<string>();
+      try {
+        const reports = await fetchNBAInjuries().catch(() => []);
+        for (const team of reports) {
+          for (const p of team.players) {
+            if (p.status === "Out" || p.status === "Doubtful") {
+              livePropInjuredNames.add(p.name.toLowerCase());
+            }
+          }
+        }
+      } catch {}
+
       for (const prop of allLiveProps) {
+        // Skip injured players — books haven't always pulled their lines yet
+        if (livePropInjuredNames.has(prop.playerName.toLowerCase())) continue;
         const { market } = prop;
         const realStats = playerStatsMap.get(prop.playerName);
         const seasonAvg = realStats
@@ -216,26 +232,32 @@ export async function GET(req: NextRequest) {
         }
       }
 
-      // Only project for players whose teams are actually playing today
+      // Only project for players whose teams are actually playing today.
+      // Convert full team names → abbreviations so we can match NBA_STAR_FALLBACK
+      // and brain.playerMemory entries (which use abbrevs like "LAL", "OKC").
       let teamsPlayingToday: Set<string> | null = null;
       try {
         const evRes = await fetch("https://diamond-quant-live.vercel.app/api/players?sport=basketball_nba&market=player_points", { signal: AbortSignal.timeout(8000) });
         if (evRes.ok) {
           const evData = await evRes.json();
-          const todayET = new Date().toLocaleDateString("en-US", { timeZone: "America/New_York" });
           teamsPlayingToday = new Set<string>();
           for (const ev of (evData.events ?? [])) {
             // events has shape { id, game: "Away @ Home" }
             const [away, home] = (ev.game ?? "").split(" @ ");
-            if (away) teamsPlayingToday.add(away.trim().toUpperCase());
-            if (home) teamsPlayingToday.add(home.trim().toUpperCase());
+            if (away) {
+              const abbrev = getNBATeamAbbrev(away.trim());
+              if (abbrev) teamsPlayingToday.add(abbrev.toUpperCase());
+            }
+            if (home) {
+              const abbrev = getNBATeamAbbrev(home.trim());
+              if (abbrev) teamsPlayingToday.add(abbrev.toUpperCase());
+            }
           }
         }
       } catch {}
 
       const healthyFallback = NBA_STAR_FALLBACK.filter(p => {
         if (injuredNames.has(p.playerName.toLowerCase())) return false;
-        // If we know today's teams, restrict to only those
         if (teamsPlayingToday && teamsPlayingToday.size > 0) {
           return teamsPlayingToday.has(p.team.toUpperCase());
         }

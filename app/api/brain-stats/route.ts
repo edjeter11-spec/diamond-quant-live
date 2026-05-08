@@ -5,6 +5,10 @@ import type { EvolutionState } from "@/lib/bot/nba-brain-evolution";
 
 export const dynamic = "force-dynamic";
 
+// CDN cache: 60s fresh, 5 min stale-while-revalidate. Brain only updates daily
+// during cron training, so fresh-after-60s is plenty.
+const CACHE_HEADERS = { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300" };
+
 export async function GET() {
   try {
     const [brain, evolution] = await Promise.all([
@@ -50,7 +54,7 @@ export async function GET() {
         bestEverWinRate: evolution.bestEverWinRate,
         history: evolution.history,
       } : null,
-    });
+    }, { headers: CACHE_HEADERS });
   } catch (error: any) {
     return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   }
