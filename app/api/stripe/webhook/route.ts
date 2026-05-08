@@ -8,7 +8,12 @@ function getStripe() {
   if (!process.env.STRIPE_SECRET_KEY) throw new Error("STRIPE_SECRET_KEY not configured");
   return new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: "2025-03-31.basil" as any });
 }
-const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL || "", process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "");
+function getSupabase() {
+  const url = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").trim();
+  const key = (process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "").trim();
+  if (!url || !key) return null;
+  return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+}
 
 export async function POST(req: NextRequest) {
   const body = await req.text();
@@ -30,7 +35,8 @@ export async function POST(req: NextRequest) {
     case "checkout.session.completed": {
       const session = event.data.object as Stripe.Checkout.Session;
       const userId = session.metadata?.userId;
-      if (userId) {
+      const supabase = getSupabase();
+      if (userId && supabase) {
         // Mark user as premium
         await supabase.from("user_profiles").update({
           is_premium: true,
@@ -43,6 +49,8 @@ export async function POST(req: NextRequest) {
 
     case "customer.subscription.deleted": {
       const sub = event.data.object as Stripe.Subscription;
+      const supabase = getSupabase();
+      if (!supabase) break;
       // Find user by customer ID and downgrade
       const { data } = await supabase.from("user_profiles")
         .select("id")

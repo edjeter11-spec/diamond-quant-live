@@ -18,10 +18,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || "",
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
-);
+function getSupabase() {
+  const url = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").trim();
+  const key = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "").trim();
+  if (!url || !key) return null;
+  return createClient(url, key);
+}
 
 function periodStart(period: string): Date | null {
   const now = new Date();
@@ -86,6 +88,9 @@ function calcStats(bets: any[]) {
 }
 
 export async function GET(req: NextRequest) {
+  const supabase = getSupabase();
+  if (!supabase) return NextResponse.json({ entries: [], error: "Supabase not configured" }, { status: 503 });
+
   try {
     const { searchParams } = req.nextUrl;
     const period = searchParams.get("period") ?? "all";
