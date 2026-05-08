@@ -110,7 +110,7 @@ export default function WarRoom() {
     selectGame, snapshotOdds, getLineMovements, hydrate,
   } = useStore();
   const { currentSport, config, setSport } = useSport();
-  const { isAdmin } = useAuth();
+  const { isAdmin, user: authUser } = useAuth();
   // Pre-load NBA + MLB player indexes on app start so headshots resolve
   // synchronously (no blank → photo flicker) when tabs remount.
   useWarmNbaPlayerIndex();
@@ -863,7 +863,7 @@ export default function WarRoom() {
                 <Suspense fallback={<TabSkeleton />}>
                   <UserProfile />
                 </Suspense>
-                <DiscordSettings />
+                {authUser && <DiscordSettings />}
               </div>
             )}
           </>

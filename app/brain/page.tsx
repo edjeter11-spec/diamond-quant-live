@@ -102,7 +102,7 @@ export default function BrainPage() {
         <Paywall
           feature="NBA Prop Brain — Pro Only"
           description="See decision weights, evolution history, top players the brain hits 60%+ on, and recent game audits. The brain auto-trains nightly and auto-evolves weekly."
-          variant="blur"
+          variant="replace"
         >
         {/* Per-market accuracy */}
         <div className="glass rounded-xl p-4 border border-purple/15">

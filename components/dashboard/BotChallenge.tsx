@@ -708,9 +708,24 @@ export default function BotChallenge() {
 
       {/* Today's Picks Status */}
       {loading ? (
-        <div className="glass rounded-xl p-4 flex items-center justify-center gap-2">
-          <RefreshCw className="w-4 h-4 text-electric animate-spin" />
-          <span className="text-sm text-mercury">Generating today's picks...</span>
+        <div className="space-y-3">
+          <div className="glass rounded-xl p-4 flex items-center justify-center gap-2">
+            <RefreshCw className="w-4 h-4 text-electric animate-spin" />
+            <span className="text-sm text-mercury">Generating today's picks...</span>
+          </div>
+          {/* Skeleton placeholders so the page isn't a wall of black */}
+          {[0,1,2,3].map(i => (
+            <div key={i} className="glass rounded-xl p-4 animate-pulse">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-gunmetal/40" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-3 bg-gunmetal/40 rounded w-2/3" />
+                  <div className="h-2 bg-gunmetal/30 rounded w-1/2" />
+                </div>
+                <div className="h-4 w-12 bg-gunmetal/40 rounded" />
+              </div>
+            </div>
+          ))}
         </div>
       ) : todayPicks.length === 0 ? (
         <div className="glass rounded-xl p-4 text-center">

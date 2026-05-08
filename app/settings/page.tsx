@@ -163,26 +163,42 @@ export default function SettingsPage() {
   }
   if (!user) {
     return (
-      <div className="min-h-screen bg-void text-silver">
-        <div className="max-w-2xl mx-auto px-4 pt-6 pb-8">
+      <div className="min-h-screen bg-void text-silver flex flex-col">
+        <div className="max-w-2xl w-full mx-auto px-4 pt-6 pb-8">
           <div className="flex items-center gap-3 mb-6">
-            <Link href="/" className="p-2 rounded-lg hover:bg-gunmetal/60 transition-colors">
-              <ArrowLeft className="w-4 h-4 text-mercury" />
+            <Link href="/" className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg hover:bg-gunmetal/60 transition-colors" aria-label="Back to dashboard">
+              <ArrowLeft className="w-5 h-5 text-mercury" />
             </Link>
             <h1 className="text-xl font-bold text-white">Settings</h1>
           </div>
-          <div className="glass rounded-xl border border-slate/30 p-6 text-center">
-            <SettingsIcon className="w-8 h-8 text-mercury/30 mx-auto mb-3" />
-            <p className="text-sm text-silver font-semibold">Sign in to manage settings</p>
-            <p className="text-[11px] text-mercury/60 mt-1">
-              Preferences sync across devices when you&apos;re signed in.
+          <div className="glass rounded-xl border border-electric/30 p-6 text-center bg-gradient-to-br from-electric/5 to-purple/5">
+            <SettingsIcon className="w-10 h-10 text-electric mx-auto mb-3" />
+            <p className="text-base text-silver font-bold">Sign in to manage settings</p>
+            <p className="text-xs text-mercury/70 mt-2 max-w-sm mx-auto">
+              Push alerts, Discord webhook, email digest — all sync across devices once you&apos;re in.
             </p>
             <Link
               href="/"
-              className="mt-4 inline-block text-[11px] text-electric hover:text-neon transition-colors"
+              className="mt-5 inline-flex items-center justify-center min-h-[44px] px-5 rounded-xl bg-electric text-bunker text-sm font-bold hover:bg-electric/90 transition-all"
             >
-              ← Back to Dashboard
+              Go Sign In →
             </Link>
+          </div>
+
+          {/* Feature preview cards so the page isn't dead empty */}
+          <div className="mt-6 grid gap-3">
+            <div className="glass rounded-xl border border-slate/20 p-4 opacity-50">
+              <p className="text-[11px] font-semibold text-mercury uppercase tracking-wider mb-2">🔔 Push Notifications</p>
+              <p className="text-xs text-mercury/60">Get +EV alerts pushed to your phone the moment edges hit. Filter by HIGH/MED/LOW confidence.</p>
+            </div>
+            <div className="glass rounded-xl border border-slate/20 p-4 opacity-50">
+              <p className="text-[11px] font-semibold text-mercury uppercase tracking-wider mb-2">🤖 Discord Webhook</p>
+              <p className="text-xs text-mercury/60">Auto-post daily picks, recaps, and arb alerts to your Discord server.</p>
+            </div>
+            <div className="glass rounded-xl border border-slate/20 p-4 opacity-50">
+              <p className="text-[11px] font-semibold text-mercury uppercase tracking-wider mb-2">📧 Email Digest</p>
+              <p className="text-xs text-mercury/60">Daily morning email with tonight's picks, top arbs, and yesterday's results.</p>
+            </div>
           </div>
         </div>
       </div>
