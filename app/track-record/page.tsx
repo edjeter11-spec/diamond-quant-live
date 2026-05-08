@@ -92,19 +92,20 @@ export default async function TrackRecordPage() {
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Link
               href="/pricing"
-              className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-gold text-bunker font-bold hover:bg-gold/90 transition-all"
+              className="group inline-flex items-center justify-center gap-2 min-h-[52px] px-7 rounded-xl bg-gradient-to-r from-gold via-yellow-400 to-gold text-bunker font-bold text-base shadow-lg shadow-gold/30 hover:shadow-gold/50 hover:scale-[1.02] active:scale-[0.98] transition-all"
             >
               <Sparkles className="w-4 h-4" />
               Start 7-Day Free Trial
-              <ArrowRight className="w-4 h-4" />
+              <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
             </Link>
             <Link
               href="/"
-              className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-gunmetal/40 border border-slate/30 text-mercury hover:text-silver hover:border-slate/50 transition-all"
+              className="inline-flex items-center justify-center gap-2 min-h-[52px] px-7 rounded-xl bg-gunmetal/40 border border-slate/30 text-mercury hover:text-silver hover:border-slate/60 hover:bg-gunmetal/60 transition-all"
             >
               See Today's Picks →
             </Link>
           </div>
+          <p className="text-[11px] text-mercury/50 mt-4">No credit card surprises · cancel anytime</p>
         </div>
       </div>
 
@@ -212,10 +213,10 @@ export default async function TrackRecordPage() {
           </p>
           <Link
             href="/pricing"
-            className="inline-flex items-center justify-center gap-2 px-8 py-3 rounded-xl bg-gold text-bunker font-bold hover:bg-gold/90 transition-all"
+            className="group inline-flex items-center justify-center gap-2 min-h-[52px] px-8 rounded-xl bg-gradient-to-r from-gold via-yellow-400 to-gold text-bunker font-bold shadow-lg shadow-gold/30 hover:shadow-gold/50 hover:scale-[1.02] active:scale-[0.98] transition-all"
           >
             Start Free Trial
-            <ArrowRight className="w-4 h-4" />
+            <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
           </Link>
           <p className="text-[10px] text-mercury/50 mt-3">$15/mo after trial · Cancel anytime</p>
         </div>

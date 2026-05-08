@@ -33,11 +33,34 @@
   background: #3a3d4e;
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
 body {
   background: var(--void);
   color: #c4c8d8;
   font-family: 'Inter', system-ui, sans-serif;
   overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Better focus ring — accessibility + polish */
+*:focus-visible {
+  outline: 2px solid rgba(0, 212, 255, 0.6);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+/* Don't double-up rings on form inputs that already have rings */
+input:focus-visible, textarea:focus-visible, select:focus-visible {
+  outline: none;
+}
+
+/* Tap highlight removed (looks bad on dark theme) */
+* {
+  -webkit-tap-highlight-color: transparent;
 }
 
 /* Neon glow effects */

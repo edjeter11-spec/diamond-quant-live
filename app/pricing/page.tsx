@@ -109,9 +109,9 @@ export default function PricingPage() {
               <button
                 onClick={() => handleCheckout(plan.priceId)}
                 disabled={!plan.priceId || loading === plan.priceId}
-                className={`w-full py-3 rounded-xl font-semibold text-sm transition-all flex items-center justify-center gap-2 ${
+                className={`w-full min-h-[48px] py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 active:scale-[0.98] ${
                   plan.highlighted
-                    ? "bg-neon/20 text-neon border border-neon/30 hover:bg-neon/30"
+                    ? "bg-gradient-to-r from-gold via-neon to-electric text-bunker shadow-lg shadow-neon/20 hover:shadow-neon/40 hover:scale-[1.02]"
                     : plan.priceId
                     ? "bg-gunmetal/60 text-white border border-slate/40 hover:bg-slate/40"
                     : "bg-gunmetal/40 text-mercury border border-slate/40 cursor-default"
@@ -119,7 +119,11 @@ export default function PricingPage() {
               >
                 {loading === plan.priceId && <Loader2 className="w-4 h-4 animate-spin" />}
                 {plan.cta}
+                {plan.highlighted && !loading && <span className="text-base">→</span>}
               </button>
+              {plan.highlighted && (
+                <p className="text-[10px] text-mercury/50 text-center mt-2">No credit card surprises · cancel anytime</p>
+              )}
             </div>
           ))}
         </div>

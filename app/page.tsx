@@ -888,19 +888,26 @@ export default function WarRoom() {
       <OnboardingTour />
 
       {/* Mobile bottom nav bar */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 z-50 bg-bunker/95 backdrop-blur-lg border-t border-slate/30 flex items-stretch">
-        {tabs.map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
-            className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-2 transition-colors ${
-              activeTab === tab.key ? "text-neon" : "text-mercury/50 hover:text-mercury"
-            }`}
-          >
-            <tab.icon className="w-4 h-4" />
-            <span className="text-[9px] font-medium">{tab.label}</span>
-          </button>
-        ))}
+      <nav className="md:hidden fixed bottom-0 inset-x-0 z-50 bg-bunker/95 backdrop-blur-lg border-t border-slate/30 flex items-stretch pb-[env(safe-area-inset-bottom)]">
+        {tabs.map((tab) => {
+          const isActive = activeTab === tab.key;
+          return (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`relative flex-1 flex flex-col items-center justify-center gap-0.5 py-2 transition-all active:scale-95 ${
+                isActive ? "text-neon" : "text-mercury/50 hover:text-mercury"
+              }`}
+            >
+              {/* Active indicator bar at top */}
+              {isActive && (
+                <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 rounded-b-full bg-neon" />
+              )}
+              <tab.icon className={`w-4 h-4 transition-transform ${isActive ? "scale-110" : ""}`} />
+              <span className={`text-[9px] font-medium ${isActive ? "font-bold" : ""}`}>{tab.label}</span>
+            </button>
+          );
+        })}
       </nav>
 
       <footer className="border-t border-slate/20 mt-6 sm:mt-8 py-3 sm:py-4 mb-14 md:mb-0 text-center px-4">

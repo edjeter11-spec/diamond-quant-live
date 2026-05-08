@@ -118,11 +118,11 @@ function PlayCard({ play, unit }: { play: Play; unit: { units: number; dollars: 
   const Icon = cfg.icon;
 
   return (
-    <div className={`rounded-lg border p-3 ${cfg.bg} flex flex-col gap-2`}>
+    <div className={`rounded-lg border p-3 ${cfg.bg} flex flex-col gap-2 transition-all duration-200 hover:scale-[1.015] hover:shadow-lg hover:shadow-${play.tier === "lock" ? "neon" : play.tier === "value" ? "electric" : "amber"}/10 active:scale-[0.99]`}>
       <div className="flex items-center gap-1.5">
         <Icon className={`w-3.5 h-3.5 ${cfg.color}`} />
         <span className={`text-[10px] font-bold uppercase tracking-wider ${cfg.color}`}>{cfg.label}</span>
-        <span className={`ml-auto text-[10px] font-mono font-bold ${play.evPercentage > 0 ? "text-neon" : "text-mercury/70"}`}>
+        <span className={`ml-auto text-[11px] font-mono font-bold tabular-nums ${play.evPercentage > 0 ? "text-neon" : "text-mercury/70"}`}>
           {play.evPercentage > 0 ? "+" : ""}{play.evPercentage.toFixed(1)}%
         </span>
       </div>
@@ -131,17 +131,20 @@ function PlayCard({ play, unit }: { play: Play; unit: { units: number; dollars: 
         <p className="text-xs font-semibold text-silver truncate">{play.pick}</p>
       </div>
       <p className="text-[10px] text-mercury/60 truncate">{play.game}</p>
-      <div className="flex items-center justify-between pt-1 border-t border-slate/20">
-        <span className="text-xs font-mono font-bold text-silver">
+      <div className="flex items-center justify-between pt-1.5 border-t border-slate/20">
+        <span className="text-sm font-mono font-bold text-silver tabular-nums">
           {play.odds > 0 ? "+" : ""}{play.odds}
         </span>
         <InfoTip term="UNIT">
-          <span className="text-[10px] font-mono text-mercury/80">
+          <span className="text-[10px] font-mono text-mercury/80 tabular-nums">
             {unit.units}u {unit.dollars > 0 ? `($${unit.dollars})` : ""}
           </span>
         </InfoTip>
       </div>
-      <p className="text-[9px] text-mercury/40 truncate">via {play.bookmaker || "best price"}</p>
+      <p className="text-[9px] text-mercury/40 truncate flex items-center gap-1">
+        <span className="w-1 h-1 rounded-full bg-mercury/30" />
+        via {play.bookmaker || "best price"}
+      </p>
     </div>
   );
 }

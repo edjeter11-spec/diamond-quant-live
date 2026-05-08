@@ -56,9 +56,9 @@ export default function ConversionBanner() {
         </div>
         <Link
           href={user ? "/pricing" : "/pricing"}
-          className="flex items-center justify-center min-h-[36px] px-3.5 rounded-lg bg-gold text-bunker text-[12px] font-bold hover:bg-gold/90 transition-all flex-shrink-0"
+          className="flex items-center justify-center gap-1 min-h-[36px] px-3.5 rounded-lg bg-gradient-to-r from-gold to-yellow-400 text-bunker text-[12px] font-bold hover:scale-[1.04] active:scale-95 shadow-md shadow-gold/30 transition-all flex-shrink-0"
         >
-          Try Pro Free
+          Try Pro Free <span className="hidden sm:inline">→</span>
         </Link>
         <button
           onClick={handleDismiss}
