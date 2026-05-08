@@ -80,7 +80,7 @@ export default function BrainPage() {
       {/* Header */}
       <div className="sticky top-0 z-10 bg-bunker/95 backdrop-blur border-b border-slate/30 px-4 py-3">
         <div className="max-w-5xl mx-auto flex items-center gap-3">
-          <Link href="/" className="text-mercury hover:text-silver">
+          <Link href="/" className="min-w-[44px] min-h-[44px] flex items-center justify-center -ml-2 text-mercury hover:text-silver" aria-label="Back to dashboard">
             <ArrowLeft className="w-5 h-5" />
           </Link>
           <Brain className="w-5 h-5 text-purple" />

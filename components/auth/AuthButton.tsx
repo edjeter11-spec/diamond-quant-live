@@ -41,9 +41,9 @@ export default function AuthButton() {
       <>
         <button
           onClick={() => setShowModal(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-electric/10 border border-electric/20 text-electric text-[11px] font-semibold hover:bg-electric/20 transition-all"
+          className="flex items-center gap-1.5 px-3 min-h-[36px] rounded-lg bg-electric/10 border border-electric/20 text-electric text-[12px] font-semibold hover:bg-electric/20 transition-all"
         >
-          <User className="w-3.5 h-3.5" />
+          <User className="w-4 h-4" />
           <span className="hidden sm:inline">Sign In</span>
         </button>
         <AuthModal isOpen={showModal} onClose={() => setShowModal(false)} />

@@ -492,13 +492,13 @@ export default function WarRoom() {
             <div className="flex items-center bg-gunmetal/50 rounded-lg p-0.5 ml-1">
               <button
                 onClick={() => { setSport("mlb"); selectGame(null); }}
-                className={`px-2 py-1 rounded text-[10px] font-bold transition-all ${
+                className={`min-h-[36px] min-w-[44px] px-3 rounded text-[11px] font-bold transition-all ${
                   currentSport === "mlb" ? "bg-neon/20 text-neon" : "text-mercury/50 hover:text-mercury"
                 }`}
               >MLB</button>
               <button
                 onClick={() => { setSport("nba"); selectGame(null); }}
-                className={`px-2 py-1 rounded text-[10px] font-bold transition-all ${
+                className={`min-h-[36px] min-w-[44px] px-3 rounded text-[11px] font-bold transition-all ${
                   currentSport === "nba" ? "bg-orange-500/20 text-orange-500" : "text-mercury/50 hover:text-mercury"
                 }`}
               >NBA</button>

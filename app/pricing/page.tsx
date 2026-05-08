@@ -64,8 +64,8 @@ export default function PricingPage() {
       <div className="max-w-5xl mx-auto px-4 pt-8 pb-12">
         {/* Header */}
         <div className="flex items-center gap-3 mb-8">
-          <Link href="/" className="p-2 rounded-lg hover:bg-gunmetal/60 transition-colors">
-            <ArrowLeft className="w-4 h-4 text-mercury" />
+          <Link href="/" className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg hover:bg-gunmetal/60 transition-colors" aria-label="Back to dashboard">
+            <ArrowLeft className="w-5 h-5 text-mercury" />
           </Link>
           <Diamond className="w-8 h-8 text-neon" />
           <div>

@@ -194,8 +194,8 @@ export default function SettingsPage() {
       <div className="max-w-2xl mx-auto px-4 pt-6 pb-8">
         {/* Header */}
         <div className="flex items-center gap-3 mb-6">
-          <Link href="/" className="p-2 rounded-lg hover:bg-gunmetal/60 transition-colors">
-            <ArrowLeft className="w-4 h-4 text-mercury" />
+          <Link href="/" className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg hover:bg-gunmetal/60 transition-colors" aria-label="Back to dashboard">
+            <ArrowLeft className="w-5 h-5 text-mercury" />
           </Link>
           <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-electric/20 to-purple/20 flex items-center justify-center border border-electric/20">
             <SettingsIcon className="w-5 h-5 text-electric" />

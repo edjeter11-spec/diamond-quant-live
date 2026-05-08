@@ -88,9 +88,9 @@ export default function ResultsPage() {
       {/* Header */}
       <header className="border-b border-slate/30 bg-bunker/80 backdrop-blur-lg sticky top-0 z-40">
         <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2 text-mercury hover:text-silver transition-colors">
-            <ArrowLeft className="w-4 h-4" />
-            <span className="text-sm">Dashboard</span>
+          <Link href="/" className="flex items-center gap-2 min-h-[44px] -ml-2 px-2 rounded-lg text-mercury hover:text-silver hover:bg-gunmetal/40 transition-colors">
+            <ArrowLeft className="w-5 h-5" />
+            <span className="text-sm font-medium">Dashboard</span>
           </Link>
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-neon/20 to-electric/20 border border-neon/25 flex items-center justify-center">
@@ -106,7 +106,7 @@ export default function ResultsPage() {
               <button
                 key={n}
                 onClick={() => setDays(n)}
-                className={`px-2.5 py-1 rounded text-[11px] font-semibold transition-colors ${
+                className={`min-w-[44px] min-h-[36px] px-3 rounded text-[12px] font-semibold transition-colors ${
                   days === n ? "bg-neon/15 text-neon" : "text-mercury/60 hover:text-mercury"
                 }`}
               >
