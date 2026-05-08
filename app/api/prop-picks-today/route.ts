@@ -5,6 +5,7 @@ import { projectProp } from "@/lib/bot/nba-prop-projector";
 import { buildReasoning, type BrainReasoning } from "@/lib/bot/prop-reasoning";
 import { fetchNBAInjuries } from "@/lib/nba/injuries";
 import { getNBATeamAbbrev } from "@/lib/nba/stats-api";
+import { getDefensiveRank } from "@/lib/nba/pace-ratings";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -42,21 +43,43 @@ const CACHE_TTL_MS = 2 * 60 * 60 * 1000; // 2 hours
 // Fallback: current NBA stars with 2024-25 season averages (updated rosters)
 // Used only when no live odds are posted. Injury-filtered at runtime.
 const NBA_STAR_FALLBACK = [
+  // Top scorers covering all 30 teams (2024-25 season averages, rosters approximate)
   { playerName: "Shai Gilgeous-Alexander", team: "OKC", ppg: 32.3, rpg: 5.2, apg: 6.4 },
   { playerName: "Nikola Jokic",            team: "DEN", ppg: 29.6, rpg: 13.0, apg: 10.2 },
   { playerName: "Giannis Antetokounmpo",   team: "MIL", ppg: 30.4, rpg: 11.9, apg: 6.5 },
   { playerName: "Luka Doncic",             team: "LAL", ppg: 28.7, rpg: 8.5, apg: 7.8 },
   { playerName: "Jayson Tatum",            team: "BOS", ppg: 26.9, rpg: 8.3, apg: 5.2 },
-  { playerName: "Anthony Davis",           team: "LAL", ppg: 26.2, rpg: 12.6, apg: 3.5 },
+  { playerName: "Anthony Davis",           team: "DAL", ppg: 26.2, rpg: 12.6, apg: 3.5 },
   { playerName: "Donovan Mitchell",        team: "CLE", ppg: 24.9, rpg: 4.5, apg: 5.0 },
   { playerName: "Kevin Durant",            team: "HOU", ppg: 27.1, rpg: 6.3, apg: 4.0 },
   { playerName: "LeBron James",            team: "LAL", ppg: 23.7, rpg: 8.3, apg: 9.0 },
   { playerName: "Stephen Curry",           team: "GSW", ppg: 26.4, rpg: 4.8, apg: 5.2 },
   { playerName: "Trae Young",              team: "ATL", ppg: 22.6, rpg: 3.0, apg: 11.1 },
-  { playerName: "Damian Lillard",          team: "MIL", ppg: 24.3, rpg: 4.4, apg: 7.2 },
+  { playerName: "Damian Lillard",          team: "POR", ppg: 24.3, rpg: 4.4, apg: 7.2 },
   { playerName: "Devin Booker",            team: "PHX", ppg: 25.1, rpg: 4.9, apg: 7.1 },
   { playerName: "Jalen Brunson",           team: "NYK", ppg: 25.9, rpg: 3.7, apg: 6.7 },
   { playerName: "Cade Cunningham",         team: "DET", ppg: 25.7, rpg: 4.4, apg: 9.1 },
+  { playerName: "Tyrese Haliburton",       team: "IND", ppg: 21.5, rpg: 3.5, apg: 9.5 },
+  { playerName: "DeMar DeRozan",           team: "SAC", ppg: 22.9, rpg: 4.0, apg: 4.6 },
+  { playerName: "Anthony Edwards",         team: "MIN", ppg: 27.8, rpg: 5.5, apg: 4.5 },
+  { playerName: "Ja Morant",               team: "MEM", ppg: 24.5, rpg: 4.5, apg: 8.2 },
+  { playerName: "Paolo Banchero",          team: "ORL", ppg: 23.5, rpg: 7.0, apg: 5.0 },
+  { playerName: "LaMelo Ball",             team: "CHA", ppg: 25.6, rpg: 4.8, apg: 7.0 },
+  { playerName: "Scottie Barnes",          team: "TOR", ppg: 19.5, rpg: 8.0, apg: 5.5 },
+  { playerName: "Mikal Bridges",           team: "NYK", ppg: 17.5, rpg: 4.0, apg: 3.5 },
+  { playerName: "Domantas Sabonis",        team: "SAC", ppg: 19.0, rpg: 13.5, apg: 6.0 },
+  { playerName: "Karl-Anthony Towns",      team: "NYK", ppg: 24.0, rpg: 12.5, apg: 3.0 },
+  { playerName: "Victor Wembanyama",       team: "SAS", ppg: 23.0, rpg: 11.0, apg: 3.5 },
+  { playerName: "Joel Embiid",             team: "PHI", ppg: 28.0, rpg: 11.0, apg: 4.5 },
+  { playerName: "Tyrese Maxey",            team: "PHI", ppg: 25.0, rpg: 3.5, apg: 6.5 },
+  { playerName: "Bam Adebayo",             team: "MIA", ppg: 19.0, rpg: 10.0, apg: 4.0 },
+  { playerName: "Tyler Herro",             team: "MIA", ppg: 22.0, rpg: 5.0, apg: 5.0 },
+  { playerName: "Zion Williamson",         team: "NOP", ppg: 24.0, rpg: 7.0, apg: 5.0 },
+  { playerName: "Cam Thomas",              team: "BKN", ppg: 23.0, rpg: 3.5, apg: 4.0 },
+  { playerName: "Coby White",              team: "CHI", ppg: 20.5, rpg: 4.0, apg: 4.5 },
+  { playerName: "Jaren Jackson Jr.",       team: "MEM", ppg: 22.5, rpg: 5.5, apg: 2.0 },
+  { playerName: "Lauri Markkanen",         team: "UTA", ppg: 22.0, rpg: 6.5, apg: 1.5 },
+  { playerName: "James Harden",            team: "LAC", ppg: 19.5, rpg: 5.5, apg: 8.5 },
 ];
 
 // Lines to test per player (slightly offset from their average to create over/under signal)
@@ -201,7 +224,18 @@ export async function GET(req: NextRequest) {
           ? { ppg: realStats.ppg, rpg: realStats.rpg, apg: realStats.apg }
           : { ppg: prop.line, rpg: prop.line, apg: prop.line };
         const last5Avg = realStats?.last5Avg;
-        const proj = projectProp(statApprox, market, prop.line, weights, { isHome: false, isB2B: false, leagueAvgTotal: 224 });
+        // Compute matchup defense rank for the opponent (player's team plays AGAINST this team)
+        // prop.team is "Away @ Home" — figure out which side has the player
+        const teamHalves = (prop.team ?? "").split(" @ ").map((s: string) => getNBATeamAbbrev(s.trim()));
+        // We don't know which side the player is on without more data; use the average of both
+        const oppDefRank = teamHalves.length === 2
+          ? Math.round((getDefensiveRank(teamHalves[0]) + getDefensiveRank(teamHalves[1])) / 2)
+          : 15;
+        const proj = projectProp(
+          statApprox, market, prop.line, weights,
+          { isHome: false, isB2B: false, leagueAvgTotal: 224, opponentDefRank: oppDefRank },
+          last5Avg && realStats ? { last5Avg, last10Avg: last5Avg, seasonAvg, gamesPlayed: 30, variance: seasonAvg * 0.3 } : undefined
+        );
         const label = market === "player_points" ? "Points" : market === "player_rebounds" ? "Rebounds" : "Assists";
         const conviction = Math.abs(proj.probability - 0.5);
         const score = conviction * proj.confidence;
@@ -264,10 +298,30 @@ export async function GET(req: NextRequest) {
         return true;
       });
 
+      // Map team -> opponent for accurate matchup defense
+      const opponentByTeam: Record<string, string> = {};
+      try {
+        const evRes = await fetch("https://diamond-quant-live.vercel.app/api/players?sport=basketball_nba&market=player_points", { signal: AbortSignal.timeout(8000) });
+        if (evRes.ok) {
+          const evData = await evRes.json();
+          for (const ev of (evData.events ?? [])) {
+            const [away, home] = (ev.game ?? "").split(" @ ");
+            const awayAb = away ? getNBATeamAbbrev(away.trim())?.toUpperCase() : "";
+            const homeAb = home ? getNBATeamAbbrev(home.trim())?.toUpperCase() : "";
+            if (awayAb && homeAb) {
+              opponentByTeam[awayAb] = homeAb;
+              opponentByTeam[homeAb] = awayAb;
+            }
+          }
+        }
+      } catch {}
+
       for (const player of healthyFallback) {
+        const opponent = opponentByTeam[player.team.toUpperCase()];
+        const oppDefRank = opponent ? getDefensiveRank(opponent) : 15;
         for (const { market, label, line, stat } of getFallbackLines(player)) {
           if (line <= 0) continue;
-          const proj = projectProp(stat, market, line, weights, { isHome: false, isB2B: false, leagueAvgTotal: 224 });
+          const proj = projectProp(stat, market, line, weights, { isHome: false, isB2B: false, leagueAvgTotal: 224, opponentDefRank: oppDefRank });
           const conviction = Math.abs(proj.probability - 0.5);
           const score = conviction * proj.confidence;
           const tier: "HIGH" | "MEDIUM" | "LEAN" = proj.confidence >= 60 ? "HIGH" : proj.confidence >= 40 ? "MEDIUM" : "LEAN";

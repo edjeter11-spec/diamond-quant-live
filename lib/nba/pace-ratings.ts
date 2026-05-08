@@ -56,6 +56,21 @@ export function getTeamRating(abbrev: string): TeamRating {
   };
 }
 
+// Defensive rank: 1 = best (lowest defRating), 30 = worst (highest defRating)
+// Lazily computed once per process
+let _defRankCache: Record<string, number> | null = null;
+export function getDefensiveRank(abbrev: string): number {
+  if (!_defRankCache) {
+    const sorted = Object.entries(NBA_TEAM_RATINGS)
+      .sort((a, b) => a[1].defRating - b[1].defRating);
+    _defRankCache = {};
+    sorted.forEach(([team], idx) => {
+      _defRankCache![team] = idx + 1;
+    });
+  }
+  return _defRankCache[(abbrev || "").toUpperCase()] ?? 15;
+}
+
 /**
  * Compute projected total for tonight using pace + ratings.
  *
