@@ -74,7 +74,7 @@ interface OddsSnapshot {
 interface AppState {
   // UI State
   selectedGameId: string | null;
-  activeTab: "dashboard" | "nrfi" | "bot" | "props" | "bankroll" | "profile";
+  activeTab: "dashboard" | "nrfi" | "bot" | "props" | "arbs" | "news" | "bankroll" | "profile";
   sidebarOpen: boolean;
   parlayBuilderOpen: boolean;
 

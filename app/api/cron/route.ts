@@ -60,26 +60,34 @@ export async function GET(req: Request) {
         nbaAudit = { graded, hits, misses };
       }
 
-      // 2. Commit ghost prop projections for upcoming NBA games
+      // 2. Commit ghost prop projections for upcoming NBA games (all 3 markets)
       try {
-        const oddsRes = await fetch(`https://${process.env.VERCEL_URL || "diamond-quant-live.vercel.app"}/api/players?sport=basketball_nba&market=player_points`);
-        if (oddsRes.ok) {
-          const oddsData = await oddsRes.json();
-          const props = (oddsData.props ?? []).map((p: any) => ({
-            playerName: p.playerName,
-            team: p.team,
-            gameId: p.gameTime ?? "",
-            propType: "player_points",
-            line: p.line,
-            bestOverOdds: p.bestOver?.price ?? -110,
-            bestUnderOdds: p.bestUnder?.price ?? -110,
-            isHome: false,
-          }));
-          if (props.length > 0) {
-            const brain = graded > 0 ? updatedBrain : nbaBrain;
-            const { committed } = await commitPropProjections(brain, props, {});
-            nbaGhostCommitted = committed;
-          }
+        const baseUrl = `https://diamond-quant-live.vercel.app`;
+        const allProps: any[] = [];
+        for (const market of ["player_points", "player_rebounds", "player_assists"]) {
+          try {
+            const oddsRes = await fetch(`${baseUrl}/api/players?sport=basketball_nba&market=${market}`);
+            if (oddsRes.ok) {
+              const oddsData = await oddsRes.json();
+              for (const p of (oddsData.props ?? [])) {
+                allProps.push({
+                  playerName: p.playerName,
+                  team: p.team,
+                  gameId: p.gameTime ?? "",
+                  propType: market,
+                  line: p.line,
+                  bestOverOdds: p.bestOver?.price ?? -110,
+                  bestUnderOdds: p.bestUnder?.price ?? -110,
+                  isHome: false,
+                });
+              }
+            }
+          } catch {}
+        }
+        if (allProps.length > 0) {
+          const brain = graded > 0 ? updatedBrain : nbaBrain;
+          const { committed } = await commitPropProjections(brain, allProps, {});
+          nbaGhostCommitted = committed;
         }
       } catch {}
     } catch {}

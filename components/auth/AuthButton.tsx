@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/lib/supabase/auth";
 import AuthModal from "./AuthModal";
-import { User, LogOut, Settings, Crown, Copy, Check, ChevronDown, Brain } from "lucide-react";
+import { User, LogOut, Settings, Crown, Copy, Check, ChevronDown, Brain, Trophy } from "lucide-react";
 
 export default function AuthButton() {
   const { user, profile, isAdmin, signOut, loading } = useAuth();
@@ -129,7 +129,7 @@ export default function AuthButton() {
               className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-mercury hover:bg-gunmetal/50 transition-colors"
               onClick={() => setShowDropdown(false)}
             >
-              <Settings className="w-3.5 h-3.5" />
+              <Trophy className="w-3.5 h-3.5" />
               Leaderboard
             </a>
             <a
@@ -139,6 +139,14 @@ export default function AuthButton() {
             >
               <Brain className="w-3.5 h-3.5" />
               Brain Stats
+            </a>
+            <a
+              href="/settings"
+              className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-mercury hover:bg-gunmetal/50 transition-colors"
+              onClick={() => setShowDropdown(false)}
+            >
+              <Settings className="w-3.5 h-3.5" />
+              Settings
             </a>
             <button
               onClick={() => { signOut(); setShowDropdown(false); }}

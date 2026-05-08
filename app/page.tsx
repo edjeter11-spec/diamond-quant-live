@@ -29,6 +29,7 @@ import StreakBanner from "@/components/dashboard/StreakBanner";
 import { useWarmNbaPlayerIndex, useWarmMlbPlayerIndex } from "@/lib/hooks/useNbaPlayerIndex";
 import FloatingParlayChip from "@/components/dashboard/FloatingParlayChip";
 import Toaster from "@/components/ui/Toaster";
+import OnboardingTour from "@/components/onboarding/OnboardingTour";
 import { backupOddsToStorage, getOddsBackup } from "@/lib/odds/cache";
 import { sendDiscordAlert } from "@/lib/odds/sportsbooks";
 import { getDiscordWebhook, setDiscordWebhook } from "@/lib/store";
@@ -37,6 +38,8 @@ import NRFITab from "@/components/dashboard/NRFITab";
 // Lazy-load heavy tabs — not needed on first paint
 const BankrollTracker = lazy(() => import("@/components/dashboard/BankrollTracker"));
 const BotChallenge = lazy(() => import("@/components/dashboard/BotChallenge"));
+const ArbBoard = lazy(() => import("@/components/dashboard/ArbBoard"));
+const NewsBoard = lazy(() => import("@/components/dashboard/NewsBoard"));
 const ThreeModelBot = lazy(() => import("@/components/dashboard/ThreeModelBot"));
 const BrainViz = lazy(() => import("@/components/dashboard/BrainViz"));
 const ModelLogs = lazy(() => import("@/components/dashboard/ModelLogs"));
@@ -54,7 +57,7 @@ function TabSkeleton() {
 }
 import {
   Diamond, BarChart3, User, UserCircle, Wallet, RefreshCw, Shield,
-  Radio, ChevronLeft, ChevronRight, X, HelpCircle, Volume2, VolumeX, AlertTriangle,
+  Radio, ChevronLeft, ChevronRight, X, HelpCircle, Volume2, VolumeX, AlertTriangle, Zap, Newspaper,
 } from "lucide-react";
 
 // Arb alert sound (short beep)
@@ -242,9 +245,10 @@ export default function WarRoom() {
     }
 
     fetchData();
+    // 60s polling — live game scores update every minute, NBA games run ~2.5h
     const interval = setInterval(() => {
       if (shouldPoll()) fetchData();
-    }, 180000); // 3 min polling
+    }, 60000);
     return () => clearInterval(interval);
   }, [fetchData]);
 
@@ -399,6 +403,8 @@ export default function WarRoom() {
     { key: "dashboard" as const, icon: BarChart3, label: "Board" },
     { key: "bot" as const, icon: Diamond, label: "Bot" },
     { key: "props" as const, icon: User, label: "Props" },
+    { key: "arbs" as const, icon: Zap, label: "Arbs" },
+    ...(currentSport === "nba" ? [{ key: "news" as const, icon: Newspaper, label: "News" }] : []),
     ...(currentSport !== "nba" ? [{ key: "nrfi" as const, icon: Shield, label: "NRFI" }] : []),
     { key: "bankroll" as const, icon: Wallet, label: "Bank" },
     { key: "profile" as const, icon: UserCircle, label: "Profile" },
@@ -806,6 +812,18 @@ export default function WarRoom() {
 
             {activeTab === "nrfi" && <NRFITab />}
 
+            {activeTab === "arbs" && (
+              <Suspense fallback={<TabSkeleton />}>
+                <ArbBoard />
+              </Suspense>
+            )}
+
+            {activeTab === "news" && (
+              <Suspense fallback={<TabSkeleton />}>
+                <NewsBoard />
+              </Suspense>
+            )}
+
             {activeTab === "bot" && (
               <div className="max-w-3xl mx-auto space-y-4">
                 <Suspense fallback={<TabSkeleton />}>
@@ -864,6 +882,9 @@ export default function WarRoom() {
       {/* Global UI: ephemeral toasts + floating parlay slip */}
       <Toaster />
       <FloatingParlayChip activeTab={activeTab} onOpenBuilder={() => openBetSlip()} />
+
+      {/* First-visit onboarding tour — topmost overlay, self-dismissing */}
+      <OnboardingTour />
 
       {/* Mobile bottom nav bar */}
       <nav className="md:hidden fixed bottom-0 inset-x-0 z-50 bg-bunker/95 backdrop-blur-lg border-t border-slate/30 flex items-stretch">
