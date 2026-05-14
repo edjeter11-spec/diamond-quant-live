@@ -1,7 +1,9 @@
 import { Metadata } from "next";
 import Link from "next/link";
 import { cloudGet } from "@/lib/supabase/client";
-import { Trophy, TrendingUp, Crown, Sparkles, ArrowRight, CheckCircle, XCircle, Brain } from "lucide-react";
+import { Trophy, TrendingUp, Crown, Sparkles, ArrowRight, CheckCircle, XCircle, Brain, DollarSign } from "lucide-react";
+import ProfitChart from "@/components/ProfitChart";
+import EmailCaptureModal from "@/components/EmailCaptureModal";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 60;
@@ -142,6 +144,17 @@ export default async function TrackRecordPage() {
           </div>
         </div>
 
+        {/* Live profit backtest chart — the conversion killer */}
+        <div className="glass rounded-xl p-6 border-2 border-neon/20 bg-gradient-to-br from-neon/3 to-transparent">
+          <h2 className="text-lg font-bold text-silver mb-1 flex items-center gap-2">
+            <DollarSign className="w-5 h-5 text-neon" /> If you'd followed every brain pick
+          </h2>
+          <p className="text-xs text-mercury/60 mb-4">
+            Real cumulative profit at $100/bet, -110 odds, every graded NBA prop the brain has surfaced.
+          </p>
+          <ProfitChart sport="nba" />
+        </div>
+
         {/* How it works */}
         <div className="glass rounded-xl p-6 border border-slate/20">
           <h2 className="text-lg font-bold text-silver mb-4 flex items-center gap-2">
@@ -221,6 +234,8 @@ export default async function TrackRecordPage() {
           <p className="text-[10px] text-mercury/50 mt-3">$15/mo after trial · Cancel anytime</p>
         </div>
       </div>
+
+      <EmailCaptureModal delayMs={20000} source="track-record" />
     </div>
   );
 }
