@@ -16,7 +16,6 @@ async function getStats() {
     const wins = graded.filter((p) => p.result === "win").length;
     const losses = graded.filter((p) => p.result === "loss").length;
     const winRate = graded.length > 0 ? (wins / graded.length) * 100 : 0;
-    // Profit at $100/-110
     const profit = wins * 90.9 - losses * 100;
     return { wins, losses, winRate, totalGraded: graded.length, profit };
   } catch {
@@ -28,139 +27,53 @@ export default async function OG() {
   const stats = await getStats();
   const wrColor = stats.winRate >= 55 ? "#00ff88" : stats.winRate >= 50 ? "#00d4ff" : "#ffd700";
   const profitColor = stats.profit >= 0 ? "#00ff88" : "#ff3b5c";
+  const winRateText = stats.totalGraded > 0 ? `${stats.winRate.toFixed(1)}%` : "—";
+  const recordText = `${stats.wins}-${stats.losses}`;
+  const profitText = `${stats.profit >= 0 ? "+" : ""}$${Math.round(stats.profit)}`;
 
   return new ImageResponse(
     (
-      <div
-        style={{
-          background: "#0a0a0f",
-          backgroundImage:
-            "radial-gradient(circle at 20% 20%, rgba(255, 215, 0, 0.15) 0%, transparent 50%), radial-gradient(circle at 80% 80%, rgba(0, 255, 136, 0.12) 0%, transparent 55%)",
-          width: "100%",
-          height: "100%",
-          display: "flex",
-          flexDirection: "column",
-          padding: 70,
-          color: "#e6e8f0",
-          fontFamily: "system-ui, sans-serif",
-        }}
-      >
-        {/* Top brand row */}
-        <div style={{ display: "flex", alignItems: "center", gap: 18, marginBottom: 12 }}>
-          <div
-            style={{
-              width: 64,
-              height: 64,
-              borderRadius: 14,
-              background: "linear-gradient(135deg, #ffd700 0%, #00ff88 100%)",
-              color: "#0a0a0f",
-              fontSize: 44,
-              fontWeight: 900,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
+      <div style={{ background: "#0a0a0f", width: "100%", height: "100%", display: "flex", flexDirection: "column", padding: 70 }}>
+        {/* Brand row */}
+        <div style={{ display: "flex", alignItems: "center", marginBottom: 30 }}>
+          <div style={{ width: 64, height: 64, borderRadius: 14, background: "#00ff88", color: "#0a0a0f", fontSize: 44, fontWeight: 900, display: "flex", alignItems: "center", justifyContent: "center", marginRight: 18 }}>
             D
           </div>
-          <div style={{ display: "flex", fontSize: 32, fontWeight: 800, color: "#ffffff" }}>
-            Diamond-Quant&nbsp;<span style={{ color: "#00ff88" }}>Live</span>
-          </div>
-          <div
-            style={{
-              marginLeft: "auto",
-              display: "flex",
-              alignItems: "center",
-              padding: "8px 18px",
-              borderRadius: 999,
-              border: "2px solid rgba(0, 255, 136, 0.4)",
-              background: "rgba(0, 255, 136, 0.1)",
-              color: "#00ff88",
-              fontSize: 16,
-              fontWeight: 700,
-              letterSpacing: 2,
-            }}
-          >
-            ● LIVE
+          <div style={{ fontSize: 34, fontWeight: 800, color: "#ffffff", display: "flex" }}>
+            Diamond-Quant Live
           </div>
         </div>
 
         {/* Headline */}
-        <div style={{ display: "flex", fontSize: 56, fontWeight: 900, lineHeight: 1.05, color: "#ffffff", letterSpacing: -1.5, marginTop: 10 }}>
-          AI Sports Betting{" "}
-          <span style={{ color: "#ffd700", marginLeft: 14 }}>That Actually Learns</span>
+        <div style={{ fontSize: 60, fontWeight: 900, lineHeight: 1.05, color: "#ffffff", letterSpacing: -1.5, display: "flex" }}>
+          AI Sports Betting
+        </div>
+        <div style={{ fontSize: 60, fontWeight: 900, lineHeight: 1.05, color: "#ffd700", letterSpacing: -1.5, display: "flex", marginBottom: 30 }}>
+          That Actually Learns
         </div>
 
         {/* Stats row */}
-        <div style={{ display: "flex", gap: 24, marginTop: 38 }}>
-          <div
-            style={{
-              flex: 1,
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              padding: 24,
-              borderRadius: 18,
-              border: "2px solid rgba(0, 255, 136, 0.25)",
-              background: "rgba(0, 255, 136, 0.06)",
-            }}
-          >
-            <div style={{ fontSize: 78, fontWeight: 900, color: wrColor, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>
-              {stats.totalGraded > 0 ? `${stats.winRate.toFixed(1)}%` : "—"}
-            </div>
-            <div style={{ display: "flex", fontSize: 16, color: "#8b8fa3", letterSpacing: 3, marginTop: 10 }}>
-              WIN RATE
-            </div>
+        <div style={{ display: "flex", marginTop: 10 }}>
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, borderRadius: 18, border: "2px solid rgba(0, 255, 136, 0.3)", background: "rgba(0, 255, 136, 0.06)", marginRight: 16 }}>
+            <div style={{ fontSize: 80, fontWeight: 900, color: wrColor, lineHeight: 1, display: "flex" }}>{winRateText}</div>
+            <div style={{ fontSize: 18, color: "#8b8fa3", letterSpacing: 3, marginTop: 10, display: "flex" }}>WIN RATE</div>
           </div>
-          <div
-            style={{
-              flex: 1,
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              padding: 24,
-              borderRadius: 18,
-              border: "2px solid rgba(255, 215, 0, 0.2)",
-              background: "rgba(255, 215, 0, 0.05)",
-            }}
-          >
-            <div style={{ display: "flex", fontSize: 78, fontWeight: 900, color: "#ffffff", lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>
-              {stats.wins}<span style={{ color: "#3a3d4e", margin: "0 6px" }}>-</span>{stats.losses}
-            </div>
-            <div style={{ display: "flex", fontSize: 16, color: "#8b8fa3", letterSpacing: 3, marginTop: 10 }}>
-              RECORD
-            </div>
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, borderRadius: 18, border: "2px solid rgba(255, 215, 0, 0.25)", background: "rgba(255, 215, 0, 0.05)", marginRight: 16 }}>
+            <div style={{ fontSize: 80, fontWeight: 900, color: "#ffffff", lineHeight: 1, display: "flex" }}>{recordText}</div>
+            <div style={{ fontSize: 18, color: "#8b8fa3", letterSpacing: 3, marginTop: 10, display: "flex" }}>RECORD</div>
           </div>
-          <div
-            style={{
-              flex: 1,
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              padding: 24,
-              borderRadius: 18,
-              border: "2px solid rgba(0, 212, 255, 0.2)",
-              background: "rgba(0, 212, 255, 0.05)",
-            }}
-          >
-            <div style={{ fontSize: 64, fontWeight: 900, color: profitColor, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>
-              {stats.profit >= 0 ? "+" : ""}${Math.round(stats.profit)}
-            </div>
-            <div style={{ display: "flex", fontSize: 16, color: "#8b8fa3", letterSpacing: 3, marginTop: 10, textAlign: "center" }}>
-              PROFIT @ $100/BET
-            </div>
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, borderRadius: 18, border: "2px solid rgba(0, 212, 255, 0.25)", background: "rgba(0, 212, 255, 0.05)" }}>
+            <div style={{ fontSize: 64, fontWeight: 900, color: profitColor, lineHeight: 1, display: "flex" }}>{profitText}</div>
+            <div style={{ fontSize: 16, color: "#8b8fa3", letterSpacing: 3, marginTop: 10, display: "flex" }}>PROFIT @ $100/BET</div>
           </div>
         </div>
 
-        {/* Bottom CTA */}
+        {/* Bottom row */}
         <div style={{ marginTop: "auto", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ display: "flex", fontSize: 22, color: "#c4c8d8" }}>
-            Self-evolving NBA prop brain · Auto-graded vs box scores · 7-day free trial
+          <div style={{ fontSize: 22, color: "#c4c8d8", display: "flex" }}>
+            Self-evolving NBA prop brain — 7-day free trial
           </div>
-          <div style={{ display: "flex", fontSize: 16, color: "#8b8fa3", letterSpacing: 1 }}>
+          <div style={{ fontSize: 16, color: "#8b8fa3", display: "flex" }}>
             diamond-quant-live.vercel.app
           </div>
         </div>
