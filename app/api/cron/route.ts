@@ -495,12 +495,19 @@ export async function GET(req: Request) {
           }
           if (changed) {
             await cloudSet(propCacheKey, { ...propData, gradedAt: new Date().toISOString() });
-            // Append to cumulative history (cap at 500 most recent)
+            // Append to cumulative history (cap at 500 most recent). Dedupe by
+            // playerName::propType::date so re-grading the same cache (e.g.
+            // when prop-picks-today is force-regenerated) doesn't duplicate.
             if (newlyGraded.length > 0) {
               const histKey = "prop_pick_history_nba";
-              const existing = await cloudGet<any[]>(histKey, []) ?? [];
-              const merged = [...newlyGraded, ...existing].slice(0, 500);
-              await cloudSet(histKey, merged);
+              const existing = (await cloudGet<any[]>(histKey, [])) ?? [];
+              const seenKey = (p: any) => `${(p.playerName ?? "").toLowerCase()}::${p.propType ?? p.market ?? ""}::${p.date ?? ""}`;
+              const seen = new Set(existing.map(seenKey));
+              const fresh = newlyGraded.filter((p) => !seen.has(seenKey(p)));
+              if (fresh.length > 0) {
+                const merged = [...fresh, ...existing].slice(0, 500);
+                await cloudSet(histKey, merged);
+              }
             }
           }
         }
@@ -569,8 +576,13 @@ export async function GET(req: Request) {
             if (newlyGradedMlb.length > 0) {
               const histKey = "prop_pick_history_mlb";
               const existing = (await cloudGet<any[]>(histKey, [])) ?? [];
-              const merged = [...newlyGradedMlb, ...existing].slice(0, 500);
-              await cloudSet(histKey, merged);
+              const seenKey = (p: any) => `${(p.playerName ?? p.player_name ?? "").toLowerCase()}::${p.propType ?? p.prop_type ?? ""}::${p.date ?? ""}`;
+              const seen = new Set(existing.map(seenKey));
+              const fresh = newlyGradedMlb.filter((p) => !seen.has(seenKey(p)));
+              if (fresh.length > 0) {
+                const merged = [...fresh, ...existing].slice(0, 500);
+                await cloudSet(histKey, merged);
+              }
             }
           }
         }

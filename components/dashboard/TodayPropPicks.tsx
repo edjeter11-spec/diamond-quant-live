@@ -131,6 +131,24 @@ function scoreProp(side: "over" | "under", prop: RawProp): PropPick | null {
   };
 }
 
+interface BrainPickFallback {
+  playerName: string;
+  team: string;
+  propType: string;
+  market: string;
+  line: number;
+  side: "over" | "under";
+  probability: number;
+  projectedValue: number;
+  odds: number;
+  bookmaker: string;
+  gameTime: string;
+  brainConfidence: number;
+  tier?: "HIGH" | "MEDIUM" | "LEAN";
+  seasonAvg?: number;
+  last5Avg?: number;
+}
+
 export default function TodayPropPicks({
   sport,
   propsData,
@@ -145,6 +163,21 @@ export default function TodayPropPicks({
   const { addParlayLeg, parlayLegs } = useStore();
   const { isPremium } = usePremium();
   const [justAdded, setJustAdded] = useState<Record<string, boolean>>({});
+
+  // Brain fallback: when live odds are empty for NBA, fetch the brain's
+  // projected prop picks so the board never goes dark.
+  const [brainPicks, setBrainPicks] = useState<BrainPickFallback[]>([]);
+  useEffect(() => {
+    if (sport !== "nba") { setBrainPicks([]); return; }
+    const hasLive = Object.values(propsData).some((arr) => (arr?.length ?? 0) > 0);
+    if (hasLive) return;
+    let cancelled = false;
+    fetch("/api/prop-picks-today")
+      .then((r) => r.json())
+      .then((d) => { if (!cancelled && Array.isArray(d?.picks)) setBrainPicks(d.picks); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [sport, propsData]);
 
   // Track when prop data was last refreshed — updates whenever a new
   // non-empty propsData payload arrives. Re-renders every 30s so the
@@ -308,6 +341,57 @@ export default function TodayPropPicks({
   }
 
   if (picks.length === 0) {
+    // NBA fallback: render brain-projected picks when no live odds posted yet
+    if (sport === "nba" && brainPicks.length > 0) {
+      return (
+        <div className="glass rounded-xl overflow-hidden border border-purple/15">
+          <div className="px-3 sm:px-4 py-2.5 border-b border-purple/15 bg-gradient-to-r from-purple/10 to-transparent flex items-center gap-2">
+            <Brain className="w-4 h-4 text-purple" />
+            <div className="flex-1">
+              <h2 className="text-xs sm:text-sm font-bold text-silver uppercase tracking-wider">Brain&apos;s Player Props</h2>
+              <p className="text-[9px] text-mercury/60 mt-0.5">No live odds yet — showing brain projections for tonight</p>
+            </div>
+            <span className="text-[9px] font-mono text-purple bg-purple/10 px-2 py-0.5 rounded border border-purple/25">
+              BRAIN
+            </span>
+          </div>
+          <div className="divide-y divide-slate/10">
+            {brainPicks.slice(0, 6).map((p, i) => {
+              const tierColor = p.tier === "HIGH" ? "text-neon" : p.tier === "MEDIUM" ? "text-amber" : "text-electric";
+              const sideColor = p.side === "over" ? "text-neon" : "text-danger";
+              return (
+                <div key={`${p.playerName}-${p.market}-${i}`} className="px-3 sm:px-4 py-2.5 flex items-center gap-3 hover:bg-gunmetal/20 transition-colors">
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${
+                    i === 0 ? "bg-gold/20 text-gold" : "bg-purple/15 text-purple"
+                  }`}>{i + 1}</div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-silver truncate">{p.playerName}</p>
+                    <p className="text-[10px] text-mercury/60 truncate">
+                      <span className={sideColor + " font-bold"}>{p.side.toUpperCase()}</span> {p.line} {p.propType}
+                      {p.seasonAvg ? ` · season avg ${p.seasonAvg}` : ""}
+                    </p>
+                  </div>
+                  <div className="flex flex-col items-end flex-shrink-0">
+                    <span className={`text-[10px] font-mono font-bold ${tierColor}`}>
+                      {p.brainConfidence}% conf
+                    </span>
+                    <span className="text-[9px] font-mono text-mercury/60">
+                      {p.odds > 0 ? "+" : ""}{p.odds} @ {p.bookmaker || "brain"}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="px-3 py-2 text-center bg-gunmetal/20 border-t border-slate/10">
+            <p className="text-[9px] text-mercury/50">
+              Books usually post props 4–6 hours before tip-off — live odds appear here when available
+            </p>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="glass rounded-xl overflow-hidden border border-purple/15">
         <div className="px-3 sm:px-4 py-2.5 border-b border-purple/15 bg-gradient-to-r from-purple/10 to-transparent flex items-center gap-2">

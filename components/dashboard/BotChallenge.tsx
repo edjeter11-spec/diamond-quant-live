@@ -1048,6 +1048,11 @@ function PickRow({ pick, dupeCount, clvRecord, isExpanded, onToggle, formatOdds,
             )}
           </div>
           <p className="text-[9px] text-mercury/60 truncate">
+            {pick.date ? (
+              <span className="text-mercury/80 font-mono">
+                {new Date(pick.date + "T12:00:00Z").toLocaleDateString("en-US", { month: "short", day: "numeric" })} ·{" "}
+              </span>
+            ) : null}
             {pick.game} {pick.finalScore ? `• ${pick.finalScore}` : `• ${pick.bookmaker}`}
           </p>
         </div>
