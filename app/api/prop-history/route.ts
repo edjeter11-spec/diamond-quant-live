@@ -22,8 +22,34 @@ export async function GET(req: NextRequest) {
       ...p, date: today, sport, result: "pending",
     }));
 
-    // Sort: pending first (most recent date), then graded by date desc
-    const all = [...pending, ...history].slice(0, limit);
+    // Merge pending + history, but dedup by player::propType::date so a pick
+    // already in history (graded) takes precedence over the same pick in today's
+    // pending cache (which can stay "pending" if the today key wasn't updated).
+    const seenKey = (p: any) =>
+      `${(p.playerName ?? "").toLowerCase()}::${p.propType ?? p.market ?? ""}::${p.date ?? ""}`;
+    const merged: any[] = [];
+    const seen = new Set<string>();
+    // History first so graded results win over pending
+    for (const p of history) {
+      const k = seenKey(p);
+      if (seen.has(k)) continue;
+      seen.add(k);
+      merged.push(p);
+    }
+    for (const p of pending) {
+      const k = seenKey(p);
+      if (seen.has(k)) continue;
+      seen.add(k);
+      merged.push(p);
+    }
+    // Sort: pending (no result) first, then graded by date desc
+    merged.sort((a, b) => {
+      const aP = !a.result || a.result === "pending" ? 1 : 0;
+      const bP = !b.result || b.result === "pending" ? 1 : 0;
+      if (aP !== bP) return bP - aP;
+      return (b.date ?? "").localeCompare(a.date ?? "");
+    });
+    const all = merged.slice(0, limit);
 
     const graded = history.filter((p: any) => p.result === "win" || p.result === "loss" || p.result === "push");
     const wins = graded.filter((p: any) => p.result === "win").length;
