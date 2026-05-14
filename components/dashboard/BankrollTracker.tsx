@@ -82,14 +82,14 @@ export default function BankrollTracker() {
                 URL.revokeObjectURL(url);
               }}
               title="Export bet history as CSV"
-              className="flex items-center gap-1 text-xs text-mercury hover:text-electric transition-colors"
+              className="flex items-center justify-center gap-1 min-w-[48px] min-h-[32px] px-2 rounded text-xs text-mercury hover:text-electric hover:bg-gunmetal/40 transition-colors"
             >
-              <Download className="w-3 h-3" />CSV
+              <Download className="w-3.5 h-3.5" />CSV
             </button>
           )}
           <button
             onClick={() => setEditingBankroll(!editingBankroll)}
-            className="text-xs text-mercury hover:text-silver transition-colors"
+            className="flex items-center justify-center min-w-[48px] min-h-[32px] px-2 rounded text-xs text-mercury hover:text-silver hover:bg-gunmetal/40 transition-colors"
           >
             {editingBankroll ? "Cancel" : "Edit"}
           </button>

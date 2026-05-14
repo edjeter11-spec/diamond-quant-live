@@ -325,7 +325,7 @@ export default function TodayPropPicks({
           </p>
           <button
             onClick={() => { try { window.location.reload(); } catch {} }}
-            className="mt-3 inline-flex items-center gap-1 px-3 py-1.5 rounded bg-purple/10 border border-purple/25 text-purple text-[10px] font-semibold hover:bg-purple/20 transition-colors"
+            className="mt-3 inline-flex items-center justify-center gap-1 min-h-[36px] px-4 rounded-lg bg-purple/10 border border-purple/25 text-purple text-xs font-semibold hover:bg-purple/20 active:scale-95 transition-all"
           >
             Force refresh
           </button>

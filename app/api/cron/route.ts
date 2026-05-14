@@ -507,6 +507,33 @@ export async function GET(req: Request) {
     (botSettle as any).propsGraded = propsGraded;
     (botSettle as any).stalePruned = stalePruned;
 
+    // ── Daily Supabase Snapshot Cleanup (3-4 UTC = 11 PM-12 AM ET) ──
+    // Removes dated snapshot rows older than 5 days to keep Supabase lean.
+    let snapsPruned = 0;
+    if (utcHour >= 3 && utcHour <= 4) {
+      try {
+        const { supabase } = await import("@/lib/supabase/client");
+        if (supabase) {
+          const cutoff = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString();
+          const prefixes = ["line_snap_", "props_snap_", "prop_picks_today_", "prop_results_", "parlay_today_"];
+          for (const prefix of prefixes) {
+            const { data: stale } = await supabase
+              .from("app_state")
+              .select("key")
+              .like("key", `${prefix}%`)
+              .lt("updated_at", cutoff)
+              .limit(100);
+            if (stale && stale.length > 0) {
+              const keys = stale.map((r: any) => r.key);
+              await supabase.from("app_state").delete().in("key", keys);
+              snapsPruned += keys.length;
+            }
+          }
+        }
+      } catch (e) { console.error("snap prune error:", e); }
+    }
+    (botSettle as any).snapsPruned = snapsPruned;
+
     // ── Weekly Calibration (Sunday 2-3 UTC = Sat 10-11 PM ET) ──
     // Recompute the "predicted prob vs actual hit rate" curve.
     let calibrationSample = 0;
