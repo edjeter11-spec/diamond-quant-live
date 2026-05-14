@@ -1,9 +1,65 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Brain, ArrowLeft, TrendingUp, Crown, Activity, RefreshCw, Award, BarChart3 } from "lucide-react";
+import { Brain, ArrowLeft, TrendingUp, Crown, Activity, RefreshCw, Award, BarChart3, DollarSign } from "lucide-react";
 import Link from "next/link";
 import Paywall from "@/components/Paywall";
+
+// Cumulative profit SVG mini-chart. Assumes -110 odds for all picks (most common prop juice).
+function ProfitChart({ history }: { history: Array<{ result?: string; date: string }> }) {
+  // Build cumulative profit over time (in units of $100 wagered)
+  const settled = (history ?? [])
+    .filter(h => h.result === "win" || h.result === "loss" || h.result === "push")
+    .sort((a, b) => (a.date ?? "").localeCompare(b.date ?? ""));
+  if (settled.length < 3) {
+    return (
+      <p className="text-[11px] text-mercury/50 text-center py-4">
+        Need at least 3 graded picks for backtest chart. Currently {settled.length}.
+      </p>
+    );
+  }
+  const points: number[] = [];
+  let cum = 0;
+  for (const p of settled) {
+    if (p.result === "win") cum += 90.9;       // -110 win
+    else if (p.result === "loss") cum -= 100;
+    // push = 0
+    points.push(cum);
+  }
+  const max = Math.max(...points, 0);
+  const min = Math.min(...points, 0);
+  const range = max - min || 1;
+  const W = 600, H = 120;
+  const stepX = W / Math.max(points.length - 1, 1);
+  const y = (v: number) => H - ((v - min) / range) * (H - 8) - 4;
+  const path = points.map((p, i) => `${i === 0 ? "M" : "L"}${(i * stepX).toFixed(1)},${y(p).toFixed(1)}`).join(" ");
+  const final = points[points.length - 1];
+  const zeroY = y(0);
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2 text-xs">
+        <span className="text-mercury/60">If you'd bet $100 on every pick at -110:</span>
+        <span className={`font-mono font-bold ml-auto ${final >= 0 ? "text-neon" : "text-danger"}`}>
+          {final >= 0 ? "+" : ""}${final.toFixed(0)}
+        </span>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-24" preserveAspectRatio="none">
+        {/* Zero line */}
+        <line x1="0" y1={zeroY} x2={W} y2={zeroY} stroke="rgba(196,200,216,0.2)" strokeDasharray="2,3" />
+        {/* Profit line */}
+        <path d={path} stroke={final >= 0 ? "#00ff88" : "#ff3b5c"} strokeWidth="2" fill="none" />
+        {/* Area under */}
+        <path d={`${path} L${W},${zeroY} L0,${zeroY} Z`} fill={final >= 0 ? "rgba(0,255,136,0.08)" : "rgba(255,59,92,0.08)"} />
+      </svg>
+      <div className="flex justify-between text-[9px] text-mercury/40">
+        <span>{settled[0]?.date}</span>
+        <span>{settled.length} settled picks</span>
+        <span>{settled[settled.length - 1]?.date}</span>
+      </div>
+    </div>
+  );
+}
 
 interface BrainStats {
   ok: boolean;
@@ -43,6 +99,14 @@ const WEIGHT_LABELS: Record<string, string> = {
 export default function BrainPage() {
   const [stats, setStats] = useState<BrainStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [propHistory, setPropHistory] = useState<Array<{ result?: string; date: string }>>([]);
+
+  useEffect(() => {
+    fetch("/api/prop-history?sport=nba&limit=200")
+      .then(r => r.json())
+      .then(d => setPropHistory(d.picks ?? []))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     fetch("/api/brain-stats")
@@ -123,6 +187,15 @@ export default function BrainPage() {
               </div>
             ))}
           </div>
+        </div>
+
+        {/* Backtest cumulative profit chart */}
+        <div className="glass rounded-xl p-4 border border-neon/15">
+          <div className="flex items-center gap-2 mb-3">
+            <DollarSign className="w-4 h-4 text-neon" />
+            <h2 className="text-xs font-bold text-silver uppercase tracking-wider">Backtest — Cumulative Profit</h2>
+          </div>
+          <ProfitChart history={propHistory} />
         </div>
 
         {/* Weights breakdown */}

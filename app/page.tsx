@@ -41,6 +41,7 @@ const BankrollTracker = lazy(() => import("@/components/dashboard/BankrollTracke
 const BotChallenge = lazy(() => import("@/components/dashboard/BotChallenge"));
 const ArbBoard = lazy(() => import("@/components/dashboard/ArbBoard"));
 const NewsBoard = lazy(() => import("@/components/dashboard/NewsBoard"));
+const LiveBoard = lazy(() => import("@/components/dashboard/LiveBoard"));
 const ThreeModelBot = lazy(() => import("@/components/dashboard/ThreeModelBot"));
 const BrainViz = lazy(() => import("@/components/dashboard/BrainViz"));
 const ModelLogs = lazy(() => import("@/components/dashboard/ModelLogs"));
@@ -402,6 +403,7 @@ export default function WarRoom() {
 
   const tabs = [
     { key: "dashboard" as const, icon: BarChart3, label: "Board" },
+    { key: "live" as const, icon: Radio, label: "Live" },
     { key: "bot" as const, icon: Diamond, label: "Bot" },
     { key: "props" as const, icon: User, label: "Props" },
     { key: "arbs" as const, icon: Zap, label: "Arbs" },
@@ -822,6 +824,12 @@ export default function WarRoom() {
             {activeTab === "news" && (
               <Suspense fallback={<TabSkeleton />}>
                 <NewsBoard />
+              </Suspense>
+            )}
+
+            {activeTab === "live" && (
+              <Suspense fallback={<TabSkeleton />}>
+                <LiveBoard />
               </Suspense>
             )}
 

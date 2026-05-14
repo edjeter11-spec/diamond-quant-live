@@ -92,6 +92,34 @@ export async function GET(req: Request) {
       } catch {}
     } catch {}
 
+    // ── Commit MLB prop projections (sport=mlb, simple seasonAvg projector) ──
+    let mlbGhostCommitted = 0;
+    try {
+      const baseUrl = `https://diamond-quant-live.vercel.app`;
+      const today = new Date().toISOString().split("T")[0];
+      const allMlbProps: any[] = [];
+      const { MLB_MARKETS, commitMLBPropProjections } = await import("@/lib/bot/mlb-prop-pipeline");
+      for (const market of MLB_MARKETS) {
+        try {
+          const res = await fetch(`${baseUrl}/api/players?sport=baseball_mlb&market=${market}`, { signal: AbortSignal.timeout(10000) });
+          if (!res.ok) continue;
+          const data = await res.json();
+          for (const p of (data.props ?? [])) {
+            allMlbProps.push({
+              playerName: p.playerName, team: p.team ?? "", gameId: p.gameTime ?? "",
+              market, line: p.line,
+              bestOverOdds: p.bestOver?.price ?? -110,
+              bestUnderOdds: p.bestUnder?.price ?? -110,
+            });
+          }
+        } catch {}
+      }
+      if (allMlbProps.length > 0) {
+        const { committed } = await commitMLBPropProjections(allMlbProps, today);
+        mlbGhostCommitted = committed;
+      }
+    } catch (e) { console.error("mlb prop commit error:", e); }
+
     // ── Track Record: settle yesterday's logged picks ──
     let trackSettled = 0;
     const settleGames = completedGames.map(g => ({
@@ -479,6 +507,76 @@ export async function GET(req: Request) {
       } catch (e) { console.error("prop grading error:", e); }
     }
 
+    // ── Grade MLB prop predictions against box scores ──
+    let mlbPropsGraded = 0;
+    if (completedGames.length > 0) {
+      try {
+        const { gradeMLBPropPick, parseMLBBoxScore } = await import("@/lib/bot/prop-grader");
+        const { supabase: sb } = await import("@/lib/supabase/client");
+        if (sb) {
+          const today = new Date().toISOString().split("T")[0];
+          const { data: pendingMlb } = await sb
+            .from("prop_predictions")
+            .select("*")
+            .eq("status", "pending")
+            .eq("sport", "mlb")
+            .lte("game_date", today)
+            .limit(200);
+
+          if (pendingMlb && pendingMlb.length > 0) {
+            const newlyGradedMlb: any[] = [];
+            for (const game of completedGames) {
+              try {
+                const bxRes = await fetch(`https://statsapi.mlb.com/api/v1/game/${game.id}/boxscore`, { next: { revalidate: 300 } });
+                if (!bxRes.ok) continue;
+                const boxData = await bxRes.json();
+                const players = parseMLBBoxScore(boxData);
+                if (players.length === 0) continue;
+                for (const pred of pendingMlb) {
+                  if (pred.status !== "pending") continue;
+                  const grade = gradeMLBPropPick({
+                    playerName: pred.player_name,
+                    market: pred.prop_type,
+                    line: pred.line,
+                    side: pred.predicted_side,
+                  }, players);
+                  if (!grade) continue;
+                  const brierScore = Math.pow((pred.predicted_prob ?? 0.5) - (grade.result === "win" ? 1 : 0), 2);
+                  await sb.from("prop_predictions").update({
+                    actual_value: grade.actualValue,
+                    hit: grade.result === "win",
+                    brier_score: Math.round(brierScore * 10000) / 10000,
+                    status: "graded",
+                    graded_at: new Date().toISOString(),
+                  }).eq("id", pred.id);
+                  pred.status = "graded"; // dedup within this run
+                  newlyGradedMlb.push({
+                    ...pred,
+                    actualValue: grade.actualValue,
+                    result: grade.result,
+                    date: pred.game_date,
+                    sport: "mlb",
+                    playerName: pred.player_name,
+                    propType: pred.prop_type,
+                    line: pred.line,
+                    side: pred.predicted_side,
+                    odds: pred.odds_at_pick,
+                  });
+                  mlbPropsGraded++;
+                }
+              } catch {}
+            }
+            if (newlyGradedMlb.length > 0) {
+              const histKey = "prop_pick_history_mlb";
+              const existing = (await cloudGet<any[]>(histKey, [])) ?? [];
+              const merged = [...newlyGradedMlb, ...existing].slice(0, 500);
+              await cloudSet(histKey, merged);
+            }
+          }
+        }
+      } catch (e) { console.error("mlb prop grading error:", e); }
+    }
+
     // ── Clean stale pending bot picks (>7 days old) ──
     let stalePruned = { mlb: 0, nba: 0 };
     try {
@@ -505,6 +603,8 @@ export async function GET(req: Request) {
     } catch (e) { console.error("stale prune error:", e); }
     // Make these visible in the response
     (botSettle as any).propsGraded = propsGraded;
+    (botSettle as any).mlbGhostCommitted = mlbGhostCommitted;
+    (botSettle as any).mlbPropsGraded = mlbPropsGraded;
     (botSettle as any).stalePruned = stalePruned;
 
     // ── Daily Supabase Snapshot Cleanup (3-4 UTC = 11 PM-12 AM ET) ──
