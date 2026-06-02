@@ -519,6 +519,9 @@ export async function GET(req: Request) {
     if (completedGames.length > 0) {
       try {
         const { gradeMLBPropPick, parseMLBBoxScore } = await import("@/lib/bot/prop-grader");
+        const { loadMLBPropBrainFromCloud, saveMLBPropBrainToCloud, learnFromMLBResult } = await import("@/lib/bot/mlb-prop-brain");
+        let mlbBrain = await loadMLBPropBrainFromCloud();
+        let brainUpdated = false;
         const { supabase: sb } = await import("@/lib/supabase/client");
         if (sb) {
           const today = new Date().toISOString().split("T")[0];
@@ -570,6 +573,22 @@ export async function GET(req: Request) {
                     odds: pred.odds_at_pick,
                   });
                   mlbPropsGraded++;
+
+                  // Feed result into the MLB brain so it learns over time
+                  try {
+                    mlbBrain = learnFromMLBResult(mlbBrain, {
+                      playerName: pred.player_name,
+                      team: pred.team ?? "",
+                      propType: pred.prop_type,
+                      predictedProb: pred.predicted_prob ?? 0.5,
+                      predictedSide: pred.predicted_side,
+                      line: pred.line,
+                      actualValue: grade.actualValue,
+                      hit: grade.result === "win",
+                      factors: Array.isArray(pred.factors) ? pred.factors : [],
+                    });
+                    brainUpdated = true;
+                  } catch {}
                 }
               } catch {}
             }
@@ -583,6 +602,10 @@ export async function GET(req: Request) {
                 const merged = [...fresh, ...existing].slice(0, 500);
                 await cloudSet(histKey, merged);
               }
+            }
+            if (brainUpdated) {
+              mlbBrain.lastTrainedAt = new Date().toISOString();
+              await saveMLBPropBrainToCloud(mlbBrain);
             }
           }
         }
@@ -645,6 +668,52 @@ export async function GET(req: Request) {
       } catch (e) { console.error("snap prune error:", e); }
     }
     (botSettle as any).snapsPruned = snapsPruned;
+
+    // ── Daily Prop History Rehydration (4-5 UTC = 12-1 AM ET) ──
+    // Rebuild prop_pick_history_{sport} from prop_predictions table so the
+    // cumulative array can never get truncated/lost. Idempotent.
+    let rehydrated = { nba: 0, mlb: 0 };
+    if (utcHour >= 4 && utcHour <= 5) {
+      try {
+        const { supabase: sb } = await import("@/lib/supabase/client");
+        if (sb) {
+          const MARKET_NBA: Record<string, string> = {
+            player_points: "Points", player_rebounds: "Rebounds", player_assists: "Assists",
+          };
+          const MARKET_MLB: Record<string, string> = {
+            pitcher_strikeouts: "Strikeouts", pitcher_outs: "Outs",
+            batter_hits: "Hits", batter_home_runs: "Home Runs",
+            batter_total_bases: "Total Bases", batter_rbis: "RBIs", batter_runs_scored: "Runs",
+          };
+          for (const sport of ["nba", "mlb"] as const) {
+            const { data: rows } = await sb
+              .from("prop_predictions")
+              .select("player_name, prop_type, line, predicted_side, hit, actual_value, game_date, odds_at_pick")
+              .eq("sport", sport)
+              .eq("status", "graded")
+              .order("game_date", { ascending: false })
+              .limit(500);
+            if (!rows || rows.length === 0) continue;
+            const LABELS = sport === "nba" ? MARKET_NBA : MARKET_MLB;
+            const history = rows.map((r: any) => ({
+              playerName: r.player_name,
+              propType: LABELS[r.prop_type] ?? r.prop_type,
+              market: r.prop_type,
+              line: r.line,
+              side: r.predicted_side,
+              result: r.hit ? "win" : "loss",
+              actualValue: r.actual_value,
+              date: r.game_date,
+              odds: r.odds_at_pick,
+              sport,
+            }));
+            await cloudSet(`prop_pick_history_${sport}`, history);
+            rehydrated[sport] = history.length;
+          }
+        }
+      } catch (e) { console.error("rehydrate error:", e); }
+    }
+    (botSettle as any).rehydrated = rehydrated;
 
     // ── Weekly Calibration (Sunday 2-3 UTC = Sat 10-11 PM ET) ──
     // Recompute the "predicted prob vs actual hit rate" curve.

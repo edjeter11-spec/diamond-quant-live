@@ -6,6 +6,7 @@ import { buildReasoning, type BrainReasoning } from "@/lib/bot/prop-reasoning";
 import { fetchNBAInjuries } from "@/lib/nba/injuries";
 import { getNBATeamAbbrev } from "@/lib/nba/stats-api";
 import { getDefensiveRank } from "@/lib/nba/pace-ratings";
+import { getPositionalDefRank } from "@/lib/nba/position-defense";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -224,13 +225,26 @@ export async function GET(req: NextRequest) {
           ? { ppg: realStats.ppg, rpg: realStats.rpg, apg: realStats.apg }
           : { ppg: prop.line, rpg: prop.line, apg: prop.line };
         const last5Avg = realStats?.last5Avg;
-        // Compute matchup defense rank for the opponent (player's team plays AGAINST this team)
-        // prop.team is "Away @ Home" — figure out which side has the player
-        const teamHalves = (prop.team ?? "").split(" @ ").map((s: string) => getNBATeamAbbrev(s.trim()));
-        // We don't know which side the player is on without more data; use the average of both
-        const oppDefRank = teamHalves.length === 2
-          ? Math.round((getDefensiveRank(teamHalves[0]) + getDefensiveRank(teamHalves[1])) / 2)
-          : 15;
+        // Per-position matchup defense — way sharper than team-wide def rank.
+        // prop.team is "Away @ Home"; we don't always know which side the player
+        // is on, so try matching to player's known team from playerMemory; fall back
+        // to averaging both teams' positional def vs the player's position.
+        const teamHalves = (prop.team ?? "").split(" @ ").map((s: string) => getNBATeamAbbrev(s.trim())).filter(Boolean) as string[];
+        let oppDefRank = 15;
+        if (teamHalves.length === 2) {
+          // Look up player's team in brain memory to determine which side they're on
+          const memTeam = (brain.playerMemory?.[prop.playerName.toLowerCase().replace(/\s+/g, "_")]?.team || "").toUpperCase();
+          const opponent = memTeam === teamHalves[0] ? teamHalves[1] : memTeam === teamHalves[1] ? teamHalves[0] : null;
+          if (opponent) {
+            oppDefRank = getPositionalDefRank(prop.playerName, opponent);
+          } else {
+            // Player's team unknown — average positional def from both teams
+            oppDefRank = Math.round(
+              (getPositionalDefRank(prop.playerName, teamHalves[0]) +
+                getPositionalDefRank(prop.playerName, teamHalves[1])) / 2
+            );
+          }
+        }
         const proj = projectProp(
           statApprox, market, prop.line, weights,
           { isHome: false, isB2B: false, leagueAvgTotal: 224, opponentDefRank: oppDefRank },
@@ -318,7 +332,7 @@ export async function GET(req: NextRequest) {
 
       for (const player of healthyFallback) {
         const opponent = opponentByTeam[player.team.toUpperCase()];
-        const oppDefRank = opponent ? getDefensiveRank(opponent) : 15;
+        const oppDefRank = opponent ? getPositionalDefRank(player.playerName, opponent) : 15;
         for (const { market, label, line, stat } of getFallbackLines(player)) {
           if (line <= 0) continue;
           const proj = projectProp(stat, market, line, weights, { isHome: false, isB2B: false, leagueAvgTotal: 224, opponentDefRank: oppDefRank });
