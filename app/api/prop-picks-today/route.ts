@@ -283,33 +283,46 @@ export async function GET(req: NextRequest) {
       // Only project for players whose teams are actually playing today.
       // Convert full team names → abbreviations so we can match NBA_STAR_FALLBACK
       // and brain.playerMemory entries (which use abbrevs like "LAL", "OKC").
-      let teamsPlayingToday: Set<string> | null = null;
+      // Try /api/players events first, fall back to /api/nba-scores (which has
+      // actual scoreboard data, more reliable during playoffs/finals).
+      let teamsPlayingToday: Set<string> = new Set();
       try {
         const evRes = await fetch("https://diamond-quant-live.vercel.app/api/players?sport=basketball_nba&market=player_points", { signal: AbortSignal.timeout(8000) });
         if (evRes.ok) {
           const evData = await evRes.json();
-          teamsPlayingToday = new Set<string>();
           for (const ev of (evData.events ?? [])) {
-            // events has shape { id, game: "Away @ Home" }
             const [away, home] = (ev.game ?? "").split(" @ ");
-            if (away) {
-              const abbrev = getNBATeamAbbrev(away.trim());
-              if (abbrev) teamsPlayingToday.add(abbrev.toUpperCase());
-            }
-            if (home) {
-              const abbrev = getNBATeamAbbrev(home.trim());
-              if (abbrev) teamsPlayingToday.add(abbrev.toUpperCase());
-            }
+            if (away) { const a = getNBATeamAbbrev(away.trim()); if (a) teamsPlayingToday.add(a.toUpperCase()); }
+            if (home) { const a = getNBATeamAbbrev(home.trim()); if (a) teamsPlayingToday.add(a.toUpperCase()); }
           }
         }
       } catch {}
+      // Backstop: read directly from /api/nba-scores if events source is empty
+      if (teamsPlayingToday.size === 0) {
+        try {
+          const sRes = await fetch("https://diamond-quant-live.vercel.app/api/nba-scores", { signal: AbortSignal.timeout(8000) });
+          if (sRes.ok) {
+            const sData = await sRes.json();
+            for (const g of (sData.games ?? [])) {
+              if (g.awayAbbrev) teamsPlayingToday.add(String(g.awayAbbrev).toUpperCase());
+              if (g.homeAbbrev) teamsPlayingToday.add(String(g.homeAbbrev).toUpperCase());
+            }
+          }
+        } catch {}
+      }
+      // Safety net: if we STILL have no teams (both sources failed), skip the
+      // fallback entirely — better to show 0 picks than picks from wrong teams.
+      if (teamsPlayingToday.size === 0) {
+        // Return empty picks rather than projecting players who aren't playing
+        return NextResponse.json({ ok: true, picks: [], message: "No NBA games scheduled today" });
+      }
 
+      // Strict: only players whose team is playing today. No "show everyone"
+      // fallback — better to render 0 picks than picks from wrong teams (e.g.
+      // Curry showing up during a Knicks/Spurs Finals).
       const healthyFallback = NBA_STAR_FALLBACK.filter(p => {
         if (injuredNames.has(p.playerName.toLowerCase())) return false;
-        if (teamsPlayingToday && teamsPlayingToday.size > 0) {
-          return teamsPlayingToday.has(p.team.toUpperCase());
-        }
-        return true;
+        return teamsPlayingToday.has(p.team.toUpperCase());
       });
 
       // Map team -> opponent for accurate matchup defense
