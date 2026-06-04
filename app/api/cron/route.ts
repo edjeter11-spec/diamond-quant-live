@@ -125,7 +125,20 @@ export async function GET(req: Request) {
     try {
       const today = new Date().toISOString().split("T")[0];
       const { commitNRFIProjections } = await import("@/lib/bot/nrfi-pipeline");
-      const result = await commitNRFIProjections(games, today);
+      // Normalize all MLB games (pre + live + final) into engine-expected shape
+      const normalizedForNRFI = games.map((g: any) => ({
+        id: String(g.gamePk),
+        homeTeam: g.teams?.home?.team?.name ?? "",
+        awayTeam: g.teams?.away?.team?.name ?? "",
+        homeAbbrev: getTeamAbbrev(g.teams?.home?.team?.name ?? ""),
+        awayAbbrev: getTeamAbbrev(g.teams?.away?.team?.name ?? ""),
+        homePitcher: g.teams?.home?.probablePitcher?.fullName ?? "TBD",
+        awayPitcher: g.teams?.away?.probablePitcher?.fullName ?? "TBD",
+        status: getGameStatus(g),
+        startTime: g.gameDate ?? "",
+        venue: g.venue?.name ?? "",
+      }));
+      const result = await commitNRFIProjections(normalizedForNRFI, today);
       nrfiCommitted = result.committed;
     } catch (e) { console.error("nrfi commit error:", e); }
 
