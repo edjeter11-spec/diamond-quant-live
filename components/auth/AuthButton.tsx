@@ -125,14 +125,6 @@ export default function AuthButton() {
               </a>
             )}
             <a
-              href="/leaderboard"
-              className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-mercury hover:bg-gunmetal/50 transition-colors"
-              onClick={() => setShowDropdown(false)}
-            >
-              <Trophy className="w-3.5 h-3.5" />
-              Leaderboard
-            </a>
-            <a
               href="/brain"
               className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-purple hover:bg-purple/10 transition-colors"
               onClick={() => setShowDropdown(false)}

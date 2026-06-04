@@ -14,8 +14,26 @@ function isValidEmail(s: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s) && s.length <= 120;
 }
 
+// Simple in-memory rate limit: 3 attempts per IP per hour. Prevents pollution.
+const ATTEMPTS = new Map<string, { count: number; reset: number }>();
+function rateLimit(ip: string): boolean {
+  const now = Date.now();
+  const slot = ATTEMPTS.get(ip);
+  if (!slot || slot.reset < now) {
+    ATTEMPTS.set(ip, { count: 1, reset: now + 60 * 60 * 1000 });
+    return true;
+  }
+  if (slot.count >= 3) return false;
+  slot.count++;
+  return true;
+}
+
 export async function POST(req: NextRequest) {
   try {
+    const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+    if (!rateLimit(ip)) {
+      return NextResponse.json({ ok: false, error: "Too many attempts — try later" }, { status: 429 });
+    }
     const body = await req.json().catch(() => ({}));
     const email = String(body.email ?? "").trim().toLowerCase();
     const source = String(body.source ?? "track-record").slice(0, 40);

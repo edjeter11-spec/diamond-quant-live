@@ -63,6 +63,23 @@ input:focus-visible, textarea:focus-visible, select:focus-visible {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* Respect user motion preference — kill scale-ups + animations for those who need it */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Mobile: drop heavy glass blur for battery + perf */
+@media (max-width: 640px) {
+  .glass {
+    backdrop-filter: blur(6px);
+  }
+}
+
 /* Neon glow effects */
 @layer utilities {
   .glow-neon {

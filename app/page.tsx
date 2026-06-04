@@ -9,13 +9,11 @@ import GameDetailModal from "@/components/dashboard/GameDetailModal";
 import OddsGrid from "@/components/dashboard/OddsGrid";
 import QuantVerdict from "@/components/dashboard/QuantVerdict";
 import ArbitrageAlert from "@/components/dashboard/ArbitrageAlert";
-import PlayerProps from "@/components/dashboard/PlayerProps";
 import LineMovement from "@/components/dashboard/LineMovement";
 import SelectedGameBanner from "@/components/dashboard/SelectedGameBanner";
 import GameMatchupBrief from "@/components/dashboard/GameMatchupBrief";
 import BetSlip from "@/components/dashboard/BetSlip";
 import PicksBoard from "@/components/dashboard/PicksBoard";
-import TopPropsOfDay from "@/components/dashboard/TopPropsOfDay";
 import SnapSync from "@/components/dashboard/SnapSync";
 import { teamNameToAbbrev } from "@/lib/logos";
 import AuthButton from "@/components/auth/AuthButton";
@@ -34,7 +32,6 @@ import OnboardingTour from "@/components/onboarding/OnboardingTour";
 import { backupOddsToStorage, getOddsBackup } from "@/lib/odds/cache";
 import { sendDiscordAlert } from "@/lib/odds/sportsbooks";
 import { getDiscordWebhook, setDiscordWebhook } from "@/lib/store";
-import NRFITab from "@/components/dashboard/NRFITab";
 
 // Lazy-load heavy tabs — not needed on first paint
 const BankrollTracker = lazy(() => import("@/components/dashboard/BankrollTracker"));
@@ -601,7 +598,7 @@ export default function WarRoom() {
       />
 
       {/* Main Content */}
-      <main className="max-w-[1800px] mx-auto px-2 sm:px-4 py-3 sm:py-4 pb-20 md:pb-4">
+      <main id="main" className="max-w-[1800px] mx-auto px-2 sm:px-4 py-3 sm:py-4 pb-20 md:pb-4">
         {isLoading ? (
           <div className="flex gap-4" aria-label="Loading dashboard" role="status">
             {/* Left sidebar skeleton (desktop) */}

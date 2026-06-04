@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { AuthProvider } from "@/lib/supabase/auth";
+import { Analytics } from "@vercel/analytics/next";
+import PostHogProvider from "@/components/PostHogProvider";
 import "./globals.css";
 
 const SITE_URL = "https://diamond-quant-live.vercel.app";
@@ -48,9 +50,19 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className="dark">
       <body className="min-h-screen bg-void text-silver antialiased">
-        <AuthProvider>
-          {children}
-        </AuthProvider>
+        {/* Skip-to-content for keyboard / screen-reader users */}
+        <a
+          href="#main"
+          className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[200] focus:px-4 focus:py-2 focus:rounded-lg focus:bg-neon focus:text-bunker focus:font-bold"
+        >
+          Skip to content
+        </a>
+        <PostHogProvider>
+          <AuthProvider>
+            {children}
+          </AuthProvider>
+        </PostHogProvider>
+        <Analytics />
       </body>
     </html>
   );

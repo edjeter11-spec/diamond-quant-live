@@ -78,11 +78,33 @@ export default function EmailCaptureModal({ delayMs = 20000, source = "track-rec
     setSubmitting(false);
   };
 
+  // ESC to dismiss + simple focus trap
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close("dismissed");
+    };
+    window.addEventListener("keydown", onKey);
+    // Lock body scroll while modal open
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center px-4">
-      <div className="absolute inset-0 bg-void/70 backdrop-blur-sm" onClick={() => close("dismissed")} />
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center px-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="email-modal-title"
+    >
+      <div className="absolute inset-0 bg-void/70 backdrop-blur-sm" onClick={() => close("dismissed")} aria-hidden="true" />
       <div className="relative max-w-md w-full bg-bunker border border-gold/30 rounded-2xl shadow-2xl shadow-gold/10 p-6 animate-slide-up">
         <button
           onClick={() => close("dismissed")}
@@ -105,7 +127,7 @@ export default function EmailCaptureModal({ delayMs = 20000, source = "track-rec
             <div className="w-12 h-12 rounded-full bg-gradient-to-br from-gold/20 to-electric/10 border border-gold/30 flex items-center justify-center mb-3">
               <Mail className="w-6 h-6 text-gold" />
             </div>
-            <h2 className="text-xl font-bold text-silver leading-tight">Get tonight's top pick — free</h2>
+            <h2 id="email-modal-title" className="text-xl font-bold text-silver leading-tight">Get tonight's top pick — free</h2>
             <p className="text-sm text-mercury/70 mt-2 leading-relaxed">
               One email per day. The brain's highest-confidence pick, yesterday's W-L, and tonight's live arbs. Unsubscribe anytime.
             </p>
