@@ -15,6 +15,7 @@ import InfoTip from "@/components/ui/InfoTip";
 import Link from "next/link";
 import { usePremium } from "@/lib/hooks/usePremium";
 import TodayPropPicks from "@/components/dashboard/TodayPropPicks";
+import NRFISection from "@/components/dashboard/NRFISection";
 import PropDetail from "@/components/dashboard/PropDetail";
 import LineMovementBadge from "@/components/ui/LineMovementBadge";
 import { formatPickLabel } from "@/lib/display";
@@ -546,6 +547,9 @@ export default function PicksBoard() {
 
       {/* ═══ TODAY'S PLAYER PROPS ═══ */}
       <TodayPropPicks sport={currentSport} propsData={propsData} loading={propsLoading} />
+
+      {/* ═══ NRFI / YRFI — first inning analysis (MLB only, auto-renders) ═══ */}
+      <NRFISection sport={currentSport} />
 
       {/* ═══ MARKET SECTIONS ═══ */}
       {sections.map((sec) => {

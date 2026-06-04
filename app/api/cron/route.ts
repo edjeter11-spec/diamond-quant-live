@@ -120,6 +120,15 @@ export async function GET(req: Request) {
       }
     } catch (e) { console.error("mlb prop commit error:", e); }
 
+    // ── Commit NRFI/YRFI predictions (MLB) ──
+    let nrfiCommitted = 0;
+    try {
+      const today = new Date().toISOString().split("T")[0];
+      const { commitNRFIProjections } = await import("@/lib/bot/nrfi-pipeline");
+      const result = await commitNRFIProjections(games, today);
+      nrfiCommitted = result.committed;
+    } catch (e) { console.error("nrfi commit error:", e); }
+
     // ── Track Record: settle yesterday's logged picks ──
     let trackSettled = 0;
     const settleGames = completedGames.map(g => ({
@@ -612,6 +621,28 @@ export async function GET(req: Request) {
       } catch (e) { console.error("mlb prop grading error:", e); }
     }
 
+    // ── Grade NRFI/YRFI predictions against MLB linescores ──
+    let nrfiGraded = 0;
+    if (completedGames.length > 0) {
+      try {
+        const { gradeNRFIPredictions } = await import("@/lib/bot/nrfi-pipeline");
+        const result = await gradeNRFIPredictions(completedGames.map(g => ({ id: g.id })));
+        nrfiGraded = result.graded;
+        // Push to history (same dedup pattern as other MLB grading)
+        if (result.newlyGraded.length > 0) {
+          const histKey = "prop_pick_history_mlb";
+          const existing = (await cloudGet<any[]>(histKey, [])) ?? [];
+          const seenKey = (p: any) => `${(p.playerName ?? "").toLowerCase()}::${p.propType ?? p.market ?? ""}::${p.date ?? ""}`;
+          const seen = new Set(existing.map(seenKey));
+          const fresh = result.newlyGraded.filter((p) => !seen.has(seenKey(p)));
+          if (fresh.length > 0) {
+            const merged = [...fresh, ...existing].slice(0, 500);
+            await cloudSet(histKey, merged);
+          }
+        }
+      } catch (e) { console.error("nrfi grading error:", e); }
+    }
+
     // ── Clean stale pending bot picks (>7 days old) ──
     let stalePruned = { mlb: 0, nba: 0 };
     try {
@@ -640,6 +671,8 @@ export async function GET(req: Request) {
     (botSettle as any).propsGraded = propsGraded;
     (botSettle as any).mlbGhostCommitted = mlbGhostCommitted;
     (botSettle as any).mlbPropsGraded = mlbPropsGraded;
+    (botSettle as any).nrfiCommitted = nrfiCommitted;
+    (botSettle as any).nrfiGraded = nrfiGraded;
     (botSettle as any).stalePruned = stalePruned;
 
     // ── Daily Supabase Snapshot Cleanup (3-4 UTC = 11 PM-12 AM ET) ──
