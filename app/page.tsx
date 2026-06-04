@@ -401,14 +401,10 @@ export default function WarRoom() {
     setBetSlipOpen(true);
   };
 
+  // Simplified to 4 tabs. Live / Props / Arbs / News all merge into Board.
   const tabs = [
     { key: "dashboard" as const, icon: BarChart3, label: "Board" },
-    { key: "live" as const, icon: Radio, label: "Live" },
     { key: "bot" as const, icon: Diamond, label: "Bot" },
-    { key: "props" as const, icon: User, label: "Props" },
-    { key: "arbs" as const, icon: Zap, label: "Arbs" },
-    ...(currentSport === "nba" ? [{ key: "news" as const, icon: Newspaper, label: "News" }] : []),
-    ...(currentSport !== "nba" ? [{ key: "nrfi" as const, icon: Shield, label: "NRFI" }] : []),
     { key: "bankroll" as const, icon: Wallet, label: "Bank" },
     { key: "profile" as const, icon: UserCircle, label: "Profile" },
   ];
@@ -531,37 +527,14 @@ export default function WarRoom() {
               </span>
             )}
             <button
-              onClick={() => setSoundEnabled(!soundEnabled)}
-              className="flex items-center justify-center min-w-[44px] min-h-[36px] rounded-lg hover:bg-gunmetal/50 transition-colors"
-              title={soundEnabled ? "Mute alerts" : "Enable alert sounds"}
-            >
-              {soundEnabled ? (
-                <Volume2 className="w-4 h-4 text-neon" />
-              ) : (
-                <VolumeX className="w-4 h-4 text-mercury/50" />
-              )}
-            </button>
-            <button
-              onClick={() => setShowHelp(!showHelp)}
-              className="flex items-center justify-center min-w-[44px] min-h-[36px] rounded-lg hover:bg-gunmetal/50 transition-colors"
-              title="What do these terms mean?"
-            >
-              <HelpCircle className="w-4 h-4 text-mercury" />
-            </button>
-            <button
               onClick={fetchData}
               disabled={refreshing}
-              className="flex items-center justify-center min-w-[44px] min-h-[36px] rounded-lg hover:bg-gunmetal/50 transition-colors"
+              className="hidden sm:flex items-center justify-center min-w-[40px] min-h-[36px] rounded-lg hover:bg-gunmetal/50 transition-colors"
               title="Refresh data"
+              aria-label="Refresh"
             >
               <RefreshCw className={`w-4 h-4 text-mercury ${refreshing ? "animate-spin" : ""}`} />
             </button>
-            <div className="hidden sm:flex items-center gap-1.5">
-              <Radio className="w-3 h-3 text-neon" />
-              <span className="text-[10px] text-mercury font-mono">
-                {lastUpdate ? `Updated ${new Date(lastUpdate).toLocaleTimeString()}` : "Connecting..."}
-              </span>
-            </div>
           </div>
         </div>
 
@@ -750,7 +723,41 @@ export default function WarRoom() {
                     {/* Tonight's Plays — 30-second answer */}
                     <TonightsPlays sport={currentSport} />
 
+                    {/* Live games (only renders when live games exist) */}
+                    <Suspense fallback={null}>
+                      <LiveBoard />
+                    </Suspense>
+
                     <PicksBoard />
+
+                    {/* Arbitrage opportunities (auto-renders empty state when 0 arbs) */}
+                    <details className="glass rounded-xl overflow-hidden border border-gold/15">
+                      <summary className="px-4 py-2.5 flex items-center gap-2 cursor-pointer hover:bg-gunmetal/20 text-xs font-bold text-silver uppercase tracking-wider list-none">
+                        <Zap className="w-3.5 h-3.5 text-gold" />
+                        Arbitrage Scanner
+                        <span className="ml-auto text-[10px] text-mercury/50 font-mono normal-case">{allArbs.length} opps</span>
+                      </summary>
+                      <div className="border-t border-slate/15 p-3">
+                        <Suspense fallback={<TabSkeleton />}>
+                          <ArbBoard />
+                        </Suspense>
+                      </div>
+                    </details>
+
+                    {/* News + injury feed (NBA only) */}
+                    {currentSport === "nba" && (
+                      <details className="glass rounded-xl overflow-hidden border border-electric/15">
+                        <summary className="px-4 py-2.5 flex items-center gap-2 cursor-pointer hover:bg-gunmetal/20 text-xs font-bold text-silver uppercase tracking-wider list-none">
+                          <Newspaper className="w-3.5 h-3.5 text-electric" />
+                          News & Injuries
+                        </summary>
+                        <div className="border-t border-slate/15 p-3">
+                          <Suspense fallback={<TabSkeleton />}>
+                            <NewsBoard />
+                          </Suspense>
+                        </div>
+                      </details>
+                    )}
 
                     {/* Game deep-dive (when a game is selected) */}
                     {selectedGameId && selectedScore && (
@@ -799,39 +806,6 @@ export default function WarRoom() {
               </>
             )}
 
-            {activeTab === "props" && (
-              currentSport === "nba" ? (
-                <div className="max-w-5xl mx-auto space-y-4">
-                  <PlayerProps />
-                </div>
-              ) : (
-                <div className="max-w-5xl mx-auto space-y-4">
-                  <TopPropsOfDay />
-                  <PlayerProps />
-                </div>
-              )
-            )}
-
-
-            {activeTab === "nrfi" && <NRFITab />}
-
-            {activeTab === "arbs" && (
-              <Suspense fallback={<TabSkeleton />}>
-                <ArbBoard />
-              </Suspense>
-            )}
-
-            {activeTab === "news" && (
-              <Suspense fallback={<TabSkeleton />}>
-                <NewsBoard />
-              </Suspense>
-            )}
-
-            {activeTab === "live" && (
-              <Suspense fallback={<TabSkeleton />}>
-                <LiveBoard />
-              </Suspense>
-            )}
 
             {activeTab === "bot" && (
               <div className="max-w-3xl mx-auto space-y-4">

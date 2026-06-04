@@ -198,111 +198,27 @@ export default function BrainPage() {
           <ProfitChart history={propHistory} />
         </div>
 
-        {/* Weights breakdown */}
-        <div className="glass rounded-xl p-4 border border-electric/15">
-          <div className="flex items-center gap-2 mb-3">
-            <Activity className="w-4 h-4 text-electric" />
-            <h2 className="text-xs font-bold text-silver uppercase tracking-wider">Decision Weights</h2>
-            <span className="text-[9px] text-mercury/40 ml-auto">LR: {brain.learningRate.toFixed(4)}</span>
-          </div>
-          <div className="space-y-2">
-            {weightEntries.map(([key, val]) => (
-              <div key={key} className="flex items-center gap-3">
-                <p className="text-[10px] text-mercury w-24 flex-shrink-0">{WEIGHT_LABELS[key] ?? key}</p>
-                <div className="flex-1 h-2 bg-gunmetal/40 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-to-r from-electric to-purple rounded-full"
-                    style={{ width: `${(val / maxWeight) * 100}%` }}
-                  />
-                </div>
-                <p className="text-[10px] font-mono text-silver w-12 text-right">{(val * 100).toFixed(1)}%</p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Evolution history */}
-        {evolution && evolution.history.length > 0 && (
-          <div className="glass rounded-xl p-4 border border-gold/15">
-            <div className="flex items-center gap-2 mb-3">
-              <Crown className="w-4 h-4 text-gold" />
-              <h2 className="text-xs font-bold text-silver uppercase tracking-wider">Evolution History</h2>
-              <span className="text-[9px] text-gold ml-auto">Best: {evolution.bestEverWinRate}%</span>
-            </div>
-            <div className="space-y-1.5">
-              {evolution.history.slice(-8).reverse().map((h, i) => (
-                <div key={i} className="flex items-center gap-3 px-3 py-1.5 rounded bg-gunmetal/20 text-[10px]">
-                  <span className="text-mercury/40 w-12">Gen {h.generation}</span>
-                  <span className="flex-1 truncate text-silver">{h.winnerName}</span>
-                  <span className={`font-mono font-bold ${h.winRate > 52 ? "text-neon" : h.winRate > 48 ? "text-electric" : "text-amber"}`}>
-                    {h.winRate}%
-                  </span>
-                  <span className="text-mercury/40 text-[9px]">
-                    {new Date(h.timestamp).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Top players */}
+        {/* Top players (just 5) */}
         {topPlayers.length > 0 && (
           <div className="glass rounded-xl p-4 border border-neon/15">
             <div className="flex items-center gap-2 mb-3">
               <Award className="w-4 h-4 text-neon" />
-              <h2 className="text-xs font-bold text-silver uppercase tracking-wider">Top Players (Brain Accuracy)</h2>
+              <h2 className="text-xs font-bold text-silver uppercase tracking-wider">Top 5 Players</h2>
               <span className="text-[9px] text-mercury/40 ml-auto">{stats.brain.playerCount} tracked</span>
             </div>
             <div className="rounded-lg overflow-hidden border border-slate/15">
-              {topPlayers.slice(0, 20).map((p, i) => (
-                <div
-                  key={p.name}
-                  className={`flex items-center gap-3 px-3 py-2 text-[11px] border-b border-slate/10 last:border-0 ${i < 3 ? "bg-neon/5" : ""}`}
-                >
-                  <span className="w-5 text-mercury/40 font-mono text-[9px]">#{i + 1}</span>
+              {topPlayers.slice(0, 5).map((p, i) => (
+                <div key={p.name} className={`flex items-center gap-3 px-3 py-2.5 text-xs border-b border-slate/10 last:border-0 ${i < 3 ? "bg-neon/5" : ""}`}>
+                  <span className="w-5 text-mercury/40 font-mono text-[10px]">#{i + 1}</span>
                   <div className="flex-1 min-w-0">
                     <p className="text-silver font-semibold truncate">{p.name}</p>
-                    <p className="text-[9px] text-mercury/50 truncate">{p.team} • {p.total} picks</p>
+                    <p className="text-[10px] text-mercury/50 truncate">{p.team} • {p.total} picks</p>
                   </div>
-                  <div className="flex gap-1.5 text-[8px] text-mercury/60">
-                    {Object.entries(p.byPropType ?? {}).map(([type, stats]: [string, any]) => (
-                      <span key={type} title={`${type}: ${stats.winRate}%`} className="font-mono">
-                        {type === "player_points" ? "P" : type === "player_rebounds" ? "R" : "A"}
-                        :{stats.winRate}
-                      </span>
-                    ))}
-                  </div>
-                  <span className={`font-mono font-bold w-12 text-right ${p.winRate > 55 ? "text-neon" : p.winRate > 50 ? "text-electric" : "text-amber"}`}>
+                  <span className={`font-mono font-bold ${p.winRate > 55 ? "text-neon" : p.winRate > 50 ? "text-electric" : "text-amber"}`}>
                     {p.winRate.toFixed(0)}%
                   </span>
                 </div>
               ))}
-            </div>
-          </div>
-        )}
-
-        {/* Recent audits */}
-        {brain.recentAudits.length > 0 && (
-          <div className="glass rounded-xl p-4 border border-electric/15">
-            <div className="flex items-center gap-2 mb-3">
-              <TrendingUp className="w-4 h-4 text-electric" />
-              <h2 className="text-xs font-bold text-silver uppercase tracking-wider">Recent Game Audits</h2>
-            </div>
-            <div className="space-y-1">
-              {brain.recentAudits.slice(-10).reverse().map((a, i) => {
-                const winRate = a.graded > 0 ? (a.hits / a.graded) * 100 : 0;
-                return (
-                  <div key={i} className="flex items-center gap-3 px-3 py-1.5 rounded bg-gunmetal/20 text-[10px]">
-                    <span className="text-mercury/40 w-20">{a.gameDate}</span>
-                    <span className="flex-1 text-silver">{a.hits}W - {a.misses}L</span>
-                    <span className="text-mercury/50">Brier {a.avgBrier.toFixed(3)}</span>
-                    <span className={`font-mono font-bold w-12 text-right ${winRate > 55 ? "text-neon" : winRate > 48 ? "text-electric" : "text-amber"}`}>
-                      {winRate.toFixed(0)}%
-                    </span>
-                  </div>
-                );
-              })}
             </div>
           </div>
         )}
