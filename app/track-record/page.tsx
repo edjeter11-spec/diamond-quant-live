@@ -4,6 +4,7 @@ import { cloudGet } from "@/lib/supabase/client";
 import { Trophy, TrendingUp, Crown, Sparkles, ArrowRight, CheckCircle, XCircle, Brain, DollarSign } from "lucide-react";
 import ProfitChart from "@/components/ProfitChart";
 import EmailCaptureModal from "@/components/EmailCaptureModal";
+import StructuredData from "@/components/StructuredData";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 60;
@@ -236,6 +237,8 @@ export default async function TrackRecordPage() {
       </div>
 
       <EmailCaptureModal delayMs={20000} source="track-record" />
+      {/* SEO: JSON-LD structured data — picked up by Google for rich snippets */}
+      <StructuredData />
     </div>
   );
 }

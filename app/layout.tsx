@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { AuthProvider } from "@/lib/supabase/auth";
 import { Analytics } from "@vercel/analytics/next";
 import PostHogProvider from "@/components/PostHogProvider";
+import PWAInstall from "@/components/PWAInstall";
 import "./globals.css";
 
 const SITE_URL = "https://diamond-quant-live.vercel.app";
@@ -60,6 +61,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <PostHogProvider>
           <AuthProvider>
             {children}
+            <PWAInstall />
           </AuthProvider>
         </PostHogProvider>
         <Analytics />
