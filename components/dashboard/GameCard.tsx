@@ -77,8 +77,8 @@ export default function GameCard({ game, oddsInfo }: GameCardProps) {
   const formatOdds = (odds: number) => (odds > 0 ? `+${odds}` : `${odds}`);
 
   // Full names for desktop, abbreviations for mobile
-  const awayFull = getFullTeamName(game.awayAbbrev, currentSport);
-  const homeFull = getFullTeamName(game.homeAbbrev, currentSport);
+  const awayFull = getFullTeamName(game.awayAbbrev, currentSport as "mlb" | "nba");
+  const homeFull = getFullTeamName(game.homeAbbrev, currentSport as "mlb" | "nba");
 
   return (
     <button

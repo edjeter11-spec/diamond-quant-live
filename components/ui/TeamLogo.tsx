@@ -19,8 +19,8 @@ export default function TeamLogo({ team, size = 20, className = "" }: TeamLogoPr
   const abbrev = teamNameToAbbrev(team || "", currentSport as "mlb" | "nba");
 
   // Primary URL — try abbrev; if that fails, try by name.
-  let primary = getTeamLogo(abbrev || team, currentSport);
-  if (!primary) primary = getTeamLogoByName(team, currentSport);
+  let primary = getTeamLogo(abbrev || team, currentSport as "mlb" | "nba");
+  if (!primary) primary = getTeamLogoByName(team, currentSport as "mlb" | "nba");
 
   // MLB has a second URL (ESPN CDN) to fall back to before we give up on images
   const fallback = currentSport === "mlb" && abbrev ? getMlbLogoFallback(abbrev) : "";

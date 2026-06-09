@@ -496,6 +496,12 @@ export default function WarRoom() {
                   currentSport === "nba" ? "bg-orange-500/20 text-orange-500" : "text-mercury/50 hover:text-mercury"
                 }`}
               >NBA</button>
+              <button
+                onClick={() => { setSport("nfl"); selectGame(null); }}
+                className={`min-h-[36px] min-w-[44px] px-3 rounded text-[11px] font-bold transition-all ${
+                  currentSport === "nfl" ? "bg-electric/20 text-electric" : "text-mercury/50 hover:text-mercury"
+                }`}
+              >NFL</button>
             </div>
           </div>
 
@@ -717,8 +723,8 @@ export default function WarRoom() {
                     {/* Push opt-in card (auto-hides if granted/dismissed) */}
                     <PushOptIn />
 
-                    {/* Tonight's Plays — 30-second answer */}
-                    <TonightsPlays sport={currentSport} />
+                    {/* Tonight's Plays — 30-second answer (only renders for MLB/NBA) */}
+                    {currentSport !== "nfl" && <TonightsPlays sport={currentSport as "mlb" | "nba"} />}
 
                     {/* Live games (only renders when live games exist) */}
                     <Suspense fallback={null}>

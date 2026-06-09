@@ -16,6 +16,7 @@ import Link from "next/link";
 import { usePremium } from "@/lib/hooks/usePremium";
 import TodayPropPicks from "@/components/dashboard/TodayPropPicks";
 import NRFISection from "@/components/dashboard/NRFISection";
+import NFLPropSection from "@/components/dashboard/NFLPropSection";
 import PropDetail from "@/components/dashboard/PropDetail";
 import LineMovementBadge from "@/components/ui/LineMovementBadge";
 import { formatPickLabel } from "@/lib/display";
@@ -545,11 +546,16 @@ export default function PicksBoard() {
         </div>
       )}
 
-      {/* ═══ TODAY'S PLAYER PROPS ═══ */}
-      <TodayPropPicks sport={currentSport} propsData={propsData} loading={propsLoading} />
+      {/* ═══ TODAY'S PLAYER PROPS — MLB/NBA only ═══ */}
+      {currentSport !== "nfl" && (
+        <TodayPropPicks sport={currentSport as "mlb" | "nba"} propsData={propsData} loading={propsLoading} />
+      )}
 
       {/* ═══ NRFI / YRFI — first inning analysis (MLB only, auto-renders) ═══ */}
-      <NRFISection sport={currentSport} />
+      <NRFISection sport={currentSport === "nfl" ? "nba" : currentSport as "mlb" | "nba"} />
+
+      {/* ═══ NFL Player Props — auto-renders when sport=nfl ═══ */}
+      <NFLPropSection sport={currentSport} />
 
       {/* ═══ MARKET SECTIONS ═══ */}
       {sections.map((sec) => {

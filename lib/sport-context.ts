@@ -5,7 +5,7 @@
 
 import { create } from "zustand";
 
-export type Sport = "mlb" | "nba";
+export type Sport = "mlb" | "nba" | "nfl";
 
 export interface SportConfig {
   sport: Sport;
@@ -60,6 +60,28 @@ export const SPORT_CONFIGS: Record<Sport, SportConfig> = {
       { key: "player_assists", label: "Assists" },
       { key: "player_threes", label: "3-Pointers" },
       { key: "player_pra", label: "Pts+Reb+Ast" },
+    ],
+  },
+  nfl: {
+    sport: "nfl",
+    name: "NFL",
+    accent: "electric",
+    accentHex: "#00d4ff",
+    oddsApiKey: "americanfootball_nfl",
+    model1Label: "QB Rating",
+    model2Label: "Market",
+    model3Label: "DVOA",
+    brainKey: "brain_nfl",
+    botKey: "smart_bot_nfl",
+    propMarkets: [
+      { key: "player_pass_yds", label: "Passing Yds" },
+      { key: "player_pass_tds", label: "Passing TDs" },
+      { key: "player_pass_attempts", label: "Pass Attempts" },
+      { key: "player_rush_yds", label: "Rushing Yds" },
+      { key: "player_rush_attempts", label: "Carries" },
+      { key: "player_receptions", label: "Receptions" },
+      { key: "player_reception_yds", label: "Receiving Yds" },
+      { key: "player_anytime_td", label: "Anytime TD" },
     ],
   },
 };
