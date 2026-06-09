@@ -6,10 +6,11 @@ import { getCached, setCache } from "@/lib/odds/server-cache";
 
 export const revalidate = 0;
 
+// Server-only route → use service-role key to bypass RLS for trusted writes.
 const supabase = (() => {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
-  return url && key ? createClient(url, key) : null;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+  return url && key ? createClient(url, key, { auth: { persistSession: false } }) : null;
 })();
 
 // ── helpers ──────────────────────────────────────────────

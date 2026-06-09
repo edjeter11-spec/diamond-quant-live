@@ -98,19 +98,22 @@ export default async function StructuredData() {
     ],
   };
 
+  // Escape `</` so a stray "</script>" in any string field can't break out
+  const safeJson = (obj: unknown) => JSON.stringify(obj).replace(/</g, "\\u003c");
+
   return (
     <>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(app) }}
+        dangerouslySetInnerHTML={{ __html: safeJson(app) }}
       />
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(org) }}
+        dangerouslySetInnerHTML={{ __html: safeJson(org) }}
       />
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(faq) }}
+        dangerouslySetInnerHTML={{ __html: safeJson(faq) }}
       />
     </>
   );

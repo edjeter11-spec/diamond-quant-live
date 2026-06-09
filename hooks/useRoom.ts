@@ -45,9 +45,8 @@ export function useRoom(userName: string = "User") {
       roomId,
       userIdRef.current,
       userName,
-      (update) => {
-        // Handle incoming updates
-        console.log("[Room] Update:", update);
+      () => {
+        // Handle incoming updates (no-op for now)
       },
       (users) => {
         setRoomUsers(users);

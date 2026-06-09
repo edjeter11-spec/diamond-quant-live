@@ -67,9 +67,7 @@ export async function GET() {
         };
       });
 
-    console.log(`[Bot Analysis] Odds games: ${oddsGames.length}, Scores: ${scores.length}`);
     const analyses = await analyzeAllGames(oddsGames, scores);
-    console.log(`[Bot Analysis] Produced ${analyses.length} analyses`);
 
     const response = {
       analyses,
