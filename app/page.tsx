@@ -784,7 +784,7 @@ export default function WarRoom() {
 
                     {/* Game deep-dive (when a game is selected) */}
                     {selectedGameId && selectedScore && (
-                      <>
+                      <SafeBoundary>
                         <SelectedGameBanner game={selectedScore} onDeselect={() => selectGame(null)} />
                         {currentSport === "nba" && selectedOdds && (() => {
                           const homeAbbrev = teamNameToAbbrev(selectedOdds.homeTeam, "nba");
@@ -814,7 +814,7 @@ export default function WarRoom() {
                           } : undefined}
                         />
                         <OddsGrid gameId={selectedGameId} />
-                      </>
+                      </SafeBoundary>
                     )}
 
                   </div>
@@ -822,7 +822,9 @@ export default function WarRoom() {
                   {/* Right Sidebar — XL */}
                   <div className="hidden xl:block w-80 flex-shrink-0 space-y-4">
                     <div className="sticky top-24 space-y-4">
-                      <LineMovement movements={lineMovements} />
+                      <SafeBoundary>
+                        <LineMovement movements={lineMovements} />
+                      </SafeBoundary>
                     </div>
                   </div>
                 </div>
@@ -887,7 +889,9 @@ export default function WarRoom() {
 
       {/* Global UI: ephemeral toasts + floating parlay slip */}
       <Toaster />
-      <FloatingParlayChip activeTab={activeTab} onOpenBuilder={() => openBetSlip()} />
+      <SafeBoundary>
+        <FloatingParlayChip activeTab={activeTab} onOpenBuilder={() => openBetSlip()} />
+      </SafeBoundary>
 
       {/* First-visit onboarding tour — topmost overlay, self-dismissing */}
       <OnboardingTour />

@@ -13,7 +13,13 @@ export default function Error({
 }) {
   useEffect(() => {
     console.error("Global error:", error);
-  }, [error]);
+    // Auto-recover: try resetting once on first paint. If the underlying
+    // problem was transient (sport-tab switch with stale state), this masks it.
+    const t = setTimeout(() => {
+      try { reset(); } catch {}
+    }, 100);
+    return () => clearTimeout(t);
+  }, [error, reset]);
 
   return (
     <div className="min-h-screen bg-void flex items-center justify-center px-6">
