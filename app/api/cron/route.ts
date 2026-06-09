@@ -197,6 +197,53 @@ export async function GET(req: Request) {
       }
     } catch (e) { console.error("nfl pipeline error:", e); }
 
+    // ── NHL prop commit + grade ──
+    let nhlCommitted = 0;
+    let nhlGraded = 0;
+    try {
+      const { fetchTodayNHLGames, getNHLGameStatus } = await import("@/lib/nhl/stats-api");
+      const events = await fetchTodayNHLGames();
+      if (events.length > 0) {
+        const today = new Date().toISOString().split("T")[0];
+        const normalized = events
+          .filter((g: any) => getNHLGameStatus(g) === "pre")
+          .map((g: any) => ({
+            gameId: String(g.id),
+            homeAbbrev: g.homeTeam?.abbrev ?? "",
+            awayAbbrev: g.awayTeam?.abbrev ?? "",
+            gameDate: today,
+          }))
+          .filter((g: any) => g.homeAbbrev && g.awayAbbrev);
+
+        if (normalized.length > 0) {
+          const { commitNHLPropProjections } = await import("@/lib/bot/nhl-prop-pipeline");
+          const result = await commitNHLPropProjections(normalized, today);
+          nhlCommitted = result.committed;
+        }
+
+        const completed = events
+          .filter((g: any) => getNHLGameStatus(g) === "final")
+          .map((g: any) => ({ id: String(g.id) }));
+
+        if (completed.length > 0) {
+          const { gradeNHLPropPredictions } = await import("@/lib/bot/nhl-prop-pipeline");
+          const result = await gradeNHLPropPredictions(completed);
+          nhlGraded = result.graded;
+          if (result.newlyGraded.length > 0) {
+            const histKey = "prop_pick_history_nhl";
+            const existing = (await cloudGet<any[]>(histKey, [])) ?? [];
+            const seenKey = (p: any) => `${(p.playerName ?? "").toLowerCase()}::${p.propType ?? p.market ?? ""}::${p.date ?? ""}`;
+            const seen = new Set(existing.map(seenKey));
+            const fresh = result.newlyGraded.filter((p: any) => !seen.has(seenKey(p)));
+            if (fresh.length > 0) {
+              const merged = [...fresh, ...existing].slice(0, 500);
+              await cloudSet(histKey, merged);
+            }
+          }
+        }
+      }
+    } catch (e) { console.error("nhl pipeline error:", e); }
+
     // ── Track Record: settle yesterday's logged picks ──
     let trackSettled = 0;
     const settleGames = completedGames.map(g => ({
@@ -743,6 +790,8 @@ export async function GET(req: Request) {
     (botSettle as any).nrfiGraded = nrfiGraded;
     (botSettle as any).nflCommitted = nflCommitted;
     (botSettle as any).nflGraded = nflGraded;
+    (botSettle as any).nhlCommitted = nhlCommitted;
+    (botSettle as any).nhlGraded = nhlGraded;
     (botSettle as any).stalePruned = stalePruned;
 
     // ── Daily Supabase Snapshot Cleanup (3-4 UTC = 11 PM-12 AM ET) ──
@@ -775,7 +824,7 @@ export async function GET(req: Request) {
     // ── Daily Prop History Rehydration (4-5 UTC = 12-1 AM ET) ──
     // Rebuild prop_pick_history_{sport} from prop_predictions table so the
     // cumulative array can never get truncated/lost. Idempotent.
-    let rehydrated: Record<string, number> = { nba: 0, mlb: 0, nfl: 0 };
+    let rehydrated: Record<string, number> = { nba: 0, mlb: 0, nfl: 0, nhl: 0 };
     if (utcHour >= 4 && utcHour <= 5) {
       try {
         const { supabase: sb } = await import("@/lib/supabase/client");
@@ -795,7 +844,11 @@ export async function GET(req: Request) {
             player_rush_attempts: "Carries", player_receptions: "Receptions",
             player_reception_yds: "Rec Yds", player_anytime_td: "Anytime TD",
           };
-          for (const sport of ["nba", "mlb", "nfl"] as const) {
+          const MARKET_NHL: Record<string, string> = {
+            player_points: "Points", player_goals: "Goals", player_assists: "Assists",
+            player_shots_on_goal: "Shots", player_total_saves: "Saves",
+          };
+          for (const sport of ["nba", "mlb", "nfl", "nhl"] as const) {
             const { data: rows } = await sb
               .from("prop_predictions")
               .select("player_name, prop_type, line, predicted_side, hit, actual_value, game_date, odds_at_pick")
@@ -804,7 +857,7 @@ export async function GET(req: Request) {
               .order("game_date", { ascending: false })
               .limit(500);
             if (!rows || rows.length === 0) continue;
-            const LABELS = sport === "nba" ? MARKET_NBA : sport === "mlb" ? MARKET_MLB : MARKET_NFL;
+            const LABELS = sport === "nba" ? MARKET_NBA : sport === "mlb" ? MARKET_MLB : sport === "nfl" ? MARKET_NFL : MARKET_NHL;
             const history = rows.map((r: any) => ({
               playerName: r.player_name,
               propType: LABELS[r.prop_type] ?? r.prop_type,
