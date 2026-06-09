@@ -18,6 +18,7 @@ import TodayPropPicks from "@/components/dashboard/TodayPropPicks";
 import NRFISection from "@/components/dashboard/NRFISection";
 import NFLPropSection from "@/components/dashboard/NFLPropSection";
 import NHLPropSection from "@/components/dashboard/NHLPropSection";
+import SafeBoundary from "@/components/SafeBoundary";
 import PropDetail from "@/components/dashboard/PropDetail";
 import LineMovementBadge from "@/components/ui/LineMovementBadge";
 import { formatPickLabel } from "@/lib/display";
@@ -549,17 +550,25 @@ export default function PicksBoard() {
 
       {/* ═══ TODAY'S PLAYER PROPS — MLB/NBA only ═══ */}
       {(currentSport === "mlb" || currentSport === "nba") && (
-        <TodayPropPicks sport={currentSport as "mlb" | "nba"} propsData={propsData} loading={propsLoading} />
+        <SafeBoundary>
+          <TodayPropPicks sport={currentSport as "mlb" | "nba"} propsData={propsData} loading={propsLoading} />
+        </SafeBoundary>
       )}
 
       {/* ═══ NRFI / YRFI — MLB only ═══ */}
-      <NRFISection sport={(currentSport === "mlb" || currentSport === "nba") ? currentSport : "nba"} />
+      <SafeBoundary>
+        <NRFISection sport={(currentSport === "mlb" || currentSport === "nba") ? currentSport : "nba"} />
+      </SafeBoundary>
 
       {/* ═══ NFL Player Props — auto-renders when sport=nfl ═══ */}
-      <NFLPropSection sport={currentSport} />
+      <SafeBoundary>
+        <NFLPropSection sport={currentSport} />
+      </SafeBoundary>
 
       {/* ═══ NHL Player Props — auto-renders when sport=nhl ═══ */}
-      <NHLPropSection sport={currentSport} />
+      <SafeBoundary>
+        <NHLPropSection sport={currentSport} />
+      </SafeBoundary>
 
       {/* ═══ MARKET SECTIONS ═══ */}
       {sections.map((sec) => {

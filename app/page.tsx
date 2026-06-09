@@ -14,6 +14,7 @@ import SelectedGameBanner from "@/components/dashboard/SelectedGameBanner";
 import GameMatchupBrief from "@/components/dashboard/GameMatchupBrief";
 import BetSlip from "@/components/dashboard/BetSlip";
 import PicksBoard from "@/components/dashboard/PicksBoard";
+import SafeBoundary from "@/components/SafeBoundary";
 import SnapSync from "@/components/dashboard/SnapSync";
 import { teamNameToAbbrev } from "@/lib/logos";
 import AuthButton from "@/components/auth/AuthButton";
@@ -737,7 +738,14 @@ export default function WarRoom() {
                       <LiveBoard />
                     </Suspense>
 
-                    <PicksBoard />
+                    <SafeBoundary fallback={
+                      <div className="glass rounded-xl p-6 text-center">
+                        <p className="text-sm text-mercury">Picks board temporarily unavailable. Refreshing...</p>
+                        <button onClick={() => location.reload()} className="mt-3 text-xs text-neon underline">Reload</button>
+                      </div>
+                    }>
+                      <PicksBoard />
+                    </SafeBoundary>
 
                     {/* Arbitrage opportunities (auto-renders empty state when 0 arbs) */}
                     <details className="glass rounded-xl overflow-hidden border border-gold/15">

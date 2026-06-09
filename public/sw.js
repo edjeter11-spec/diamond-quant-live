@@ -2,7 +2,7 @@
 // Cache-first for static assets, network-first for HTML + API.
 // Bumps the version → invalidates old cache.
 
-const VERSION = "dq-v2";
+const VERSION = "dq-v3";
 const RUNTIME = `dq-runtime-${VERSION}`;
 
 const PRECACHE_URLS = ["/", "/track-record", "/manifest.json"];
