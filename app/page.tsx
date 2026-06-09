@@ -725,22 +725,28 @@ export default function WarRoom() {
                   {/* Center — Main Picks Board */}
                   <div className="flex-1 min-w-0 space-y-3 sm:space-y-4">
                     {/* Streak banner — social proof / retention hook */}
-                    <StreakBanner />
+                    <SafeBoundary><StreakBanner /></SafeBoundary>
 
                     {/* Push opt-in card (auto-hides if granted/dismissed) */}
-                    <PushOptIn />
+                    <SafeBoundary><PushOptIn /></SafeBoundary>
 
                     {/* Tonight's Plays — 30-second answer (only renders for MLB/NBA) */}
-                    {(currentSport === "mlb" || currentSport === "nba") && <TonightsPlays sport={currentSport as "mlb" | "nba"} />}
+                    {(currentSport === "mlb" || currentSport === "nba") && (
+                      <SafeBoundary>
+                        <TonightsPlays sport={currentSport as "mlb" | "nba"} />
+                      </SafeBoundary>
+                    )}
 
                     {/* Live games (only renders when live games exist) */}
-                    <Suspense fallback={null}>
-                      <LiveBoard />
-                    </Suspense>
+                    <SafeBoundary>
+                      <Suspense fallback={null}>
+                        <LiveBoard />
+                      </Suspense>
+                    </SafeBoundary>
 
                     <SafeBoundary fallback={
                       <div className="glass rounded-xl p-6 text-center">
-                        <p className="text-sm text-mercury">Picks board temporarily unavailable. Refreshing...</p>
+                        <p className="text-sm text-mercury">Picks board temporarily unavailable.</p>
                         <button onClick={() => location.reload()} className="mt-3 text-xs text-neon underline">Reload</button>
                       </div>
                     }>
