@@ -18,8 +18,16 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 120;
 
 export async function GET(req: Request) {
-  // Verify cron secret (optional security)
-  const authHeader = req.headers.get("authorization");
+  // Lock down: Vercel Cron sends `Authorization: Bearer ${CRON_SECRET}`; internal/manual
+  // callers use `x-cron-secret`. Grades bets + writes shared cloud state — must not be open.
+  const cronSecret = process.env.CRON_SECRET;
+  if (cronSecret) {
+    const authHeader = req.headers.get("authorization");
+    const headerSecret = req.headers.get("x-cron-secret");
+    if (authHeader !== `Bearer ${cronSecret}` && headerSecret !== cronSecret) {
+      return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+    }
+  }
   const url = new URL(req.url);
   const forceTrain = url.searchParams.get("forceTrain") === "true";
   const forceEvolve = url.searchParams.get("forceEvolve") === "true";
