@@ -231,11 +231,13 @@ export function settleAndLearn(
     const awayWon = score.awayScore > score.homeScore;
     const finalScore = `${score.awayAbbrev} ${score.awayScore} - ${score.homeAbbrev} ${score.homeScore}`;
 
-    // Determine result
+    // Determine result — same fuzzy matcher as score-finding above, so a feed
+    // name mismatch ("Athletics" vs "Oakland Athletics") can't grade a win as a loss
     let result: SmartBotPick["result"] = "loss";
     let payout = 0;
-    const pickedHome = pick.pick.includes(score.homeTeam) || pick.pick.includes(score.homeAbbrev);
-    const pickedAway = pick.pick.includes(score.awayTeam) || pick.pick.includes(score.awayAbbrev);
+    const pickedTeam = pick.pick.replace(/\s+ML$/i, "").trim();
+    const pickedHome = teamMatch(pickedTeam, score.homeTeam, score.homeAbbrev);
+    const pickedAway = teamMatch(pickedTeam, score.awayTeam, score.awayAbbrev);
 
     if ((pickedHome && homeWon) || (pickedAway && awayWon)) {
       result = "win";
@@ -303,10 +305,11 @@ export function settleAndLearn(
 
   if (!changed) return { botState, accuracy };
 
-  // Recalculate bankroll
+  // Recalculate bankroll: start − every stake placed + returns from settled picks.
+  // Pending stakes stay deducted (in-play exposure), matching the deduction made
+  // at generation time — no phantom refund the moment a pick settles.
   const totalStaked = updatedPicks.reduce((s, p) => s + p.stake, 0);
   const totalReturns = updatedPicks.filter(p => p.result !== "pending").reduce((s, p) => s + p.payout, 0);
-  const pendingStake = updatedPicks.filter(p => p.result === "pending").reduce((s, p) => s + p.stake, 0);
 
   // Daily P&L
   const dailyPnL: Record<string, number> = {};
@@ -315,7 +318,7 @@ export function settleAndLearn(
   }
 
   const newState: SmartBotState = {
-    bankroll: STARTING_BANKROLL + totalReturns - totalStaked + pendingStake,
+    bankroll: STARTING_BANKROLL + totalReturns - totalStaked,
     picks: updatedPicks,
     dailyPnL,
   };

@@ -299,10 +299,18 @@ export default function BotChallenge() {
   useEffect(() => {
     if (analyses.length === 0) return;
     const today = new Date().toISOString().split("T")[0];
-    const hasTodayPicks = botState.picks.filter(p => p.date === today).length >= 4;
-    if (hasTodayPicks) return;
+    const todaysExisting = botState.picks.filter(p => p.date === today);
+    if (todaysExisting.length >= 4) return;
 
-    const newPicks = generateSmartPicks(analyses, botState.bankroll);
+    // Dedupe against picks already generated today — on a short slate (<4 games)
+    // the count guard alone never trips, and every analyses refetch would
+    // re-append the same games and drain the bankroll again
+    const usedGames = new Set(todaysExisting.map(p => p.game));
+    const usedIds = new Set(todaysExisting.map(p => p.id));
+    const newPicks = generateSmartPicks(analyses, botState.bankroll)
+      .filter(p => !usedGames.has(p.game))
+      .slice(0, 4 - todaysExisting.length)
+      .map((p, i) => usedIds.has(p.id) ? { ...p, id: `smart-${today}-${todaysExisting.length + i}` } : p);
     if (newPicks.length > 0) {
       const updated: SmartBotState = {
         ...botState,
@@ -360,8 +368,9 @@ export default function BotChallenge() {
         fetch(isNBA ? "/api/nba-analysis" : "/api/odds")
           .then(r => r.json())
           .then((rawData: any) => {
-            const oddsGames: any[] = isNBA ? (rawData.analyses ?? []) : rawData;
-            if (isNBA && oddsGames.length === 0) return;
+            // Both endpoints wrap their arrays: /api/odds → {games}, /api/nba-analysis → {analyses}
+            const oddsGames: any[] = isNBA ? (rawData?.analyses ?? []) : (rawData?.games ?? []);
+            if (oddsGames.length === 0) return;
             // Build closing-odds map: "Team ML" → current odds
             const allClosingOdds: Record<string, number> = {};
             for (const game of oddsGames) {
@@ -375,6 +384,9 @@ export default function BotChallenge() {
                   bestAway = line.awayML;
                 }
               }
+              // NBA analyses carry no oddsLines — fall back to their pre-computed best lines
+              if (bestHome === 0 && typeof game.bestHomeML === "number" && game.bestHomeML !== -999) bestHome = game.bestHomeML;
+              if (bestAway === 0 && typeof game.bestAwayML === "number" && game.bestAwayML !== -999) bestAway = game.bestAwayML;
               if (bestHome !== 0) allClosingOdds[`${game.homeTeam} ML`] = bestHome;
               if (bestAway !== 0) allClosingOdds[`${game.awayTeam} ML`] = bestAway;
             }
