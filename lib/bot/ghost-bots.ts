@@ -4,6 +4,7 @@
 // ──────────────────────────────────────────────────────────
 
 import { americanToDecimal, americanToImpliedProb, kellyStake, devig } from "@/lib/model/kelly";
+import { loadJSON, isRecord } from "@/lib/safe-storage";
 
 // ── Ghost Bot Strategies ──
 
@@ -96,12 +97,7 @@ export interface GhostSystemState {
 const STARTING_BANKROLL = 5000;
 
 export function loadGhostSystem(): GhostSystemState {
-  if (typeof window === "undefined") return createDefaultSystem();
-  try {
-    const stored = localStorage.getItem("dq_ghost_system");
-    if (stored) return JSON.parse(stored);
-  } catch {}
-  return createDefaultSystem();
+  return loadJSON<GhostSystemState | null>("dq_ghost_system", null, (v) => isRecord(v) && Array.isArray(v.ghosts)) ?? createDefaultSystem();
 }
 
 export function saveGhostSystem(state: GhostSystemState) {

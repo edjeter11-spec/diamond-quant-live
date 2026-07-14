@@ -36,11 +36,7 @@ export default function BotChallenge() {
   const storageKey = isNBA ? "dq_smart_bot_nba" : "dq_smart_bot";
   const [botState, setBotState] = useState<SmartBotState>(() => {
     if (typeof window === "undefined") return { bankroll: 5000, picks: [], dailyPnL: {} };
-    try {
-      const stored = localStorage.getItem(storageKey);
-      if (stored) return JSON.parse(stored);
-    } catch {}
-    return { bankroll: 5000, picks: [], dailyPnL: {} };
+    return loadSmartBot(currentSport); // shape-validated, self-healing
   });
   const [accuracy, setAccuracy] = useState<ModelAccuracy>(loadModelAccuracy);
   const [analyses, setAnalyses] = useState<GameAnalysis[]>([]);
@@ -238,13 +234,7 @@ export default function BotChallenge() {
 
   // Reload bot state + CLV when sport changes
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(storageKey);
-      if (stored) setBotState(JSON.parse(stored));
-      else setBotState({ bankroll: 5000, picks: [], dailyPnL: {} });
-    } catch {
-      setBotState({ bankroll: 5000, picks: [], dailyPnL: {} });
-    }
+    setBotState(loadSmartBot(currentSport)); // shape-validated, self-healing
     setClvRecords(loadCLVRecords(currentSport));
   }, [currentSport, storageKey]);
 
@@ -256,11 +246,13 @@ export default function BotChallenge() {
         const cloudKey = isNBA ? "smart_bot_nba" : "smart_bot";
         const todayKey = isNBA ? `smart_bot_today_nba_${today}` : `smart_bot_today_mlb_${today}`;
 
-        // Try to load pre-generated picks from Supabase (set by cron for all users)
+        // Try to load pre-generated picks from Supabase (set by cron for all users).
+        // Validate shapes: a corrupt cloud row otherwise crashes every device
+        // that opens this sport tab, even after clearing localStorage.
         const { cloudGet } = await import("@/lib/supabase/client");
         const [cloudBotState, todayPregen] = await Promise.all([
-          cloudGet(cloudKey, null) as Promise<SmartBotState | null>,
-          cloudGet(todayKey, null) as Promise<{ picks: any[]; generatedAt: string } | null>,
+          cloudGet(cloudKey, null, (v) => v && typeof v.bankroll === "number" && Array.isArray(v.picks)) as Promise<SmartBotState | null>,
+          cloudGet(todayKey, null, (v) => v && Array.isArray(v.picks)) as Promise<{ picks: any[]; generatedAt: string } | null>,
         ]);
 
         // Merge cloud state into local if user has no local picks for today

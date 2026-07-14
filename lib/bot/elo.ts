@@ -4,6 +4,8 @@
 // Every game result adjusts ratings. Replaces the weak trend model.
 // ───────────────��──────────────────────────────────────────
 
+import { loadJSON, isRecord } from "@/lib/safe-storage";
+
 export interface TeamElo {
   team: string;
   rating: number;        // starts at 1500
@@ -141,12 +143,11 @@ export function getPowerRankings(state: EloState): TeamElo[] {
 
 // Load/Save Elo state
 export function loadEloState(sport: string = "mlb"): EloState {
-  if (typeof window === "undefined") return { teams: {}, sport, lastUpdated: "", totalGamesProcessed: 0 };
-  try {
-    const stored = localStorage.getItem(`dq_elo_${sport}`);
-    if (stored) return JSON.parse(stored);
-  } catch {}
-  return { teams: {}, sport, lastUpdated: "", totalGamesProcessed: 0 };
+  return loadJSON<EloState>(
+    `dq_elo_${sport}`,
+    { teams: {}, sport, lastUpdated: "", totalGamesProcessed: 0 },
+    (v) => isRecord(v) && isRecord(v.teams)
+  );
 }
 
 export function saveEloState(state: EloState) {

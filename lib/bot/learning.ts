@@ -4,6 +4,8 @@
 // Tracks accuracy by market, updates thresholds dynamically
 // ──────────────────────────────────────────────────────────
 
+import { loadJSON, isRecord } from "@/lib/safe-storage";
+
 export interface ModelWeights {
   pitching: number;
   hitting: number;
@@ -62,12 +64,7 @@ const DEFAULT_STATE: LearningState = {
 };
 
 export function loadLearningState(): LearningState {
-  if (typeof window === "undefined") return { ...DEFAULT_STATE };
-  try {
-    const stored = localStorage.getItem("dq_learning_state");
-    if (stored) return JSON.parse(stored);
-  } catch {}
-  return { ...DEFAULT_STATE };
+  return loadJSON<LearningState>("dq_learning_state", { ...DEFAULT_STATE }, (v) => isRecord(v) && isRecord(v.weights));
 }
 
 export function saveLearningState(state: LearningState) {

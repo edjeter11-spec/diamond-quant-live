@@ -8,12 +8,27 @@ import { buildParlay } from "./model/parlay";
 import { americanToImpliedProb } from "./model/kelly";
 
 // localStorage helpers + cloud sync
+// Validates parsed shape against the fallback (array vs object) and removes
+// corrupt keys — a bad dq_betHistory/dq_oddsSnapshots otherwise crashes every
+// component that .filter()/.map()s over it
 function loadFromStorage<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;
   try {
     const stored = localStorage.getItem(key);
-    return stored ? JSON.parse(stored) : fallback;
+    if (!stored) return fallback;
+    const parsed = JSON.parse(stored);
+    const ok = Array.isArray(fallback)
+      ? Array.isArray(parsed)
+      : typeof fallback === "object" && fallback !== null
+        ? typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
+        : typeof parsed === typeof fallback;
+    if (!ok) {
+      try { localStorage.removeItem(key); } catch {}
+      return fallback;
+    }
+    return parsed;
   } catch {
+    try { localStorage.removeItem(key); } catch {}
     return fallback;
   }
 }
@@ -173,9 +188,9 @@ async function hydrateFromCloud(set: any, currentBetHistory: any[] = []) {
     }
     const { cloudGet } = await import("@/lib/supabase/client");
     const [bankroll, betHistory, savedParlays] = await Promise.all([
-      cloudGet("bankroll", null),
-      cloudGet("betHistory", null),
-      cloudGet("savedParlays", null),
+      cloudGet("bankroll", null, (v) => v && typeof v === "object" && !Array.isArray(v)),
+      cloudGet("betHistory", null, Array.isArray),
+      cloudGet("savedParlays", null, Array.isArray),
     ]);
     const updates: any = {};
     if (bankroll) updates.bankroll = bankroll;

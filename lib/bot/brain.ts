@@ -4,6 +4,8 @@
 // Stores everything in localStorage as the model's "memory"
 // ──────────────────────────────────────────────────────────
 
+import { loadJSON, isRecord } from "@/lib/safe-storage";
+
 export interface ModelWeights {
   pitching: number;
   hitting: number;
@@ -131,12 +133,8 @@ function createFreshBrain(): BrainState {
 
 // Load: try cloud first, then localStorage, then fresh
 export function loadBrain(): BrainState {
-  if (typeof window === "undefined") return createFreshBrain();
-  try {
-    const stored = localStorage.getItem("dq_brain");
-    if (stored) return repairWeights(JSON.parse(stored));
-  } catch {}
-  return createFreshBrain();
+  const stored = loadJSON<BrainState | null>("dq_brain", null, (v) => isRecord(v) && isRecord(v.weights));
+  return stored ? repairWeights(stored) : createFreshBrain();
 }
 
 // Repair drifted weights — if any weight is below 4% or above 35%, reset to healthy defaults

@@ -4,6 +4,8 @@
 // CLV > 0 consistently = proven edge
 // ──────────────────────────────────────────────────────────
 
+import { loadJSON } from "@/lib/safe-storage";
+
 export interface CLVRecord {
   id: string;
   date: string;
@@ -49,11 +51,7 @@ export function calculateCLV(openingOdds: number, closingOdds: number): { clvPer
 
 // Load CLV records
 export function loadCLVRecords(sport: string = "mlb"): CLVRecord[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const stored = localStorage.getItem(`dq_clv_${sport}`);
-    return stored ? JSON.parse(stored) : [];
-  } catch { return []; }
+  return loadJSON<CLVRecord[]>(`dq_clv_${sport}`, []);
 }
 
 // Save CLV records

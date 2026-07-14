@@ -5,6 +5,8 @@
 // ──────────────────────────────────────────────────────────
 
 // ── Weight System ──
+import { loadJSON, isRecord } from "@/lib/safe-storage";
+
 export interface NbaPropWeights {
   seasonAverage: number;    // baseline PPG/RPG/APG
   recentForm: number;       // last 5 games trend
@@ -96,12 +98,7 @@ export interface NbaPropBrainState {
 // ── Load / Save ──
 
 export function loadNbaPropBrain(): NbaPropBrainState {
-  if (typeof window === "undefined") return createDefaultBrain();
-  try {
-    const stored = localStorage.getItem("dq_nba_prop_brain");
-    if (stored) return JSON.parse(stored);
-  } catch {}
-  return createDefaultBrain();
+  return loadJSON<NbaPropBrainState | null>("dq_nba_prop_brain", null, (v) => isRecord(v) && isRecord(v.weights)) ?? createDefaultBrain();
 }
 
 export function saveNbaPropBrain(brain: NbaPropBrainState) {

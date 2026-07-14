@@ -5,6 +5,8 @@
 // Feeds into the brain's lineMovement factor
 // ──────────────────────────────────────────────────────────
 
+import { loadJSON } from "@/lib/safe-storage";
+
 export interface PropLineSnapshot {
   timestamp: string;
   lines: Record<string, PropLineEntry>; // key: "playerName::propType"
@@ -38,11 +40,7 @@ const MAX_SNAPSHOTS = 24; // keep 24 snapshots (~12 hours at 30-min intervals)
 
 // ── Load snapshots from localStorage ──
 export function loadPropSnapshots(): PropLineSnapshot[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    return stored ? JSON.parse(stored) : [];
-  } catch { return []; }
+  return loadJSON<PropLineSnapshot[]>(STORAGE_KEY, []);
 }
 
 // ── Save a new snapshot ──

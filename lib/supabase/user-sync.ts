@@ -31,7 +31,11 @@ async function getCurrentUserId(): Promise<string | null> {
 }
 
 // ── Read user-private data ──
-export async function userGet<T>(key: string, fallback: T): Promise<T> {
+export async function userGet<T>(
+  key: string,
+  fallback: T,
+  validate?: (v: any) => boolean
+): Promise<T> {
   const userId = await getCurrentUserId();
 
   // If logged in, read from user_state
@@ -43,7 +47,7 @@ export async function userGet<T>(key: string, fallback: T): Promise<T> {
         .eq("user_id", userId)
         .eq("key", key)
         .single();
-      if (data && !error) return data.value as T;
+      if (data && !error && (!validate || validate(data.value))) return data.value as T;
     } catch {}
   }
 
@@ -51,8 +55,14 @@ export async function userGet<T>(key: string, fallback: T): Promise<T> {
   if (typeof window === "undefined") return fallback;
   try {
     const stored = localStorage.getItem(`dq_${key}`);
-    if (stored) return JSON.parse(stored);
-  } catch {}
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (!validate || validate(parsed)) return parsed;
+      localStorage.removeItem(`dq_${key}`); // self-heal corrupt key
+    }
+  } catch {
+    try { localStorage.removeItem(`dq_${key}`); } catch {}
+  }
 
   return fallback;
 }

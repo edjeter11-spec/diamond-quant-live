@@ -31,7 +31,11 @@ const TABLE = "app_state";
 
 // ── Read from cloud (fall back to localStorage) ──
 
-export async function cloudGet<T>(key: string, fallback: T): Promise<T> {
+export async function cloudGet<T>(
+  key: string,
+  fallback: T,
+  validate?: (v: any) => boolean
+): Promise<T> {
   // Try Supabase first
   if (supabase) {
     try {
@@ -41,7 +45,7 @@ export async function cloudGet<T>(key: string, fallback: T): Promise<T> {
         .eq("key", key)
         .single();
 
-      if (data && !error) {
+      if (data && !error && (!validate || validate(data.value))) {
         return data.value as T;
       }
     } catch {}
@@ -51,8 +55,14 @@ export async function cloudGet<T>(key: string, fallback: T): Promise<T> {
   if (typeof window === "undefined") return fallback;
   try {
     const stored = localStorage.getItem(`dq_${key}`);
-    if (stored) return JSON.parse(stored);
-  } catch {}
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (!validate || validate(parsed)) return parsed;
+      localStorage.removeItem(`dq_${key}`); // self-heal corrupt key
+    }
+  } catch {
+    try { localStorage.removeItem(`dq_${key}`); } catch {}
+  }
 
   return fallback;
 }

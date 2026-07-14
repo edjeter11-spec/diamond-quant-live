@@ -267,14 +267,20 @@ export default function WarRoom() {
         const raw = localStorage.getItem(`dq_sport_cache_${currentSport}`);
         if (raw) {
           const cached = JSON.parse(raw);
-          // Trust caches up to 30 min old — gives instant pop-in then refresh
+          // Trust caches up to 30 min old — gives instant pop-in then refresh.
+          // Shape-check every field: a legacy/corrupt cache entry pushed into
+          // the store crashes every component that .filter()s over it.
+          const arr = (v: any) => (Array.isArray(v) ? v : []);
           if (cached?.ts && Date.now() - cached.ts < 30 * 60 * 1000) {
-            setScores(cached.scores ?? []);
-            setOddsData(cached.odds ?? []);
-            setAnalyses(cached.analyses ?? []);
-            setGames(cached.merged ?? cached.scores ?? []);
+            setScores(arr(cached.scores));
+            setOddsData(arr(cached.odds));
+            setAnalyses(arr(cached.analyses));
+            const merged = arr(cached.merged);
+            setGames(merged.length ? merged : arr(cached.scores));
             setLoading(false);
             hydratedFromCache = true;
+          } else if (!cached?.ts) {
+            localStorage.removeItem(`dq_sport_cache_${currentSport}`); // self-heal corrupt cache
           }
         }
       }

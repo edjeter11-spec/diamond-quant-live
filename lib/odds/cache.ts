@@ -52,11 +52,18 @@ export function getOddsBackup(): { data: any; age: number } | null {
     const stored = localStorage.getItem("dq_odds_backup");
     if (!stored) return null;
     const parsed = JSON.parse(stored);
+    // Consumers spread this into oddsData and .map over it — a corrupt or
+    // legacy-shape backup must be dropped, not returned
+    if (!parsed || !Array.isArray(parsed.data) || typeof parsed.timestamp !== "number") {
+      localStorage.removeItem("dq_odds_backup");
+      return null;
+    }
     return {
       data: parsed.data,
       age: Math.floor((Date.now() - parsed.timestamp) / 60000), // minutes ago
     };
   } catch {
+    try { localStorage.removeItem("dq_odds_backup"); } catch {}
     return null;
   }
 }
