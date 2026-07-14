@@ -180,8 +180,10 @@ export default function WarRoom() {
       setScores(scoreGames);
       setLoading(false); // unblock UI as soon as scores arrive
 
-      // Auto-select first live or upcoming game — never a final
-      if (!selectedGameId && scoreGames.length > 0) {
+      // Auto-select first live or upcoming game — never a final.
+      // Read selection via getState() so clicking a game doesn't rebuild
+      // fetchData (which would tear down the poll interval and refetch everything)
+      if (!useStore.getState().selectedGameId && scoreGames.length > 0) {
         const liveGame = scoreGames.find((g: any) => g.status === "live");
         const upcoming = scoreGames.find((g: any) => g.status === "pre");
         const pick = liveGame ?? upcoming;
@@ -234,7 +236,7 @@ export default function WarRoom() {
       setLoading(false);
     }
     setRefreshing(false);
-  }, [setScores, setOddsData, setGames, setLoading, snapshotOdds, selectedGameId, selectGame, currentSport, config]);
+  }, [setScores, setOddsData, setGames, setLoading, snapshotOdds, selectGame, currentSport, config]);
 
   useEffect(() => {
     // Smart polling: dead overnight, fast during games, slow otherwise
@@ -285,7 +287,9 @@ export default function WarRoom() {
       setGames([]);
       setLoading(true);
     }
-    fetchData();
+    // No fetchData() here: the polling effect above re-runs on sport change
+    // (fetchData identity depends on currentSport) and fires the fetch once —
+    // calling it here too doubled every scores/odds/analysis request.
   }, [currentSport]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Manual refresh event from PicksBoard empty state
@@ -329,7 +333,14 @@ export default function WarRoom() {
     const bigEV = oddsData.flatMap((g: any) => g.evBets ?? []).filter((b: any) => b.evPercentage > 6 && !b.isSuspicious);
     if (bigEV.length > 0 && !isLoading) {
       const top = bigEV[0];
-      const evKey = `${top.pick}|${top.bookmaker}|${top.odds}`;
+      // Date-scoped key: yesterday's entries stop matching (same pick can
+      // re-alert on a new day) and we can prune them so the set doesn't grow
+      // unbounded over a long-lived tab
+      const todayKey = new Date().toISOString().split("T")[0];
+      const evKey = `${todayKey}|${top.pick}|${top.bookmaker}|${top.odds}`;
+      for (const k of alertedEvIds.current) {
+        if (!k.startsWith(todayKey)) alertedEvIds.current.delete(k);
+      }
       if (!alertedEvIds.current.has(evKey)) {
         alertedEvIds.current.add(evKey);
         sendNotification("High EV Alert", `${top.pick} at ${top.bookmaker} — +${top.evPercentage.toFixed(1)}% edge`);
