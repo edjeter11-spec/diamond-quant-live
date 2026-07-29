@@ -559,7 +559,14 @@ export default function TodayPropPicks({
     },
     { wins: 0, losses: 0, pushes: 0, live: 0 },
   );
-  const hasTally = tally.wins + tally.losses + tally.pushes + tally.live > 0;
+  // Hide the win/loss/accuracy tally until there's a real sample — a 0W-1L
+  // record reads as a meaningful stat when it's actually just noise from a
+  // single day of grading. Reappears automatically once enough picks have
+  // settled, no manual toggle needed. "Live" count is a real-time status,
+  // not an accuracy claim, so it's shown independently of sample size.
+  const MIN_GRADED_FOR_TALLY = 20;
+  const showRecord = tally.wins + tally.losses >= MIN_GRADED_FOR_TALLY;
+  const hasTally = showRecord || tally.live > 0;
 
   return (
     <div className="glass rounded-xl overflow-hidden border border-purple/15">
@@ -589,20 +596,24 @@ export default function TodayPropPicks({
           </p>
           {hasTally && (
             <div className="flex items-center gap-2 mt-1 text-[10px] font-semibold">
-              <span className="text-neon">{tally.wins}W</span>
-              <span className="text-danger">{tally.losses}L</span>
-              {tally.pushes > 0 && (
-                <span className="text-mercury/70">{tally.pushes}P</span>
+              {showRecord && (
+                <>
+                  <span className="text-neon">{tally.wins}W</span>
+                  <span className="text-danger">{tally.losses}L</span>
+                  {tally.pushes > 0 && (
+                    <span className="text-mercury/70">{tally.pushes}P</span>
+                  )}
+                  <span className="text-silver">
+                    {Math.round(
+                      (tally.wins / (tally.wins + tally.losses)) * 100,
+                    )}
+                    %
+                  </span>
+                </>
               )}
               {tally.live > 0 && (
                 <span className="text-electric animate-pulse">
                   {tally.live} live
-                </span>
-              )}
-              {tally.wins + tally.losses > 0 && (
-                <span className="text-silver">
-                  {Math.round((tally.wins / (tally.wins + tally.losses)) * 100)}
-                  %
                 </span>
               )}
             </div>
