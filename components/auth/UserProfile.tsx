@@ -366,7 +366,7 @@ export default function UserProfile() {
             type="text"
             value={editName}
             onChange={(e) => setEditName(e.target.value)}
-            className="w-full px-3 py-2 rounded-lg bg-gunmetal/50 border border-slate/20 text-sm text-silver focus:border-electric/50 focus:outline-none"
+            className="w-full px-3 py-2 rounded-lg bg-gunmetal/50 border border-slate/20 text-base sm:text-sm text-silver focus:border-electric/50 focus:outline-none"
           />
         </div>
         <button
@@ -442,7 +442,7 @@ export default function UserProfile() {
               <select
                 value={pushMinConf}
                 onChange={(e) => setPushMinConf(e.target.value)}
-                className="w-full mt-1 px-3 py-1.5 rounded-lg bg-gunmetal/50 border border-slate/20 text-xs text-silver focus:outline-none"
+                className="w-full mt-1 px-3 py-1.5 rounded-lg bg-gunmetal/50 border border-slate/20 text-base sm:text-xs text-silver focus:outline-none"
               >
                 <option value="HIGH">HIGH only</option>
                 <option value="MEDIUM">MEDIUM+</option>
@@ -475,7 +475,7 @@ export default function UserProfile() {
               placeholder="https://discord.com/api/webhooks/..."
               value={discord}
               onChange={(e) => setDiscord(e.target.value)}
-              className="w-full mt-1 px-3 py-2 rounded-lg bg-gunmetal/50 border border-slate/20 text-xs text-silver placeholder:text-mercury/30 focus:border-electric/50 focus:outline-none"
+              className="w-full mt-1 px-3 py-2 rounded-lg bg-gunmetal/50 border border-slate/20 text-base sm:text-xs text-silver placeholder:text-mercury/30 focus:border-electric/50 focus:outline-none"
             />
           </div>
           <div>

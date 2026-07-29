@@ -113,6 +113,16 @@ export default function GameDetailModal({
     return () => window.removeEventListener("keydown", handler);
   }, [onClose]);
 
+  // Lock body scroll while the modal is open — otherwise iOS Safari lets the
+  // page scroll behind the fixed overlay (scroll-through bug).
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
+
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-4">
       {/* Backdrop */}
@@ -122,7 +132,7 @@ export default function GameDetailModal({
       />
 
       {/* Modal */}
-      <div className="relative w-full max-w-2xl max-h-[92vh] overflow-y-auto glass rounded-2xl border border-slate/30 shadow-2xl animate-slide-up">
+      <div className="relative w-full max-w-2xl max-h-[92vh] max-h-[92dvh] overflow-y-auto overscroll-contain glass rounded-2xl border border-slate/30 shadow-2xl animate-slide-up">
         {/* Close button */}
         <button
           onClick={onClose}

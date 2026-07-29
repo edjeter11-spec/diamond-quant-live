@@ -52,6 +52,17 @@ export default function ParlayBuilder() {
     return () => document.removeEventListener("mousedown", handler);
   }, [parlayBuilderOpen, setParlayBuilderOpen]);
 
+  // Lock body scroll while the panel is open — otherwise iOS Safari lets the
+  // page scroll behind the fixed overlay (scroll-through bug).
+  useEffect(() => {
+    if (!parlayBuilderOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [parlayBuilderOpen]);
+
   if (!parlayBuilderOpen) return null;
 
   const legCount = parlayLegs.length;
@@ -107,7 +118,7 @@ export default function ParlayBuilder() {
       {/* Panel — bottom sheet on mobile, fixed right panel on desktop */}
       <div
         ref={panelRef}
-        className="absolute bottom-0 left-0 right-0 md:inset-y-0 md:bottom-auto md:top-0 md:left-auto md:right-0 md:w-96 flex flex-col bg-bunker border-t md:border-t-0 md:border-l border-slate/40 shadow-2xl max-h-[85vh] md:max-h-none animate-slide-up md:animate-none"
+        className="absolute bottom-0 left-0 right-0 md:inset-y-0 md:bottom-auto md:top-0 md:left-auto md:right-0 md:w-96 flex flex-col bg-bunker border-t md:border-t-0 md:border-l border-slate/40 shadow-2xl max-h-[85vh] max-h-[85dvh] md:max-h-none animate-slide-up md:animate-none"
       >
         {/* Header */}
         <div className="flex items-center gap-2 px-4 py-3 border-b border-slate/30 bg-bunker/95 backdrop-blur-md flex-shrink-0">
@@ -161,7 +172,7 @@ export default function ParlayBuilder() {
         )}
 
         {/* Scrollable leg list */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto overscroll-contain">
           {legCount === 0 ? (
             <div className="px-4 py-10 text-center">
               <Layers className="w-8 h-8 text-mercury/30 mx-auto mb-2" />
@@ -210,7 +221,7 @@ export default function ParlayBuilder() {
 
         {/* Footer */}
         {legCount > 0 && (
-          <div className="border-t border-slate/30 px-4 py-3 space-y-3 flex-shrink-0 bg-gunmetal/20">
+          <div className="border-t border-slate/30 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] space-y-3 flex-shrink-0 bg-gunmetal/20">
             {/* Same-game warning */}
             {hasSameGame && (
               <div className="flex items-start gap-2 rounded-lg border border-amber/30 bg-amber/10 px-3 py-2">

@@ -13,6 +13,7 @@ import {
   Clock,
   Plus,
   Check,
+  AlertTriangle,
 } from "lucide-react";
 import { americanToDecimal } from "@/lib/model/kelly";
 import { useStore } from "@/lib/store";
@@ -418,6 +419,13 @@ export default function TodayPropPicks({
     if (sport === "nba" && brainPicks.length > 0) {
       return (
         <div className="glass rounded-xl overflow-hidden border border-purple/15">
+          <div className="flex items-center gap-2 px-3 sm:px-4 py-1.5 bg-amber/10 border-b border-amber/25">
+            <AlertTriangle className="w-3.5 h-3.5 text-amber flex-shrink-0" />
+            <p className="text-[10px] sm:text-[11px] font-bold text-amber uppercase tracking-wide">
+              Estimated lines — no live odds posted yet, not a confirmed market
+              price
+            </p>
+          </div>
           <div className="px-3 sm:px-4 py-2.5 border-b border-purple/15 bg-gradient-to-r from-purple/10 to-transparent flex items-center gap-2">
             <Brain className="w-4 h-4 text-purple" />
             <div className="flex-1">
@@ -798,10 +806,10 @@ export default function TodayPropPicks({
                         )}
                         {p.isSynthesized && (
                           <span
-                            className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-electric/15 border border-electric/30 text-electric text-[9px] sm:text-[8px] font-bold"
-                            title="Projected pick — books haven't posted lines yet. Estimated from season stats + brain."
+                            className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-amber/15 border border-amber/30 text-amber text-[9px] sm:text-[8px] font-bold"
+                            title="Projected pick — books haven't posted lines yet. Estimated from season stats + brain, not a live market price."
                           >
-                            PROJECTED
+                            PROJECTED — ESTIMATED
                           </span>
                         )}
                         {p.fairProb >= 60 && (

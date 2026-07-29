@@ -64,6 +64,17 @@ export default function BetSlip({ isOpen, onClose, prefill }: BetSlipProps) {
     }
   }, [isOpen, prefill]);
 
+  // Lock body scroll while the modal is open — otherwise iOS Safari lets the
+  // page scroll behind the fixed overlay (scroll-through bug).
+  useEffect(() => {
+    if (!isOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   const canSubmit =
@@ -138,7 +149,7 @@ export default function BetSlip({ isOpen, onClose, prefill }: BetSlipProps) {
                 value={game}
                 onChange={(e) => setGame(e.target.value)}
                 placeholder="e.g. NYY vs BOS"
-                className="w-full px-3 py-2 rounded-lg bg-bunker border border-slate/50 text-silver text-sm placeholder:text-mercury/40 focus:outline-none focus:border-neon/50 transition-colors"
+                className="w-full px-3 py-2 rounded-lg bg-bunker border border-slate/50 text-silver text-base sm:text-sm placeholder:text-mercury/40 focus:outline-none focus:border-neon/50 transition-colors"
               />
             </div>
 
@@ -152,7 +163,7 @@ export default function BetSlip({ isOpen, onClose, prefill }: BetSlipProps) {
                 value={pick}
                 onChange={(e) => setPick(e.target.value)}
                 placeholder="e.g. NYY ML"
-                className="w-full px-3 py-2 rounded-lg bg-bunker border border-slate/50 text-silver text-sm placeholder:text-mercury/40 focus:outline-none focus:border-neon/50 transition-colors"
+                className="w-full px-3 py-2 rounded-lg bg-bunker border border-slate/50 text-silver text-base sm:text-sm placeholder:text-mercury/40 focus:outline-none focus:border-neon/50 transition-colors"
               />
             </div>
 
@@ -165,7 +176,7 @@ export default function BetSlip({ isOpen, onClose, prefill }: BetSlipProps) {
                 <select
                   value={bookmaker}
                   onChange={(e) => setBookmaker(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg bg-bunker border border-slate/50 text-silver text-sm focus:outline-none focus:border-neon/50 transition-colors appearance-none cursor-pointer"
+                  className="w-full px-3 py-2 rounded-lg bg-bunker border border-slate/50 text-silver text-base sm:text-sm focus:outline-none focus:border-neon/50 transition-colors appearance-none cursor-pointer"
                 >
                   {BOOKMAKERS.map((b) => (
                     <option key={b} value={b}>
@@ -182,7 +193,7 @@ export default function BetSlip({ isOpen, onClose, prefill }: BetSlipProps) {
                 <select
                   value={market}
                   onChange={(e) => setMarket(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg bg-bunker border border-slate/50 text-silver text-sm focus:outline-none focus:border-neon/50 transition-colors appearance-none cursor-pointer"
+                  className="w-full px-3 py-2 rounded-lg bg-bunker border border-slate/50 text-silver text-base sm:text-sm focus:outline-none focus:border-neon/50 transition-colors appearance-none cursor-pointer"
                 >
                   {MARKETS.map((m) => (
                     <option key={m} value={m}>
@@ -206,7 +217,7 @@ export default function BetSlip({ isOpen, onClose, prefill }: BetSlipProps) {
                   value={odds}
                   onChange={(e) => setOdds(e.target.value)}
                   placeholder="+150 or -110"
-                  className="w-full px-3 py-2 rounded-lg bg-bunker border border-slate/50 text-silver text-sm font-mono placeholder:text-mercury/40 focus:outline-none focus:border-neon/50 transition-colors"
+                  className="w-full px-3 py-2 rounded-lg bg-bunker border border-slate/50 text-silver text-base sm:text-sm font-mono placeholder:text-mercury/40 focus:outline-none focus:border-neon/50 transition-colors"
                 />
               </div>
 
@@ -241,7 +252,7 @@ export default function BetSlip({ isOpen, onClose, prefill }: BetSlipProps) {
                     value={stake}
                     onChange={(e) => setStake(e.target.value)}
                     placeholder="0.00"
-                    className="w-full pl-7 pr-3 py-2 rounded-lg bg-bunker border border-slate/50 text-silver text-sm font-mono placeholder:text-mercury/40 focus:outline-none focus:border-neon/50 transition-colors"
+                    className="w-full pl-7 pr-3 py-2 rounded-lg bg-bunker border border-slate/50 text-silver text-base sm:text-sm font-mono placeholder:text-mercury/40 focus:outline-none focus:border-neon/50 transition-colors"
                   />
                 </div>
               </div>

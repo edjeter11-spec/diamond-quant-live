@@ -86,6 +86,65 @@ export interface PlayerAnalysis {
   };
 }
 
+export interface PopularPlayer {
+  id: number;
+  fullName: string;
+  team: string;
+  position: string;
+  headline: string; // e.g. "35 HR" or "2.10 ERA"
+}
+
+// Popular/notable players to show before the user searches anything —
+// real qualified stat leaders (HR + qualified AVG for batters, ERA + K for
+// pitchers), deduped, capped at `limit`. All from the free MLB Stats API's
+// leaderboard endpoint — no scraping, no extra API key.
+export async function getPopularPlayers(limit = 12): Promise<PopularPlayer[]> {
+  const season = new Date().getFullYear();
+  const fetchLeaders = async (
+    category: string,
+    statGroup: "hitting" | "pitching",
+    fmt: (value: string) => string,
+  ) => {
+    try {
+      const url = `${MLB_API}/stats/leaders?leaderCategories=${category}&season=${season}&limit=8&sportId=1&statGroup=${statGroup}`;
+      const res = await fetch(url, { next: { revalidate: 3600 } });
+      if (!res.ok) return [];
+      const data = await res.json();
+      const leaders = data.leagueLeaders?.[0]?.leaders ?? [];
+      return leaders.map((l: any) => ({
+        id: l.person?.id,
+        fullName: l.person?.fullName,
+        team: l.team?.name ?? "",
+        position: statGroup === "pitching" ? "P" : "",
+        headline: fmt(l.value),
+      }));
+    } catch {
+      return [];
+    }
+  };
+
+  const [hr, avg, era] = await Promise.all([
+    fetchLeaders("homeRuns", "hitting", (v) => `${v} HR`),
+    fetchLeaders("battingAverage", "hitting", (v) => `${v} AVG`),
+    fetchLeaders("era", "pitching", (v) => `${v} ERA`),
+  ]);
+
+  const seen = new Set<number>();
+  const merged: PopularPlayer[] = [];
+  // Interleave so the list isn't all sluggers or all one category.
+  const pools = [hr, avg, era];
+  let i = 0;
+  while (merged.length < limit && pools.some((p) => p.length > 0)) {
+    const pool = pools[i % pools.length];
+    i++;
+    const next = pool.shift();
+    if (!next || !next.id || seen.has(next.id)) continue;
+    seen.add(next.id);
+    merged.push(next);
+  }
+  return merged.slice(0, limit);
+}
+
 // Typeahead search — returns up to `limit` active-player matches (the raw
 // MLB search endpoint returns everyone matching a common surname, e.g.
 // "smith" → 27 players; searchPlayer() below just takes the top hit, which

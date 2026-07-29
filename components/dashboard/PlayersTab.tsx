@@ -19,6 +19,10 @@ interface SearchResult {
   position: string;
 }
 
+interface PopularPlayer extends SearchResult {
+  headline: string;
+}
+
 interface StatProjection {
   market: string;
   label: string;
@@ -93,7 +97,20 @@ export default function PlayersTab() {
   const [profile, setProfile] = useState<PlayerProfile | null>(null);
   const [loading, setLoading] = useState(false);
   const [notFound, setNotFound] = useState(false);
+  const [popular, setPopular] = useState<PopularPlayer[]>([]);
+  const [popularLoading, setPopularLoading] = useState(true);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Popular players — shown before the user searches anything so the tab
+  // isn't empty on first visit. Real current-season stat leaders, not a
+  // hardcoded list.
+  useEffect(() => {
+    fetch("/api/mlb-popular-players")
+      .then((r) => r.json())
+      .then((d) => setPopular(d.players ?? []))
+      .catch(() => setPopular([]))
+      .finally(() => setPopularLoading(false));
+  }, []);
 
   // Debounced typeahead search
   useEffect(() => {
@@ -155,12 +172,13 @@ export default function PlayersTab() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search any MLB player..."
-            className="w-full pl-9 pr-9 py-2.5 rounded-lg bg-gunmetal/50 border border-slate/30 text-sm text-silver placeholder:text-mercury/40 focus:outline-none focus:border-electric/40"
+            className="w-full pl-9 pr-9 py-2.5 rounded-lg bg-gunmetal/50 border border-slate/30 text-base sm:text-sm text-silver placeholder:text-mercury/40 focus:outline-none focus:border-electric/40"
           />
           {query && (
             <button
               onClick={() => setQuery("")}
-              className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-gunmetal/60"
+              aria-label="Clear search"
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center justify-center w-9 h-9 rounded-full hover:bg-gunmetal/60 active:bg-gunmetal/70 touch-manipulation"
             >
               <X className="w-3.5 h-3.5 text-mercury/50" />
             </button>
@@ -169,7 +187,7 @@ export default function PlayersTab() {
 
         {/* Typeahead dropdown */}
         {query.trim().length >= 2 && (
-          <div className="mt-2 rounded-lg border border-slate/20 bg-bunker/95 overflow-hidden max-h-72 overflow-y-auto">
+          <div className="mt-2 rounded-lg border border-slate/20 bg-bunker/95 overflow-hidden max-h-72 overflow-y-auto overscroll-contain">
             {searching && (
               <p className="px-3 py-2.5 text-xs text-mercury/60">
                 Searching...
@@ -207,16 +225,66 @@ export default function PlayersTab() {
         )}
       </div>
 
-      {/* Empty state */}
+      {/* Popular players — shown before search, or as a starting point */}
       {!selected && (
-        <div className="glass rounded-xl p-8 text-center">
-          <Search className="w-8 h-8 text-mercury/30 mx-auto mb-2" />
-          <p className="text-sm text-mercury">
-            Search for any active MLB player
-          </p>
-          <p className="text-[11px] text-mercury/50 mt-1">
-            See season stats, recent form, and a next-game projection
-          </p>
+        <div className="glass rounded-xl overflow-hidden">
+          <div className="px-4 py-2.5 border-b border-slate/15">
+            <h3 className="text-xs font-bold text-silver uppercase tracking-wider">
+              Popular Players
+            </h3>
+            <p className="text-[9px] text-mercury/50 mt-0.5">
+              Current MLB stat leaders
+            </p>
+          </div>
+          {popularLoading ? (
+            <div className="p-3 space-y-2">
+              {[0, 1, 2, 3].map((i) => (
+                <div
+                  key={i}
+                  className="h-12 rounded-lg bg-gunmetal/20 animate-pulse"
+                />
+              ))}
+            </div>
+          ) : popular.length === 0 ? (
+            <div className="p-6 text-center">
+              <Search className="w-8 h-8 text-mercury/30 mx-auto mb-2" />
+              <p className="text-sm text-mercury">
+                Search for any active MLB player
+              </p>
+              <p className="text-[11px] text-mercury/50 mt-1">
+                See season stats, recent form, and a next-game projection
+              </p>
+            </div>
+          ) : (
+            <div className="divide-y divide-slate/10">
+              {popular.map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => loadProfile(p)}
+                  className="w-full px-4 py-2.5 flex items-center gap-2.5 hover:bg-gunmetal/30 active:bg-gunmetal/40 text-left"
+                >
+                  <PlayerAvatar
+                    name={p.fullName}
+                    playerId={p.id}
+                    sport="mlb"
+                    size={32}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-silver truncate">
+                      {p.fullName}
+                    </p>
+                    <p className="text-[10px] text-mercury/60 truncate">
+                      {p.team}
+                      {p.position ? ` · ${p.position}` : ""}
+                    </p>
+                  </div>
+                  <span className="text-[11px] font-mono font-bold text-electric flex-shrink-0">
+                    {p.headline}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

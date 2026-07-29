@@ -315,10 +315,10 @@ export default function TopPropsOfDay() {
                     </span>
                     {pick.isSynthesized && (
                       <span
-                        className="inline-flex items-center px-1 py-0.5 rounded bg-electric/15 border border-electric/30 text-electric text-[8px] font-bold"
-                        title="Projected pick — books haven't posted lines yet. Estimated from season stats + brain."
+                        className="inline-flex items-center px-1.5 py-0.5 rounded bg-amber/15 border border-amber/30 text-amber text-[8px] font-bold"
+                        title="Projected pick — books haven't posted lines yet. Estimated from season stats + brain, not a live market price."
                       >
-                        PROJECTED
+                        PROJECTED — ESTIMATED LINE
                       </span>
                     )}
                   </p>

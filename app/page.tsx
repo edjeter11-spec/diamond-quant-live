@@ -22,14 +22,12 @@ import GameMatchupBrief from "@/components/dashboard/GameMatchupBrief";
 import BetSlip from "@/components/dashboard/BetSlip";
 import PicksBoard from "@/components/dashboard/PicksBoard";
 import SafeBoundary from "@/components/SafeBoundary";
-import SnapSync from "@/components/dashboard/SnapSync";
 import { teamNameToAbbrev } from "@/lib/logos";
 import AuthButton from "@/components/auth/AuthButton";
 import PushOptIn from "@/components/dashboard/PushOptIn";
 import { useAuth } from "@/lib/supabase/auth";
 import MigrationBanner from "@/components/auth/MigrationBanner";
 import ConversionBanner from "@/components/ConversionBanner";
-import ROIChart from "@/components/dashboard/ROIChart";
 import { matchGames } from "@/lib/mlb/match-games";
 import StreakBanner from "@/components/dashboard/StreakBanner";
 import {
@@ -44,9 +42,6 @@ import { sendDiscordAlert } from "@/lib/odds/sportsbooks";
 import { getDiscordWebhook, setDiscordWebhook } from "@/lib/store";
 
 // Lazy-load heavy tabs — not needed on first paint
-const BankrollTracker = lazy(
-  () => import("@/components/dashboard/BankrollTracker"),
-);
 const BotChallenge = lazy(() => import("@/components/dashboard/BotChallenge"));
 const PlayersTab = lazy(() => import("@/components/dashboard/PlayersTab"));
 const ArbBoard = lazy(() => import("@/components/dashboard/ArbBoard"));
@@ -74,7 +69,6 @@ import {
   BarChart3,
   User,
   UserCircle,
-  Wallet,
   RefreshCw,
   Shield,
   Radio,
@@ -544,7 +538,6 @@ export default function WarRoom() {
     { key: "dashboard" as const, icon: BarChart3, label: "Board" },
     { key: "bot" as const, icon: Diamond, label: "Bot" },
     { key: "players" as const, icon: Search, label: "Players" },
-    { key: "bankroll" as const, icon: Wallet, label: "Bank" },
     { key: "profile" as const, icon: UserCircle, label: "Profile" },
   ];
 
@@ -1115,22 +1108,6 @@ export default function WarRoom() {
               <Suspense fallback={<TabSkeleton />}>
                 <PlayersTab />
               </Suspense>
-            </div>
-
-            <div
-              className={`max-w-2xl mx-auto space-y-4 ${activeTab === "bankroll" ? "" : "hidden"}`}
-            >
-              <ROIChart />
-              <SnapSync />
-              <Suspense fallback={<TabSkeleton />}>
-                <BankrollTracker />
-              </Suspense>
-              <button
-                onClick={() => openBetSlip()}
-                className="w-full py-3 rounded-xl bg-neon/15 text-neon border border-neon/30 font-semibold text-sm hover:bg-neon/25 transition-colors"
-              >
-                + Log a Bet
-              </button>
             </div>
 
             <div

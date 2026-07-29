@@ -159,6 +159,15 @@ export default function ThreeModelBot() {
             key={game.gameId}
             className={`glass rounded-xl overflow-hidden ${game.consensus.confidence === "HIGH" ? "border border-neon/15" : ""}`}
           >
+            {game.consensus.confidence === "NO_PLAY" && (
+              <div className="flex items-center gap-2 px-3 sm:px-4 py-1.5 bg-amber/10 border-b border-amber/25">
+                <AlertTriangle className="w-3.5 h-3.5 text-amber flex-shrink-0" />
+                <p className="text-[10px] sm:text-[11px] font-bold text-amber uppercase tracking-wide">
+                  No real edge here — shown for visibility only, not a
+                  recommendation
+                </p>
+              </div>
+            )}
             {/* Game Row */}
             <button
               onClick={() => setExpandedGame(isExpanded ? null : game.gameId)}
@@ -342,6 +351,16 @@ export default function ThreeModelBot() {
                 </div>
 
                 {/* Picks */}
+                {game.consensus.confidence === "NO_PLAY" &&
+                  game.picks.length > 0 && (
+                    <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-amber/10 border border-amber/25">
+                      <AlertTriangle className="w-3.5 h-3.5 text-amber flex-shrink-0 mt-0.5" />
+                      <p className="text-[10px] sm:text-[11px] font-bold text-amber uppercase tracking-wide">
+                        No real edge here — shown for visibility only, not a
+                        recommendation
+                      </p>
+                    </div>
+                  )}
                 {game.picks.map((pick, i) => (
                   <div key={i} className="flex gap-2">
                     {getDeepLink(pick.bookmaker, {

@@ -25,6 +25,7 @@ import {
   Minus,
   Star,
   AlertCircle,
+  AlertTriangle,
   Zap,
   Search,
   X,
@@ -351,7 +352,7 @@ export default function PlayerProps() {
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && searchPlayer()}
               placeholder={`Search any player (e.g. ${currentSport === "nba" ? "Devin Booker" : "Aaron Judge"})...`}
-              className="w-full pl-8 pr-3 py-2 bg-gunmetal/50 border border-slate/30 rounded-lg text-sm text-silver placeholder:text-mercury/40 focus:outline-none focus:border-electric/30"
+              className="w-full pl-8 pr-3 py-2 bg-gunmetal/50 border border-slate/30 rounded-lg text-base sm:text-sm text-silver placeholder:text-mercury/40 focus:outline-none focus:border-electric/30"
             />
             {searchQuery && (
               <button
@@ -360,7 +361,8 @@ export default function PlayerProps() {
                   setSearchResult(null);
                   setSearchError("");
                 }}
-                className="absolute right-2 top-1/2 -translate-y-1/2"
+                aria-label="Clear search"
+                className="absolute right-0.5 top-1/2 -translate-y-1/2 flex items-center justify-center w-9 h-9 rounded-full hover:bg-gunmetal/60 active:bg-gunmetal/70 touch-manipulation"
               >
                 <X className="w-3.5 h-3.5 text-mercury/50" />
               </button>
@@ -588,6 +590,15 @@ export default function PlayerProps() {
                         : "bg-gunmetal/30 border-slate/20"
                   }`}
                 >
+                  {searchResult.recommendation.side === "no_edge" && (
+                    <div className="flex items-start gap-2 px-2.5 py-2 rounded-lg bg-amber/10 border border-amber/25 mb-2">
+                      <AlertTriangle className="w-3.5 h-3.5 text-amber flex-shrink-0 mt-0.5" />
+                      <p className="text-[10px] sm:text-[11px] font-bold text-amber uppercase tracking-wide">
+                        No real edge here — shown for visibility only, not a
+                        recommendation
+                      </p>
+                    </div>
+                  )}
                   <div className="flex items-center gap-2 mb-2">
                     <Target className="w-4 h-4 text-gold" />
                     <span
@@ -1135,6 +1146,15 @@ export default function PlayerProps() {
                                       : "bg-gunmetal/30 border-slate/20"
                                 }`}
                               >
+                                {analysis.recommendation.side === "no_edge" && (
+                                  <div className="flex items-start gap-2 px-2.5 py-2 rounded-lg bg-amber/10 border border-amber/25 mb-2">
+                                    <AlertTriangle className="w-3.5 h-3.5 text-amber flex-shrink-0 mt-0.5" />
+                                    <p className="text-[10px] sm:text-[11px] font-bold text-amber uppercase tracking-wide">
+                                      No real edge here — shown for visibility
+                                      only, not a recommendation
+                                    </p>
+                                  </div>
+                                )}
                                 <div className="flex items-center gap-2 mb-2">
                                   <Target className="w-4 h-4 text-gold" />
                                   <span

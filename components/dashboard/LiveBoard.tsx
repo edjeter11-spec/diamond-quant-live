@@ -111,7 +111,7 @@ export default function LiveBoard() {
           <button
             onClick={load}
             disabled={loading}
-            className="flex items-center justify-center min-w-[36px] min-h-[36px] rounded-lg hover:bg-gunmetal/40 text-mercury hover:text-silver transition-colors"
+            className="flex items-center justify-center min-w-[44px] min-h-[44px] rounded-lg hover:bg-gunmetal/40 active:bg-gunmetal/50 text-mercury hover:text-silver transition-colors touch-manipulation"
             aria-label="Refresh"
           >
             <RefreshCw

@@ -159,7 +159,7 @@ export default function EmailCaptureModal({
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@email.com"
-                className="w-full min-h-[44px] px-4 rounded-xl bg-gunmetal/50 border border-slate/30 text-silver text-sm placeholder:text-mercury/40 focus:border-electric/40 outline-none"
+                className="w-full min-h-[44px] px-4 rounded-xl bg-gunmetal/50 border border-slate/30 text-silver text-base sm:text-sm placeholder:text-mercury/40 focus:border-electric/40 outline-none"
                 required
               />
               {error && <p className="text-[11px] text-danger">{error}</p>}

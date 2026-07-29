@@ -22,11 +22,11 @@ export const revalidate = 60;
 export const metadata: Metadata = {
   title: "Diamond Quant — Live Track Record",
   description:
-    "Watch our AI-powered NBA prop bot bet in real-time. 4,041 games trained, 54.1% backtested win rate. Free 7-day trial.",
+    "Watch our AI-powered NBA prop bot bet in real-time. Model trained on a 4,041-game historical backtest (54.1% win rate) — see the live forward-tested track record on-site. Free 7-day trial.",
   openGraph: {
     title: "Diamond Quant — Live Track Record",
     description:
-      "AI sports betting that learns. Self-evolving NBA prop brain hits 54%+ on backtests.",
+      "AI sports betting that learns. Self-evolving NBA prop brain trained on a 4,041-game historical backtest (54.1%) — live forward-tested results tracked separately.",
   },
 };
 
@@ -140,59 +140,102 @@ export default async function TrackRecordPage() {
       </div>
 
       <div className="max-w-4xl mx-auto px-4 py-8 space-y-6">
-        {/* Stats grid */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <div className="glass rounded-xl p-4 text-center border border-neon/20">
-            <Trophy className="w-5 h-5 text-neon mx-auto mb-2" />
-            <p
-              className={`text-3xl font-bold font-mono ${stats.winRate >= 55 ? "text-neon" : stats.winRate >= 50 ? "text-electric" : "text-amber"}`}
-            >
-              {stats.totalGraded > 0 ? `${stats.winRate.toFixed(1)}%` : "—"}
-            </p>
-            <p className="text-[10px] text-mercury/60 uppercase mt-1">
-              Win Rate
-            </p>
+        {/* LIVE TRACK RECORD — real forward-tested performance */}
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-neon animate-pulse" />
+            <h2 className="text-[11px] font-bold uppercase tracking-wider text-neon">
+              Live Track Record — Forward-Tested
+            </h2>
           </div>
-          <div className="glass rounded-xl p-4 text-center border border-electric/20">
-            <CheckCircle className="w-5 h-5 text-electric mx-auto mb-2" />
-            <p className="text-3xl font-bold font-mono text-silver">
-              {stats.wins}
-              <span className="text-mercury/40">-</span>
-              {stats.losses}
-            </p>
-            <p className="text-[10px] text-mercury/60 uppercase mt-1">Record</p>
-          </div>
-          <div className="glass rounded-xl p-4 text-center border border-purple/20">
-            <Brain className="w-5 h-5 text-purple mx-auto mb-2" />
-            <p className="text-3xl font-bold font-mono text-silver">
-              {brain?.games?.toLocaleString() ?? "0"}
-            </p>
-            <p className="text-[10px] text-mercury/60 uppercase mt-1">
-              Games Trained
-            </p>
-          </div>
-          <div className="glass rounded-xl p-4 text-center border border-gold/20">
-            <Sparkles className="w-5 h-5 text-gold mx-auto mb-2" />
-            <p className="text-3xl font-bold font-mono text-silver">
-              {brain?.players?.toLocaleString() ?? "0"}
-            </p>
-            <p className="text-[10px] text-mercury/60 uppercase mt-1">
-              Players Tracked
-            </p>
+          <p className="text-[11px] text-mercury/50 mb-3">
+            Every pick below is graded automatically against real box scores
+            after games end. This is live performance, not a simulation.
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="glass rounded-xl p-4 text-center border border-neon/20">
+              <Trophy className="w-5 h-5 text-neon mx-auto mb-2" />
+              <p
+                className={`text-3xl font-bold font-mono ${stats.winRate >= 55 ? "text-neon" : stats.winRate >= 50 ? "text-electric" : "text-amber"}`}
+              >
+                {stats.totalGraded > 0 ? `${stats.winRate.toFixed(1)}%` : "—"}
+              </p>
+              <p className="text-[10px] text-mercury/60 uppercase mt-1">
+                Live Win Rate
+              </p>
+              {stats.totalGraded > 0 && stats.totalGraded < 50 && (
+                <p className="text-[9px] text-amber/80 mt-1.5 leading-tight">
+                  Based on {stats.totalGraded} graded picks — check back as more
+                  data settles
+                </p>
+              )}
+            </div>
+            <div className="glass rounded-xl p-4 text-center border border-electric/20">
+              <CheckCircle className="w-5 h-5 text-electric mx-auto mb-2" />
+              <p className="text-3xl font-bold font-mono text-silver">
+                {stats.wins}
+                <span className="text-mercury/40">-</span>
+                {stats.losses}
+              </p>
+              <p className="text-[10px] text-mercury/60 uppercase mt-1">
+                Live Record
+              </p>
+            </div>
           </div>
         </div>
 
-        {/* Live profit backtest chart — the conversion killer */}
+        {/* MODEL TRAINING — historical corpus size, not a performance claim */}
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <Brain className="w-3.5 h-3.5 text-purple" />
+            <h2 className="text-[11px] font-bold uppercase tracking-wider text-purple">
+              Model Training — Historical Data Size
+            </h2>
+          </div>
+          <p className="text-[11px] text-mercury/50 mb-3">
+            Size of the historical dataset the brain trained on. This reflects
+            model scale, not live betting performance.
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="glass rounded-xl p-4 text-center border border-purple/20">
+              <Brain className="w-5 h-5 text-purple mx-auto mb-2" />
+              <p className="text-3xl font-bold font-mono text-silver">
+                {brain?.games?.toLocaleString() ?? "0"}
+              </p>
+              <p className="text-[10px] text-mercury/60 uppercase mt-1">
+                Games Trained
+              </p>
+            </div>
+            <div className="glass rounded-xl p-4 text-center border border-gold/20">
+              <Sparkles className="w-5 h-5 text-gold mx-auto mb-2" />
+              <p className="text-3xl font-bold font-mono text-silver">
+                {brain?.players?.toLocaleString() ?? "0"}
+              </p>
+              <p className="text-[10px] text-mercury/60 uppercase mt-1">
+                Players Tracked
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Live cumulative profit chart — the conversion killer */}
         <div className="glass rounded-xl p-6 border-2 border-neon/20 bg-gradient-to-br from-neon/3 to-transparent">
           <h2 className="text-lg font-bold text-silver mb-1 flex items-center gap-2">
             <DollarSign className="w-5 h-5 text-neon" /> If you'd followed every
             brain pick
           </h2>
           <p className="text-xs text-mercury/60 mb-4">
-            Real cumulative profit at $100/bet, -110 odds, every graded NBA prop
-            the brain has surfaced.
+            Live cumulative profit at $100/bet, -110 odds, using only picks the
+            brain has actually surfaced and that have since been graded — not a
+            backtest or simulation.
           </p>
           <ProfitChart sport="nba" />
+          {stats.totalGraded > 0 && stats.totalGraded < 50 && (
+            <p className="text-[10px] text-amber/70 mt-2 text-center">
+              Small sample ({stats.totalGraded} graded picks) — early results
+              can swing widely and aren't yet statistically reliable.
+            </p>
+          )}
         </div>
 
         {/* How it works */}

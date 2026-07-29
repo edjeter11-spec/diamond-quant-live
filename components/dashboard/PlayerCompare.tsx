@@ -90,7 +90,7 @@ export default function PlayerCompare() {
                 onKeyDown={(e) =>
                   e.key === "Enter" && fetchPlayer(searchA, "A")
                 }
-                className="flex-1 px-2 py-1.5 rounded-lg bg-gunmetal/50 border border-slate/20 text-xs text-silver placeholder:text-mercury/30 focus:border-electric/50 focus:outline-none"
+                className="flex-1 px-2 py-1.5 rounded-lg bg-gunmetal/50 border border-slate/20 text-base sm:text-xs text-silver placeholder:text-mercury/30 focus:border-electric/50 focus:outline-none"
               />
               <button
                 onClick={() => fetchPlayer(searchA, "A")}
@@ -111,7 +111,7 @@ export default function PlayerCompare() {
                 onKeyDown={(e) =>
                   e.key === "Enter" && fetchPlayer(searchB, "B")
                 }
-                className="flex-1 px-2 py-1.5 rounded-lg bg-gunmetal/50 border border-slate/20 text-xs text-silver placeholder:text-mercury/30 focus:border-electric/50 focus:outline-none"
+                className="flex-1 px-2 py-1.5 rounded-lg bg-gunmetal/50 border border-slate/20 text-base sm:text-xs text-silver placeholder:text-mercury/30 focus:border-electric/50 focus:outline-none"
               />
               <button
                 onClick={() => fetchPlayer(searchB, "B")}

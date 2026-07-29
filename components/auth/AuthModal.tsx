@@ -187,7 +187,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
                     placeholder="Display name"
                     value={displayName}
                     onChange={(e) => setDisplayName(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-gunmetal/50 border border-slate/20 text-sm text-silver placeholder:text-mercury/30 focus:border-electric/50 focus:outline-none transition-colors"
+                    className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-gunmetal/50 border border-slate/20 text-base sm:text-sm text-silver placeholder:text-mercury/30 focus:border-electric/50 focus:outline-none transition-colors"
                   />
                 </div>
               )}
@@ -199,7 +199,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-gunmetal/50 border border-slate/20 text-sm text-silver placeholder:text-mercury/30 focus:border-electric/50 focus:outline-none transition-colors"
+                  className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-gunmetal/50 border border-slate/20 text-base sm:text-sm text-silver placeholder:text-mercury/30 focus:border-electric/50 focus:outline-none transition-colors"
                 />
               </div>
               <div className="relative">
@@ -211,7 +211,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   minLength={6}
-                  className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-gunmetal/50 border border-slate/20 text-sm text-silver placeholder:text-mercury/30 focus:border-electric/50 focus:outline-none transition-colors"
+                  className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-gunmetal/50 border border-slate/20 text-base sm:text-sm text-silver placeholder:text-mercury/30 focus:border-electric/50 focus:outline-none transition-colors"
                 />
               </div>
               {mode === "signup" && (
@@ -225,7 +225,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
                       setInviteCode(e.target.value.toUpperCase())
                     }
                     maxLength={6}
-                    className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-gunmetal/50 border border-slate/20 text-sm text-silver placeholder:text-mercury/30 focus:border-electric/50 focus:outline-none transition-colors font-mono uppercase"
+                    className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-gunmetal/50 border border-slate/20 text-base sm:text-sm text-silver placeholder:text-mercury/30 focus:border-electric/50 focus:outline-none transition-colors font-mono uppercase"
                   />
                 </div>
               )}

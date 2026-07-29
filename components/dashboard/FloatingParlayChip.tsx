@@ -160,7 +160,7 @@ export default function FloatingParlayChip({
           <div className="absolute inset-0 bg-void/70 backdrop-blur-sm" />
           <div
             onClick={(e) => e.stopPropagation()}
-            className="absolute bottom-0 left-0 right-0 md:bottom-6 md:right-6 md:left-auto md:max-w-sm md:rounded-2xl rounded-t-2xl bg-bunker border-t md:border border-slate/40 shadow-2xl max-h-[80vh] overflow-y-auto animate-slide-up"
+            className="absolute bottom-0 left-0 right-0 md:bottom-6 md:right-6 md:left-auto md:max-w-sm md:rounded-2xl rounded-t-2xl bg-bunker border-t md:border border-slate/40 shadow-2xl max-h-[80vh] max-h-[80dvh] overflow-y-auto overscroll-contain animate-slide-up"
           >
             {/* Header */}
             <div className="sticky top-0 bg-bunker/95 backdrop-blur-md px-4 py-3 border-b border-slate/30 flex items-center gap-2 z-10">
@@ -291,7 +291,7 @@ export default function FloatingParlayChip({
                     value={stake}
                     onChange={(e) => setStake(e.target.value)}
                     placeholder="0"
-                    className="w-full pl-8 pr-3 py-2 rounded-lg bg-bunker border border-slate/40 text-silver text-sm font-mono placeholder:text-mercury/30 focus:outline-none focus:border-neon/50"
+                    className="w-full pl-8 pr-3 py-2 rounded-lg bg-bunker border border-slate/40 text-silver text-base sm:text-sm font-mono placeholder:text-mercury/30 focus:outline-none focus:border-neon/50"
                   />
                 </div>
                 {stakeNum > 0 && (
