@@ -454,7 +454,7 @@ export async function GET(req: Request) {
         if (existingMlb) {
           pickGen.mlb = "already-cached";
         } else {
-          const baseUrl = `https://${process.env.VERCEL_URL || "diamond-quant-live.vercel.app"}`;
+          const baseUrl = "https://diamond-quant-live.vercel.app"; // public alias — VERCEL_URL sits behind Vercel deployment protection and returns an HTML auth page instead of JSON
           const mlbRes = await fetch(`${baseUrl}/api/bot-analysis`);
           if (mlbRes.ok) {
             const mlbData = await mlbRes.json();
@@ -529,7 +529,7 @@ export async function GET(req: Request) {
         if (existingNba) {
           pickGen.nba = "already-cached";
         } else {
-          const baseUrl = `https://${process.env.VERCEL_URL || "diamond-quant-live.vercel.app"}`;
+          const baseUrl = "https://diamond-quant-live.vercel.app"; // public alias — VERCEL_URL sits behind Vercel deployment protection and returns an HTML auth page instead of JSON
           const nbaRes = await fetch(`${baseUrl}/api/nba-analysis`);
           if (nbaRes.ok) {
             const nbaData = await nbaRes.json();
@@ -682,7 +682,7 @@ export async function GET(req: Request) {
     let emailRecap = { sent: 0, skipped: 0 };
     if (utcHour >= 12 && utcHour <= 13) {
       try {
-        const baseUrl = `https://${process.env.VERCEL_URL || "diamond-quant-live.vercel.app"}`;
+        const baseUrl = "https://diamond-quant-live.vercel.app"; // public alias — VERCEL_URL sits behind Vercel deployment protection and returns an HTML auth page instead of JSON
         emailRecap = await sendDailyRecapToAll(baseUrl);
       } catch (e) {
         console.error("email recap error:", e);
@@ -1234,7 +1234,7 @@ export async function GET(req: Request) {
 
         if (neverTrained || daysSinceTrain >= 7) {
           // Fire-and-forget — training takes ~5 min, cron has 120s
-          const baseUrl = `https://${process.env.VERCEL_URL || "diamond-quant-live.vercel.app"}`;
+          const baseUrl = "https://diamond-quant-live.vercel.app"; // public alias — VERCEL_URL sits behind Vercel deployment protection and returns an HTML auth page instead of JSON
           fetch(
             `${baseUrl}/api/nba-prop-train?seasons=2022,2023,2024${neverTrained ? "&reset=true" : ""}`,
             {
@@ -1259,7 +1259,7 @@ export async function GET(req: Request) {
 
         if (daysSince >= 6) {
           // Trigger evolution in background (don't await — cron has time limit)
-          const baseUrl = `https://${process.env.VERCEL_URL || "diamond-quant-live.vercel.app"}`;
+          const baseUrl = "https://diamond-quant-live.vercel.app"; // public alias — VERCEL_URL sits behind Vercel deployment protection and returns an HTML auth page instead of JSON
           fetch(`${baseUrl}/api/nba-prop-evolve?generations=2`, {
             headers: { "x-cron-secret": process.env.CRON_SECRET ?? "" },
           }).catch(() => {});

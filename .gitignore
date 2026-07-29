@@ -26,6 +26,9 @@ yarn-error.log*
 # local env files
 .env*.local
 .env
+# Catch-all: `vercel env pull` and ad-hoc dumps create files like .env.cron,
+# .env.vercel.tmp, .env.chk — the patterns above don't match those.
+.env*
 
 # vercel
 .vercel
