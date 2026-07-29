@@ -138,6 +138,12 @@ export async function GET(req: Request) {
 
       const response = { games, timestamp: new Date().toISOString() };
       setCache(CACHE_KEY, response);
+      const activeAfter = getActiveKeyCount();
+      if (activeAfter <= 1) {
+        console.warn(
+          `[ODDS QUOTA CRITICAL] only ${activeAfter}/${getKeyCount()} keys active`,
+        );
+      }
       return NextResponse.json(response, {
         headers: {
           "Cache-Control": "public, s-maxage=30, stale-while-revalidate=300",
@@ -149,6 +155,10 @@ export async function GET(req: Request) {
     }
   }
 
+  // All keys exhausted or failed
+  console.warn(
+    `[ODDS QUOTA CRITICAL] only ${getActiveKeyCount()}/${getKeyCount()} keys active`,
+  );
   // All keys failed — return cached if any (even stale)
   const stale = getCached(CACHE_KEY, CACHE_TTL.ODDS * 10);
   if (stale) return NextResponse.json({ ...stale, stale: true });

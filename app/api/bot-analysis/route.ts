@@ -61,6 +61,14 @@ export async function GET() {
         markKeyExhausted(key);
       }
     }
+    {
+      const activeAfter = getActiveKeyCount();
+      if (activeAfter <= 1) {
+        console.warn(
+          `[ODDS QUOTA CRITICAL] only ${activeAfter}/${getKeyCount()} keys active`,
+        );
+      }
+    }
 
     // Build scores
     const scores = scoresRaw.map((game: any) => ({

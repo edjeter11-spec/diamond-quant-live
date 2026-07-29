@@ -11,6 +11,16 @@ Each file is idempotent (uses `CREATE TABLE IF NOT EXISTS` / `DROP POLICY IF EXI
 | 4   | `004_prop_predictions.sql`   | `prop_predictions` closed-loop learning table for the NBA prop brain                                               |
 | 5   | `005_track_record.sql`       | `daily_picks_log` for the public `/results` page + `is_premium` / Stripe columns on `user_profiles`                |
 | 6   | `006_security_hardening.sql` | Tightens RLS: removes public DELETE on `odds_history`, restricts `shared_slips` inserts to JWT subject             |
+| 7   | `007_push_subscriptions.sql` | `push_subscriptions` table for web push (per-device VAPID subs) + RLS                                              |
+| 8   | `008_grading_coverage.sql`   | Adds `result` column + index to `prop_predictions`; adds `pick_source` column + index to `daily_picks_log`         |
+
+## Production parity note (2026-07-29)
+
+`daily_picks_log` (005) and the `prop_predictions.result` / `pick_source` additions (008) were
+applied to production by hand-typing SQL in the Supabase SQL Editor rather than running these
+files verbatim. The hand-typed SQL was verified column-by-column, index-by-index, and
+policy-by-policy against 005 and 008 as they exist on disk — they match exactly. No schema
+drift exists; running these migrations against a fresh database reproduces production as-is.
 
 ## After running
 
