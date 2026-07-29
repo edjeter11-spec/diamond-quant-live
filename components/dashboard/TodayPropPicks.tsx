@@ -394,7 +394,7 @@ export default function TodayPropPicks({
           {[0, 1, 2, 3, 4].map((i) => (
             <div
               key={i}
-              className="px-3 sm:px-4 py-3 sm:py-2.5 min-h-[64px] sm:min-h-0 flex items-center gap-3 sm:gap-2.5 animate-pulse"
+              className="px-3 sm:px-4 py-2 sm:py-2.5 min-h-[44px] sm:min-h-0 flex items-center gap-2.5 animate-pulse"
             >
               {/* Match real row sizing: 40px avatar mobile, 28px desktop */}
               <div className="w-10 h-10 sm:w-7 sm:h-7 rounded-full bg-slate/20 flex-shrink-0" />
@@ -688,26 +688,17 @@ export default function TodayPropPicks({
               <div key={p.key}>
                 <button
                   onClick={() => setOpenPick(isOpen ? null : p.key)}
-                  className={`w-full px-3 sm:px-4 py-3 sm:py-2.5 min-h-[64px] sm:min-h-0 flex items-center gap-3 sm:gap-2.5 hover:bg-gunmetal/20 active:bg-slate/50 active:scale-[0.98] transition-all text-left touch-manipulation ${rowTint}`}
+                  className={`w-full px-3 sm:px-4 py-2 sm:py-2.5 min-h-[44px] sm:min-h-0 flex items-center gap-2.5 hover:bg-gunmetal/20 active:bg-slate/50 active:scale-[0.98] transition-all text-left touch-manipulation ${rowTint}`}
                 >
-                  {/* Player photo — left, 40px mobile, 28px desktop */}
+                  {/* Player photo — 28px both breakpoints; the 40px mobile
+                      variant was inflating every row's height */}
                   <div className="flex-shrink-0">
-                    <span className="sm:hidden">
-                      <PlayerAvatar
-                        name={p.playerName}
-                        playerId={p.playerId}
-                        sport={sport}
-                        size={40}
-                      />
-                    </span>
-                    <span className="hidden sm:inline">
-                      <PlayerAvatar
-                        name={p.playerName}
-                        playerId={p.playerId}
-                        sport={sport}
-                        size={28}
-                      />
-                    </span>
+                    <PlayerAvatar
+                      name={p.playerName}
+                      playerId={p.playerId}
+                      sport={sport}
+                      size={28}
+                    />
                   </div>
                   {/* Side icon — smaller, secondary on mobile */}
                   <div
@@ -751,7 +742,7 @@ export default function TodayPropPicks({
                     </p>
                     {/* Pick — bold, mobile gets inline side icon for hierarchy */}
                     <p
-                      className={`text-xs font-bold leading-tight mt-1 sm:mt-0.5 flex items-center gap-1 ${p.side === "over" ? "text-neon" : "text-amber"}`}
+                      className={`text-xs font-bold leading-tight mt-0.5 flex items-center gap-1 ${p.side === "over" ? "text-neon" : "text-amber"}`}
                     >
                       {p.side === "over" ? (
                         <ArrowUpRight className="w-3.5 h-3.5 sm:hidden" />
@@ -765,20 +756,23 @@ export default function TodayPropPicks({
                         </span>
                       )}
                     </p>
-                    {/* Mobile: stack book + edge vertically; Desktop: inline wrap */}
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:flex-wrap gap-1 sm:gap-1.5 mt-1.5 sm:mt-1">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-[10px] text-mercury/60">
+                    {/* Inline-wrap on both breakpoints — the mobile flex-col
+                        variant forced an extra stacked line per row, which
+                        is most of what made these rows so tall. */}
+                    <div className="flex flex-row items-center flex-wrap gap-x-1.5 gap-y-0.5 mt-0.5">
+                      {/* Kept to a single line — the text column is only
+                          ~174px on a 375px screen, so the old verbose version
+                          ("Hard Rock Bet · 68.2% fair" + edge) wrapped to 3
+                          lines and was the last thing making rows ~100px. */}
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="text-[10px] text-mercury/60 truncate">
                           {p.bookmaker} · {p.fairProb}%
-                          {p.usesBrain ? " brain" : " fair"}
-                          {p.projectedValue != null &&
-                            p.usesBrain &&
-                            ` · proj ${p.projectedValue}`}
                         </span>
                         <span
-                          className={`text-[10px] font-semibold ${p.evPercentage > 0 ? "text-neon" : "text-mercury/60"}`}
+                          className={`text-[10px] font-semibold flex-shrink-0 ${p.evPercentage > 0 ? "text-neon" : "text-mercury/60"}`}
                         >
-                          +{p.evPercentage}% edge
+                          {p.evPercentage > 0 ? "+" : ""}
+                          {p.evPercentage}%
                         </span>
                       </div>
                       <div className="flex items-center gap-1 flex-wrap">
@@ -828,8 +822,12 @@ export default function TodayPropPicks({
                       </div>
                     </div>
                   </div>
-                  {/* Right rail — odds stacked over Parlay on mobile for 44px+ targets */}
-                  <div className="flex flex-col sm:flex-row items-end sm:items-center gap-1.5 sm:gap-2 flex-shrink-0">
+                  {/* Right rail — odds and Parlay side-by-side. Stacking them
+                      vertically on mobile made this rail 88px tall, which was
+                      the real driver of the ~104px row height (the text column
+                      is only ~49px). Horizontal keeps the 44px tap target
+                      without inflating every row. */}
+                  <div className="flex flex-row items-center gap-2 flex-shrink-0">
                     <span className="text-xs sm:text-sm font-mono font-bold text-silver leading-none">
                       {p.odds > 0 ? "+" : ""}
                       {p.odds}
