@@ -2,10 +2,13 @@
 // Cache-first for static assets, network-first for HTML + API.
 // Bumps the version → invalidates old cache.
 
-const VERSION = "dq-v3";
+const VERSION = "dq-v4";
 const RUNTIME = `dq-runtime-${VERSION}`;
 
-const PRECACHE_URLS = ["/", "/track-record", "/manifest.json"];
+// Only precache things that don't change per-deploy. HTML is deliberately NOT
+// precached — a stale cached shell paired with fresh build chunks (or vice
+// versa) produced hydration mismatches and ChunkLoadErrors after every deploy.
+const PRECACHE_URLS = ["/manifest.json"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -59,7 +62,32 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Cache-first for static assets
+  // Next.js build output (/_next/static/**) is content-hashed and changes on
+  // every deploy. Serving it cache-first meant a freshly-deployed HTML doc
+  // could request a chunk hash the SW had never seen while the SW kept
+  // handing back stale chunks — the source of post-deploy ChunkLoadErrors
+  // and hydration mismatches. Always go to network for build output, falling
+  // back to cache only when genuinely offline.
+  const isBuildAsset = url.pathname.startsWith("/_next/");
+  if (isBuildAsset) {
+    event.respondWith(
+      fetch(request)
+        .then((res) => {
+          if (res.ok) {
+            const copy = res.clone();
+            caches
+              .open(RUNTIME)
+              .then((cache) => cache.put(request, copy))
+              .catch(() => {});
+          }
+          return res;
+        })
+        .catch(() => caches.match(request)),
+    );
+    return;
+  }
+
+  // Cache-first for other static assets (icons, manifest, images)
   event.respondWith(
     caches.match(request).then((cached) => {
       if (cached) return cached;

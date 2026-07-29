@@ -10,6 +10,12 @@ import {
 } from "@/lib/model/kelly";
 import { loadBrain, saveBrain, learnFromGame, type BrainState } from "./brain";
 import type { GameAnalysis, GamePick } from "./three-models";
+import { etDateString } from "@/lib/sports-date";
+
+// Minimum edge (%) against the best available line before the bot will bet a
+// game. Without this the bot ranked purely on model win probability, so a
+// heavy favorite at a bad price counted as a "pick".
+const MIN_EV_FLOOR = 0.5;
 
 // ── Per-model accuracy tracking ──
 
@@ -78,6 +84,10 @@ export interface SmartBotPick {
   consensusProb: number;
   confidence: string;
   reasoning: string[];
+  // Value context — model vs market at the price actually bet
+  fairProb?: number;
+  impliedProb?: number;
+  evPercentage?: number;
   // Settlement
   finalScore?: string;
   settledAt?: string;
@@ -134,7 +144,7 @@ export function generateSmartPicks(
   analyses: GameAnalysis[],
   bankroll: number,
 ): SmartBotPick[] {
-  const today = new Date().toISOString().split("T")[0];
+  const today = etDateString();
 
   // Sort: HIGH confidence first, then MEDIUM, then by consensus probability strength
   const ranked = [...analyses]
@@ -172,11 +182,26 @@ export function generateSmartPicks(
     if (pickOdds === -999 || pickOdds === 0) continue;
 
     const decOdds = americanToDecimal(pickOdds);
+
+    // ── Price check (odds-aware gate) ──
+    // Previously this ranked purely on model win probability and took the top
+    // 4, so a 70% favorite at -400 (negative EV) could be a "pick". Require a
+    // real edge against the best available line before betting it.
+    const impliedProb = americanToImpliedProb(pickOdds);
+    const evPercentage = (fairProb * decOdds - 1) * 100;
+    if (!Number.isFinite(evPercentage) || evPercentage < MIN_EV_FLOOR) continue;
+
+    // Price also caps confidence — a thin edge can't be a HIGH-confidence play
+    let confidence = game.consensus.confidence;
+    if (evPercentage < 1) confidence = "LOW";
+    else if (evPercentage < 2 && confidence === "HIGH") confidence = "MEDIUM";
+
     const rawKelly = kellyStake(fairProb, decOdds, bankroll, 0.15); // reduced from 0.25 to 0.15
     // Cap: min $50, max $150 (prevents huge variance between bets)
     const stake = Math.max(Math.min(rawKelly, 150), 50);
 
     const reasoning = [
+      `Price check: fair ${(fairProb * 100).toFixed(1)}% vs implied ${(impliedProb * 100).toFixed(1)}% → EV ${evPercentage >= 0 ? "+" : ""}${evPercentage.toFixed(1)}% at ${pickBook}`,
       `Pitcher Model: ${(game.pitcherModel.homeWinProb * 100).toFixed(0)}% home — ${game.pitcherModel.factors[0] ?? ""}`,
       `Market Model: ${(game.marketModel.homeWinProb * 100).toFixed(0)}% home — ${game.marketModel.factors[0] ?? ""}`,
       `Elo Power: ${(game.trendModel.homeWinProb * 100).toFixed(0)}% home — ${game.trendModel.factors[0] ?? ""}`,
@@ -205,8 +230,12 @@ export function generateSmartPicks(
       marketScore: Math.round(game.marketModel.homeWinProb * 100),
       trendScore: Math.round(game.trendModel.homeWinProb * 100),
       consensusProb: Math.round(game.consensus.homeWinProb * 1000) / 10,
-      confidence: game.consensus.confidence,
+      confidence,
       reasoning,
+      // Value context (additive) — lets the UI show why this price is a bet
+      fairProb: Math.round(fairProb * 1000) / 10,
+      impliedProb: Math.round(impliedProb * 1000) / 10,
+      evPercentage: Math.round(evPercentage * 10) / 10,
     });
   }
 

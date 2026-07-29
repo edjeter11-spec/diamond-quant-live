@@ -50,7 +50,7 @@ function normalizeTeam(s: string): string {
   return s.toLowerCase().replace(/\s+/g, " ").trim();
 }
 
-function findGame(
+export function findGame(
   pickOrGame: string,
   games: CompletedGame[],
 ): CompletedGame | null {
@@ -74,7 +74,10 @@ function findGame(
 
 // ─── Per-leg grading ─────────────────────────────────────
 
-function gradeMoneyline(pickText: string, game: CompletedGame): BetResult {
+export function gradeMoneyline(
+  pickText: string,
+  game: CompletedGame,
+): BetResult {
   const text = normalizeTeam(pickText);
   const home = normalizeTeam(game.homeTeam);
   const away = normalizeTeam(game.awayTeam);
@@ -98,7 +101,7 @@ function gradeMoneyline(pickText: string, game: CompletedGame): BetResult {
   return "pending";
 }
 
-function gradeTotal(pickText: string, game: CompletedGame): BetResult {
+export function gradeTotal(pickText: string, game: CompletedGame): BetResult {
   const text = pickText.toLowerCase();
   const total = game.homeScore + game.awayScore;
   const overMatch = text.match(/over\s+(\d+(\.\d+)?)/);
@@ -118,7 +121,7 @@ function gradeTotal(pickText: string, game: CompletedGame): BetResult {
   return "pending";
 }
 
-function gradeSpread(pickText: string, game: CompletedGame): BetResult {
+export function gradeSpread(pickText: string, game: CompletedGame): BetResult {
   // Match "Team -3.5" or "Team +7" formats
   const signMatch = pickText.match(/([+\-])(\d+(\.\d+)?)/);
   if (!signMatch) return "pending";
@@ -165,6 +168,21 @@ export function gradeLeg(
     m === "point spread"
   )
     return gradeSpread(pickText, game);
+  // Unknown/blank market: best-effort sniff from the pick text itself so
+  // picks logged without a clean `market` field (e.g. some board/lock rows)
+  // still get graded instead of sitting pending forever.
+  if (
+    !m ||
+    m === "unknown" ||
+    m === "pick" ||
+    m === "lock" ||
+    m === "longshot"
+  ) {
+    if (/\bml\b|\bmoneyline\b/i.test(pickText))
+      return gradeMoneyline(pickText, game);
+    if (/\bover\b|\bunder\b/i.test(pickText)) return gradeTotal(pickText, game);
+    if (/[+\-]\d+(\.\d+)?/.test(pickText)) return gradeSpread(pickText, game);
+  }
   // Player props, futures, derivatives → can't grade from scores alone
   return "pending";
 }

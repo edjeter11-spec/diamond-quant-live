@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { analyzeNRFI, type NRFIGame } from "@/lib/bot/nrfi-engine";
 import { getDeepLink } from "@/lib/odds/sportsbooks";
+import TeamLogo from "@/components/ui/TeamLogo";
 
 const GRADE_COLORS: Record<
   string,
@@ -346,10 +347,12 @@ function GameRow({
         {/* Matchup */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
+            <TeamLogo team={game.awayAbbrev || game.awayTeam} size={18} />
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-gunmetal text-mercury font-bold">
               {game.awayAbbrev}
             </span>
             <span className="text-[9px] text-mercury/40">@</span>
+            <TeamLogo team={game.homeAbbrev || game.homeTeam} size={18} />
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-gunmetal text-mercury font-bold">
               {game.homeAbbrev}
             </span>
@@ -512,6 +515,7 @@ function PitcherCard({
   return (
     <div className="rounded-lg bg-gunmetal/30 p-2.5">
       <div className="flex items-center gap-1.5 mb-1.5">
+        <TeamLogo team={abbrev} size={16} />
         <span className="text-[9px] px-1 py-0.5 rounded bg-electric/15 text-electric font-bold">
           {abbrev}
         </span>

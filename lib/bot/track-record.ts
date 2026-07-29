@@ -6,9 +6,13 @@
 
 import { supabaseAdmin } from "@/lib/supabase/server-auth";
 import { americanToDecimal } from "@/lib/model/kelly";
+import { gradeLeg, findGame, type CompletedGame } from "@/lib/bot/bet-grader";
 
 export type PickCategory = "parlay" | "lock" | "longshot" | "prop";
 export type PickResult = "pending" | "win" | "loss" | "push" | "void";
+// Which surface the pick was surfaced on. Additive — defaults to "bot" so
+// existing rows (all logged from the cron's bot slate) keep working.
+export type PickSource = "bot" | "board" | "prop" | "nrfi";
 
 export interface LoggedPick {
   sport: "mlb" | "nba";
@@ -22,14 +26,14 @@ export interface LoggedPick {
   evPercentage?: number;
   fairProb?: number;
   confidence?: string;
+  pickSource?: PickSource;
 }
 
-export function etDateString(d = new Date()): string {
-  const et = new Date(
-    d.toLocaleString("en-US", { timeZone: "America/New_York" }),
-  );
-  return `${et.getFullYear()}-${String(et.getMonth() + 1).padStart(2, "0")}-${String(et.getDate()).padStart(2, "0")}`;
-}
+// Canonical implementation lives in lib/sports-date.ts (client-safe, so the
+// UI can share it). Imported for local use and re-exported to keep existing
+// import sites working.
+import { etDateString } from "@/lib/sports-date";
+export { etDateString };
 
 /**
  * Log a batch of today's picks. Deduplicated server-side by
@@ -75,6 +79,7 @@ export async function logDailyPicks(
       ev_percentage: p.evPercentage,
       fair_prob: p.fairProb,
       confidence: p.confidence,
+      pick_source: p.pickSource ?? "bot",
     });
   }
   if (rows.length === 0) return { inserted: 0 };
@@ -89,18 +94,19 @@ export async function logDailyPicks(
 
 /**
  * Grade pending picks whose games have finished.
- * Very simple matcher: compares pick_text against a list of completed-game outcomes.
- * Returns count of rows settled.
+ *
+ * Uses the same abbreviation/last-name-aware matcher (`findGame`) and
+ * push-safe per-market grader (`gradeLeg`) as the user bet-grader, instead of
+ * a separate weaker substring matcher — previously this function only
+ * recognized moneyline and total picks (never spreads) and had no push
+ * branch for moneyline ties.
+ *
+ * Idempotent: only ever reads rows with result = 'pending' and updates them
+ * once, so re-running settlement (e.g. duplicate cron invocations) cannot
+ * double-count or re-grade an already-settled pick.
  */
 export async function settlePendingPicks(
-  completedGames: Array<{
-    homeTeam: string;
-    awayTeam: string;
-    homeAbbrev?: string;
-    awayAbbrev?: string;
-    homeScore: number;
-    awayScore: number;
-  }>,
+  completedGames: CompletedGame[],
 ): Promise<{ settled: number }> {
   if (!supabaseAdmin || completedGames.length === 0) return { settled: 0 };
 
@@ -114,19 +120,15 @@ export async function settlePendingPicks(
 
   let settled = 0;
   for (const pick of pending) {
-    const match = completedGames.find(
-      (g) =>
-        (pick.game ?? "").includes(g.homeTeam) ||
-        (pick.game ?? "").includes(g.awayTeam) ||
-        (pick.game ?? "").includes(g.homeAbbrev ?? "__") ||
-        (pick.game ?? "").includes(g.awayAbbrev ?? "__") ||
-        (pick.pick_text ?? "").includes(g.homeTeam) ||
-        (pick.pick_text ?? "").includes(g.awayTeam),
-    );
-    if (!match) continue;
+    // Match on the game field first (most reliable), falling back to the
+    // pick text itself (covers rows where `game` wasn't populated).
+    const game =
+      findGame(pick.game ?? "", completedGames) ??
+      findGame(pick.pick_text ?? "", completedGames);
+    if (!game) continue;
 
-    const result = gradeMLPick(pick, match);
-    if (!result) continue;
+    const result = gradeLeg(pick.market ?? "", pick.pick_text ?? "", game);
+    if (result === "pending") continue; // can't confidently grade — leave pending
 
     const stake = 1; // 1-unit sizing for track-record clarity
     const profit =
@@ -143,55 +145,11 @@ export async function settlePendingPicks(
         settled_at: new Date().toISOString(),
         profit_units: Math.round(profit * 100) / 100,
       })
-      .eq("id", pick.id);
+      .eq("id", pick.id)
+      .eq("result", "pending"); // belt-and-suspenders: no-op if already settled
     settled++;
   }
   return { settled };
-}
-
-/**
- * Grade a single ML/total pick against a completed game.
- * Returns null if we can't confidently grade it (e.g., a prop with no score to check).
- */
-function gradeMLPick(
-  pick: any,
-  game: {
-    homeTeam: string;
-    awayTeam: string;
-    homeScore: number;
-    awayScore: number;
-  },
-): PickResult | null {
-  const text = (pick.pick_text ?? "").toLowerCase();
-  const homeWin = game.homeScore > game.awayScore;
-  const total = game.homeScore + game.awayScore;
-
-  // Moneyline / spread pick naming: "Yankees ML" or "Yankees -1.5"
-  if (text.includes("ml") || pick.market === "moneyline") {
-    const homeWon = homeWin;
-    const pickedHome = text.includes(game.homeTeam.toLowerCase());
-    const pickedAway = text.includes(game.awayTeam.toLowerCase());
-    if (!pickedHome && !pickedAway) return null;
-    return (pickedHome && homeWon) || (pickedAway && !homeWon) ? "win" : "loss";
-  }
-
-  // Over/Under: look for a number after "over" or "under"
-  const overMatch = text.match(/over\s+(\d+(\.\d+)?)/);
-  const underMatch = text.match(/under\s+(\d+(\.\d+)?)/);
-  if (overMatch) {
-    const line = parseFloat(overMatch[1]);
-    if (total > line) return "win";
-    if (total < line) return "loss";
-    return "push";
-  }
-  if (underMatch) {
-    const line = parseFloat(underMatch[1]);
-    if (total < line) return "win";
-    if (total > line) return "loss";
-    return "push";
-  }
-
-  return null; // unknown pick type — leave pending (e.g., player props)
 }
 
 /**
@@ -232,12 +190,25 @@ export async function getTrackRecordStats(days: number = 30): Promise<{
     losses: number;
     profitUnits: number;
   }>;
+  // Additive: props + NRFI/YRFI, sourced from `prop_predictions` (its own
+  // commit/grade pipeline), merged into the same overall totals so accuracy
+  // reflects EVERY pick type the app surfaces, not just the bot slate.
+  propsAndNrfi?: {
+    total: number;
+    wins: number;
+    losses: number;
+    pushes: number;
+    winRate: number;
+    profitUnits: number;
+  };
 } | null> {
   if (!supabaseAdmin) return null;
 
+  // ET-anchored window boundary so it lines up with the ET dates picks are
+  // actually bucketed under (pick_date / game_date are both ET strings).
   const since = new Date();
   since.setUTCDate(since.getUTCDate() - days);
-  const sinceDate = since.toISOString().split("T")[0];
+  const sinceDate = etDateString(since);
 
   const { data } = await supabaseAdmin
     .from("daily_picks_log")
@@ -269,6 +240,9 @@ export async function getTrackRecordStats(days: number = 30): Promise<{
     { wins: number; losses: number; profitUnits: number }
   >();
 
+  // profitUnits for daily_picks_log rows is 1-unit flat sizing computed at
+  // settlement time (see settlePendingPicks) using the odds recorded at
+  // pick time — already correct, kept as-is here.
   for (const r of rows) {
     overall.total++;
     if (r.result === "win") overall.wins++;
@@ -280,6 +254,7 @@ export async function getTrackRecordStats(days: number = 30): Promise<{
     cat.total++;
     if (r.result === "win") cat.wins++;
     else if (r.result === "loss") cat.losses++;
+    else if (r.result === "push") cat.pushes++;
     cat.profitUnits += Number(r.profit_units ?? 0);
     byCategory[r.category] = cat;
 
@@ -287,6 +262,7 @@ export async function getTrackRecordStats(days: number = 30): Promise<{
     sport.total++;
     if (r.result === "win") sport.wins++;
     else if (r.result === "loss") sport.losses++;
+    else if (r.result === "push") sport.pushes++;
     sport.profitUnits += Number(r.profit_units ?? 0);
     bySport[r.sport] = sport;
 
@@ -298,6 +274,74 @@ export async function getTrackRecordStats(days: number = 30): Promise<{
     dailyMap.set(d, day);
   }
 
+  // ── Props + NRFI/YRFI: pull graded rows from prop_predictions and fold
+  // them into the same overall/bySport/daily buckets. `result` is the
+  // push-safe column (migration 008); fall back to the legacy `hit`
+  // boolean for rows graded before that column existed (those rows can
+  // never have been a push in-place, since the old code coerced push→loss
+  // at write time, so treating missing `result` as win/loss off `hit` is
+  // safe and doesn't invent pushes that didn't happen).
+  const propBucket = bucket();
+  try {
+    const { data: propRows } = await supabaseAdmin
+      .from("prop_predictions")
+      .select("sport,game_date,result,hit,odds_at_pick,status")
+      .eq("status", "graded")
+      .gte("game_date", sinceDate);
+
+    for (const r of propRows ?? []) {
+      const result: PickResult =
+        r.result === "win" || r.result === "loss" || r.result === "push"
+          ? r.result
+          : r.hit === true
+            ? "win"
+            : r.hit === false
+              ? "loss"
+              : "push"; // hit is null/unknown — don't guess a decided result
+      if (result === "push") {
+        propBucket.total++;
+        propBucket.pushes++;
+      } else {
+        const stake = 1;
+        const profit =
+          result === "win"
+            ? stake * (americanToDecimal(r.odds_at_pick ?? -110) - 1)
+            : -stake;
+        propBucket.total++;
+        if (result === "win") propBucket.wins++;
+        else propBucket.losses++;
+        propBucket.profitUnits += profit;
+
+        overall.total++;
+        if (result === "win") overall.wins++;
+        else overall.losses++;
+        overall.profitUnits += profit;
+
+        const sport = bySport[r.sport] ?? bucket();
+        sport.total++;
+        if (result === "win") sport.wins++;
+        else sport.losses++;
+        sport.profitUnits += profit;
+        bySport[r.sport] = sport;
+
+        const cat = byCategory.prop;
+        cat.total++;
+        if (result === "win") cat.wins++;
+        else cat.losses++;
+        cat.profitUnits += profit;
+
+        const d = r.game_date;
+        const day = dailyMap.get(d) ?? { wins: 0, losses: 0, profitUnits: 0 };
+        if (result === "win") day.wins++;
+        else day.losses++;
+        day.profitUnits += profit;
+        dailyMap.set(d, day);
+      }
+    }
+  } catch (e) {
+    console.error("getTrackRecordStats prop rollup error:", e);
+  }
+
   const finalize = (b: any) => {
     const decided = b.wins + b.losses;
     b.winRate = decided > 0 ? (b.wins / decided) * 100 : 0;
@@ -307,6 +351,7 @@ export async function getTrackRecordStats(days: number = 30): Promise<{
   finalize(overall);
   for (const k of Object.keys(byCategory)) finalize(byCategory[k]);
   for (const k of Object.keys(bySport)) finalize(bySport[k]);
+  finalize(propBucket);
 
   const daily = Array.from(dailyMap.entries())
     .map(([date, v]) => ({
@@ -321,5 +366,6 @@ export async function getTrackRecordStats(days: number = 30): Promise<{
     byCategory: byCategory as any,
     bySport: bySport as any,
     daily,
+    propsAndNrfi: propBucket,
   };
 }

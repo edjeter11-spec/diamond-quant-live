@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cloudGet, cloudSet } from "@/lib/supabase/client";
 import { generateSmartPicks } from "@/lib/bot/smart-picks";
+import { etDateString } from "@/lib/sports-date";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -10,11 +11,14 @@ export async function GET(req: NextRequest) {
   const sport = (searchParams.get("sport") ?? "mlb").toLowerCase();
   const force = searchParams.get("force") === "true";
   const isNBA = sport === "nba";
-  const today = new Date().toISOString().split("T")[0];
-  // v3: today-only filter active
+  const today = etDateString();
+  // Must match the key cron (app/api/cron/route.ts) and BotChallenge.tsx both
+  // read/write — this route previously used a "_v3_" suffixed key that no
+  // other part of the pipeline ever wrote to, so `force`/cache-hit here could
+  // never see cron-pregenerated picks (and vice versa).
   const cacheKey = isNBA
-    ? `smart_bot_today_nba_v3_${today}`
-    : `smart_bot_today_mlb_v3_${today}`;
+    ? `smart_bot_today_nba_${today}`
+    : `smart_bot_today_mlb_${today}`;
 
   if (!force) {
     const cached = await cloudGet<{ picks: any[]; generatedAt: string } | null>(

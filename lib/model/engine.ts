@@ -76,10 +76,14 @@ function getDynamicWeights(gameState: GameState): ModelWeights {
     w.defense -= 0.04;
   }
 
-  // Normalize weights to sum to 1.0
+  // Normalize weights to sum to 1.0 (guard: never divide by zero/NaN)
   const total = Object.values(w).reduce((a, b) => a + b, 0);
-  for (const key of Object.keys(w) as (keyof ModelWeights)[]) {
-    w[key] /= total;
+  if (Number.isFinite(total) && total > 0) {
+    for (const key of Object.keys(w) as (keyof ModelWeights)[]) {
+      w[key] /= total;
+    }
+  } else {
+    return { ...BASE_WEIGHTS };
   }
 
   return w;

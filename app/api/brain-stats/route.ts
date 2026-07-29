@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { cloudGet } from "@/lib/supabase/client";
 import { loadNbaPropBrainFromCloud } from "@/lib/bot/nba-prop-brain";
 import type { EvolutionState } from "@/lib/bot/nba-brain-evolution";
+import { loadCalibration } from "@/lib/bot/calibration";
 
 export const dynamic = "force-dynamic";
 
@@ -13,9 +14,10 @@ const CACHE_HEADERS = {
 
 export async function GET() {
   try {
-    const [brain, evolution] = await Promise.all([
+    const [brain, evolution, calibration] = await Promise.all([
       loadNbaPropBrainFromCloud(),
       cloudGet<EvolutionState | null>("nba_brain_evolution", null),
+      loadCalibration().catch(() => null),
     ]);
 
     // Top players by win rate (min 5 picks)
@@ -57,6 +59,18 @@ export async function GET() {
               liveBrainId: evolution.liveBrainId,
               bestEverWinRate: evolution.bestEverWinRate,
               history: evolution.history,
+            }
+          : null,
+        // Additive: shows whether stated confidence (HIGH/MEDIUM/LOW) actually
+        // matches measured hit rate, and per-market settled hit rates — the
+        // same curve three-models.ts uses to haircut pick confidence.
+        calibration: calibration
+          ? {
+              sample: calibration.sample,
+              computedAt: calibration.computedAt,
+              calibrationDelta: calibration.calibrationDelta,
+              confidenceTiers: calibration.confidenceTiers ?? null,
+              marketRates: calibration.marketRates ?? null,
             }
           : null,
       },

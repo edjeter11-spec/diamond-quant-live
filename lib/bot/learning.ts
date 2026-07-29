@@ -2,7 +2,18 @@
 // Self-Learning Feedback Loop
 // Adjusts model weights based on actual results
 // Tracks accuracy by market, updates thresholds dynamically
+//
+// NOTE: the localStorage-based functions below (loadLearningState,
+// learnFromBet, etc.) only ever run client-side and were never wired to
+// any settlement path — they're kept for backward compatibility with any
+// UI code that reads them, but they are NOT the server-side learning loop.
+// The real feedback loop is the server-safe section below, which reads
+// settled picks from daily_picks_log (Supabase) — the same source of
+// truth track-record.ts / calibration.ts use — and is safe to call from
+// API routes / cron (three-models.ts, engine.ts).
 // ──────────────────────────────────────────────────────────
+
+import { supabaseAdmin } from "@/lib/supabase/server-auth";
 
 export interface ModelWeights {
   pitching: number;
@@ -194,10 +205,14 @@ export function learnFromBet(
     weights.hitting = Math.min(0.35, weights.hitting + lr * surprise * 0.2);
   }
 
-  // Normalize weights
+  // Normalize weights (guard: never divide by zero/NaN — fall back to defaults)
   const total = Object.values(weights).reduce((a, b) => a + b, 0);
-  for (const key of Object.keys(weights) as (keyof ModelWeights)[]) {
-    weights[key] = weights[key] / total;
+  if (Number.isFinite(total) && total > 0) {
+    for (const key of Object.keys(weights) as (keyof ModelWeights)[]) {
+      weights[key] = weights[key] / total;
+    }
+  } else {
+    Object.assign(weights, DEFAULT_WEIGHTS);
   }
 
   // Bump version
@@ -244,4 +259,111 @@ export function calculateCLV(
     clvPercent: Math.round(clvPercent * 100) / 100,
     beatClosing: clvPercent > 0,
   };
+}
+
+// ──────────────────────────────────────────────────────────
+// SERVER-SIDE: Per-pick historical context
+// Answers "how has the bot done on picks like THIS one before?"
+// broken down by market type + confidence tier + sport — pulled from the
+// real settled record in daily_picks_log (Supabase), NOT localStorage.
+// This is what closes the learning loop for pick generation: every pick
+// can carry its own comparable track record so confidence isn't cosmetic.
+// ──────────────────────────────────────────────────────────
+
+export interface HistoricalRecord {
+  /** Sample size backing this record. */
+  sampleSize: number;
+  wins: number;
+  losses: number;
+  /** wins / (wins+losses), 0-1. 0.5 (coin-flip) when sample is too small to trust. */
+  hitRate: number;
+  /** Average EV%% recorded on those settled picks, NaN-safe. */
+  avgEvPercentage: number;
+  /** True once sampleSize >= the guard threshold — UI/model should only lean on this when true. */
+  reliable: boolean;
+  /** Human-readable summary for reasoning arrays / UI display. */
+  summary: string;
+}
+
+const MIN_SAMPLE_FOR_HISTORY = 10;
+
+function emptyHistoricalRecord(reason: string): HistoricalRecord {
+  return {
+    sampleSize: 0,
+    wins: 0,
+    losses: 0,
+    hitRate: 0.5,
+    avgEvPercentage: 0,
+    reliable: false,
+    summary: reason,
+  };
+}
+
+/**
+ * Look up the bot's settled track record on picks comparable to the one
+ * being made right now — same sport + market, optionally filtered to a
+ * confidence tier. Used to attach a `historicalRecord` field to each pick
+ * so confidence is backed by an auditable number, not just a label.
+ *
+ * Guards: returns a non-reliable (coin-flip) record instead of throwing
+ * when Supabase is unavailable or the sample is too small (< 10) to trust.
+ */
+export async function getHistoricalRecordFor(params: {
+  sport: "mlb" | "nba";
+  market: string;
+  confidence?: "HIGH" | "MEDIUM" | "LOW";
+}): Promise<HistoricalRecord> {
+  if (!supabaseAdmin) return emptyHistoricalRecord("No DB connection");
+
+  try {
+    let query = supabaseAdmin
+      .from("daily_picks_log")
+      .select("result,ev_percentage,confidence")
+      .eq("sport", params.sport)
+      .eq("market", params.market)
+      .in("result", ["win", "loss"])
+      .order("settled_at", { ascending: false })
+      .limit(300);
+
+    if (params.confidence) {
+      query = query.eq("confidence", params.confidence);
+    }
+
+    const { data, error } = await query;
+    if (error || !data) return emptyHistoricalRecord("No settled history yet");
+
+    const wins = data.filter((r) => r.result === "win").length;
+    const losses = data.filter((r) => r.result === "loss").length;
+    const sampleSize = wins + losses;
+
+    if (sampleSize === 0)
+      return emptyHistoricalRecord("No settled history yet");
+
+    const hitRate = sampleSize > 0 ? wins / sampleSize : 0.5;
+    const evValues = data
+      .map((r) => Number(r.ev_percentage))
+      .filter((v) => Number.isFinite(v));
+    const avgEvPercentage =
+      evValues.length > 0
+        ? evValues.reduce((a, b) => a + b, 0) / evValues.length
+        : 0;
+
+    const reliable = sampleSize >= MIN_SAMPLE_FOR_HISTORY;
+    const tierLabel = params.confidence ? `${params.confidence} ` : "";
+    const summary = reliable
+      ? `${wins}-${losses} (${(hitRate * 100).toFixed(1)}%) on ${tierLabel}${params.market} picks (${params.sport.toUpperCase()}, last ${sampleSize})`
+      : `Only ${sampleSize} settled ${tierLabel}${params.market} pick(s) so far — too few to trust`;
+
+    return {
+      sampleSize,
+      wins,
+      losses,
+      hitRate: Math.round(hitRate * 1000) / 1000,
+      avgEvPercentage: Math.round(avgEvPercentage * 100) / 100,
+      reliable,
+      summary,
+    };
+  } catch {
+    return emptyHistoricalRecord("Historical lookup failed");
+  }
 }

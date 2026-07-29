@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useStore } from "@/lib/store";
 import { Shield, Flame, Brain, ChevronDown, RefreshCw } from "lucide-react";
 import { analyzeNRFI, type NRFIGame } from "@/lib/bot/nrfi-engine";
+import TeamLogo from "@/components/ui/TeamLogo";
 
 const GRADE_COLOR: Record<string, string> = {
   A: "bg-neon/15 text-neon border-neon/30",
@@ -123,9 +124,13 @@ export default function NRFISection({ sport }: { sport: "mlb" | "nba" }) {
                   {g.nrfiGrade}
                 </span>
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs text-silver font-semibold truncate">
-                    {g.awayAbbrev} @ {g.homeAbbrev}
-                    <span className={`ml-2 text-[10px] font-bold ${rec.color}`}>
+                  <p className="text-xs text-silver font-semibold truncate flex items-center gap-1">
+                    <TeamLogo team={g.awayAbbrev || g.awayTeam} size={16} />
+                    <span>{g.awayAbbrev}</span>
+                    <span className="text-mercury/40">@</span>
+                    <TeamLogo team={g.homeAbbrev || g.homeTeam} size={16} />
+                    <span>{g.homeAbbrev}</span>
+                    <span className={`ml-1 text-[10px] font-bold ${rec.color}`}>
                       {rec.label}
                     </span>
                   </p>
@@ -231,6 +236,7 @@ function PitcherStats({
   return (
     <div className="rounded-lg bg-gunmetal/30 p-2.5">
       <div className="flex items-center gap-1.5 mb-1.5">
+        <TeamLogo team={abbrev} size={16} />
         <span className="text-[9px] px-1.5 py-0.5 rounded bg-electric/15 text-electric font-bold">
           {abbrev}
         </span>

@@ -119,7 +119,7 @@ export async function GET(req: Request) {
     let mlbGhostCommitted = 0;
     try {
       const baseUrl = `https://diamond-quant-live.vercel.app`;
-      const today = new Date().toISOString().split("T")[0];
+      const today = etDateString();
       const allMlbProps: any[] = [];
       const { MLB_MARKETS, commitMLBPropProjections } =
         await import("@/lib/bot/mlb-prop-pipeline");
@@ -158,7 +158,7 @@ export async function GET(req: Request) {
     // ── Commit NRFI/YRFI predictions (MLB) ──
     let nrfiCommitted = 0;
     try {
-      const today = new Date().toISOString().split("T")[0];
+      const today = etDateString();
       const { commitNRFIProjections } = await import("@/lib/bot/nrfi-pipeline");
       // Normalize all MLB games (pre + live + final) into engine-expected shape
       const normalizedForNRFI = games.map((g: any) => ({
@@ -188,7 +188,7 @@ export async function GET(req: Request) {
         await import("@/lib/nfl/stats-api");
       const events = await fetchTodayNFLGames();
       if (events.length > 0) {
-        const today = new Date().toISOString().split("T")[0];
+        const today = etDateString();
         // Normalize for commit
         const normalized = events
           .filter((ev: any) => getNFLGameStatus(ev) === "pre")
@@ -254,7 +254,7 @@ export async function GET(req: Request) {
         await import("@/lib/nhl/stats-api");
       const events = await fetchTodayNHLGames();
       if (events.length > 0) {
-        const today = new Date().toISOString().split("T")[0];
+        const today = etDateString();
         const normalized = events
           .filter((g: any) => getNHLGameStatus(g) === "pre")
           .map((g: any) => ({
@@ -415,21 +415,44 @@ export async function GET(req: Request) {
     }
 
     // ── Auto-generate today's smart picks for all users ──
-    // Runs in the morning hours (7-11 AM ET = 11-15 UTC) so picks are ready for the day
+    // Runs in the morning hours (7-11 AM ET = 11-15 UTC) so picks are ready for the day.
+    // pickGen surfaces success/failure in the cron JSON response instead of a
+    // silent try/catch — lets us tell "cron ran but produced 0 picks" apart
+    // from "cron never got this far" from the Vercel cron log/response alone.
+    const pickGen: {
+      mlb:
+        | "generated"
+        | "already-cached"
+        | "no-picks"
+        | "fetch-failed"
+        | "skipped-window"
+        | "error";
+      nba:
+        | "generated"
+        | "already-cached"
+        | "no-picks"
+        | "fetch-failed"
+        | "skipped-window"
+        | "error";
+      error?: string;
+    } = { mlb: "skipped-window", nba: "skipped-window" };
     const utcHour = new Date().getUTCHours();
     if (utcHour >= 11 && utcHour <= 15) {
       try {
-        const today = new Date().toISOString().split("T")[0];
+        const today = etDateString();
 
         // MLB picks
         const mlbTodayKey = `smart_bot_today_mlb_${today}`;
         const existingMlb = await cloudGet(mlbTodayKey, null);
-        if (!existingMlb) {
+        if (existingMlb) {
+          pickGen.mlb = "already-cached";
+        } else {
           const baseUrl = `https://${process.env.VERCEL_URL || "diamond-quant-live.vercel.app"}`;
           const mlbRes = await fetch(`${baseUrl}/api/bot-analysis`);
           if (mlbRes.ok) {
             const mlbData = await mlbRes.json();
             const mlbPicks = generateSmartPicks(mlbData.analyses ?? [], 5000);
+            pickGen.mlb = mlbPicks.length > 0 ? "generated" : "no-picks";
             if (mlbPicks.length > 0) {
               await cloudSet(mlbTodayKey, {
                 picks: mlbPicks,
@@ -488,18 +511,23 @@ export async function GET(req: Request) {
                 }
               } catch {}
             }
+          } else {
+            pickGen.mlb = "fetch-failed";
           }
         }
 
         // NBA picks
         const nbaTodayKey = `smart_bot_today_nba_${today}`;
         const existingNba = await cloudGet(nbaTodayKey, null);
-        if (!existingNba) {
+        if (existingNba) {
+          pickGen.nba = "already-cached";
+        } else {
           const baseUrl = `https://${process.env.VERCEL_URL || "diamond-quant-live.vercel.app"}`;
           const nbaRes = await fetch(`${baseUrl}/api/nba-analysis`);
           if (nbaRes.ok) {
             const nbaData = await nbaRes.json();
             const nbaPicks = generateSmartPicks(nbaData.analyses ?? [], 5000);
+            pickGen.nba = nbaPicks.length > 0 ? "generated" : "no-picks";
             if (nbaPicks.length > 0) {
               await cloudSet(nbaTodayKey, {
                 picks: nbaPicks,
@@ -556,6 +584,8 @@ export async function GET(req: Request) {
                 }
               } catch {}
             }
+          } else {
+            pickGen.nba = "fetch-failed";
           }
         }
         // ── High-confidence picks push (sent once per day, all sports combined) ──
@@ -595,8 +625,11 @@ export async function GET(req: Request) {
             }
           }
         } catch {}
-      } catch (e) {
+      } catch (e: any) {
         console.error("pick gen/log error:", e);
+        pickGen.error = e?.message ?? String(e);
+        if (pickGen.mlb === "skipped-window") pickGen.mlb = "error";
+        if (pickGen.nba === "skipped-window") pickGen.nba = "error";
       }
     }
 
@@ -750,7 +783,7 @@ export async function GET(req: Request) {
     if (nbaCompletedGames.length > 0) {
       try {
         const { gradePropPick } = await import("@/lib/bot/prop-grader");
-        const today = new Date().toISOString().split("T")[0];
+        const today = etDateString();
         const propCacheKey = `prop_picks_today_nba_${today}`;
         const propData = await cloudGet<any>(propCacheKey, null);
         if (propData?.picks?.length > 0) {
@@ -855,7 +888,7 @@ export async function GET(req: Request) {
         let brainUpdated = false;
         const { supabase: sb } = await import("@/lib/supabase/client");
         if (sb) {
-          const today = new Date().toISOString().split("T")[0];
+          const today = etDateString();
           const { data: pendingMlb } = await sb
             .from("prop_predictions")
             .select("*")
@@ -898,6 +931,10 @@ export async function GET(req: Request) {
                     .update({
                       actual_value: grade.actualValue,
                       hit: grade.result === "win",
+                      // Push-safe grade (migration 008). `hit` is a plain
+                      // boolean so a push would otherwise be recorded as a
+                      // loss and drag down accuracy.
+                      result: grade.result,
                       brier_score: Math.round(brierScore * 10000) / 10000,
                       status: "graded",
                       graded_at: new Date().toISOString(),
@@ -918,21 +955,28 @@ export async function GET(req: Request) {
                   });
                   mlbPropsGraded++;
 
-                  // Feed result into the MLB brain so it learns over time
-                  try {
-                    mlbBrain = learnFromMLBResult(mlbBrain, {
-                      playerName: pred.player_name,
-                      team: pred.team ?? "",
-                      propType: pred.prop_type,
-                      predictedProb: pred.predicted_prob ?? 0.5,
-                      predictedSide: pred.predicted_side,
-                      line: pred.line,
-                      actualValue: grade.actualValue,
-                      hit: grade.result === "win",
-                      factors: Array.isArray(pred.factors) ? pred.factors : [],
-                    });
-                    brainUpdated = true;
-                  } catch {}
+                  // Feed result into the MLB brain so it learns over time.
+                  // Skip pushes — the actual landed exactly on the line, which
+                  // says nothing about whether the projection leaned the right
+                  // way. Training a push as `hit: false` taught it a false loss.
+                  if (grade.result !== "push") {
+                    try {
+                      mlbBrain = learnFromMLBResult(mlbBrain, {
+                        playerName: pred.player_name,
+                        team: pred.team ?? "",
+                        propType: pred.prop_type,
+                        predictedProb: pred.predicted_prob ?? 0.5,
+                        predictedSide: pred.predicted_side,
+                        line: pred.line,
+                        actualValue: grade.actualValue,
+                        hit: grade.result === "win",
+                        factors: Array.isArray(pred.factors)
+                          ? pred.factors
+                          : [],
+                      });
+                      brainUpdated = true;
+                    } catch {}
+                  }
                 }
               } catch {}
             }
@@ -1231,6 +1275,7 @@ export async function GET(req: Request) {
       trackRecord: { settled: trackSettled },
       userBets: userBetsSettled,
       botSettle,
+      pickGen,
     });
   } catch (error: any) {
     return NextResponse.json(

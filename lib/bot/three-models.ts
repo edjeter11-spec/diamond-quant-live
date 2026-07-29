@@ -11,6 +11,12 @@ import {
   kellyStake,
 } from "@/lib/model/kelly";
 import { getLineMovement } from "@/lib/odds/line-movement";
+import {
+  loadCalibration,
+  calibrateConfidenceLabel,
+  type CalibrationCurve,
+} from "@/lib/bot/calibration";
+import { getHistoricalRecordFor } from "@/lib/bot/learning";
 
 const MLB_API = "https://statsapi.mlb.com/api/v1";
 
@@ -52,6 +58,20 @@ function getBrainCloudCached(): Promise<any | null> {
     }
   })();
   brainCloudCache = { promise, ts: Date.now() };
+  return promise;
+}
+
+// Calibration curve is the same for every game in a batch — one fetch per batch.
+let calibrationCache: {
+  promise: Promise<CalibrationCurve | null>;
+  ts: number;
+} | null = null;
+function getCalibrationCached(): Promise<CalibrationCurve | null> {
+  if (calibrationCache && Date.now() - calibrationCache.ts < 5 * 60 * 1000) {
+    return calibrationCache.promise;
+  }
+  const promise = loadCalibration().catch(() => null);
+  calibrationCache = { promise, ts: Date.now() };
   return promise;
 }
 
@@ -108,6 +128,21 @@ export interface GamePick {
   confidence: "HIGH" | "MEDIUM" | "LOW";
   reasoning: string[];
   modelScores: { pitcher: number; market: number; trend: number };
+  // ── Additive: calibration + historical-record fields (backward-compatible) ──
+  /** Confidence label AFTER haircutting against measured historical hit rate for that tier. Same as `confidence` when sample is too small to calibrate. */
+  calibratedConfidence?: "HIGH" | "MEDIUM" | "LOW";
+  /** fairProb (0-100 scale, matches `fairProb`) after calibration haircut is applied. */
+  calibratedFairProb?: number;
+  /** How many pts (0-100 scale) the confidence was shaved by calibration. 0 = no calibration data yet or no adjustment needed. */
+  calibrationHaircut?: number;
+  /** The bot's real settled track record on comparable picks (same sport+market+confidence tier). */
+  historicalRecord?: {
+    sampleSize: number;
+    hitRate: number;
+    avgEvPercentage: number;
+    reliable: boolean;
+    summary: string;
+  };
 }
 
 export interface PitcherProfile {
@@ -1087,7 +1122,10 @@ export async function analyzeAllGames(
       const picks: GamePick[] = [];
       const gameName = `${awayTeam} @ ${homeTeam}`;
 
-      // ML pick
+      // ML pick — ODDS-AWARE: a model favorite is only a pick if the price
+      // actually pays for that probability. A 70% favorite at -400 implies
+      // ~80% (juice aside), so that's negative EV and must NOT be pushed out
+      // as a "confident" bet just because the models agree on the winner.
       if (consensus.confidence !== "NO_PLAY" && bestHomeML !== -999) {
         const isHome = consensus.homeWinProb > 0.5;
         const pickTeam = isHome ? homeTeam : awayTeam;
@@ -1100,35 +1138,61 @@ export async function analyzeAllGames(
         const ev =
           ((fairProb - impliedProb) / Math.max(impliedProb, 0.01)) * 100;
 
-        picks.push({
-          pick: `${pickTeam} ML`,
-          market: "moneyline",
-          odds: pickOdds,
-          bookmaker: pickBook,
-          evPercentage: Math.round(ev * 100) / 100,
-          fairProb: Math.round(fairProb * 1000) / 10,
-          kellyStake:
-            ev > 0
-              ? kellyStake(fairProb, americanToDecimal(pickOdds), 5000, 0.25)
-              : 0,
-          confidence:
+        // Minimum EV floor: without a real price edge, model agreement alone
+        // is not a bet. This is what makes the decision "odds-aware" instead
+        // of just "who does the model like" — mirrors the dynamic thresholds
+        // learning.ts computes per-market, but even at the static floor this
+        // stops the classic -400 model-favorite trap.
+        const MIN_EV_FLOOR = 0.5; // percent
+        const hasPriceEdge = Number.isFinite(ev) && ev >= MIN_EV_FLOOR;
+
+        if (hasPriceEdge) {
+          // Confidence must reflect the SIZE of the edge, not just model
+          // agreement — big favorites at bad prices no longer masquerade
+          // as HIGH confidence.
+          let priceAwareConfidence: "HIGH" | "MEDIUM" | "LOW" =
             consensus.confidence === "HIGH"
               ? "HIGH"
               : consensus.confidence === "MEDIUM"
                 ? "MEDIUM"
-                : "LOW",
-          reasoning: [
-            ...pitcherModel.factors.slice(0, 2),
-            ...marketModel.factors.slice(0, 1),
-            ...trendModel.factors.slice(0, 1),
-            `Consensus: ${(consensus.homeWinProb * 100).toFixed(1)}% home | Agreement: ${consensus.modelsAgree ? "YES" : "SPLIT"}`,
-          ],
-          modelScores: {
-            pitcher: Math.round(pitcherModel.homeWinProb * 100),
-            market: Math.round(marketModel.homeWinProb * 100),
-            trend: Math.round(trendModel.homeWinProb * 100),
-          },
-        });
+                : "LOW";
+          if (ev < 2) {
+            // Thin edge — never call it HIGH regardless of model agreement
+            priceAwareConfidence =
+              priceAwareConfidence === "HIGH" ? "MEDIUM" : priceAwareConfidence;
+          }
+          if (ev < 1) {
+            priceAwareConfidence = "LOW";
+          }
+
+          picks.push({
+            pick: `${pickTeam} ML`,
+            market: "moneyline",
+            odds: pickOdds,
+            bookmaker: pickBook,
+            evPercentage: Math.round(ev * 100) / 100,
+            fairProb: Math.round(fairProb * 1000) / 10,
+            kellyStake: kellyStake(
+              fairProb,
+              americanToDecimal(pickOdds),
+              5000,
+              0.25,
+            ),
+            confidence: priceAwareConfidence,
+            reasoning: [
+              ...pitcherModel.factors.slice(0, 2),
+              ...marketModel.factors.slice(0, 1),
+              ...trendModel.factors.slice(0, 1),
+              `Consensus: ${(consensus.homeWinProb * 100).toFixed(1)}% home | Agreement: ${consensus.modelsAgree ? "YES" : "SPLIT"}`,
+              `Price check: fair ${(fairProb * 100).toFixed(1)}% vs implied ${(impliedProb * 100).toFixed(1)}% → EV ${ev >= 0 ? "+" : ""}${ev.toFixed(1)}%`,
+            ],
+            modelScores: {
+              pitcher: Math.round(pitcherModel.homeWinProb * 100),
+              market: Math.round(marketModel.homeWinProb * 100),
+              trend: Math.round(trendModel.homeWinProb * 100),
+            },
+          });
+        }
       }
 
       // Total pick
@@ -1159,6 +1223,49 @@ export async function analyzeAllGames(
             trend: Math.round(trendModel.totalProjection * 10),
           },
         });
+      }
+
+      // ── Enrich every pick with calibration + historical-record context ──
+      // Closes the learning loop at the point of decision: confidence is
+      // haircut against the bot's REAL measured hit rate for that tier, and
+      // every pick exposes what the bot has actually done on comparable
+      // picks before. Both are best-effort — a DB hiccup must never break
+      // pick generation, so failures fall back to the original label/prob.
+      if (picks.length > 0) {
+        try {
+          const curve = await getCalibrationCached();
+          await Promise.all(
+            picks.map(async (pick) => {
+              // fairProb on GamePick is stored 0-100; calibration works in 0-1
+              const fairProbFraction = pick.fairProb / 100;
+              const calibrated = calibrateConfidenceLabel(
+                pick.confidence,
+                fairProbFraction,
+                curve,
+              );
+              pick.calibratedConfidence = calibrated.calibratedLabel;
+              pick.calibratedFairProb =
+                Math.round(calibrated.calibratedProb * 1000) / 10;
+              pick.calibrationHaircut =
+                Math.round(calibrated.haircutApplied * 1000) / 10;
+
+              const history = await getHistoricalRecordFor({
+                sport: "mlb",
+                market: pick.market,
+                confidence: pick.confidence,
+              });
+              pick.historicalRecord = {
+                sampleSize: history.sampleSize,
+                hitRate: history.hitRate,
+                avgEvPercentage: history.avgEvPercentage,
+                reliable: history.reliable,
+                summary: history.summary,
+              };
+            }),
+          );
+        } catch {
+          // Non-fatal — picks still carry their original (uncalibrated) fields
+        }
       }
 
       return {

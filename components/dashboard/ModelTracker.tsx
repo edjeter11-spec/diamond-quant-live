@@ -2,6 +2,17 @@
 
 import { useStore } from "@/lib/store";
 import { useMemo } from "react";
+
+// Local copy of the ET-date helper (mirrors lib/bot/track-record.ts).
+// Not imported directly to avoid pulling the server-only supabaseAdmin
+// client (and its service-role env access) into this client component's
+// bundle — this is a pure, dependency-free date computation.
+function etDateString(d: Date): string {
+  const et = new Date(
+    d.toLocaleString("en-US", { timeZone: "America/New_York" }),
+  );
+  return `${et.getFullYear()}-${String(et.getMonth() + 1).padStart(2, "0")}-${String(et.getDate()).padStart(2, "0")}`;
+}
 import {
   BarChart3,
   TrendingUp,
@@ -81,10 +92,12 @@ export default function ModelTracker() {
     // Recent 10 results
     const recent10 = settled.slice(-10).map((b) => b.result);
 
-    // Best and worst day
+    // Best and worst day — grouped by ET calendar date (not the UTC slice
+    // of the ISO timestamp), so a bet settled at e.g. 9pm ET / 1am UTC
+    // lands on the day it actually happened rather than the next day.
     const byDay: Record<string, number> = {};
     for (const bet of settled) {
-      const day = bet.timestamp.split("T")[0];
+      const day = etDateString(new Date(bet.timestamp));
       byDay[day] = (byDay[day] ?? 0) + (bet.payout - bet.stake);
     }
     const days = Object.entries(byDay).sort((a, b) => b[1] - a[1]);

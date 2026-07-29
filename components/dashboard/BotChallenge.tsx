@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useStore } from "@/lib/store";
 import { useSport } from "@/lib/sport-context";
+import { etDateString } from "@/lib/sports-date";
 import {
   Bot,
   Brain,
@@ -74,6 +75,16 @@ export default function BotChallenge() {
   // silently showing "waiting for game data" forever
   const [analysisError, setAnalysisError] = useState(false);
   const [retryTick, setRetryTick] = useState(0);
+  // Once analyses have loaded successfully but produced zero usable picks
+  // (e.g. every game today graded NO_PLAY, or the slate is genuinely empty),
+  // we know it's not a fetch failure — show a distinct "no plays today"
+  // message instead of implying cron just hasn't run yet.
+  const [noPlaysToday, setNoPlaysToday] = useState(false);
+  // Server-side force-generate fallback (hits /api/today-picks?force=true)
+  // for when cron hasn't run yet and the client-side analyses/generate path
+  // above also comes up empty. Lets the user break out of "waiting" state
+  // instead of it looking permanently stuck.
+  const [forceGenerating, setForceGenerating] = useState(false);
 
   // CLV tracking state
   const [clvRecords, setClvRecords] = useState<CLVRecord[]>(() => {
@@ -356,7 +367,7 @@ export default function BotChallenge() {
   // Fetch sport-specific analysis + load pre-generated picks from Supabase
   useEffect(() => {
     async function init() {
-      const today = new Date().toISOString().split("T")[0];
+      const today = etDateString();
 
       // 1) Cloud bot state + pre-generated picks (non-fatal — a Supabase
       //    failure here must NOT block the analysis fetch below)
@@ -437,13 +448,17 @@ export default function BotChallenge() {
   // Auto-generate picks when analyses arrive and we don't have today's
   useEffect(() => {
     if (analyses.length === 0) return;
-    const today = new Date().toISOString().split("T")[0];
+    const today = etDateString();
     const hasTodayPicks =
       botState.picks.filter((p) => p.date === today).length >= 4;
-    if (hasTodayPicks) return;
+    if (hasTodayPicks) {
+      setNoPlaysToday(false);
+      return;
+    }
 
     const newPicks = generateSmartPicks(analyses, botState.bankroll);
     if (newPicks.length > 0) {
+      setNoPlaysToday(false);
       const updated: SmartBotState = {
         ...botState,
         picks: [...botState.picks, ...newPicks],
@@ -466,8 +481,51 @@ export default function BotChallenge() {
       }, clvRecords);
       saveCLVRecords(updatedCLV, currentSport);
       setClvRecords(updatedCLV);
+    } else {
+      // Analyses loaded fine (not a fetch error) but every game graded
+      // NO_PLAY / had no usable odds — genuinely nothing to pick today.
+      setNoPlaysToday(true);
     }
   }, [analyses]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Manual fallback: ask the server to force-generate + persist today's
+  // picks right now (bypassing cron's morning-only window). Used when the
+  // client-side analyses came back empty/NO_PLAY but the user wants a fresh
+  // attempt (e.g. odds just posted, or cron hasn't run yet today).
+  const forceGeneratePicks = async () => {
+    setForceGenerating(true);
+    try {
+      const sportParam = isNBA ? "nba" : "mlb";
+      const res = await fetch(
+        `/api/today-picks?sport=${sportParam}&force=true`,
+      );
+      if (res.ok) {
+        const data = await res.json();
+        if (data.picks?.length > 0) {
+          const today = etDateString();
+          setBotState((prev) => {
+            if (prev.picks.filter((p) => p.date === today).length > 0)
+              return prev;
+            const updated: SmartBotState = {
+              ...prev,
+              picks: [...prev.picks, ...data.picks],
+            };
+            saveSmartBot(updated, currentSport);
+            return updated;
+          });
+          setNoPlaysToday(false);
+        } else {
+          // Server also found nothing to pick — genuinely no plays today
+          setNoPlaysToday(true);
+        }
+      } else {
+        setAnalysisError(true);
+      }
+    } catch {
+      setAnalysisError(true);
+    }
+    setForceGenerating(false);
+  };
 
   // Auto-settle + learn + update CLV + update Elo when scores arrive
   useEffect(() => {
@@ -573,7 +631,7 @@ export default function BotChallenge() {
   }, [scores]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const formatOdds = (odds: number) => (odds > 0 ? `+${odds}` : `${odds}`);
-  const today = new Date().toISOString().split("T")[0];
+  const today = etDateString();
   const todayPicks = botState.picks.filter((p) => p.date === today);
   const settled = botState.picks.filter((p) => p.result !== "pending");
   const pendingPicks = botState.picks.filter((p) => p.result === "pending");
@@ -1069,6 +1127,24 @@ export default function BotChallenge() {
                 Retry
               </button>
             </>
+          ) : noPlaysToday ? (
+            <>
+              <p className="text-sm text-mercury">
+                No qualifying plays today — models disagree or odds aren't
+                posted yet
+              </p>
+              <p className="text-[10px] text-mercury/50 mt-1">
+                Today's slate didn't clear our consensus bar. Check back later,
+                or try again now.
+              </p>
+              <button
+                onClick={forceGeneratePicks}
+                disabled={forceGenerating}
+                className="mt-2 px-3 py-1.5 rounded-lg bg-electric/10 border border-electric/25 text-electric text-xs font-semibold hover:bg-electric/20 transition-all disabled:opacity-50"
+              >
+                {forceGenerating ? "Checking..." : "Check again"}
+              </button>
+            </>
           ) : (
             <>
               <p className="text-sm text-mercury">
@@ -1077,6 +1153,13 @@ export default function BotChallenge() {
               <p className="text-[10px] text-mercury/50 mt-1">
                 Picks auto-generate each morning — no manual action needed
               </p>
+              <button
+                onClick={forceGeneratePicks}
+                disabled={forceGenerating}
+                className="mt-2 px-3 py-1.5 rounded-lg bg-electric/10 border border-electric/25 text-electric text-xs font-semibold hover:bg-electric/20 transition-all disabled:opacity-50"
+              >
+                {forceGenerating ? "Generating..." : "Generate now"}
+              </button>
             </>
           )}
         </div>

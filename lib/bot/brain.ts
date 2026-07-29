@@ -519,10 +519,14 @@ export function learnFromResult(
     w[key] = Math.max(FLOOR, Math.min(CEIL, w[key]));
   }
 
-  // Normalize
+  // Normalize (guard: floor above already keeps total > 0, but never trust it blindly)
   const total = Object.values(w).reduce((a, b) => a + b, 0);
-  for (const key of Object.keys(w) as (keyof ModelWeights)[]) {
-    w[key] = w[key] / total;
+  if (Number.isFinite(total) && total > 0) {
+    for (const key of Object.keys(w) as (keyof ModelWeights)[]) {
+      w[key] = w[key] / total;
+    }
+  } else {
+    Object.assign(w, DEFAULT_WEIGHTS);
   }
   updated.weights = w;
 

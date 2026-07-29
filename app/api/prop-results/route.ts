@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { etDateString } from "@/lib/bot/track-record";
 
 // ──────────────────────────────────────────────────────────
 // Prop Results — grades player props for tonight's completed games.
@@ -26,8 +27,10 @@ interface GradedProp {
   gameStatus: "final" | "live" | "pre";
 }
 
+// ET date, not UTC — MLB/NBA games in progress after 8pm ET (= midnight UTC)
+// would otherwise get bucketed under tomorrow's date while still live.
 function todayKey() {
-  return new Date().toISOString().split("T")[0];
+  return etDateString();
 }
 
 export async function GET(req: Request) {

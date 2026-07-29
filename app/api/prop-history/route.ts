@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cloudGet } from "@/lib/supabase/client";
+import { etDateString } from "@/lib/bot/track-record";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 60;
@@ -14,8 +15,11 @@ export async function GET(req: NextRequest) {
     const histKey = `prop_pick_history_${sport}`;
     const history = (await cloudGet<any[]>(histKey, [])) ?? [];
 
-    // Also try to read today's pending picks if not already in history
-    const today = new Date().toISOString().split("T")[0];
+    // Also try to read today's pending picks if not already in history.
+    // ET date, not UTC — matches the key format the cron writes under
+    // (games in progress past 8pm ET would otherwise be looked up under
+    // the wrong day's cache key here).
+    const today = etDateString();
     const todayKey = `prop_picks_today_${sport}_${today}`;
     const todayData = await cloudGet<any>(todayKey, null);
     const pending = (todayData?.picks ?? [])

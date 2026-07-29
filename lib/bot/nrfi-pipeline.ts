@@ -133,11 +133,14 @@ export async function gradeNRFIPredictions(
         2,
       );
 
+      // NRFI/YRFI is a binary market (0 runs vs 1+ runs in the 1st) — there is
+      // no push case, so `result` and `hit` always agree here.
       await supabase
         .from("prop_predictions")
         .update({
           actual_value: totalRuns,
           hit,
+          result: hit ? "win" : "loss",
           brier_score: Math.round(brierScore * 10000) / 10000,
           status: "graded",
           graded_at: new Date().toISOString(),

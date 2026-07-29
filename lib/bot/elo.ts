@@ -66,15 +66,26 @@ export function updateElo(
   const awayActual = homeWon ? 0 : 1;
 
   // Margin of victory multiplier (bigger wins = bigger Elo change)
+  // NaN-guard: a bad/missing margin must fall back to the neutral 1x
+  // multiplier rather than propagating NaN into both teams' ratings.
+  const safeMargin = Number.isFinite(margin) ? margin : 0;
   const movMultiplier =
-    margin > 0 ? Math.log(Math.abs(margin) + 1) * 0.6 + 0.7 : 1;
+    safeMargin > 0 ? Math.log(Math.abs(safeMargin) + 1) * 0.6 + 0.7 : 1;
 
   // Update ratings
   const homeChange = K_FACTOR * movMultiplier * (homeActual - homeExpected);
   const awayChange = K_FACTOR * movMultiplier * (awayActual - awayExpected);
 
-  home.rating = Math.round(home.rating + homeChange);
-  away.rating = Math.round(away.rating + awayChange);
+  home.rating = Math.round(
+    Number.isFinite(home.rating + homeChange)
+      ? home.rating + homeChange
+      : home.rating,
+  );
+  away.rating = Math.round(
+    Number.isFinite(away.rating + awayChange)
+      ? away.rating + awayChange
+      : away.rating,
+  );
   home.gamesPlayed++;
   away.gamesPlayed++;
   if (homeWon) {
