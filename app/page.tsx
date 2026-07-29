@@ -31,7 +31,6 @@ import MigrationBanner from "@/components/auth/MigrationBanner";
 import ConversionBanner from "@/components/ConversionBanner";
 import ROIChart from "@/components/dashboard/ROIChart";
 import { matchGames } from "@/lib/mlb/match-games";
-import TonightsPlays from "@/components/dashboard/TonightsPlays";
 import StreakBanner from "@/components/dashboard/StreakBanner";
 import {
   useWarmNbaPlayerIndex,
@@ -972,13 +971,6 @@ export default function WarRoom() {
                   <SafeBoundary>
                     <PushOptIn />
                   </SafeBoundary>
-
-                  {/* Tonight's Plays — 30-second answer (only renders for MLB/NBA) */}
-                  {(currentSport === "mlb" || currentSport === "nba") && (
-                    <SafeBoundary>
-                      <TonightsPlays sport={currentSport as "mlb" | "nba"} />
-                    </SafeBoundary>
-                  )}
 
                   {/* Live games (only renders when live games exist) */}
                   <SafeBoundary>
