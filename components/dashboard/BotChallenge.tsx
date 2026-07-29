@@ -1613,6 +1613,14 @@ function PickRow({
                 ×{dupeCount}
               </span>
             )}
+            {pick.isForcedPick && (
+              <span
+                className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber/15 border border-amber/30 text-amber flex-shrink-0"
+                title="No game today cleared both the model's confidence bar and a real market edge — this is the closest call, not a recommended bet."
+              >
+                CLOSEST CALL — NOT A LOCK
+              </span>
+            )}
             {/* Inline CLV badge on settled picks */}
             {clvRecord && clvRecord.closingOdds !== 0 && (
               <span

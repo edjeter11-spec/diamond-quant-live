@@ -88,6 +88,9 @@ export interface SmartBotPick {
   fairProb?: number;
   impliedProb?: number;
   evPercentage?: number;
+  // True only when no game cleared the confidence+EV bar today and this is
+  // the least-bad option shown for visibility, not a real recommendation.
+  isForcedPick?: boolean;
   // Settlement
   finalScore?: string;
   settledAt?: string;
@@ -237,6 +240,68 @@ export function generateSmartPicks(
       impliedProb: Math.round(impliedProb * 1000) / 10,
       evPercentage: Math.round(evPercentage * 10) / 10,
     });
+  }
+
+  // No game cleared both the confidence bar AND the price bar today — that's
+  // a real outcome, not a bug, and it should stay the default (a bad forced
+  // bet is worse than no bet). But an empty tab looks broken and gives no
+  // signal at all. Surface the single least-bad option as an explicit
+  // "closest call" — same math, clearly labeled as NOT a real recommendation,
+  // staked at the table minimum only.
+  if (picks.length === 0 && analyses.length > 0) {
+    let best: {
+      game: GameAnalysis;
+      pickOdds: number;
+      pickBook: string;
+      pickTeam: string;
+      fairProb: number;
+      evPercentage: number;
+    } | null = null;
+    for (const game of analyses) {
+      const isHome = game.consensus.homeWinProb > 0.5;
+      const pickOdds = isHome ? game.bestHomeML : game.bestAwayML;
+      const pickBook = isHome ? game.bestHomeBook : game.bestAwayBook;
+      const pickTeam = isHome ? game.homeTeam : game.awayTeam;
+      const fairProb = isHome
+        ? game.consensus.homeWinProb
+        : 1 - game.consensus.homeWinProb;
+      if (pickOdds === -999 || pickOdds === 0) continue;
+      const decOdds = americanToDecimal(pickOdds);
+      const evPercentage = (fairProb * decOdds - 1) * 100;
+      if (!Number.isFinite(evPercentage)) continue;
+      if (!best || evPercentage > best.evPercentage) {
+        best = { game, pickOdds, pickBook, pickTeam, fairProb, evPercentage };
+      }
+    }
+    if (best) {
+      const impliedProb = americanToImpliedProb(best.pickOdds);
+      picks.push({
+        id: `smart-${today}-forced`,
+        gameId: best.game.gameId,
+        date: today,
+        game: `${best.game.awayTeam} @ ${best.game.homeTeam}`,
+        pick: `${best.pickTeam} ML`,
+        market: "moneyline",
+        odds: best.pickOdds,
+        bookmaker: best.pickBook,
+        stake: 50,
+        result: "pending",
+        payout: 0,
+        pitcherScore: Math.round(best.game.pitcherModel.homeWinProb * 100),
+        marketScore: Math.round(best.game.marketModel.homeWinProb * 100),
+        trendScore: Math.round(best.game.trendModel.homeWinProb * 100),
+        consensusProb: Math.round(best.game.consensus.homeWinProb * 1000) / 10,
+        confidence: "NO_PLAY",
+        reasoning: [
+          "No game today clears both the model's confidence bar and a real market edge — this is the closest call, not a recommended bet.",
+          `Price check: fair ${(best.fairProb * 100).toFixed(1)}% vs implied ${(impliedProb * 100).toFixed(1)}% → EV ${best.evPercentage >= 0 ? "+" : ""}${best.evPercentage.toFixed(1)}% at ${best.pickBook}`,
+        ],
+        fairProb: Math.round(best.fairProb * 1000) / 10,
+        impliedProb: Math.round(impliedProb * 1000) / 10,
+        evPercentage: Math.round(best.evPercentage * 10) / 10,
+        isForcedPick: true,
+      });
+    }
   }
 
   return picks;

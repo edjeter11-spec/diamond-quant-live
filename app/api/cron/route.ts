@@ -482,8 +482,12 @@ export async function GET(req: Request) {
               }
 
               // ── Log to public track record ──
+              // Forced picks (no game cleared the confidence+EV bar today —
+              // shown for visibility only, explicitly not a recommendation)
+              // don't count toward the public track record.
               const etDate = etDateString();
               const logged: LoggedPick[] = mlbPicks
+                .filter((p: any) => !p.isForcedPick)
                 .slice(0, 5)
                 .map((p: any, idx: number) => ({
                   sport: "mlb" as const,
