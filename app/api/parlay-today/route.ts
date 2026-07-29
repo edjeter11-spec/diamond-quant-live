@@ -52,15 +52,28 @@ function scorePick(p: { confidence: string; evPercentage?: number }): number {
   return confScore * 5 + (p.evPercentage ?? 0);
 }
 
+function americanToDecimalOdds(odds: number): number {
+  return odds > 0 ? odds / 100 + 1 : 100 / Math.abs(odds) + 1;
+}
+
 function toAmericanParlay(legs: ParlayLeg[]): number {
-  const decimal = legs.reduce((acc, p) => {
-    const dec = p.odds > 0 ? p.odds / 100 + 1 : 100 / Math.abs(p.odds) + 1;
-    return acc * dec;
-  }, 1);
+  const decimal = legs.reduce(
+    (acc, p) => acc * americanToDecimalOdds(p.odds),
+    1,
+  );
   return decimal >= 2
     ? Math.round((decimal - 1) * 100)
     : Math.round(-100 / (decimal - 1));
 }
+
+// "Parlay of the Day" is meant to be a simple, boostable 3-4 leg builder —
+// short favorites/light dogs that compound to roughly -100 to +150, not a
+// long-shot ticket. Filtering candidates to individually-reasonable prices
+// up front (rather than picking the highest-EV leg regardless of price and
+// letting the product multiply out to +700+) keeps the final number sane.
+const MIN_LEG_ODDS = -260; // don't include heavy chalk that adds no payout
+const MAX_LEG_ODDS = 180; // don't include a longshot that blows up the parlay
+const TARGET_MAX_AMERICAN = 150;
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -200,41 +213,52 @@ export async function GET(req: NextRequest) {
     );
     propCandidates.sort((a, b) => scorePick(b) - scorePick(a));
 
-    // Mixed-type builder: one per market when possible
+    // Rank ALL candidates (game lines + props, any market) by real value —
+    // no market-type quota. Previously this grabbed "one moneyline, one
+    // spread, one total, one prop" regardless of which was actually the
+    // best value, which is how a board full of real-book Unders turned
+    // into a parlay that was *only* Unders (whichever total happened to
+    // win the "total" slot), and multiplying 3 real-priced legs together
+    // with no ceiling produced parlays like +753 under a "Parlay of the
+    // Day" banner that's supposed to read as a simple, boostable ticket.
+    const allCandidates = [...pool, ...propCandidates]
+      .filter((c) => c.odds >= MIN_LEG_ODDS && c.odds <= MAX_LEG_ODDS)
+      .sort((a, b) => scorePick(b) - scorePick(a));
+
     const legs: ParlayLeg[] = [];
     const usedGames = new Set<string>();
-    const usedMarkets = new Set<string>();
+    let runningDecimal = 1;
 
     const tryAdd = (p: Candidate): boolean => {
-      if (legs.length >= 3) return false;
+      if (legs.length >= 4) return false;
       if (usedGames.has(p.game)) return false;
+      // Would this leg push the parlay's compounded odds past the target
+      // ceiling? Skip it and keep looking for something that fits — unless
+      // we don't have 3 legs yet, in which case take it anyway (having a
+      // real 3-leg parlay beats an artificially short one).
+      const nextDecimal = runningDecimal * americanToDecimalOdds(p.odds);
+      const nextAmerican =
+        nextDecimal >= 2
+          ? Math.round((nextDecimal - 1) * 100)
+          : Math.round(-100 / (nextDecimal - 1));
+      if (legs.length >= 3 && nextAmerican > TARGET_MAX_AMERICAN) return false;
+
       const { day: _day, ...leg } = p;
       legs.push({ ...leg, dayLabel });
       usedGames.add(p.game);
-      usedMarkets.add(p.market);
+      runningDecimal = nextDecimal;
       return true;
     };
 
-    const wantMarkets = ["moneyline", "spread", "total", "player_prop"];
-    for (const mkt of wantMarkets) {
-      if (legs.length >= 3) break;
-      const src = mkt === "player_prop" ? propCandidates : pool;
-      const best = src.find(
-        (p) =>
-          p.market === mkt &&
-          !usedMarkets.has(p.market) &&
-          !usedGames.has(p.game),
-      );
-      if (best) tryAdd(best);
-    }
-
-    const allCandidates = [...pool, ...propCandidates].sort(
-      (a, b) => scorePick(b) - scorePick(a),
-    );
     for (const c of allCandidates) {
-      if (legs.length >= 3) break;
+      if (legs.length >= 4) break;
       tryAdd(c);
     }
+
+    // Landing on the chalkier side of -100 is fine — safer than target
+    // beats a longshot. The per-leg MIN/MAX_LEG_ODDS filter plus the
+    // running-total ceiling above are what keep the final number sane;
+    // there's no floor enforcement beyond "use real candidates as they come."
 
     if (legs.length < 2) {
       // 200 with empty legs so the UI renders the "checking back later" empty

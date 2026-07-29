@@ -208,10 +208,26 @@ select:focus-visible {
   }
   .ticker-content {
     display: inline-flex;
-    animation: ticker 40s linear infinite;
+    animation: ticker-scroll 40s linear infinite;
   }
   .ticker-content:hover {
     animation-play-state: paused;
+  }
+}
+
+/* The scrolling-scoreboard keyframe. This MUST live in plain CSS, not only
+   in tailwind.config.ts's `keyframes` — Tailwind only emits a configured
+   keyframe when something actually uses its `animate-*` utility class, and
+   nothing here does (the animation is applied via the .ticker-content
+   component class instead). Previously `.ticker-content` referenced an
+   `animation: ticker ...` whose @keyframes was never generated, so the
+   ticker rendered but never moved. */
+@keyframes ticker-scroll {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
   }
 }
 
