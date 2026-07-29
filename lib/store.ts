@@ -88,6 +88,7 @@ interface AppState {
     | "dashboard"
     | "nrfi"
     | "bot"
+    | "players"
     | "props"
     | "arbs"
     | "news"

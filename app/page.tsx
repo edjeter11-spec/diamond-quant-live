@@ -49,6 +49,7 @@ const BankrollTracker = lazy(
   () => import("@/components/dashboard/BankrollTracker"),
 );
 const BotChallenge = lazy(() => import("@/components/dashboard/BotChallenge"));
+const PlayersTab = lazy(() => import("@/components/dashboard/PlayersTab"));
 const ArbBoard = lazy(() => import("@/components/dashboard/ArbBoard"));
 const NewsBoard = lazy(() => import("@/components/dashboard/NewsBoard"));
 const LiveBoard = lazy(() => import("@/components/dashboard/LiveBoard"));
@@ -87,6 +88,7 @@ import {
   AlertTriangle,
   Zap,
   Newspaper,
+  Search,
 } from "lucide-react";
 
 // Arb alert sound (short beep)
@@ -542,6 +544,7 @@ export default function WarRoom() {
   const tabs = [
     { key: "dashboard" as const, icon: BarChart3, label: "Board" },
     { key: "bot" as const, icon: Diamond, label: "Bot" },
+    { key: "players" as const, icon: Search, label: "Players" },
     { key: "bankroll" as const, icon: Wallet, label: "Bank" },
     { key: "profile" as const, icon: UserCircle, label: "Profile" },
   ];
@@ -1111,6 +1114,14 @@ export default function WarRoom() {
                     <ModelLogs />
                   </>
                 )}
+              </Suspense>
+            </div>
+
+            <div
+              className={`max-w-2xl mx-auto space-y-4 ${activeTab === "players" ? "" : "hidden"}`}
+            >
+              <Suspense fallback={<TabSkeleton />}>
+                <PlayersTab />
               </Suspense>
             </div>
 

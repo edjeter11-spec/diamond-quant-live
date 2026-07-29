@@ -86,6 +86,34 @@ export interface PlayerAnalysis {
   };
 }
 
+// Typeahead search — returns up to `limit` active-player matches (the raw
+// MLB search endpoint returns everyone matching a common surname, e.g.
+// "smith" → 27 players; searchPlayer() below just takes the top hit, which
+// is fine for prop-line lookups but wrong for a real search box).
+export async function searchPlayersMulti(
+  name: string,
+  limit = 8,
+): Promise<
+  Array<{ id: number; fullName: string; team: string; position: string }>
+> {
+  if (!name || name.trim().length < 2) return [];
+  try {
+    const url = `${MLB_API}/people/search?names=${encodeURIComponent(name)}&sportIds=1&active=true&hydrate=currentTeam`;
+    const res = await fetch(url, { next: { revalidate: 3600 } });
+    if (!res.ok) return [];
+    const data = await res.json();
+    const people = (data.people ?? []).slice(0, limit);
+    return people.map((p: any) => ({
+      id: p.id,
+      fullName: p.fullName,
+      team: p.currentTeam?.name ?? "",
+      position: p.primaryPosition?.abbreviation ?? "??",
+    }));
+  } catch {
+    return [];
+  }
+}
+
 // Search for a player by name — uses the correct MLB search endpoint
 export async function searchPlayer(name: string): Promise<{
   id: number;
@@ -121,6 +149,54 @@ export async function searchPlayer(name: string): Promise<{
       } catch {}
     }
 
+    return {
+      id: player.id,
+      fullName: player.fullName,
+      team: teamName,
+      position: player.primaryPosition?.abbreviation ?? "??",
+      number: player.primaryNumber ?? "",
+      photo: `https://img.mlbstatic.com/mlb-photos/image/upload/d_people:generic:headshot:67:current.png/w_213,q_auto:best/v1/people/${player.id}/headshot/67/current`,
+    };
+  } catch {
+    return null;
+  }
+}
+
+// Look up a specific player by MLB people ID — used when the caller already
+// disambiguated via searchPlayersMulti (avoids re-searching by name and
+// risking a different "Smith" than the one the user actually picked).
+export async function searchPlayerById(id: number): Promise<{
+  id: number;
+  fullName: string;
+  team: string;
+  position: string;
+  number: string;
+  photo: string;
+} | null> {
+  try {
+    // hydrate=currentTeam — the bare /people/{id} endpoint omits currentTeam
+    // entirely (confirmed: same player, same day, present via /people/search
+    // but absent here without this param), which showed as team "Unknown".
+    const res = await fetch(`${MLB_API}/people/${id}?hydrate=currentTeam`, {
+      next: { revalidate: 3600 },
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const player = data.people?.[0];
+    if (!player) return null;
+    const teamId = player.currentTeam?.id;
+    let teamName = "Unknown";
+    if (teamId) {
+      try {
+        const teamRes = await fetch(`${MLB_API}/teams/${teamId}`, {
+          next: { revalidate: 86400 },
+        });
+        if (teamRes.ok) {
+          const teamData = await teamRes.json();
+          teamName = teamData.teams?.[0]?.name ?? "Unknown";
+        }
+      } catch {}
+    }
     return {
       id: player.id,
       fullName: player.fullName,
@@ -370,6 +446,231 @@ export async function analyzePlayer(
       trend: trending,
     },
     recommendation,
+  };
+}
+
+// ──────────────────────────────────────────────────────────
+// Browse-mode player profile — no prop line required. Powers the Players
+// tab: search any active player, see season stats, trend, and a next-game
+// projection across the markets relevant to their position.
+// ──────────────────────────────────────────────────────────
+
+export interface StatProjection {
+  market: string; // e.g. "batter_hits"
+  label: string; // e.g. "Hits"
+  seasonAvg: number;
+  last10Avg: number;
+  last5Avg: number;
+  trend: "up" | "down" | "flat";
+  projection: number; // blended next-game estimate
+}
+
+export interface PlayerProfile {
+  player: PlayerSeasonStats;
+  isPitcher: boolean;
+  lastYearStats?: Partial<PlayerSeasonStats>;
+  careerStats?: Partial<PlayerSeasonStats>;
+  dataSource: "current" | "lastYear" | "career";
+  last10Games: GameLogEntry[];
+  projections: StatProjection[];
+  nextGame: { opponent: string; date: string; venue?: string } | null;
+}
+
+const BATTER_MARKETS = [
+  { market: "batter_hits", label: "Hits" },
+  { market: "batter_total_bases", label: "Total Bases" },
+  { market: "batter_home_runs", label: "Home Runs" },
+  { market: "batter_rbi", label: "RBI" },
+];
+const PITCHER_MARKETS = [
+  { market: "pitcher_strikeouts", label: "Strikeouts" },
+  { market: "pitcher_outs", label: "Outs Recorded" },
+];
+
+function buildProjection(
+  gameLog: GameLogEntry[],
+  seasonPerGame: number,
+  market: string,
+  label: string,
+  isPitcher: boolean,
+): StatProjection {
+  const values = gameLog.map((g) => getStatForMarket(g, market, isPitcher));
+  const last10 = values.slice(-10);
+  const last5 = values.slice(-5);
+  const avg = (arr: number[]) =>
+    arr.length > 0 ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+  const last10Avg = avg(last10);
+  const last5Avg = avg(last5);
+  const first5 = values.slice(0, Math.max(0, values.length - 5)).slice(-5);
+  const avgFirst5 = avg(first5.length > 0 ? first5 : last10);
+  const trend: StatProjection["trend"] =
+    last5Avg > avgFirst5 + 0.15
+      ? "up"
+      : last5Avg < avgFirst5 - 0.15
+        ? "down"
+        : "flat";
+  // Blend: recent form weighted higher than season rate, season rate as a
+  // stabilizer when the game-log sample is thin.
+  const projection =
+    last10.length >= 5
+      ? last10Avg * 0.6 + last5Avg * 0.25 + seasonPerGame * 0.15
+      : seasonPerGame;
+  return {
+    market,
+    label,
+    seasonAvg: Math.round(seasonPerGame * 100) / 100,
+    last10Avg: Math.round(last10Avg * 100) / 100,
+    last5Avg: Math.round(last5Avg * 100) / 100,
+    trend,
+    projection: Math.round(projection * 100) / 100,
+  };
+}
+
+export async function getPlayerProfile(
+  playerName: string,
+  playerId?: number,
+): Promise<PlayerProfile | null> {
+  const player = playerId
+    ? await searchPlayerById(playerId)
+    : await searchPlayer(playerName);
+  if (!player) return null;
+
+  const isPitcher = player.position === "P";
+  const lastYear = new Date().getFullYear() - 1;
+
+  const [seasonRaw, lastYearRaw, careerRaw, gameLog] = await Promise.all([
+    isPitcher
+      ? fetchPitcherSeasonStats(player.id)
+      : fetchBatterSeasonStats(player.id),
+    isPitcher
+      ? fetchPitcherSeasonStats(player.id, lastYear)
+      : fetchBatterSeasonStats(player.id, lastYear),
+    fetchCareerStats(player.id, isPitcher),
+    fetchGameLog(player.id, isPitcher),
+  ]);
+
+  const primaryRaw = seasonRaw ?? lastYearRaw;
+  if (!primaryRaw && !lastYearRaw && !careerRaw) return null;
+  const raw = primaryRaw ?? lastYearRaw ?? careerRaw;
+  if (!raw) return null;
+
+  const gamesPlayed = parseInt(raw.gamesPlayed || raw.gamesPitched || "0");
+  const seasonStats: PlayerSeasonStats = {
+    name: player.fullName,
+    team: player.team,
+    teamAbbrev:
+      player.team.split(" ").pop()?.slice(0, 3).toUpperCase() ?? "???",
+    position: player.position,
+    gamesPlayed,
+    number: player.number,
+    photo: player.photo,
+  };
+
+  if (isPitcher) {
+    const totalK = parseInt(raw.strikeOuts) || 0;
+    const ip = ipToInnings(raw.inningsPitched);
+    seasonStats.era = parseFloat(raw.era) || 0;
+    seasonStats.whip = parseFloat(raw.whip) || 0;
+    seasonStats.strikeouts = totalK;
+    seasonStats.k9 = ip > 0 ? (totalK / ip) * 9 : 0;
+    seasonStats.bb9 = ip > 0 ? ((parseInt(raw.baseOnBalls) || 0) / ip) * 9 : 0;
+    seasonStats.inningsPitched = ip;
+    seasonStats.wins = parseInt(raw.wins) || 0;
+    seasonStats.losses = parseInt(raw.losses) || 0;
+    seasonStats.avgStrikeoutsPerGame =
+      gamesPlayed > 0 ? totalK / gamesPlayed : 0;
+  } else {
+    const hits = parseInt(raw.hits) || 0;
+    const doubles = parseInt(raw.doubles) || 0;
+    const triples = parseInt(raw.triples) || 0;
+    const hr = parseInt(raw.homeRuns) || 0;
+    const tb = hits + doubles + triples * 2 + hr * 3;
+    seasonStats.avg = parseFloat(raw.avg) || 0;
+    seasonStats.ops = parseFloat(raw.ops) || 0;
+    seasonStats.hits = hits;
+    seasonStats.homeRuns = hr;
+    seasonStats.rbi = parseInt(raw.rbi) || 0;
+    seasonStats.stolenBases = parseInt(raw.stolenBases) || 0;
+    seasonStats.totalBases = tb;
+    seasonStats.hitsPerGame = gamesPlayed > 0 ? hits / gamesPlayed : 0;
+    seasonStats.tbPerGame = gamesPlayed > 0 ? tb / gamesPlayed : 0;
+  }
+
+  const markets = isPitcher ? PITCHER_MARKETS : BATTER_MARKETS;
+  const seasonPerGameFor = (market: string): number => {
+    if (isPitcher) {
+      if (market === "pitcher_strikeouts")
+        return seasonStats.avgStrikeoutsPerGame ?? 0;
+      if (market === "pitcher_outs")
+        return gamesPlayed > 0
+          ? ((seasonStats.inningsPitched ?? 0) * 3) / gamesPlayed
+          : 0;
+      return 0;
+    }
+    if (market === "batter_hits") return seasonStats.hitsPerGame ?? 0;
+    if (market === "batter_total_bases") return seasonStats.tbPerGame ?? 0;
+    if (market === "batter_home_runs")
+      return gamesPlayed > 0 ? (seasonStats.homeRuns ?? 0) / gamesPlayed : 0;
+    if (market === "batter_rbi")
+      return gamesPlayed > 0 ? (seasonStats.rbi ?? 0) / gamesPlayed : 0;
+    return 0;
+  };
+
+  const projections = markets.map(({ market, label }) =>
+    buildProjection(
+      gameLog,
+      seasonPerGameFor(market),
+      market,
+      label,
+      isPitcher,
+    ),
+  );
+
+  const lastYearStats = lastYearRaw
+    ? buildStatSummary(lastYearRaw, isPitcher)
+    : undefined;
+  const careerStatsObj = careerRaw
+    ? buildStatSummary(careerRaw, isPitcher)
+    : undefined;
+  const dataSource = seasonRaw
+    ? ("current" as const)
+    : lastYearRaw
+      ? ("lastYear" as const)
+      : ("career" as const);
+
+  // Next scheduled game for this player's team (today or upcoming)
+  let nextGame: PlayerProfile["nextGame"] = null;
+  try {
+    const { fetchTodayGames, getTeamAbbrev } = await import("./stats-api");
+    const games = await fetchTodayGames();
+    const myAbbrev = seasonStats.teamAbbrev;
+    const match = games.find((g) => {
+      const homeAbbrev = getTeamAbbrev(g.teams.home.team.name);
+      const awayAbbrev = getTeamAbbrev(g.teams.away.team.name);
+      return homeAbbrev === myAbbrev || awayAbbrev === myAbbrev;
+    });
+    if (match) {
+      const isHome = getTeamAbbrev(match.teams.home.team.name) === myAbbrev;
+      const oppName = isHome
+        ? match.teams.away.team.name
+        : match.teams.home.team.name;
+      nextGame = {
+        opponent: oppName,
+        date: match.gameDate,
+        venue: match.venue?.name,
+      };
+    }
+  } catch {}
+
+  return {
+    player: seasonStats,
+    isPitcher,
+    lastYearStats,
+    careerStats: careerStatsObj,
+    dataSource,
+    last10Games: gameLog.slice(-10),
+    projections,
+    nextGame,
   };
 }
 
