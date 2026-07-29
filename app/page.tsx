@@ -534,9 +534,14 @@ export default function WarRoom() {
   };
 
   // Simplified to 4 tabs. Live / Props / Arbs / News all merge into Board.
+  // Bot tab is admin-only — the underlying pick-generation/learning engine
+  // still runs on its normal schedule and feeds picks elsewhere, but its
+  // own record/stats aren't public-facing yet (thin sample, mixes backtest
+  // and live numbers in ways a visitor could easily misread as a proven
+  // track record). Keep watching it internally; don't show it publicly.
   const tabs = [
     { key: "dashboard" as const, icon: BarChart3, label: "Board" },
-    { key: "bot" as const, icon: Diamond, label: "Bot" },
+    ...(isAdmin ? [{ key: "bot" as const, icon: Diamond, label: "Bot" }] : []),
     { key: "players" as const, icon: Search, label: "Players" },
     { key: "profile" as const, icon: UserCircle, label: "Profile" },
   ];
@@ -965,13 +970,6 @@ export default function WarRoom() {
                     <PushOptIn />
                   </SafeBoundary>
 
-                  {/* Live games (only renders when live games exist) */}
-                  <SafeBoundary>
-                    <Suspense fallback={null}>
-                      <LiveBoard />
-                    </Suspense>
-                  </SafeBoundary>
-
                   <SafeBoundary
                     fallback={
                       <div className="glass rounded-xl p-6 text-center">
@@ -1073,6 +1071,15 @@ export default function WarRoom() {
                       <OddsGrid gameId={selectedGameId} />
                     </SafeBoundary>
                   )}
+
+                  {/* Live games — moved to the bottom of the board. Parlay
+                      of the Day and player props (inside PicksBoard) are
+                      the priority content up top. */}
+                  <SafeBoundary>
+                    <Suspense fallback={null}>
+                      <LiveBoard />
+                    </Suspense>
+                  </SafeBoundary>
                 </div>
 
                 {/* Right Sidebar — XL */}
@@ -1087,7 +1094,7 @@ export default function WarRoom() {
             </div>
 
             <div
-              className={`max-w-3xl mx-auto space-y-4 ${activeTab === "bot" ? "" : "hidden"}`}
+              className={`max-w-3xl mx-auto space-y-4 ${activeTab === "bot" && isAdmin ? "" : "hidden"}`}
             >
               <Suspense fallback={<TabSkeleton />}>
                 <BotChallenge />
