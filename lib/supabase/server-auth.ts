@@ -7,11 +7,26 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const SUPABASE_ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 
+// The Supabase JS SDK's default fetch has no timeout — a degraded DB/schema
+// cache can hang a query indefinitely (observed: builds timing out at 60s+
+// on routes that call Supabase at build time via static generation). This
+// bounds every request the SDK makes so callers' try/catch can actually run.
+function timeoutFetch(timeoutMs: number): typeof fetch {
+  return (input, init) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    return fetch(input, { ...init, signal: controller.signal }).finally(() =>
+      clearTimeout(timer),
+    );
+  };
+}
+
 // Service-role client for trusted server-side operations (bypasses RLS).
 // Falls back to anon key if SERVICE_ROLE not configured (less secure but works).
 export const supabaseAdmin = SUPABASE_URL
   ? createClient(SUPABASE_URL, SERVICE_KEY || SUPABASE_ANON, {
       auth: { persistSession: false, autoRefreshToken: false },
+      global: { fetch: timeoutFetch(8000) },
     })
   : null;
 
@@ -43,6 +58,7 @@ export async function getUserFromRequest(
   // Use a per-request client so we can verify the token
   const client = createClient(SUPABASE_URL, SUPABASE_ANON, {
     auth: { persistSession: false, autoRefreshToken: false },
+    global: { fetch: timeoutFetch(8000) },
   });
 
   try {

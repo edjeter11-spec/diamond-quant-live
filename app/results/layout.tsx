@@ -24,8 +24,12 @@ export const metadata: Metadata = {
 
 async function fetchStats() {
   try {
+    // Hard timeout — this runs during `next build`'s static generation too,
+    // where the deployment being built isn't live yet at SITE. An unbounded
+    // fetch here previously hung the Vercel build past its 60s cap.
     const res = await fetch(`${SITE}/api/results?days=30`, {
       next: { revalidate: 600 },
+      signal: AbortSignal.timeout(8000),
     });
     if (!res.ok) return null;
     const d = await res.json();
