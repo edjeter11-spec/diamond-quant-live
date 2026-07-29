@@ -436,8 +436,15 @@ export async function GET(req: Request) {
         | "error";
       error?: string;
     } = { mlb: "skipped-window", nba: "skipped-window" };
+    // Generate any time today's picks are still missing — not just in a fixed
+    // morning window. The old `utcHour >= 11 && <= 15` gate meant that if cron
+    // failed during those 4 hours (e.g. the DB was down), picks never
+    // generated for the rest of the day and the Bot tab stayed empty with no
+    // recovery path. The `already-cached` check below makes re-running cheap,
+    // so there's no reason to refuse outside the morning. Still skipped
+    // overnight (0-10 UTC = 8pm-6am ET) when there's no fresh slate to price.
     const utcHour = new Date().getUTCHours();
-    if (utcHour >= 11 && utcHour <= 15) {
+    if (utcHour >= 11) {
       try {
         const today = etDateString();
 
