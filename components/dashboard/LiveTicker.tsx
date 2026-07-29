@@ -6,9 +6,31 @@ import { AlertTriangle, TrendingUp, Zap } from "lucide-react";
 export default function LiveTicker() {
   const { oddsData, scores } = useStore();
 
-  // Collect all alerts: arbs, big EV, live scores
+  // Live scores get their own dedicated, always-first entries — a real
+  // scrolling scoreboard rather than one alert buried among arbs/EV lines.
+  const liveScores: Array<{ text: string }> = [];
+  for (const score of scores) {
+    if (score.status !== "live") continue;
+    // Skip ghost-live games (status flipped but no actual play yet) — avoids "0 0 ▲1" noise
+    const hasAction =
+      (score.awayScore ?? 0) > 0 ||
+      (score.homeScore ?? 0) > 0 ||
+      (score.inning ?? 0) > 1 ||
+      (score.period ?? 0) > 1 ||
+      (score.outs ?? 0) > 0;
+    if (!hasAction) continue;
+    const isMLB = score.inningHalf != null;
+    const periodTxt = isMLB
+      ? `${score.inningHalf === "top" ? "Top" : "Bot"} ${score.inning ?? 1}`
+      : `${score.periodLabel || `Q${score.period ?? 1}`}${score.timeRemaining ? ` ${score.timeRemaining}` : ""}`;
+    liveScores.push({
+      text: `${score.awayAbbrev} ${score.awayScore ?? 0} - ${score.homeAbbrev} ${score.homeScore ?? 0} · ${periodTxt}`,
+    });
+  }
+
+  // Collect all alerts: arbs, big EV
   const alerts: Array<{
-    type: "arb" | "ev" | "live";
+    type: "arb" | "ev";
     text: string;
     priority: number;
   }> = [];
@@ -35,41 +57,24 @@ export default function LiveTicker() {
     }
   }
 
-  for (const score of scores) {
-    if (score.status !== "live") continue;
-    // Skip ghost-live games (status flipped but no actual play yet) — avoids "0 0 ▲1" noise
-    const hasAction =
-      (score.awayScore ?? 0) > 0 ||
-      (score.homeScore ?? 0) > 0 ||
-      (score.inning ?? 0) > 1 ||
-      (score.period ?? 0) > 1 ||
-      (score.outs ?? 0) > 0;
-    if (!hasAction) continue;
-    const isMLB = score.inningHalf != null;
-    const periodTxt = isMLB
-      ? `${score.inningHalf === "top" ? "▲" : "▼"}${score.inning ?? 1}`
-      : `${score.periodLabel || `Q${score.period ?? 1}`}${score.timeRemaining ? ` ${score.timeRemaining}` : ""}`;
-    alerts.push({
-      type: "live",
-      text: `LIVE: ${score.awayAbbrev} ${score.awayScore ?? 0} @ ${score.homeAbbrev} ${score.homeScore ?? 0} (${periodTxt})`,
-      priority: 1,
-    });
-  }
-
-  // Sort by priority
+  // Sort alerts by priority
   alerts.sort((a, b) => b.priority - a.priority);
 
-  // If no alerts, show default
-  if (alerts.length === 0) {
-    alerts.push({
+  // Merge: live scores first (dedicated scoreboard entries), then alerts.
+  // If there's truly nothing to show, fall back to a default idle message.
+  const combined: Array<{ type: "arb" | "ev" | "live"; text: string }> = [
+    ...liveScores.map((s) => ({ type: "live" as const, text: s.text })),
+    ...alerts,
+  ];
+  if (combined.length === 0) {
+    combined.push({
       type: "ev",
       text: "Diamond-Quant Live — Scanning markets for edges...",
-      priority: 0,
     });
   }
 
   // Double the content for seamless loop
-  const tickerItems = [...alerts, ...alerts];
+  const tickerItems = [...combined, ...combined];
 
   return (
     <div className="safe-top w-full bg-bunker border-b border-slate/50 overflow-hidden">

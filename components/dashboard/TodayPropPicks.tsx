@@ -829,7 +829,7 @@ export default function TodayPropPicks({
                   </div>
                   {/* Right rail — odds stacked over Parlay on mobile for 44px+ targets */}
                   <div className="flex flex-col sm:flex-row items-end sm:items-center gap-1.5 sm:gap-2 flex-shrink-0">
-                    <span className="text-base sm:text-sm font-mono font-bold text-silver leading-none">
+                    <span className="text-xs sm:text-sm font-mono font-bold text-silver leading-none">
                       {p.odds > 0 ? "+" : ""}
                       {p.odds}
                     </span>

@@ -38,7 +38,6 @@ import InfoTip from "@/components/ui/InfoTip";
 import Link from "next/link";
 import { usePremium } from "@/lib/hooks/usePremium";
 import TodayPropPicks from "@/components/dashboard/TodayPropPicks";
-import NRFISection from "@/components/dashboard/NRFISection";
 import NFLPropSection from "@/components/dashboard/NFLPropSection";
 import NHLPropSection from "@/components/dashboard/NHLPropSection";
 import SafeBoundary from "@/components/SafeBoundary";
@@ -599,18 +598,55 @@ export default function PicksBoard() {
     };
   }, [combinedPicks]);
 
-  // Schedule summary — de-duped by game (a game can have multiple picks),
-  // so counts reflect actual games, not pick rows.
+  // Schedule summary — de-duped by game, derived from the REAL game slate,
+  // not from combinedPicks. The model can produce zero picks for tonight
+  // (thin EV night) while real games are still live/upcoming — the
+  // schedule strip must reflect actual games, not how many cleared the
+  // pick bar. Prefers oddsData (has commenceTime for day-labeling), but
+  // falls back to the free `scores` feed when odds are unavailable (quota
+  // exhausted etc.) — scores don't depend on the Odds API at all, so this
+  // keeps the strip honest even when odds can't be fetched.
   const scheduleSummary = useMemo(() => {
     const byGame = new Map<
       string,
-      { status: Pick["gameStatus"]; dayLabel?: string }
+      { status: Pick["gameStatus"] | "final"; dayLabel?: string }
     >();
-    for (const p of combinedPicks) {
-      if (!byGame.has(p.game)) {
-        byGame.set(p.game, { status: p.gameStatus, dayLabel: p.dayLabel });
+    const now = Date.now();
+    for (const game of oddsData) {
+      const gameName =
+        game.awayTeam && game.homeTeam
+          ? `${game.awayTeam} @ ${game.homeTeam}`
+          : "";
+      if (!gameName || byGame.has(gameName)) continue;
+
+      // Skip games that started 4+ hours ago (definitely over) — same rule
+      // used when building allEV.
+      if (game.commenceTime) {
+        const gameStart = new Date(game.commenceTime).getTime();
+        if (gameStart < now - 4 * 60 * 60 * 1000) continue;
+      }
+
+      const { status, dayLabel } = getGameStatus(gameName, game.commenceTime);
+      if (status === "final") continue;
+      byGame.set(gameName, { status, dayLabel });
+    }
+
+    // Fallback: odds feed is empty (quota exhausted, no lines posted yet) —
+    // use the free scores feed so the strip doesn't go blank/wrong.
+    if (byGame.size === 0) {
+      for (const s of scores as any[]) {
+        const gameName =
+          s.awayTeam && s.homeTeam ? `${s.awayTeam} @ ${s.homeTeam}` : "";
+        if (!gameName || byGame.has(gameName)) continue;
+        if (s.status === "final") continue;
+        const { status, dayLabel } = getGameStatus(gameName, s.startTime);
+        // getGameStatus already resolves "live" straight from gameStatusMap
+        // (also built off `scores`), so this stays correct without needing
+        // oddsData at all.
+        byGame.set(gameName, { status, dayLabel });
       }
     }
+
     let live = 0,
       tonight = 0,
       tomorrow = 0,
@@ -633,10 +669,10 @@ export default function PicksBoard() {
       laterCount,
       laterLabel,
     };
-  }, [combinedPicks]);
+  }, [oddsData, scores, getGameStatus]);
   const hasLiveGames = scheduleSummary.live > 0;
   const allFuture =
-    combinedPicks.length > 0 &&
+    scheduleSummary.totalGames > 0 &&
     scheduleSummary.live === 0 &&
     scheduleSummary.tonight === 0;
   const nextDayLabel =
@@ -852,16 +888,7 @@ export default function PicksBoard() {
         </SafeBoundary>
       )}
 
-      {/* ═══ NRFI / YRFI — MLB only ═══ */}
-      <SafeBoundary>
-        <NRFISection
-          sport={
-            currentSport === "mlb" || currentSport === "nba"
-              ? currentSport
-              : "nba"
-          }
-        />
-      </SafeBoundary>
+      {/* NRFI / YRFI moved to its own top-level tab — see app/page.tsx */}
 
       {/* ═══ NFL Player Props — auto-renders when sport=nfl ═══ */}
       <SafeBoundary>

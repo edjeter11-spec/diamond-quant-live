@@ -87,6 +87,7 @@ interface AppState {
   activeTab:
     | "dashboard"
     | "nrfi"
+    | "dingers"
     | "bot"
     | "players"
     | "props"

@@ -44,6 +44,8 @@ import { getDiscordWebhook, setDiscordWebhook } from "@/lib/store";
 // Lazy-load heavy tabs — not needed on first paint
 const BotChallenge = lazy(() => import("@/components/dashboard/BotChallenge"));
 const PlayersTab = lazy(() => import("@/components/dashboard/PlayersTab"));
+const NRFITab = lazy(() => import("@/components/dashboard/NRFITab"));
+const DingersTab = lazy(() => import("@/components/dashboard/DingersTab"));
 const ArbBoard = lazy(() => import("@/components/dashboard/ArbBoard"));
 const NewsBoard = lazy(() => import("@/components/dashboard/NewsBoard"));
 const LiveBoard = lazy(() => import("@/components/dashboard/LiveBoard"));
@@ -82,6 +84,8 @@ import {
   Zap,
   Newspaper,
   Search,
+  Target,
+  Flame,
 } from "lucide-react";
 
 // Arb alert sound (short beep)
@@ -541,6 +545,8 @@ export default function WarRoom() {
   // track record). Keep watching it internally; don't show it publicly.
   const tabs = [
     { key: "dashboard" as const, icon: BarChart3, label: "Board" },
+    { key: "nrfi" as const, icon: Target, label: "NRFI" },
+    { key: "dingers" as const, icon: Flame, label: "Dingers" },
     ...(isAdmin ? [{ key: "bot" as const, icon: Diamond, label: "Bot" }] : []),
     { key: "players" as const, icon: Search, label: "Players" },
     { key: "profile" as const, icon: UserCircle, label: "Profile" },
@@ -988,21 +994,24 @@ export default function WarRoom() {
                     <PicksBoard />
                   </SafeBoundary>
 
-                  {/* Arbitrage opportunities (auto-renders empty state when 0 arbs) */}
-                  <details className="glass rounded-xl overflow-hidden border border-gold/15">
-                    <summary className="px-4 py-2.5 flex items-center gap-2 cursor-pointer hover:bg-gunmetal/20 text-xs font-bold text-silver uppercase tracking-wider list-none">
-                      <Zap className="w-3.5 h-3.5 text-gold" />
-                      Arbitrage Scanner
-                      <span className="ml-auto text-[10px] text-mercury/50 font-mono normal-case">
-                        {allArbs.length} opps
-                      </span>
-                    </summary>
-                    <div className="border-t border-slate/15 p-3">
-                      <Suspense fallback={<TabSkeleton />}>
-                        <ArbBoard />
-                      </Suspense>
-                    </div>
-                  </details>
+                  {/* Arbitrage opportunities — admin-only for now, same as
+                      Bot/QuantVerdict below (not a public trust claim yet) */}
+                  {isAdmin && (
+                    <details className="glass rounded-xl overflow-hidden border border-gold/15">
+                      <summary className="px-4 py-2.5 flex items-center gap-2 cursor-pointer hover:bg-gunmetal/20 text-xs font-bold text-silver uppercase tracking-wider list-none">
+                        <Zap className="w-3.5 h-3.5 text-gold" />
+                        Arbitrage Scanner
+                        <span className="ml-auto text-[10px] text-mercury/50 font-mono normal-case">
+                          {allArbs.length} opps
+                        </span>
+                      </summary>
+                      <div className="border-t border-slate/15 p-3">
+                        <Suspense fallback={<TabSkeleton />}>
+                          <ArbBoard />
+                        </Suspense>
+                      </div>
+                    </details>
+                  )}
 
                   {/* News + injury feed (NBA only) */}
                   {currentSport === "nba" && (
@@ -1044,30 +1053,36 @@ export default function WarRoom() {
                             />
                           ) : null;
                         })()}
-                      <QuantVerdict
-                        game={{
-                          homeTeam: selectedOdds?.homeTeam ?? "Select a game",
-                          awayTeam: selectedOdds?.awayTeam ?? "",
-                        }}
-                        analysis={buildVerdict()}
-                        onPlaceBet={
-                          selectedOdds
-                            ? () => {
-                                const verdict = buildVerdict();
-                                if (verdict) {
-                                  openBetSlip({
-                                    game: `${selectedOdds.awayTeam} @ ${selectedOdds.homeTeam}`,
-                                    pick: verdict.pick,
-                                    odds: verdict.marketOdds,
-                                    bookmaker: verdict.bookmaker,
-                                    market: "moneyline",
-                                    evAtPlacement: verdict.evPercentage,
-                                  });
+                      {/* Quant Verdict card — admin-only for now. Underlying
+                          logic/component untouched; just not shown publicly
+                          on the homepage yet (same reasoning as the Bot tab
+                          and Arbitrage Scanner above). */}
+                      {isAdmin && (
+                        <QuantVerdict
+                          game={{
+                            homeTeam: selectedOdds?.homeTeam ?? "Select a game",
+                            awayTeam: selectedOdds?.awayTeam ?? "",
+                          }}
+                          analysis={buildVerdict()}
+                          onPlaceBet={
+                            selectedOdds
+                              ? () => {
+                                  const verdict = buildVerdict();
+                                  if (verdict) {
+                                    openBetSlip({
+                                      game: `${selectedOdds.awayTeam} @ ${selectedOdds.homeTeam}`,
+                                      pick: verdict.pick,
+                                      odds: verdict.marketOdds,
+                                      bookmaker: verdict.bookmaker,
+                                      market: "moneyline",
+                                      evAtPlacement: verdict.evPercentage,
+                                    });
+                                  }
                                 }
-                              }
-                            : undefined
-                        }
-                      />
+                              : undefined
+                          }
+                        />
+                      )}
                       <OddsGrid gameId={selectedGameId} />
                     </SafeBoundary>
                   )}
@@ -1106,6 +1121,18 @@ export default function WarRoom() {
                     <ModelLogs />
                   </>
                 )}
+              </Suspense>
+            </div>
+
+            <div className={activeTab === "nrfi" ? "" : "hidden"}>
+              <Suspense fallback={<TabSkeleton />}>
+                <NRFITab />
+              </Suspense>
+            </div>
+
+            <div className={activeTab === "dingers" ? "" : "hidden"}>
+              <Suspense fallback={<TabSkeleton />}>
+                <DingersTab />
               </Suspense>
             </div>
 
