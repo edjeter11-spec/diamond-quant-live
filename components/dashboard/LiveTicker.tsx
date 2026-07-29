@@ -72,7 +72,7 @@ export default function LiveTicker() {
   const tickerItems = [...alerts, ...alerts];
 
   return (
-    <div className="w-full bg-bunker border-b border-slate/50 overflow-hidden">
+    <div className="safe-top w-full bg-bunker border-b border-slate/50 overflow-hidden">
       <div className="ticker-wrap">
         <div className="ticker-content py-2 gap-12">
           {tickerItems.map((alert, i) => (

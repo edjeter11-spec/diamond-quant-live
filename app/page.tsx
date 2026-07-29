@@ -904,239 +904,240 @@ export default function WarRoom() {
           </div>
         ) : (
           <>
-            {activeTab === "dashboard" && (
-              <>
-                {/* Mobile: View Games button */}
-                <button
-                  onClick={() => setMobileGamesOpen(true)}
-                  className="lg:hidden w-full mb-3 flex items-center justify-center gap-2 py-2.5 rounded-xl glass glass-hover text-sm font-medium text-mercury"
+            {/* Tabs stay mounted once visited and are only hidden via CSS —
+                switching Board <-> Bot <-> Bank <-> Profile no longer
+                unmounts + refetches everything from scratch. */}
+            <div className={activeTab === "dashboard" ? "" : "hidden"}>
+              {/* Mobile: View Games button */}
+              <button
+                onClick={() => setMobileGamesOpen(true)}
+                className="lg:hidden w-full mb-3 flex items-center justify-center gap-2 py-2.5 rounded-xl glass glass-hover text-sm font-medium text-mercury"
+              >
+                <BarChart3 className="w-4 h-4" />
+                Games ({activeGames.length})
+                <ChevronRight className="w-4 h-4" />
+              </button>
+
+              {/* Arb Alert */}
+              {allArbs.length > 0 && (
+                <div
+                  className={`mb-3 ${arbFlash ? "animate-flash-gold rounded-xl" : ""}`}
                 >
-                  <BarChart3 className="w-4 h-4" />
-                  Games ({activeGames.length})
-                  <ChevronRight className="w-4 h-4" />
-                </button>
+                  <ArbitrageAlert arbitrage={allArbs} />
+                </div>
+              )}
 
-                {/* Arb Alert */}
-                {allArbs.length > 0 && (
-                  <div
-                    className={`mb-3 ${arbFlash ? "animate-flash-gold rounded-xl" : ""}`}
-                  >
-                    <ArbitrageAlert arbitrage={allArbs} />
-                  </div>
-                )}
-
-                <div className="flex gap-4">
-                  {/* Left Sidebar — Desktop */}
-                  <div
-                    className={`hidden lg:block transition-all duration-300 ${sidebarOpen ? "w-72" : "w-12"} flex-shrink-0`}
-                  >
-                    <div className="sticky top-24">
-                      <div className="flex items-center justify-between mb-3">
-                        {sidebarOpen && (
-                          <h2 className="text-xs font-semibold text-mercury uppercase tracking-wider">
-                            Games ({scores.length})
-                          </h2>
+              <div className="flex gap-4">
+                {/* Left Sidebar — Desktop */}
+                <div
+                  className={`hidden lg:block transition-all duration-300 ${sidebarOpen ? "w-72" : "w-12"} flex-shrink-0`}
+                >
+                  <div className="sticky top-24">
+                    <div className="flex items-center justify-between mb-3">
+                      {sidebarOpen && (
+                        <h2 className="text-xs font-semibold text-mercury uppercase tracking-wider">
+                          Games ({scores.length})
+                        </h2>
+                      )}
+                      <button
+                        onClick={toggleSidebar}
+                        className="p-1 hover:bg-gunmetal/50 rounded"
+                      >
+                        {sidebarOpen ? (
+                          <ChevronLeft className="w-4 h-4 text-mercury" />
+                        ) : (
+                          <ChevronRight className="w-4 h-4 text-mercury" />
                         )}
+                      </button>
+                    </div>
+                    {sidebarOpen && (
+                      <div className="max-h-[calc(100vh-180px)] overflow-y-auto pr-1">
+                        {renderGameCards()}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Center — Main Picks Board */}
+                <div className="flex-1 min-w-0 space-y-3 sm:space-y-4">
+                  {/* Streak banner — social proof / retention hook */}
+                  <SafeBoundary>
+                    <StreakBanner />
+                  </SafeBoundary>
+
+                  {/* Push opt-in card (auto-hides if granted/dismissed) */}
+                  <SafeBoundary>
+                    <PushOptIn />
+                  </SafeBoundary>
+
+                  {/* Tonight's Plays — 30-second answer (only renders for MLB/NBA) */}
+                  {(currentSport === "mlb" || currentSport === "nba") && (
+                    <SafeBoundary>
+                      <TonightsPlays sport={currentSport as "mlb" | "nba"} />
+                    </SafeBoundary>
+                  )}
+
+                  {/* Live games (only renders when live games exist) */}
+                  <SafeBoundary>
+                    <Suspense fallback={null}>
+                      <LiveBoard />
+                    </Suspense>
+                  </SafeBoundary>
+
+                  <SafeBoundary
+                    fallback={
+                      <div className="glass rounded-xl p-6 text-center">
+                        <p className="text-sm text-mercury">
+                          Picks board temporarily unavailable.
+                        </p>
                         <button
-                          onClick={toggleSidebar}
-                          className="p-1 hover:bg-gunmetal/50 rounded"
+                          onClick={() => location.reload()}
+                          className="mt-3 text-xs text-neon underline"
                         >
-                          {sidebarOpen ? (
-                            <ChevronLeft className="w-4 h-4 text-mercury" />
-                          ) : (
-                            <ChevronRight className="w-4 h-4 text-mercury" />
-                          )}
+                          Reload
                         </button>
                       </div>
-                      {sidebarOpen && (
-                        <div className="max-h-[calc(100vh-180px)] overflow-y-auto pr-1">
-                          {renderGameCards()}
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                    }
+                  >
+                    <PicksBoard />
+                  </SafeBoundary>
 
-                  {/* Center — Main Picks Board */}
-                  <div className="flex-1 min-w-0 space-y-3 sm:space-y-4">
-                    {/* Streak banner — social proof / retention hook */}
-                    <SafeBoundary>
-                      <StreakBanner />
-                    </SafeBoundary>
-
-                    {/* Push opt-in card (auto-hides if granted/dismissed) */}
-                    <SafeBoundary>
-                      <PushOptIn />
-                    </SafeBoundary>
-
-                    {/* Tonight's Plays — 30-second answer (only renders for MLB/NBA) */}
-                    {(currentSport === "mlb" || currentSport === "nba") && (
-                      <SafeBoundary>
-                        <TonightsPlays sport={currentSport as "mlb" | "nba"} />
-                      </SafeBoundary>
-                    )}
-
-                    {/* Live games (only renders when live games exist) */}
-                    <SafeBoundary>
-                      <Suspense fallback={null}>
-                        <LiveBoard />
+                  {/* Arbitrage opportunities (auto-renders empty state when 0 arbs) */}
+                  <details className="glass rounded-xl overflow-hidden border border-gold/15">
+                    <summary className="px-4 py-2.5 flex items-center gap-2 cursor-pointer hover:bg-gunmetal/20 text-xs font-bold text-silver uppercase tracking-wider list-none">
+                      <Zap className="w-3.5 h-3.5 text-gold" />
+                      Arbitrage Scanner
+                      <span className="ml-auto text-[10px] text-mercury/50 font-mono normal-case">
+                        {allArbs.length} opps
+                      </span>
+                    </summary>
+                    <div className="border-t border-slate/15 p-3">
+                      <Suspense fallback={<TabSkeleton />}>
+                        <ArbBoard />
                       </Suspense>
-                    </SafeBoundary>
+                    </div>
+                  </details>
 
-                    <SafeBoundary
-                      fallback={
-                        <div className="glass rounded-xl p-6 text-center">
-                          <p className="text-sm text-mercury">
-                            Picks board temporarily unavailable.
-                          </p>
-                          <button
-                            onClick={() => location.reload()}
-                            className="mt-3 text-xs text-neon underline"
-                          >
-                            Reload
-                          </button>
-                        </div>
-                      }
-                    >
-                      <PicksBoard />
-                    </SafeBoundary>
-
-                    {/* Arbitrage opportunities (auto-renders empty state when 0 arbs) */}
-                    <details className="glass rounded-xl overflow-hidden border border-gold/15">
+                  {/* News + injury feed (NBA only) */}
+                  {currentSport === "nba" && (
+                    <details className="glass rounded-xl overflow-hidden border border-electric/15">
                       <summary className="px-4 py-2.5 flex items-center gap-2 cursor-pointer hover:bg-gunmetal/20 text-xs font-bold text-silver uppercase tracking-wider list-none">
-                        <Zap className="w-3.5 h-3.5 text-gold" />
-                        Arbitrage Scanner
-                        <span className="ml-auto text-[10px] text-mercury/50 font-mono normal-case">
-                          {allArbs.length} opps
-                        </span>
+                        <Newspaper className="w-3.5 h-3.5 text-electric" />
+                        News & Injuries
                       </summary>
                       <div className="border-t border-slate/15 p-3">
                         <Suspense fallback={<TabSkeleton />}>
-                          <ArbBoard />
+                          <NewsBoard />
                         </Suspense>
                       </div>
                     </details>
+                  )}
 
-                    {/* News + injury feed (NBA only) */}
-                    {currentSport === "nba" && (
-                      <details className="glass rounded-xl overflow-hidden border border-electric/15">
-                        <summary className="px-4 py-2.5 flex items-center gap-2 cursor-pointer hover:bg-gunmetal/20 text-xs font-bold text-silver uppercase tracking-wider list-none">
-                          <Newspaper className="w-3.5 h-3.5 text-electric" />
-                          News & Injuries
-                        </summary>
-                        <div className="border-t border-slate/15 p-3">
-                          <Suspense fallback={<TabSkeleton />}>
-                            <NewsBoard />
-                          </Suspense>
-                        </div>
-                      </details>
-                    )}
-
-                    {/* Game deep-dive (when a game is selected) */}
-                    {selectedGameId && selectedScore && (
-                      <SafeBoundary>
-                        <SelectedGameBanner
-                          game={selectedScore}
-                          onDeselect={() => selectGame(null)}
-                        />
-                        {currentSport === "nba" &&
-                          selectedOdds &&
-                          (() => {
-                            const homeAbbrev = teamNameToAbbrev(
-                              selectedOdds.homeTeam,
-                              "nba",
-                            );
-                            const awayAbbrev = teamNameToAbbrev(
-                              selectedOdds.awayTeam,
-                              "nba",
-                            );
-                            return homeAbbrev && awayAbbrev ? (
-                              <GameMatchupBrief
-                                homeAbbrev={homeAbbrev}
-                                awayAbbrev={awayAbbrev}
-                              />
-                            ) : null;
-                          })()}
-                        <QuantVerdict
-                          game={{
-                            homeTeam: selectedOdds?.homeTeam ?? "Select a game",
-                            awayTeam: selectedOdds?.awayTeam ?? "",
-                          }}
-                          analysis={buildVerdict()}
-                          onPlaceBet={
-                            selectedOdds
-                              ? () => {
-                                  const verdict = buildVerdict();
-                                  if (verdict) {
-                                    openBetSlip({
-                                      game: `${selectedOdds.awayTeam} @ ${selectedOdds.homeTeam}`,
-                                      pick: verdict.pick,
-                                      odds: verdict.marketOdds,
-                                      bookmaker: verdict.bookmaker,
-                                      market: "moneyline",
-                                      evAtPlacement: verdict.evPercentage,
-                                    });
-                                  }
+                  {/* Game deep-dive (when a game is selected) */}
+                  {selectedGameId && selectedScore && (
+                    <SafeBoundary>
+                      <SelectedGameBanner
+                        game={selectedScore}
+                        onDeselect={() => selectGame(null)}
+                      />
+                      {currentSport === "nba" &&
+                        selectedOdds &&
+                        (() => {
+                          const homeAbbrev = teamNameToAbbrev(
+                            selectedOdds.homeTeam,
+                            "nba",
+                          );
+                          const awayAbbrev = teamNameToAbbrev(
+                            selectedOdds.awayTeam,
+                            "nba",
+                          );
+                          return homeAbbrev && awayAbbrev ? (
+                            <GameMatchupBrief
+                              homeAbbrev={homeAbbrev}
+                              awayAbbrev={awayAbbrev}
+                            />
+                          ) : null;
+                        })()}
+                      <QuantVerdict
+                        game={{
+                          homeTeam: selectedOdds?.homeTeam ?? "Select a game",
+                          awayTeam: selectedOdds?.awayTeam ?? "",
+                        }}
+                        analysis={buildVerdict()}
+                        onPlaceBet={
+                          selectedOdds
+                            ? () => {
+                                const verdict = buildVerdict();
+                                if (verdict) {
+                                  openBetSlip({
+                                    game: `${selectedOdds.awayTeam} @ ${selectedOdds.homeTeam}`,
+                                    pick: verdict.pick,
+                                    odds: verdict.marketOdds,
+                                    bookmaker: verdict.bookmaker,
+                                    market: "moneyline",
+                                    evAtPlacement: verdict.evPercentage,
+                                  });
                                 }
-                              : undefined
-                          }
-                        />
-                        <OddsGrid gameId={selectedGameId} />
-                      </SafeBoundary>
-                    )}
-                  </div>
+                              }
+                            : undefined
+                        }
+                      />
+                      <OddsGrid gameId={selectedGameId} />
+                    </SafeBoundary>
+                  )}
+                </div>
 
-                  {/* Right Sidebar — XL */}
-                  <div className="hidden xl:block w-80 flex-shrink-0 space-y-4">
-                    <div className="sticky top-24 space-y-4">
-                      <SafeBoundary>
-                        <LineMovement movements={lineMovements} />
-                      </SafeBoundary>
-                    </div>
+                {/* Right Sidebar — XL */}
+                <div className="hidden xl:block w-80 flex-shrink-0 space-y-4">
+                  <div className="sticky top-24 space-y-4">
+                    <SafeBoundary>
+                      <LineMovement movements={lineMovements} />
+                    </SafeBoundary>
                   </div>
                 </div>
-              </>
-            )}
-
-            {activeTab === "bot" && (
-              <div className="max-w-3xl mx-auto space-y-4">
-                <Suspense fallback={<TabSkeleton />}>
-                  <BotChallenge />
-                  {currentSport === "mlb" && isAdmin && (
-                    <>
-                      <ThreeModelBot />
-                      <BrainViz />
-                      <GhostBots />
-                      <ModelLogs />
-                    </>
-                  )}
-                </Suspense>
               </div>
-            )}
+            </div>
 
-            {activeTab === "bankroll" && (
-              <div className="max-w-2xl mx-auto space-y-4">
-                <ROIChart />
-                <SnapSync />
-                <Suspense fallback={<TabSkeleton />}>
-                  <BankrollTracker />
-                </Suspense>
-                <button
-                  onClick={() => openBetSlip()}
-                  className="w-full py-3 rounded-xl bg-neon/15 text-neon border border-neon/30 font-semibold text-sm hover:bg-neon/25 transition-colors"
-                >
-                  + Log a Bet
-                </button>
-              </div>
-            )}
+            <div
+              className={`max-w-3xl mx-auto space-y-4 ${activeTab === "bot" ? "" : "hidden"}`}
+            >
+              <Suspense fallback={<TabSkeleton />}>
+                <BotChallenge />
+                {currentSport === "mlb" && isAdmin && (
+                  <>
+                    <ThreeModelBot />
+                    <BrainViz />
+                    <GhostBots />
+                    <ModelLogs />
+                  </>
+                )}
+              </Suspense>
+            </div>
 
-            {activeTab === "profile" && (
-              <div className="max-w-lg mx-auto space-y-4">
-                <Suspense fallback={<TabSkeleton />}>
-                  <UserProfile />
-                </Suspense>
-                {authUser && <DiscordSettings />}
-              </div>
-            )}
+            <div
+              className={`max-w-2xl mx-auto space-y-4 ${activeTab === "bankroll" ? "" : "hidden"}`}
+            >
+              <ROIChart />
+              <SnapSync />
+              <Suspense fallback={<TabSkeleton />}>
+                <BankrollTracker />
+              </Suspense>
+              <button
+                onClick={() => openBetSlip()}
+                className="w-full py-3 rounded-xl bg-neon/15 text-neon border border-neon/30 font-semibold text-sm hover:bg-neon/25 transition-colors"
+              >
+                + Log a Bet
+              </button>
+            </div>
+
+            <div
+              className={`max-w-lg mx-auto space-y-4 ${activeTab === "profile" ? "" : "hidden"}`}
+            >
+              <Suspense fallback={<TabSkeleton />}>
+                <UserProfile />
+              </Suspense>
+              {authUser && <DiscordSettings />}
+            </div>
           </>
         )}
       </main>

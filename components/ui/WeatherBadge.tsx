@@ -15,6 +15,41 @@ interface Weather {
   summary: string;
 }
 
+// Module-level cache + in-flight de-dupe, shared across every WeatherBadge
+// instance on the page. Weather changes slowly (server already caches 10min
+// per team) — without this, every re-render/remount of a game card list
+// (tab switch, sport toggle, sidebar refresh) re-fired one fetch per team,
+// and with 16 MLB games that's 16 redundant network round-trips each time.
+const weatherCache = new Map<string, Weather | null>();
+const inFlight = new Map<string, Promise<Weather | null>>();
+const CLIENT_TTL_MS = 10 * 60 * 1000;
+const cacheStamps = new Map<string, number>();
+
+function getTeamWeather(team: string): Promise<Weather | null> {
+  const stamp = cacheStamps.get(team);
+  if (weatherCache.has(team) && stamp && Date.now() - stamp < CLIENT_TTL_MS) {
+    return Promise.resolve(weatherCache.get(team) ?? null);
+  }
+  const pending = inFlight.get(team);
+  if (pending) return pending;
+
+  const req = fetch(`/api/weather?team=${encodeURIComponent(team)}`)
+    .then((r) => r.json())
+    .then((data) => {
+      const w = data.ok && data.weather ? (data.weather as Weather) : null;
+      weatherCache.set(team, w);
+      cacheStamps.set(team, Date.now());
+      return w;
+    })
+    .catch(() => null)
+    .finally(() => {
+      inFlight.delete(team);
+    });
+
+  inFlight.set(team, req);
+  return req;
+}
+
 // Compact weather badge for game cards. Only meaningful for MLB outdoor venues.
 // Hides itself silently on roofed/missing/NBA games.
 export default function WeatherBadge({
@@ -33,16 +68,11 @@ export default function WeatherBadge({
       return;
     }
     let cancelled = false;
-    fetch(`/api/weather?team=${encodeURIComponent(team)}`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (cancelled) return;
-        if (data.ok && data.weather) setWeather(data.weather);
-        setLoaded(true);
-      })
-      .catch(() => {
-        if (!cancelled) setLoaded(true);
-      });
+    getTeamWeather(team).then((w) => {
+      if (cancelled) return;
+      if (w) setWeather(w);
+      setLoaded(true);
+    });
     return () => {
       cancelled = true;
     };
