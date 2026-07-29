@@ -402,7 +402,17 @@ export default function BotChallenge() {
                 : prev;
             const baseToday = base.picks.filter((p) => p.date === today).length;
             if (baseToday === 0 && todayPregen?.picks?.length) {
-              return { ...base, picks: [...base.picks, ...todayPregen.picks] };
+              // Dedupe by game+pick — belt-and-suspenders against any path
+              // that could otherwise double up the same pick.
+              const seen = new Set(
+                base.picks
+                  .filter((p) => p.date === today)
+                  .map((p) => `${p.game}|${p.pick}`),
+              );
+              const freshPicks = todayPregen.picks.filter(
+                (p: any) => !seen.has(`${p.game}|${p.pick}`),
+              );
+              return { ...base, picks: [...base.picks, ...freshPicks] };
             }
             return base;
           });
@@ -445,12 +455,18 @@ export default function BotChallenge() {
     return () => clearTimeout(t);
   }, [loading]);
 
-  // Auto-generate picks when analyses arrive and we don't have today's
+  // Auto-generate picks when analyses arrive and we don't have today's.
+  // A single forced ("closest call") pick counts as "done for today" too —
+  // otherwise this effect re-fired on every analyses refresh (since 1 < 4)
+  // and kept appending a fresh forced pick each time with no dedup, which is
+  // exactly how the Bot tab ended up showing the same pick twice.
   useEffect(() => {
     if (analyses.length === 0) return;
     const today = etDateString();
+    const todaysPicks = botState.picks.filter((p) => p.date === today);
     const hasTodayPicks =
-      botState.picks.filter((p) => p.date === today).length >= 4;
+      todaysPicks.length >= 4 ||
+      todaysPicks.some((p) => (p as any).isForcedPick);
     if (hasTodayPicks) {
       setNoPlaysToday(false);
       return;
@@ -459,10 +475,14 @@ export default function BotChallenge() {
     const newPicks = generateSmartPicks(analyses, botState.bankroll);
     if (newPicks.length > 0) {
       setNoPlaysToday(false);
+      // Dedupe by game+pick so a re-run (or a cloud-synced pick that arrived
+      // via a different code path) can never produce a visible duplicate.
+      const seen = new Set(todaysPicks.map((p) => `${p.game}|${p.pick}`));
+      const deduped = newPicks.filter((p) => !seen.has(`${p.game}|${p.pick}`));
       const updated: SmartBotState = {
         ...botState,
-        picks: [...botState.picks, ...newPicks],
-        bankroll: botState.bankroll - newPicks.reduce((s, p) => s + p.stake, 0),
+        picks: [...botState.picks, ...deduped],
+        bankroll: botState.bankroll - deduped.reduce((s, p) => s + p.stake, 0),
       };
       saveSmartBot(updated, currentSport);
       setBotState(updated);
@@ -632,7 +652,16 @@ export default function BotChallenge() {
 
   const formatOdds = (odds: number) => (odds > 0 ? `+${odds}` : `${odds}`);
   const today = etDateString();
-  const todayPicks = botState.picks.filter((p) => p.date === today);
+  // Render-time dedupe safety net — pending/settled picks on the same game+
+  // pick text should never both show (covers any stale localStorage state
+  // saved before the generation-side dedup existed).
+  const todayPicks = Array.from(
+    new Map(
+      botState.picks
+        .filter((p) => p.date === today)
+        .map((p) => [`${p.game}|${p.pick}`, p]),
+    ).values(),
+  );
   const settled = botState.picks.filter((p) => p.result !== "pending");
   const pendingPicks = botState.picks.filter((p) => p.result === "pending");
   const wins = settled.filter((p) => p.result === "win").length;
