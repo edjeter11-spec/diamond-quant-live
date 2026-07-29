@@ -724,8 +724,9 @@ export default function TodayPropPicks({
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    {/* Player name — text-sm mobile (was xs), prominent */}
-                    <p className="text-sm sm:text-sm font-semibold text-silver leading-tight break-words">
+                    {/* Player name — matches the type scale used everywhere
+                        else in the board (Locks/Longshots etc use text-xs) */}
+                    <p className="text-xs font-semibold text-silver leading-tight break-words">
                       {p.playerName}
                       {result === "win" && (
                         <span className="ml-1.5 text-[10px] font-bold text-neon">
@@ -750,7 +751,7 @@ export default function TodayPropPicks({
                     </p>
                     {/* Pick — bold, mobile gets inline side icon for hierarchy */}
                     <p
-                      className={`text-sm sm:text-xs font-bold leading-tight mt-1 sm:mt-0.5 flex items-center gap-1 ${p.side === "over" ? "text-neon" : "text-amber"}`}
+                      className={`text-xs font-bold leading-tight mt-1 sm:mt-0.5 flex items-center gap-1 ${p.side === "over" ? "text-neon" : "text-amber"}`}
                     >
                       {p.side === "over" ? (
                         <ArrowUpRight className="w-3.5 h-3.5 sm:hidden" />
@@ -767,7 +768,7 @@ export default function TodayPropPicks({
                     {/* Mobile: stack book + edge vertically; Desktop: inline wrap */}
                     <div className="flex flex-col sm:flex-row sm:items-center sm:flex-wrap gap-1 sm:gap-1.5 mt-1.5 sm:mt-1">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-[11px] sm:text-[10px] text-mercury/70 sm:text-mercury/60">
+                        <span className="text-[10px] text-mercury/60">
                           {p.bookmaker} · {p.fairProb}%
                           {p.usesBrain ? " brain" : " fair"}
                           {p.projectedValue != null &&
@@ -775,7 +776,7 @@ export default function TodayPropPicks({
                             ` · proj ${p.projectedValue}`}
                         </span>
                         <span
-                          className={`text-[11px] sm:text-[10px] font-semibold ${p.evPercentage > 0 ? "text-neon" : "text-mercury/60"}`}
+                          className={`text-[10px] font-semibold ${p.evPercentage > 0 ? "text-neon" : "text-mercury/60"}`}
                         >
                           +{p.evPercentage}% edge
                         </span>
