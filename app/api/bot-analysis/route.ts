@@ -10,6 +10,7 @@ import {
   getApiKey,
   markKeyExhausted,
   getActiveKeyCount,
+  getKeyCount,
 } from "@/lib/odds/api-keys";
 import { getFreeEvents } from "@/lib/odds/free-events";
 import {
@@ -37,7 +38,10 @@ export async function GET() {
     // exhausted/dead key returned [] silently and the whole MLB bot tab
     // showed "waiting for game data" forever.
     let oddsRaw: any[] = [];
-    for (let attempt = 0; attempt < 3; attempt++) {
+    // Try every configured key — see app/api/odds/route.ts for why 3 wasn't
+    // enough (in-memory exhausted-set doesn't survive cold starts).
+    const maxAttempts = getKeyCount();
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
       const key = getApiKey();
       if (!key) break;
       try {

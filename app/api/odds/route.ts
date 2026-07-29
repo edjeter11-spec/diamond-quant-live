@@ -9,6 +9,7 @@ import {
   getApiKey,
   markKeyExhausted,
   getActiveKeyCount,
+  getKeyCount,
 } from "@/lib/odds/api-keys";
 import {
   getCached,
@@ -62,7 +63,13 @@ export async function GET(req: Request) {
     });
   }
 
-  for (let attempt = 0; attempt < 3; attempt++) {
+  // Try every configured key, not just the first 3 — the "exhausted" set is
+  // in-memory per serverless instance, so a cold start has to rediscover
+  // dead keys from scratch each time. With 10 keys and only 3 of them alive
+  // at a given moment, capping attempts at 3 meant a real chance of exhausting
+  // the try-budget on dead keys before ever reaching a live one.
+  const maxAttempts = getKeyCount();
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const key = getApiKey();
     if (!key) break;
 
