@@ -9,18 +9,24 @@ const PRECACHE_URLS = ["/", "/track-record", "/manifest.json"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(RUNTIME).then((cache) => cache.addAll(PRECACHE_URLS).catch(() => {}))
+    caches
+      .open(RUNTIME)
+      .then((cache) => cache.addAll(PRECACHE_URLS).catch(() => {})),
   );
   self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(
-        keys.filter((k) => k.startsWith("dq-") && k !== RUNTIME).map((k) => caches.delete(k))
-      )
-    )
+    caches
+      .keys()
+      .then((keys) =>
+        Promise.all(
+          keys
+            .filter((k) => k.startsWith("dq-") && k !== RUNTIME)
+            .map((k) => caches.delete(k)),
+        ),
+      ),
   );
   self.clients.claim();
 });
@@ -33,7 +39,8 @@ self.addEventListener("fetch", (event) => {
   if (url.origin !== self.location.origin) return;
 
   const isApi = url.pathname.startsWith("/api/");
-  const isHtml = request.mode === "navigate" || request.destination === "document";
+  const isHtml =
+    request.mode === "navigate" || request.destination === "document";
 
   // Network-first for fresh data, cache fallback for offline shell
   if (isApi || isHtml) {
@@ -41,10 +48,13 @@ self.addEventListener("fetch", (event) => {
       fetch(request)
         .then((res) => {
           const copy = res.clone();
-          caches.open(RUNTIME).then((cache) => cache.put(request, copy)).catch(() => {});
+          caches
+            .open(RUNTIME)
+            .then((cache) => cache.put(request, copy))
+            .catch(() => {});
           return res;
         })
-        .catch(() => caches.match(request).then((c) => c || caches.match("/")))
+        .catch(() => caches.match(request).then((c) => c || caches.match("/"))),
     );
     return;
   }
@@ -56,11 +66,14 @@ self.addEventListener("fetch", (event) => {
       return fetch(request).then((res) => {
         if (res.ok) {
           const copy = res.clone();
-          caches.open(RUNTIME).then((cache) => cache.put(request, copy)).catch(() => {});
+          caches
+            .open(RUNTIME)
+            .then((cache) => cache.put(request, copy))
+            .catch(() => {});
         }
         return res;
       });
-    })
+    }),
   );
 });
 
@@ -76,7 +89,7 @@ self.addEventListener("push", (event) => {
         badge: "/apple-icon",
         tag: data.tag ?? "dq-alert",
         data: { url: data.url ?? "/" },
-      })
+      }),
     );
   } catch {}
 });

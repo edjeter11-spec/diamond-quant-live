@@ -8,13 +8,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCached, setCache } from "@/lib/odds/server-cache";
 
 const GEMINI_KEY = process.env.GEMINI_API_KEY ?? "";
-const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
+const GEMINI_URL =
+  "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
-  if (!body) return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+  if (!body)
+    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
 
   const { game, reasoning, history, aiTip, gameId } = body as {
     game?: string;
@@ -24,7 +26,8 @@ export async function POST(req: NextRequest) {
     gameId?: string;
   };
 
-  if (!game) return NextResponse.json({ error: "game required" }, { status: 400 });
+  if (!game)
+    return NextResponse.json({ error: "game required" }, { status: 400 });
 
   // Server-side cache: 30 min per game
   const today = new Date().toISOString().split("T")[0];
@@ -67,7 +70,8 @@ Write a 2-3 sentence preview that: (1) highlights the most important matchup fac
     }
 
     const data = await response.json();
-    const summary: string | null = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? null;
+    const summary: string | null =
+      data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? null;
 
     if (!summary) return NextResponse.json({ summary: null, source: "empty" });
 

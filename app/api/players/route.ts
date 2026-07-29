@@ -67,15 +67,23 @@ function todayKey() {
 
 function filterTodayOnly(response: any): any {
   if (!response?.props) return response;
-  const todayET = new Date().toLocaleDateString("en-US", { timeZone: "America/New_York" });
+  const todayET = new Date().toLocaleDateString("en-US", {
+    timeZone: "America/New_York",
+  });
   const filteredProps = response.props.filter((p: any) => {
     if (!p.gameTime) return true; // synthesized/fallback — keep
-    const gameDay = new Date(p.gameTime).toLocaleDateString("en-US", { timeZone: "America/New_York" });
+    const gameDay = new Date(p.gameTime).toLocaleDateString("en-US", {
+      timeZone: "America/New_York",
+    });
     return gameDay === todayET;
   });
   const filteredEvents = (response.events ?? []).filter((e: any) => {
     // events have no gameTime, but we can map via the props
-    return filteredProps.some((p: any) => p.team?.includes(e.game?.split(" @ ")[0]?.trim() ?? "___") || p.team?.includes(e.game?.split(" @ ")[1]?.trim() ?? "___"));
+    return filteredProps.some(
+      (p: any) =>
+        p.team?.includes(e.game?.split(" @ ")[0]?.trim() ?? "___") ||
+        p.team?.includes(e.game?.split(" @ ")[1]?.trim() ?? "___"),
+    );
   });
   return { ...response, props: filteredProps, events: filteredEvents };
 }
@@ -91,7 +99,9 @@ export async function GET(req: Request) {
   const cacheKey = `props_v5_${sport}_${market}`;
   const cached = getCached(cacheKey, CACHE_TTL.PROPS);
   if (cached) {
-    return NextResponse.json(filterTodayOnly(cached), { headers: { "Cache-Control": CDN_CACHE } });
+    return NextResponse.json(filterTodayOnly(cached), {
+      headers: { "Cache-Control": CDN_CACHE },
+    });
   }
 
   // Cold server cache — check Supabase snapshot next (shared across serverless
@@ -101,10 +111,16 @@ export async function GET(req: Request) {
   const snapshotKey = `props_snap_v3_${sport}_${market}_${todayKey()}`;
   try {
     const snapshot = await cloudGet<any>(snapshotKey, null);
-    if (snapshot && Array.isArray(snapshot.props) && snapshot.props.length > 0) {
+    if (
+      snapshot &&
+      Array.isArray(snapshot.props) &&
+      snapshot.props.length > 0
+    ) {
       const filtered = filterTodayOnly(snapshot);
       setCache(cacheKey, filtered); // warm the server cache too
-      return NextResponse.json(filtered, { headers: { "Cache-Control": CDN_CACHE } });
+      return NextResponse.json(filtered, {
+        headers: { "Cache-Control": CDN_CACHE },
+      });
     }
   } catch {}
 
@@ -122,13 +138,16 @@ export async function GET(req: Request) {
         try {
           const eventsRes = await fetch(
             `${BASE_URL}/sports/${sport}/events?apiKey=${apiKey}`,
-            { next: { revalidate: 300 } }
+            { next: { revalidate: 300 }, signal: AbortSignal.timeout(8000) },
           );
           if (eventsRes.ok) {
             allEvents = await eventsRes.json();
           }
         } catch (e) {
-          console.error("Odds API events fetch failed, falling back to free source:", e instanceof Error ? e.message : e);
+          console.error(
+            "Odds API events fetch failed, falling back to free source:",
+            e instanceof Error ? e.message : e,
+          );
         }
       }
       // Fallback: ESPN (NBA) / MLB Stats API (MLB) — no key needed
@@ -136,7 +155,10 @@ export async function GET(req: Request) {
         try {
           allEvents = await getFreeEvents(sport);
         } catch (e) {
-          console.error("Free events fallback failed:", e instanceof Error ? e.message : e);
+          console.error(
+            "Free events fallback failed:",
+            e instanceof Error ? e.message : e,
+          );
           allEvents = [];
         }
       }
@@ -145,16 +167,29 @@ export async function GET(req: Request) {
       // within the last 4 hours (still live / recently final).
       const now = Date.now();
       // Today's games only (ET) — started within 4h ago or up to midnight ET + 2h buffer
-      const todayET = new Date().toLocaleDateString("en-US", { timeZone: "America/New_York" });
+      const todayET = new Date().toLocaleDateString("en-US", {
+        timeZone: "America/New_York",
+      });
       const pool = allEvents.filter((e: any) => {
         const t = new Date(e.commence_time).getTime();
-        const gameDay = new Date(e.commence_time).toLocaleDateString("en-US", { timeZone: "America/New_York" });
+        const gameDay = new Date(e.commence_time).toLocaleDateString("en-US", {
+          timeZone: "America/New_York",
+        });
         return t >= now - 4 * 60 * 60 * 1000 && gameDay === todayET;
       });
       events = pool
-        .sort((a: any, b: any) => new Date(a.commence_time).getTime() - new Date(b.commence_time).getTime())
+        .sort(
+          (a: any, b: any) =>
+            new Date(a.commence_time).getTime() -
+            new Date(b.commence_time).getTime(),
+        )
         .slice(0, 5)
-        .map((e: any) => ({ id: e.id, away_team: e.away_team, home_team: e.home_team, commence_time: e.commence_time }));
+        .map((e: any) => ({
+          id: e.id,
+          away_team: e.away_team,
+          home_team: e.home_team,
+          commence_time: e.commence_time,
+        }));
 
       setCache(eventsCacheKey, events);
     }
@@ -162,10 +197,14 @@ export async function GET(req: Request) {
     // Always re-filter to today's ET date — in case the cached events include
     // tomorrow's games (cached before this filter was added).
     const nowMs = Date.now();
-    const todayFilterET = new Date().toLocaleDateString("en-US", { timeZone: "America/New_York" });
+    const todayFilterET = new Date().toLocaleDateString("en-US", {
+      timeZone: "America/New_York",
+    });
     events = (events as any[]).filter((e: any) => {
       const t = new Date(e.commence_time).getTime();
-      const gameDay = new Date(e.commence_time).toLocaleDateString("en-US", { timeZone: "America/New_York" });
+      const gameDay = new Date(e.commence_time).toLocaleDateString("en-US", {
+        timeZone: "America/New_York",
+      });
       return t >= nowMs - 4 * 60 * 60 * 1000 && gameDay === todayFilterET;
     });
 
@@ -193,12 +232,16 @@ export async function GET(req: Request) {
             const primary = await attempt(marketsParam);
             if (primary.length > 0) return primary;
             if (alt) {
-              try { return await attempt(market); } catch {}
+              try {
+                return await attempt(market);
+              } catch {}
             }
             return primary;
           } catch {
             if (alt) {
-              try { return await attempt(market); } catch {}
+              try {
+                return await attempt(market);
+              } catch {}
             }
             return [];
           }
@@ -223,7 +266,10 @@ export async function GET(req: Request) {
           isSynthesized = grouped.length > 0;
         }
       } catch (e) {
-        console.error(`Synthesis failed for ${sport}/${market}:`, e instanceof Error ? e.message : e);
+        console.error(
+          `Synthesis failed for ${sport}/${market}:`,
+          e instanceof Error ? e.message : e,
+        );
       }
     }
 
@@ -243,25 +289,27 @@ export async function GET(req: Request) {
         const augmentTargets = grouped.slice(0, 30);
 
         // Deduplicate player names to avoid N+1 queries (60 calls → one per unique name)
-        const uniquePlayerNames = [...new Set(augmentTargets.map((g: any) => g.playerName))];
+        const uniquePlayerNames = [
+          ...new Set(augmentTargets.map((g: any) => g.playerName)),
+        ];
         const playerCache = new Map();
         const injuryCache = new Map();
 
         // Batch lookup all unique players
         await Promise.all([
           Promise.all(
-            uniquePlayerNames.map(name =>
+            uniquePlayerNames.map((name) =>
               searchNBAPlayer(name)
-                .then(p => playerCache.set(name, p))
-                .catch(() => playerCache.set(name, null))
-            )
+                .then((p) => playerCache.set(name, p))
+                .catch(() => playerCache.set(name, null)),
+            ),
           ),
           Promise.all(
-            uniquePlayerNames.map(name =>
+            uniquePlayerNames.map((name) =>
               isPlayerInjured(name)
-                .then(inj => injuryCache.set(name, inj))
-                .catch(() => injuryCache.set(name, null))
-            )
+                .then((inj) => injuryCache.set(name, inj))
+                .catch(() => injuryCache.set(name, null)),
+            ),
           ),
         ]);
 
@@ -280,12 +328,20 @@ export async function GET(req: Request) {
               // Brain projection — only runs when we have real stats for the
               // relevant market. Zero-stat fallbacks produced nonsense (line
               // 25 vs 0 ppg = 99% under) which the client filter dropped.
-              const relevantStat = g.market === "player_points" ? p?.ppg
-                : g.market === "player_rebounds" ? p?.rpg
-                : g.market === "player_assists" ? p?.apg
-                : 0;
+              const relevantStat =
+                g.market === "player_points"
+                  ? p?.ppg
+                  : g.market === "player_rebounds"
+                    ? p?.rpg
+                    : g.market === "player_assists"
+                      ? p?.apg
+                      : 0;
               if (weights && p && Number(relevantStat) > 0) {
-                const stats = { ppg: p.ppg ?? 0, rpg: p.rpg ?? 0, apg: p.apg ?? 0 };
+                const stats = {
+                  ppg: p.ppg ?? 0,
+                  rpg: p.rpg ?? 0,
+                  apg: p.apg ?? 0,
+                };
                 // Determine if player's team is home from prop.team ("Away @ Home")
                 const teamStr: string = g.team ?? "";
                 const atIdx = teamStr.indexOf(" @ ");
@@ -305,18 +361,26 @@ export async function GET(req: Request) {
                 // Store both sides as percentages (0-100) so the UI can compare
                 // against fairOverProb/fairUnderProb which are also 0-100.
                 const probPct = projection.probability * 100;
-                g.brainOverProb = projection.side === "over" ? probPct : 100 - probPct;
-                g.brainUnderProb = projection.side === "under" ? probPct : 100 - probPct;
+                g.brainOverProb =
+                  projection.side === "over" ? probPct : 100 - probPct;
+                g.brainUnderProb =
+                  projection.side === "under" ? probPct : 100 - probPct;
                 g.brainConfidence = projection.confidence;
                 g.brainProjectedValue = projection.projectedValue;
               }
             } catch (e) {
-              console.error(`Failed to augment ${g.playerName}:`, e instanceof Error ? e.message : e);
+              console.error(
+                `Failed to augment ${g.playerName}:`,
+                e instanceof Error ? e.message : e,
+              );
             }
-          })
+          }),
         );
       } catch (e) {
-        console.error("NBA prop augmentation failed:", e instanceof Error ? e.message : e);
+        console.error(
+          "NBA prop augmentation failed:",
+          e instanceof Error ? e.message : e,
+        );
       }
     }
 
@@ -350,10 +414,20 @@ export async function GET(req: Request) {
     const response = {
       props: slim,
       markets: marketsFor(sport),
-      events: events.map((g: any) => ({ id: g.id, game: `${g.away_team} @ ${g.home_team}` })),
+      events: events.map((g: any) => ({
+        id: g.id,
+        game: `${g.away_team} @ ${g.home_team}`,
+      })),
       isSynthesized,
-      source: isSynthesized ? "brain_projection" : (allProps.length > 0 ? "live_books" : "empty"),
-      message: slim.length === 0 ? "No props available yet for this market" : undefined,
+      source: isSynthesized
+        ? "brain_projection"
+        : allProps.length > 0
+          ? "live_books"
+          : "empty",
+      message:
+        slim.length === 0
+          ? "No props available yet for this market"
+          : undefined,
     };
 
     if (slim.length > 0) {
@@ -362,7 +436,9 @@ export async function GET(req: Request) {
       // serve the same picks instantly. Fire-and-forget.
       cloudSet(snapshotKey, response).catch(() => {});
     }
-    return NextResponse.json(response, { headers: { "Cache-Control": CDN_CACHE } });
+    return NextResponse.json(response, {
+      headers: { "Cache-Control": CDN_CACHE },
+    });
   } catch (error) {
     console.error("Props API error:", error);
     const stale = getCached(cacheKey, CACHE_TTL.PROPS * 5);
@@ -434,14 +510,32 @@ function getEtOffsetMinutes(d: Date): number {
 // Build projected picks when no books have posted props yet.
 // Uses the NBA player index to find each team's top contributors,
 // runs them through the brain with the season avg as the implied line.
-async function synthesizeNbaBrainPicks(market: string, games: any[]): Promise<any[]> {
-  const statKey = market === "player_points" ? "ppg"
-    : market === "player_rebounds" ? "rpg"
-    : market === "player_assists" ? "apg" : "ppg";
+async function synthesizeNbaBrainPicks(
+  market: string,
+  games: any[],
+): Promise<any[]> {
+  const statKey =
+    market === "player_points"
+      ? "ppg"
+      : market === "player_rebounds"
+        ? "rpg"
+        : market === "player_assists"
+          ? "apg"
+          : "ppg";
 
-  // Pull the shared NBA player index
-  const base = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://diamond-quant-live.vercel.app";
-  const idxRes = await fetch(`${base}/api/nba-player-index`, { next: { revalidate: 3600 } });
+  // Pull the shared NBA player index. In local dev, call localhost — not
+  // production over the real internet (that pattern caused multi-minute
+  // hangs elsewhere whenever prod was slow/cold).
+  const base =
+    process.env.NODE_ENV === "development"
+      ? "http://localhost:3000"
+      : process.env.VERCEL_URL
+        ? `https://${process.env.VERCEL_URL}`
+        : "https://diamond-quant-live.vercel.app";
+  const idxRes = await fetch(`${base}/api/nba-player-index`, {
+    next: { revalidate: 3600 },
+    signal: AbortSignal.timeout(8000),
+  });
   if (!idxRes.ok) return [];
   const idxData = await idxRes.json();
   const allPlayers: any[] = idxData.players ?? [];
@@ -466,7 +560,9 @@ async function synthesizeNbaBrainPicks(market: string, games: any[]): Promise<an
     candidateNames.map((n) => searchNBAPlayer(n).catch(() => null)),
   );
   const withStats = enriched
-    .filter((p): p is NonNullable<typeof p> => !!p && Number((p as any)[statKey]) > 0)
+    .filter(
+      (p): p is NonNullable<typeof p> => !!p && Number((p as any)[statKey]) > 0,
+    )
     .map((p: any) => ({
       ...p,
       stat: Number(p[statKey]),
@@ -498,9 +594,17 @@ async function synthesizeNbaBrainPicks(market: string, games: any[]): Promise<an
     });
     const line = Math.round(p.stat * 2) / 2 - 0.5; // season avg minus a half-step for Over lean
     const stats = { ppg: p.ppg ?? 0, rpg: p.rpg ?? 0, apg: p.apg ?? 0 };
-    let brainOverProb = 60, brainUnderProb = 40, brainSide: "over" | "under" = "over", brainConfidence = 60, brainProjectedValue = p.stat;
+    let brainOverProb = 60,
+      brainUnderProb = 40,
+      brainSide: "over" | "under" = "over",
+      brainConfidence = 60,
+      brainProjectedValue = p.stat;
     if (weights) {
-      const proj = projectProp(stats, market, line, weights, { isHome: false, isB2B: false, leagueAvgTotal: 224 });
+      const proj = projectProp(stats, market, line, weights, {
+        isHome: false,
+        isB2B: false,
+        leagueAvgTotal: 224,
+      });
       const pct = proj.probability * 100;
       brainSide = proj.side;
       brainOverProb = proj.side === "over" ? pct : 100 - pct;
@@ -534,8 +638,12 @@ async function synthesizeNbaBrainPicks(market: string, games: any[]): Promise<an
 // MLB brain-projection synthesis. Builds picks from probable pitchers when
 // books haven't posted props yet (or when Odds API is exhausted). Pitcher
 // markets only — batter props need confirmed lineups which often aren't out.
-async function synthesizeMlbBrainPicks(market: string, games: any[]): Promise<any[]> {
-  const isPitcherMarket = market === "pitcher_strikeouts" || market === "pitcher_outs";
+async function synthesizeMlbBrainPicks(
+  market: string,
+  games: any[],
+): Promise<any[]> {
+  const isPitcherMarket =
+    market === "pitcher_strikeouts" || market === "pitcher_outs";
   if (!isPitcherMarket) return []; // batter props need lineups — skip for now
 
   const MLB_API = "https://statsapi.mlb.com/api/v1";
@@ -546,7 +654,10 @@ async function synthesizeMlbBrainPicks(market: string, games: any[]): Promise<an
     try {
       const gamePk = game.id;
       const url = `${MLB_API}/schedule?sportId=1&gamePk=${gamePk}&hydrate=probablePitcher`;
-      const res = await fetch(url, { next: { revalidate: 600 } });
+      const res = await fetch(url, {
+        next: { revalidate: 600 },
+        signal: AbortSignal.timeout(5000),
+      });
       if (!res.ok) continue;
       const data = await res.json();
       for (const dateEntry of data.dates ?? []) {
@@ -558,7 +669,10 @@ async function synthesizeMlbBrainPicks(market: string, games: any[]): Promise<an
             // Fetch career K/9 + IP/start as basis for projection
             try {
               const statsUrl = `${MLB_API}/people/${pitcher.id}/stats?stats=season&group=pitching`;
-              const sRes = await fetch(statsUrl, { next: { revalidate: 3600 } });
+              const sRes = await fetch(statsUrl, {
+                next: { revalidate: 3600 },
+                signal: AbortSignal.timeout(5000),
+              });
               if (!sRes.ok) continue;
               const sData = await sRes.json();
               const stat = sData.stats?.[0]?.splits?.[0]?.stat;
@@ -574,11 +688,16 @@ async function synthesizeMlbBrainPicks(market: string, games: any[]): Promise<an
               const projectedKs = (ipPerStart * k9) / 9;
               const projectedOuts = ipPerStart * 3;
 
-              const projectedValue = market === "pitcher_strikeouts" ? projectedKs : projectedOuts;
-              if (!Number.isFinite(projectedValue) || projectedValue <= 0) continue;
+              const projectedValue =
+                market === "pitcher_strikeouts" ? projectedKs : projectedOuts;
+              if (!Number.isFinite(projectedValue) || projectedValue <= 0)
+                continue;
 
               const line = Math.round(projectedValue * 2) / 2 - 0.5;
-              const overProb = Math.min(70, 50 + Math.max(0, projectedValue - line) * 10);
+              const overProb = Math.min(
+                70,
+                50 + Math.max(0, projectedValue - line) * 10,
+              );
 
               out.push({
                 playerName: pitcher.fullName ?? "Unknown",
@@ -636,9 +755,18 @@ function groupByPlayer(props: ReturnType<typeof parsePlayerProps>) {
 
   const lineRows: LineRow[] = [];
   for (const lines of byLine.values()) {
-    const bestOver = lines.reduce((best, l) => (l.overPrice > best.overPrice ? l : best), lines[0]);
-    const bestUnder = lines.reduce((best, l) => (l.underPrice > best.underPrice ? l : best), lines[0]);
-    const { prob1: fairOverProb } = devig(bestOver.overPrice, bestUnder.underPrice);
+    const bestOver = lines.reduce(
+      (best, l) => (l.overPrice > best.overPrice ? l : best),
+      lines[0],
+    );
+    const bestUnder = lines.reduce(
+      (best, l) => (l.underPrice > best.underPrice ? l : best),
+      lines[0],
+    );
+    const { prob1: fairOverProb } = devig(
+      bestOver.overPrice,
+      bestUnder.underPrice,
+    );
 
     lineRows.push({
       playerName: lines[0].playerName,
@@ -646,9 +774,16 @@ function groupByPlayer(props: ReturnType<typeof parsePlayerProps>) {
       team: lines[0].team,
       gameTime: (lines[0] as any).gameTime ?? null,
       line: lines[0].line,
-      books: lines.map((l) => ({ bookmaker: l.bookmaker, overPrice: l.overPrice, underPrice: l.underPrice })),
+      books: lines.map((l) => ({
+        bookmaker: l.bookmaker,
+        overPrice: l.overPrice,
+        underPrice: l.underPrice,
+      })),
       bestOver: { bookmaker: bestOver.bookmaker, price: bestOver.overPrice },
-      bestUnder: { bookmaker: bestUnder.bookmaker, price: bestUnder.underPrice },
+      bestUnder: {
+        bookmaker: bestUnder.bookmaker,
+        price: bestUnder.underPrice,
+      },
       fairOverProb: Math.round(fairOverProb * 10000) / 100,
       fairUnderProb: Math.round((1 - fairOverProb) * 10000) / 100,
     });
@@ -672,7 +807,14 @@ function groupByPlayer(props: ReturnType<typeof parsePlayerProps>) {
 
     // Best-EV alt: highest edge (fair prob vs implied) across over/under on alts
     let bestAltEdge = 0;
-    let bestAlt: { line: number; side: "over" | "under"; price: number; bookmaker: string; fairProb: number; edgePct: number } | null = null;
+    let bestAlt: {
+      line: number;
+      side: "over" | "under";
+      price: number;
+      bookmaker: string;
+      fairProb: number;
+      edgePct: number;
+    } | null = null;
     for (const alt of alts) {
       const overImplied = 1 / americanToDecimal(alt.bestOver.price);
       const underImplied = 1 / americanToDecimal(alt.bestUnder.price);
@@ -680,11 +822,25 @@ function groupByPlayer(props: ReturnType<typeof parsePlayerProps>) {
       const underEdge = alt.fairUnderProb / 100 - underImplied;
       if (overEdge > bestAltEdge) {
         bestAltEdge = overEdge;
-        bestAlt = { line: alt.line, side: "over", price: alt.bestOver.price, bookmaker: alt.bestOver.bookmaker, fairProb: alt.fairOverProb, edgePct: Math.round(overEdge * 10000) / 100 };
+        bestAlt = {
+          line: alt.line,
+          side: "over",
+          price: alt.bestOver.price,
+          bookmaker: alt.bestOver.bookmaker,
+          fairProb: alt.fairOverProb,
+          edgePct: Math.round(overEdge * 10000) / 100,
+        };
       }
       if (underEdge > bestAltEdge) {
         bestAltEdge = underEdge;
-        bestAlt = { line: alt.line, side: "under", price: alt.bestUnder.price, bookmaker: alt.bestUnder.bookmaker, fairProb: alt.fairUnderProb, edgePct: Math.round(underEdge * 10000) / 100 };
+        bestAlt = {
+          line: alt.line,
+          side: "under",
+          price: alt.bestUnder.price,
+          bookmaker: alt.bestUnder.bookmaker,
+          fairProb: alt.fairUnderProb,
+          edgePct: Math.round(underEdge * 10000) / 100,
+        };
       }
     }
 

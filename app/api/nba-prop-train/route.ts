@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { deepTrainNbaProps } from "@/lib/bot/nba-prop-deep-trainer";
-import { loadNbaPropBrainFromCloud, saveNbaPropBrainToCloud } from "@/lib/bot/nba-prop-brain";
+import {
+  loadNbaPropBrainFromCloud,
+  saveNbaPropBrainToCloud,
+} from "@/lib/bot/nba-prop-brain";
 import { cloudGet, cloudSet } from "@/lib/supabase/client";
 import { getUserFromRequest } from "@/lib/supabase/server-auth";
 
@@ -12,23 +15,42 @@ export async function GET(req: NextRequest) {
   const cronSecret = req.headers.get("x-cron-secret");
   if (cronSecret !== process.env.CRON_SECRET) {
     const user = await getUserFromRequest(req);
-    if (!user) return NextResponse.json({ ok: false, error: "Auth required" }, { status: 401 });
-    if (!user.isAdmin) return NextResponse.json({ ok: false, error: "Admin only" }, { status: 403 });
+    if (!user)
+      return NextResponse.json(
+        { ok: false, error: "Auth required" },
+        { status: 401 },
+      );
+    if (!user.isAdmin)
+      return NextResponse.json(
+        { ok: false, error: "Admin only" },
+        { status: 403 },
+      );
   }
 
   const { searchParams } = new URL(req.url);
   const reset = searchParams.get("reset") === "true";
-  const seasons = (searchParams.get("seasons") || "2022,2023,2024").split(",").map(Number);
+  const seasons = (searchParams.get("seasons") || "2022,2023,2024")
+    .split(",")
+    .map(Number);
 
   try {
     // Load or create brain
     let brain = reset ? null : await loadNbaPropBrainFromCloud();
     if (!brain || reset) {
       // Import and create default
-      const { default: createDefault } = await import("@/lib/bot/nba-prop-brain").then(m => ({ default: m }));
+      const { default: createDefault } =
+        await import("@/lib/bot/nba-prop-brain").then((m) => ({ default: m }));
       brain = await loadNbaPropBrainFromCloud(); // will return default if nothing saved
       if (reset) {
-        brain.weights = { seasonAverage: 0.25, recentForm: 0.20, matchupDefense: 0.18, homeAway: 0.10, restSchedule: 0.10, paceContext: 0.10, lineMovement: 0.07 };
+        brain.weights = {
+          seasonAverage: 0.25,
+          recentForm: 0.2,
+          matchupDefense: 0.18,
+          homeAway: 0.1,
+          restSchedule: 0.1,
+          paceContext: 0.1,
+          lineMovement: 0.07,
+        };
         brain.playerMemory = {};
         brain.markets = {};
         brain.totalPredictions = 0;
@@ -51,24 +73,20 @@ export async function GET(req: NextRequest) {
     });
 
     // Run training
-    const result = await deepTrainNbaProps(
-      brain,
-      seasons,
-      async (msg) => {
-        // Update progress in Supabase
-        const match = msg.match(/(\d+) games/);
-        const gamesProcessed = match ? parseInt(match[1]) : 0;
-        await cloudSet("nba_prop_training_progress", {
-          status: "running",
-          gamesProcessed,
-          totalGames: 45000,
-          message: msg,
-          currentSeason: seasons.join(","),
-          startedAt: new Date().toISOString(),
-          accuracy: {},
-        }).catch(() => {}); // don't fail training on progress save error
-      }
-    );
+    const result = await deepTrainNbaProps(brain, seasons, async (msg) => {
+      // Update progress in Supabase
+      const match = msg.match(/(\d+) games/);
+      const gamesProcessed = match ? parseInt(match[1]) : 0;
+      await cloudSet("nba_prop_training_progress", {
+        status: "running",
+        gamesProcessed,
+        totalGames: 45000,
+        message: msg,
+        currentSeason: seasons.join(","),
+        startedAt: new Date().toISOString(),
+        accuracy: {},
+      }).catch(() => {}); // don't fail training on progress save error
+    });
 
     // Save trained brain
     await saveNbaPropBrainToCloud(result.brain);
@@ -100,6 +118,9 @@ export async function GET(req: NextRequest) {
       status: "error",
       error: error.message,
     }).catch(() => {});
-    return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+    return NextResponse.json(
+      { ok: false, error: error.message },
+      { status: 500 },
+    );
   }
 }

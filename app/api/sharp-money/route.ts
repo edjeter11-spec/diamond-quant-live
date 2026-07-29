@@ -9,8 +9,13 @@ export const revalidate = 0;
 // Server-only route → use service-role key to bypass RLS for trusted writes.
 const supabase = (() => {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
-  return url && key ? createClient(url, key, { auth: { persistSession: false } }) : null;
+  const key =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    "";
+  return url && key
+    ? createClient(url, key, { auth: { persistSession: false } })
+    : null;
 })();
 
 // ── helpers ──────────────────────────────────────────────
@@ -36,16 +41,26 @@ function computeMovements(rows: any[]) {
     const last = entries[entries.length - 1];
     const game = `${first.away_team} @ ${first.home_team}`;
     const ago = Math.round(
-      (new Date(last.captured_at).getTime() - new Date(first.captured_at).getTime()) / 60000
+      (new Date(last.captured_at).getTime() -
+        new Date(first.captured_at).getTime()) /
+        60000,
     );
 
-    if (first.market === "spreads" && first.spread != null && last.spread != null) {
+    if (
+      first.market === "spreads" &&
+      first.spread != null &&
+      last.spread != null
+    ) {
       const delta = Math.abs(last.spread - first.spread);
       if (delta >= 0.5) {
         movements.push({
-          game, game_id: first.game_id, bookmaker: first.bookmaker,
+          game,
+          game_id: first.game_id,
+          bookmaker: first.bookmaker,
           market: "Spread",
-          from: first.spread, to: last.spread, delta,
+          from: first.spread,
+          to: last.spread,
+          delta,
           direction: last.spread > first.spread ? "up" : "down",
           minutes_ago: ago,
           is_sharp: delta >= 1.5,
@@ -53,13 +68,21 @@ function computeMovements(rows: any[]) {
       }
     }
 
-    if (first.market === "totals" && first.total != null && last.total != null) {
+    if (
+      first.market === "totals" &&
+      first.total != null &&
+      last.total != null
+    ) {
       const delta = Math.abs(last.total - first.total);
       if (delta >= 0.5) {
         movements.push({
-          game, game_id: first.game_id, bookmaker: first.bookmaker,
+          game,
+          game_id: first.game_id,
+          bookmaker: first.bookmaker,
           market: "Total",
-          from: first.total, to: last.total, delta,
+          from: first.total,
+          to: last.total,
+          delta,
           direction: last.total > first.total ? "up" : "down",
           minutes_ago: ago,
           is_sharp: delta >= 1.5,
@@ -67,15 +90,22 @@ function computeMovements(rows: any[]) {
       }
     }
 
-    if (first.market === "moneyline" && first.home_price != null && last.home_price != null) {
+    if (
+      first.market === "moneyline" &&
+      first.home_price != null &&
+      last.home_price != null
+    ) {
       const oldP = americanToImplied(first.home_price);
       const newP = americanToImplied(last.home_price);
       const probDelta = Math.abs(newP - oldP);
       if (probDelta >= 0.02) {
         movements.push({
-          game, game_id: first.game_id, bookmaker: first.bookmaker,
+          game,
+          game_id: first.game_id,
+          bookmaker: first.bookmaker,
           market: "ML",
-          from: first.home_price, to: last.home_price,
+          from: first.home_price,
+          to: last.home_price,
           delta: Math.round(probDelta * 100 * 10) / 10, // % probability
           direction: last.home_price > first.home_price ? "up" : "down",
           minutes_ago: ago,
@@ -151,19 +181,27 @@ export async function POST(req: Request) {
           const home = mkt.outcomes.find((o: any) => o.name === game.home_team);
           const away = mkt.outcomes.find((o: any) => o.name === game.away_team);
           rows.push({
-            sport, game_id: game.id,
-            home_team: game.home_team, away_team: game.away_team,
-            bookmaker: book.key, market: "moneyline",
+            sport,
+            game_id: game.id,
+            home_team: game.home_team,
+            away_team: game.away_team,
+            bookmaker: book.key,
+            market: "moneyline",
             home_price: home?.price ?? null,
             away_price: away?.price ?? null,
             captured_at: now,
           });
         } else if (mkt.key === "spreads") {
-          const homeSpread = mkt.outcomes.find((o: any) => o.name === game.home_team);
+          const homeSpread = mkt.outcomes.find(
+            (o: any) => o.name === game.home_team,
+          );
           rows.push({
-            sport, game_id: game.id,
-            home_team: game.home_team, away_team: game.away_team,
-            bookmaker: book.key, market: "spreads",
+            sport,
+            game_id: game.id,
+            home_team: game.home_team,
+            away_team: game.away_team,
+            bookmaker: book.key,
+            market: "spreads",
             spread: homeSpread?.point ?? null,
             home_price: homeSpread?.price ?? null,
             captured_at: now,
@@ -171,9 +209,12 @@ export async function POST(req: Request) {
         } else if (mkt.key === "totals") {
           const over = mkt.outcomes.find((o: any) => o.name === "Over");
           rows.push({
-            sport, game_id: game.id,
-            home_team: game.home_team, away_team: game.away_team,
-            bookmaker: book.key, market: "totals",
+            sport,
+            game_id: game.id,
+            home_team: game.home_team,
+            away_team: game.away_team,
+            bookmaker: book.key,
+            market: "totals",
             total: over?.point ?? null,
             home_price: over?.price ?? null,
             captured_at: now,

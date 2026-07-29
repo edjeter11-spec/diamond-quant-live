@@ -24,12 +24,12 @@ const STEPS: Step[] = [
   },
   {
     title: "Player Props Tab",
-    hint: "Top nav (desktop) or bottom bar (mobile) — labeled \"Props\".",
+    hint: 'Top nav (desktop) or bottom bar (mobile) — labeled "Props".',
     body: "Player props with our trained NBA brain projection. UNDER picks beat the line ~54% in backtests.",
   },
   {
     title: "Bot Challenge Tab",
-    hint: "Top nav (desktop) or bottom bar (mobile) — labeled \"Bot\".",
+    hint: 'Top nav (desktop) or bottom bar (mobile) — labeled "Bot".',
     body: "Watch the bot bet $5K virtually with daily picks. ROI tracks live.",
   },
 ];
@@ -50,7 +50,8 @@ export default function OnboardingTour() {
       if (typeof window === "undefined") return;
       const seen = window.localStorage.getItem(STORAGE_KEY);
       if (!seen) {
-        previouslyFocused.current = document.activeElement as HTMLElement | null;
+        previouslyFocused.current =
+          document.activeElement as HTMLElement | null;
         setActive(true);
       }
     } catch {
@@ -107,19 +108,27 @@ export default function OnboardingTour() {
       if (e.key === "Tab") {
         // Trap focus between Skip and Next/Get Started
         const focusables = [skipBtnRef.current, nextBtnRef.current].filter(
-          (el): el is HTMLButtonElement => !!el
+          (el): el is HTMLButtonElement => !!el,
         );
         if (focusables.length === 0) return;
         const first = focusables[0];
         const last = focusables[focusables.length - 1];
         const activeEl = document.activeElement as HTMLElement | null;
         if (e.shiftKey) {
-          if (activeEl === first || !activeEl || !cardRef.current?.contains(activeEl)) {
+          if (
+            activeEl === first ||
+            !activeEl ||
+            !cardRef.current?.contains(activeEl)
+          ) {
             e.preventDefault();
             last.focus();
           }
         } else {
-          if (activeEl === last || !activeEl || !cardRef.current?.contains(activeEl)) {
+          if (
+            activeEl === last ||
+            !activeEl ||
+            !cardRef.current?.contains(activeEl)
+          ) {
             e.preventDefault();
             first.focus();
           }
@@ -176,7 +185,10 @@ export default function OnboardingTour() {
         </div>
 
         {/* Step counter */}
-        <div className="flex items-center gap-1.5 mb-3" aria-label={`Step ${step + 1} of ${total}`}>
+        <div
+          className="flex items-center gap-1.5 mb-3"
+          aria-label={`Step ${step + 1} of ${total}`}
+        >
           {STEPS.map((_, i) => (
             <span
               key={i}
@@ -184,8 +196,8 @@ export default function OnboardingTour() {
                 i === step
                   ? "w-6 bg-neon"
                   : i < step
-                  ? "w-3 bg-neon/40"
-                  : "w-3 bg-slate/40"
+                    ? "w-3 bg-neon/40"
+                    : "w-3 bg-slate/40"
               }`}
               aria-hidden="true"
             />
@@ -209,9 +221,7 @@ export default function OnboardingTour() {
           {current.body}
         </p>
 
-        <p className="mt-3 text-xs text-mercury italic">
-          {current.hint}
-        </p>
+        <p className="mt-3 text-xs text-mercury italic">{current.hint}</p>
 
         {/* Actions */}
         <div className="mt-6 flex items-center justify-between gap-3">

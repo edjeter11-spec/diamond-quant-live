@@ -14,12 +14,16 @@ interface RecapPayload {
   siteUrl: string;
 }
 
-const FROM = process.env.RESEND_FROM_EMAIL || "Diamond-Quant <picks@diamond-quant-live.vercel.app>";
+const FROM =
+  process.env.RESEND_FROM_EMAIL ||
+  "Diamond-Quant <picks@diamond-quant-live.vercel.app>";
 
 function renderHtml(p: RecapPayload, displayName?: string): string {
   const profit = p.yesterdayRecord.profitUnits;
-  const profitColor = profit > 0 ? "#00ff88" : profit < 0 ? "#ff3b5c" : "#8b8fa3";
-  const profitText = profit >= 0 ? `+${profit.toFixed(1)}u` : `${profit.toFixed(1)}u`;
+  const profitColor =
+    profit > 0 ? "#00ff88" : profit < 0 ? "#ff3b5c" : "#8b8fa3";
+  const profitText =
+    profit >= 0 ? `+${profit.toFixed(1)}u` : `${profit.toFixed(1)}u`;
 
   const greeting = displayName ? `Hey ${displayName.split(" ")[0]},` : "Hey,";
 
@@ -69,7 +73,9 @@ function renderHtml(p: RecapPayload, displayName?: string): string {
 }
 
 /** Build recap data from the public track record. */
-export async function buildRecap(siteUrl: string): Promise<RecapPayload | null> {
+export async function buildRecap(
+  siteUrl: string,
+): Promise<RecapPayload | null> {
   if (!supabaseAdmin) return null;
   const yesterday = new Date();
   yesterday.setUTCDate(yesterday.getUTCDate() - 1);
@@ -82,9 +88,15 @@ export async function buildRecap(siteUrl: string): Promise<RecapPayload | null> 
     .neq("result", "pending");
 
   const yesterdayRecord = {
-    wins: (yesterdayRows ?? []).filter(r => r.result === "win").length,
-    losses: (yesterdayRows ?? []).filter(r => r.result === "loss").length,
-    profitUnits: Math.round((yesterdayRows ?? []).reduce((s, r) => s + Number(r.profit_units ?? 0), 0) * 10) / 10,
+    wins: (yesterdayRows ?? []).filter((r) => r.result === "win").length,
+    losses: (yesterdayRows ?? []).filter((r) => r.result === "loss").length,
+    profitUnits:
+      Math.round(
+        (yesterdayRows ?? []).reduce(
+          (s, r) => s + Number(r.profit_units ?? 0),
+          0,
+        ) * 10,
+      ) / 10,
   };
 
   // 7-day rollup
@@ -96,9 +108,13 @@ export async function buildRecap(siteUrl: string): Promise<RecapPayload | null> 
     .gte("pick_date", since.toISOString().split("T")[0])
     .neq("result", "pending");
   const results7Days = {
-    wins: (weekRows ?? []).filter(r => r.result === "win").length,
-    losses: (weekRows ?? []).filter(r => r.result === "loss").length,
-    profitUnits: Math.round((weekRows ?? []).reduce((s, r) => s + Number(r.profit_units ?? 0), 0) * 10) / 10,
+    wins: (weekRows ?? []).filter((r) => r.result === "win").length,
+    losses: (weekRows ?? []).filter((r) => r.result === "loss").length,
+    profitUnits:
+      Math.round(
+        (weekRows ?? []).reduce((s, r) => s + Number(r.profit_units ?? 0), 0) *
+          10,
+      ) / 10,
   };
 
   // Tonight's parlay + pick count
@@ -125,7 +141,9 @@ export async function buildRecap(siteUrl: string): Promise<RecapPayload | null> 
 }
 
 /** Send the daily recap to every user who opted in. */
-export async function sendDailyRecapToAll(siteUrl: string): Promise<{ sent: number; skipped: number }> {
+export async function sendDailyRecapToAll(
+  siteUrl: string,
+): Promise<{ sent: number; skipped: number }> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey || !supabaseAdmin) return { sent: 0, skipped: 0 };
 
@@ -146,7 +164,10 @@ export async function sendDailyRecapToAll(siteUrl: string): Promise<{ sent: numb
       .select("email,display_name")
       .eq("id", u.user_id)
       .single();
-    if (!profile?.email) { skipped++; continue; }
+    if (!profile?.email) {
+      skipped++;
+      continue;
+    }
 
     try {
       const html = renderHtml(payload, profile.display_name);

@@ -35,7 +35,9 @@ export async function commitNRFIProjections(
     .eq("sport", "mlb")
     .eq("game_date", gameDate)
     .in("prop_type", ["nrfi", "yrfi"]);
-  const seen = new Set((existing ?? []).map((r: any) => `${r.game_id}::${r.prop_type}`));
+  const seen = new Set(
+    (existing ?? []).map((r: any) => `${r.game_id}::${r.prop_type}`),
+  );
 
   const rows: any[] = [];
   let skipped = 0;
@@ -43,13 +45,17 @@ export async function commitNRFIProjections(
     const isNRFI = g.recommendation.includes("NRFI");
     const propType = isNRFI ? "nrfi" : "yrfi";
     const key = `${g.gameId}::${propType}`;
-    if (seen.has(key)) { skipped++; continue; }
+    if (seen.has(key)) {
+      skipped++;
+      continue;
+    }
 
     const predProb = (isNRFI ? g.nrfiProb : g.yrfiProb) / 100;
     // Standard NRFI/YRFI odds: NRFI typically -115, YRFI -105
     const odds = isNRFI ? -115 : -105;
     const impliedProb = Math.abs(odds) / (Math.abs(odds) + 100);
-    const evEdge = ((predProb - impliedProb) / Math.max(impliedProb, 0.01)) * 100;
+    const evEdge =
+      ((predProb - impliedProb) / Math.max(impliedProb, 0.01)) * 100;
 
     rows.push({
       sport: "mlb",
@@ -122,7 +128,10 @@ export async function gradeNRFIPredictions(
       const isNRFIPick = pred.prop_type === "nrfi";
       // NRFI wins when total = 0; YRFI wins when total >= 1
       const hit = isNRFIPick ? totalRuns === 0 : totalRuns >= 1;
-      const brierScore = Math.pow((pred.predicted_prob ?? 0.5) - (hit ? 1 : 0), 2);
+      const brierScore = Math.pow(
+        (pred.predicted_prob ?? 0.5) - (hit ? 1 : 0),
+        2,
+      );
 
       await supabase
         .from("prop_predictions")

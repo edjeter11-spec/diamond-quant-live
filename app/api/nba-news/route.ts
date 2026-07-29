@@ -20,7 +20,7 @@ async function fetchESPNNews(): Promise<NewsItem[]> {
   try {
     const res = await fetch(
       "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/news?limit=30",
-      { next: { revalidate: 300 } }
+      { next: { revalidate: 300 } },
     );
     if (!res.ok) return [];
     const data = await res.json();
@@ -52,7 +52,14 @@ export async function GET(req: NextRequest) {
     const injuryItems: NewsItem[] = [];
     for (const team of injuryReports) {
       for (const p of team.players) {
-        const priority = p.status === "Out" ? 10 : p.status === "Doubtful" ? 8 : p.status === "Questionable" ? 5 : 3;
+        const priority =
+          p.status === "Out"
+            ? 10
+            : p.status === "Doubtful"
+              ? 8
+              : p.status === "Questionable"
+                ? 5
+                : 3;
         injuryItems.push({
           type: "injury",
           player: p.name,
@@ -67,16 +74,21 @@ export async function GET(req: NextRequest) {
 
     // Combine + sort by priority (high first), then by recency
     const all = [...injuryItems, ...espnNews]
-      .sort((a, b) => b.priority - a.priority || (new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()))
+      .sort(
+        (a, b) =>
+          b.priority - a.priority ||
+          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+      )
       .slice(0, 50);
 
     const response = {
       ok: true,
       items: all,
       counts: {
-        out: injuryItems.filter(i => i.status === "Out").length,
-        doubtful: injuryItems.filter(i => i.status === "Doubtful").length,
-        questionable: injuryItems.filter(i => i.status === "Questionable").length,
+        out: injuryItems.filter((i) => i.status === "Out").length,
+        doubtful: injuryItems.filter((i) => i.status === "Doubtful").length,
+        questionable: injuryItems.filter((i) => i.status === "Questionable")
+          .length,
         general: espnNews.length,
       },
       generatedAt: new Date().toISOString(),

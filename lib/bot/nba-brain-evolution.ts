@@ -4,12 +4,21 @@
 // tests on held-out set, promotes the winner. Repeats per generation.
 // ──────────────────────────────────────────────────────────
 
-import { projectProp, type ProjectionContext, type RecentFormData } from "./nba-prop-projector";
 import {
-  type NbaPropBrainState, type NbaPropWeights,
-  repairWeights, learnFromPropResult,
+  projectProp,
+  type ProjectionContext,
+  type RecentFormData,
+} from "./nba-prop-projector";
+import {
+  type NbaPropBrainState,
+  type NbaPropWeights,
+  repairWeights,
+  learnFromPropResult,
 } from "./nba-prop-brain";
-import { fetchAllTrainingData, type NbaPlayerGameLog } from "./nba-stats-fetcher";
+import {
+  fetchAllTrainingData,
+  type NbaPlayerGameLog,
+} from "./nba-stats-fetcher";
 
 // ── Types ──
 
@@ -21,8 +30,14 @@ export interface BrainVariant {
   weights: NbaPropWeights;
   learningRate: number;
   strategy: string;
-  trainAccuracy: Record<string, { total: number; hits: number; winRate: number }>;
-  testAccuracy: Record<string, { total: number; hits: number; winRate: number }>;
+  trainAccuracy: Record<
+    string,
+    { total: number; hits: number; winRate: number }
+  >;
+  testAccuracy: Record<
+    string,
+    { total: number; hits: number; winRate: number }
+  >;
   overallTestWinRate: number;
   brierScore: number;
 }
@@ -32,7 +47,13 @@ export interface EvolutionState {
   liveBrainId: string;
   liveWeights: NbaPropWeights;
   variants: BrainVariant[];
-  history: Array<{ generation: number; winnerId: string; winnerName: string; winRate: number; timestamp: string }>;
+  history: Array<{
+    generation: number;
+    winnerId: string;
+    winnerName: string;
+    winRate: number;
+    timestamp: string;
+  }>;
   totalGenerationsRun: number;
   bestEverWinRate: number;
   bestEverVariantId: string;
@@ -43,7 +64,15 @@ export function createDefaultEvolutionState(): EvolutionState {
   return {
     currentGeneration: 0,
     liveBrainId: "original",
-    liveWeights: { seasonAverage: 0.25, recentForm: 0.20, matchupDefense: 0.18, homeAway: 0.10, restSchedule: 0.10, paceContext: 0.10, lineMovement: 0.07 },
+    liveWeights: {
+      seasonAverage: 0.25,
+      recentForm: 0.2,
+      matchupDefense: 0.18,
+      homeAway: 0.1,
+      restSchedule: 0.1,
+      paceContext: 0.1,
+      lineMovement: 0.07,
+    },
     variants: [],
     history: [],
     totalGenerationsRun: 0,
@@ -55,41 +84,82 @@ export function createDefaultEvolutionState(): EvolutionState {
 
 // ── Named Strategies (Generation 1) ──
 
-const NAMED_STRATEGIES: Array<{ name: string; slug: string; weights: NbaPropWeights; lr: number; desc: string }> = [
+const NAMED_STRATEGIES: Array<{
+  name: string;
+  slug: string;
+  weights: NbaPropWeights;
+  lr: number;
+  desc: string;
+}> = [
   {
     name: "Form Hunter",
     slug: "form-hunter",
     desc: "Heavy recentForm — bets hot/cold streaks are predictive",
     lr: 0.015,
-    weights: { seasonAverage: 0.15, recentForm: 0.35, matchupDefense: 0.15, homeAway: 0.10, restSchedule: 0.10, paceContext: 0.08, lineMovement: 0.07 },
+    weights: {
+      seasonAverage: 0.15,
+      recentForm: 0.35,
+      matchupDefense: 0.15,
+      homeAway: 0.1,
+      restSchedule: 0.1,
+      paceContext: 0.08,
+      lineMovement: 0.07,
+    },
   },
   {
     name: "Matchup Specialist",
     slug: "matchup-specialist",
     desc: "Heavy matchupDefense — who you play against matters most",
     lr: 0.015,
-    weights: { seasonAverage: 0.18, recentForm: 0.15, matchupDefense: 0.30, homeAway: 0.10, restSchedule: 0.12, paceContext: 0.08, lineMovement: 0.07 },
+    weights: {
+      seasonAverage: 0.18,
+      recentForm: 0.15,
+      matchupDefense: 0.3,
+      homeAway: 0.1,
+      restSchedule: 0.12,
+      paceContext: 0.08,
+      lineMovement: 0.07,
+    },
   },
   {
     name: "Context King",
     slug: "context-king",
     desc: "Boosts rest + home + pace — situational factors beat raw stats",
     lr: 0.015,
-    weights: { seasonAverage: 0.15, recentForm: 0.12, matchupDefense: 0.13, homeAway: 0.15, restSchedule: 0.20, paceContext: 0.15, lineMovement: 0.10 },
+    weights: {
+      seasonAverage: 0.15,
+      recentForm: 0.12,
+      matchupDefense: 0.13,
+      homeAway: 0.15,
+      restSchedule: 0.2,
+      paceContext: 0.15,
+      lineMovement: 0.1,
+    },
   },
   {
     name: "Aggressive Learner",
     slug: "aggressive-learner",
     desc: "2x learning rate — adapts faster, risks overfitting",
-    lr: 0.030,
-    weights: { seasonAverage: 0.25, recentForm: 0.20, matchupDefense: 0.18, homeAway: 0.10, restSchedule: 0.10, paceContext: 0.10, lineMovement: 0.07 },
+    lr: 0.03,
+    weights: {
+      seasonAverage: 0.25,
+      recentForm: 0.2,
+      matchupDefense: 0.18,
+      homeAway: 0.1,
+      restSchedule: 0.1,
+      paceContext: 0.1,
+      lineMovement: 0.07,
+    },
   },
 ];
 
 // ── Seeded RNG for reproducible mutations ──
 function seededRng(seed: number): () => number {
   let s = seed;
-  return () => { s = (s * 1664525 + 1013904223) & 0x7fffffff; return s / 0x7fffffff; };
+  return () => {
+    s = (s * 1664525 + 1013904223) & 0x7fffffff;
+    return s / 0x7fffffff;
+  };
 }
 
 // ── Generate Variants ──
@@ -97,7 +167,7 @@ export function generateVariants(
   parentWeights: NbaPropWeights,
   parentId: string,
   generation: number,
-  seed: number = Date.now()
+  seed: number = Date.now(),
 ): BrainVariant[] {
   const variants: BrainVariant[] = [];
   const rng = seededRng(seed);
@@ -113,32 +183,70 @@ export function generateVariants(
         weights: repairWeights(strat.weights),
         learningRate: strat.lr,
         strategy: strat.desc,
-        trainAccuracy: {}, testAccuracy: {},
+        trainAccuracy: {},
+        testAccuracy: {},
         overallTestWinRate: 0,
         brierScore: 0.25,
       });
     }
     // Add one random mutation
-    variants.push(createRandomMutant(parentWeights, parentId, generation, rng, 0.30));
+    variants.push(
+      createRandomMutant(parentWeights, parentId, generation, rng, 0.3),
+    );
   } else {
     // Subsequent generations: mutate from winner
     // 2 small mutations (±10%)
-    variants.push(createMutation(parentWeights, parentId, generation, rng, 0.10, "Small Mutation A"));
-    variants.push(createMutation(parentWeights, parentId, generation, rng, 0.10, "Small Mutation B"));
+    variants.push(
+      createMutation(
+        parentWeights,
+        parentId,
+        generation,
+        rng,
+        0.1,
+        "Small Mutation A",
+      ),
+    );
+    variants.push(
+      createMutation(
+        parentWeights,
+        parentId,
+        generation,
+        rng,
+        0.1,
+        "Small Mutation B",
+      ),
+    );
     // 1 medium mutation (±20%)
-    variants.push(createMutation(parentWeights, parentId, generation, rng, 0.20, "Medium Mutation"));
+    variants.push(
+      createMutation(
+        parentWeights,
+        parentId,
+        generation,
+        rng,
+        0.2,
+        "Medium Mutation",
+      ),
+    );
     // 1 large mutation (±40%)
-    variants.push(createMutation(parentWeights, parentId, generation, rng, 0.40, "Explorer"));
+    variants.push(
+      createMutation(parentWeights, parentId, generation, rng, 0.4, "Explorer"),
+    );
     // 1 random wildcard
-    variants.push(createRandomMutant(parentWeights, parentId, generation, rng, 0.35));
+    variants.push(
+      createRandomMutant(parentWeights, parentId, generation, rng, 0.35),
+    );
   }
 
   return variants;
 }
 
 function createMutation(
-  parent: NbaPropWeights, parentId: string, gen: number,
-  rng: () => number, magnitude: number, name: string
+  parent: NbaPropWeights,
+  parentId: string,
+  gen: number,
+  rng: () => number,
+  magnitude: number,
+  name: string,
 ): BrainVariant {
   const keys = Object.keys(parent) as (keyof NbaPropWeights)[];
   const mutated = { ...parent };
@@ -153,15 +261,19 @@ function createMutation(
     weights: repairWeights(mutated),
     learningRate: 0.012 + rng() * 0.008, // 0.012-0.020
     strategy: `±${(magnitude * 100).toFixed(0)}% mutation from winner`,
-    trainAccuracy: {}, testAccuracy: {},
+    trainAccuracy: {},
+    testAccuracy: {},
     overallTestWinRate: 0,
     brierScore: 0.25,
   };
 }
 
 function createRandomMutant(
-  parent: NbaPropWeights, parentId: string, gen: number,
-  rng: () => number, magnitude: number
+  parent: NbaPropWeights,
+  parentId: string,
+  gen: number,
+  rng: () => number,
+  magnitude: number,
 ): BrainVariant {
   const keys = Object.keys(parent) as (keyof NbaPropWeights)[];
   const mutated = { ...parent };
@@ -174,9 +286,10 @@ function createRandomMutant(
     generation: gen,
     parentId,
     weights: repairWeights(mutated),
-    learningRate: 0.010 + rng() * 0.015,
+    learningRate: 0.01 + rng() * 0.015,
     strategy: "Random exploration — entirely new weight config",
-    trainAccuracy: {}, testAccuracy: {},
+    trainAccuracy: {},
+    testAccuracy: {},
     overallTestWinRate: 0,
     brierScore: 0.25,
   };
@@ -189,7 +302,7 @@ export async function trainAndEvaluate(
   variant: BrainVariant,
   trainData: NbaPlayerGameLog[],
   testData: NbaPlayerGameLog[],
-  onProgress?: (msg: string) => void
+  onProgress?: (msg: string) => void,
 ): Promise<BrainVariant> {
   onProgress?.(`Training ${variant.name}...`);
 
@@ -203,9 +316,33 @@ export async function trainAndEvaluate(
     initialWeights: { ...variant.weights },
     learningRate: variant.learningRate,
     markets: {
-      player_points: { totalPredictions: 0, hits: 0, misses: 0, brierScore: 0.25, avgEV: 0, winRate: 50, dynamicThreshold: 2.0 },
-      player_rebounds: { totalPredictions: 0, hits: 0, misses: 0, brierScore: 0.25, avgEV: 0, winRate: 50, dynamicThreshold: 2.0 },
-      player_assists: { totalPredictions: 0, hits: 0, misses: 0, brierScore: 0.25, avgEV: 0, winRate: 50, dynamicThreshold: 2.0 },
+      player_points: {
+        totalPredictions: 0,
+        hits: 0,
+        misses: 0,
+        brierScore: 0.25,
+        avgEV: 0,
+        winRate: 50,
+        dynamicThreshold: 2.0,
+      },
+      player_rebounds: {
+        totalPredictions: 0,
+        hits: 0,
+        misses: 0,
+        brierScore: 0.25,
+        avgEV: 0,
+        winRate: 50,
+        dynamicThreshold: 2.0,
+      },
+      player_assists: {
+        totalPredictions: 0,
+        hits: 0,
+        misses: 0,
+        brierScore: 0.25,
+        avgEV: 0,
+        winRate: 50,
+        dynamicThreshold: 2.0,
+      },
     },
     playerMemory: {},
     logs: [],
@@ -234,9 +371,12 @@ export async function trainAndEvaluate(
   const types = Object.values(tested.accuracy);
   const totalHits = types.reduce((s, t) => s + t.hits, 0);
   const totalTests = types.reduce((s, t) => s + t.total, 0);
-  variant.overallTestWinRate = totalTests > 0 ? Math.round((totalHits / totalTests) * 1000) / 10 : 0;
+  variant.overallTestWinRate =
+    totalTests > 0 ? Math.round((totalHits / totalTests) * 1000) / 10 : 0;
 
-  onProgress?.(`${variant.name}: ${variant.overallTestWinRate}% on test set (Brier: ${variant.brierScore})`);
+  onProgress?.(
+    `${variant.name}: ${variant.overallTestWinRate}% on test set (Brier: ${variant.brierScore})`,
+  );
   return variant;
 }
 
@@ -245,8 +385,12 @@ async function runQuizOnData(
   brain: NbaPropBrainState,
   data: NbaPlayerGameLog[],
   learn: boolean,
-  onProgress?: (msg: string) => void
-): Promise<{ brain: NbaPropBrainState; accuracy: Record<string, { total: number; hits: number; winRate: number }>; brierScore: number }> {
+  onProgress?: (msg: string) => void,
+): Promise<{
+  brain: NbaPropBrainState;
+  accuracy: Record<string, { total: number; hits: number; winRate: number }>;
+  brierScore: number;
+}> {
   let updated = { ...brain };
   const accuracy: Record<string, { total: number; hits: number }> = {
     player_points: { total: 0, hits: 0 },
@@ -257,7 +401,17 @@ async function runQuizOnData(
   let brierCount = 0;
 
   // Build rolling player states
-  const playerStates = new Map<number, { gamesPlayed: number; ptsSum: number; rebSum: number; astSum: number; last5: Array<{ pts: number; reb: number; ast: number; date: string }> ; lastDate: string }>();
+  const playerStates = new Map<
+    number,
+    {
+      gamesPlayed: number;
+      ptsSum: number;
+      rebSum: number;
+      astSum: number;
+      last5: Array<{ pts: number; reb: number; ast: number; date: string }>;
+      lastDate: string;
+    }
+  >();
 
   // Group by date
   const byDate = new Map<string, NbaPlayerGameLog[]>();
@@ -281,9 +435,15 @@ async function runQuizOnData(
       const ppg = state.ptsSum / state.gamesPlayed;
       const rpg = state.rebSum / state.gamesPlayed;
       const apg = state.astSum / state.gamesPlayed;
-      const isB2B = state.lastDate ? daysBetween(state.lastDate, date) <= 1 : false;
+      const isB2B = state.lastDate
+        ? daysBetween(state.lastDate, date) <= 1
+        : false;
 
-      const ctx: ProjectionContext = { isHome: log.isHome, isB2B, leagueAvgTotal: 224 };
+      const ctx: ProjectionContext = {
+        isHome: log.isHome,
+        isB2B,
+        leagueAvgTotal: 224,
+      };
 
       const propTypes = [
         { type: "player_points", stat: log.pts, avg: ppg },
@@ -295,12 +455,35 @@ async function runQuizOnData(
         if (avg <= 0) continue;
         const line = Math.round(avg * 2) / 2;
         const last5 = state.last5.slice(-5);
-        const last5Avg = last5.length > 0
-          ? last5.reduce((s, g) => s + (type === "player_points" ? g.pts : type === "player_rebounds" ? g.reb : g.ast), 0) / last5.length
-          : avg;
+        const last5Avg =
+          last5.length > 0
+            ? last5.reduce(
+                (s, g) =>
+                  s +
+                  (type === "player_points"
+                    ? g.pts
+                    : type === "player_rebounds"
+                      ? g.reb
+                      : g.ast),
+                0,
+              ) / last5.length
+            : avg;
 
-        const recentForm: RecentFormData = { last5Avg, last10Avg: last5Avg, seasonAvg: avg, gamesPlayed: state.gamesPlayed, variance: avg * 0.30 };
-        const proj = projectProp({ ppg, rpg, apg }, type, line, updated.weights, ctx, recentForm);
+        const recentForm: RecentFormData = {
+          last5Avg,
+          last10Avg: last5Avg,
+          seasonAvg: avg,
+          gamesPlayed: state.gamesPlayed,
+          variance: avg * 0.3,
+        };
+        const proj = projectProp(
+          { ppg, rpg, apg },
+          type,
+          line,
+          updated.weights,
+          ctx,
+          recentForm,
+        );
         const hit = proj.side === "over" ? stat > line : stat < line;
 
         accuracy[type].total++;
@@ -313,9 +496,16 @@ async function runQuizOnData(
 
         if (learn) {
           updated = learnFromPropResult(updated, {
-            playerName: log.playerName, playerId: log.playerId, team: log.team,
-            propType: type, predictedProb: proj.probability, predictedSide: proj.side,
-            actualValue: stat, line, hit, factors: proj.factors,
+            playerName: log.playerName,
+            playerId: log.playerId,
+            team: log.team,
+            propType: type,
+            predictedProb: proj.probability,
+            predictedSide: proj.side,
+            actualValue: stat,
+            line,
+            hit,
+            factors: proj.factors,
           });
         }
       }
@@ -325,7 +515,15 @@ async function runQuizOnData(
     for (const log of dayLogs) {
       if (log.minutes < 5) continue;
       let state = playerStates.get(log.playerId);
-      if (!state) state = { gamesPlayed: 0, ptsSum: 0, rebSum: 0, astSum: 0, last5: [], lastDate: "" };
+      if (!state)
+        state = {
+          gamesPlayed: 0,
+          ptsSum: 0,
+          rebSum: 0,
+          astSum: 0,
+          last5: [],
+          lastDate: "",
+        };
       state.gamesPlayed++;
       state.ptsSum += log.pts;
       state.rebSum += log.reb;
@@ -337,17 +535,28 @@ async function runQuizOnData(
     }
   }
 
-  const result: Record<string, { total: number; hits: number; winRate: number }> = {};
+  const result: Record<
+    string,
+    { total: number; hits: number; winRate: number }
+  > = {};
   for (const [key, val] of Object.entries(accuracy)) {
-    result[key] = { ...val, winRate: val.total > 0 ? Math.round((val.hits / val.total) * 1000) / 10 : 0 };
+    result[key] = {
+      ...val,
+      winRate:
+        val.total > 0 ? Math.round((val.hits / val.total) * 1000) / 10 : 0,
+    };
   }
 
-  const avgBrier = brierCount > 0 ? Math.round((brierSum / brierCount) * 10000) / 10000 : 0.25;
+  const avgBrier =
+    brierCount > 0 ? Math.round((brierSum / brierCount) * 10000) / 10000 : 0.25;
   return { brain: updated, accuracy: result, brierScore: avgBrier };
 }
 
 function daysBetween(d1: string, d2: string): number {
-  return Math.round(Math.abs(new Date(d2).getTime() - new Date(d1).getTime()) / (1000 * 60 * 60 * 24));
+  return Math.round(
+    Math.abs(new Date(d2).getTime() - new Date(d1).getTime()) /
+      (1000 * 60 * 60 * 24),
+  );
 }
 
 // ── Run Full Tournament ──
@@ -356,7 +565,7 @@ export async function runTournament(
   parentId: string,
   generation: number,
   allData: NbaPlayerGameLog[],
-  onProgress?: (msg: string) => void
+  onProgress?: (msg: string) => void,
 ): Promise<{ variants: BrainVariant[]; winner: BrainVariant }> {
   // Use all data — extra sampling made individual players not qualify (< 5 games seen)
   const sampled = allData;
@@ -366,7 +575,9 @@ export async function runTournament(
   const trainData = sampled.slice(0, splitIdx);
   const testData = sampled.slice(splitIdx);
 
-  onProgress?.(`Gen ${generation}: ${trainData.length} train / ${testData.length} test games (sampled from ${allData.length})`);
+  onProgress?.(
+    `Gen ${generation}: ${trainData.length} train / ${testData.length} test games (sampled from ${allData.length})`,
+  );
 
   // Use top 3 variants for speed (not 5)
   const allVariants = generateVariants(parentWeights, parentId, generation);
@@ -374,15 +585,24 @@ export async function runTournament(
   const evaluated: BrainVariant[] = [];
 
   for (let i = 0; i < variants.length; i++) {
-    onProgress?.(`Gen ${generation}: Training variant ${i + 1}/${variants.length} — ${variants[i].name}`);
-    const result = await trainAndEvaluate(variants[i], trainData, testData, onProgress);
+    onProgress?.(
+      `Gen ${generation}: Training variant ${i + 1}/${variants.length} — ${variants[i].name}`,
+    );
+    const result = await trainAndEvaluate(
+      variants[i],
+      trainData,
+      testData,
+      onProgress,
+    );
     evaluated.push(result);
   }
 
   // Sort by test accuracy (highest first)
   evaluated.sort((a, b) => b.overallTestWinRate - a.overallTestWinRate);
 
-  onProgress?.(`Gen ${generation} winner: ${evaluated[0].name} at ${evaluated[0].overallTestWinRate}%`);
+  onProgress?.(
+    `Gen ${generation} winner: ${evaluated[0].name} at ${evaluated[0].overallTestWinRate}%`,
+  );
 
   return { variants: evaluated, winner: evaluated[0] };
 }
@@ -392,7 +612,7 @@ export async function evolve(
   startingWeights: NbaPropWeights,
   generations: number,
   allData: NbaPlayerGameLog[],
-  onProgress?: (msg: string) => void
+  onProgress?: (msg: string) => void,
 ): Promise<EvolutionState> {
   const state: EvolutionState = createDefaultEvolutionState();
   state.liveWeights = { ...startingWeights };
@@ -404,14 +624,21 @@ export async function evolve(
   for (let gen = 1; gen <= generations; gen++) {
     onProgress?.(`═══ GENERATION ${gen}/${generations} ═══`);
 
-    const { variants, winner } = await runTournament(currentWeights, currentId, gen, allData, onProgress);
+    const { variants, winner } = await runTournament(
+      currentWeights,
+      currentId,
+      gen,
+      allData,
+      onProgress,
+    );
 
     state.variants.push(...variants);
     state.currentGeneration = gen;
     state.totalGenerationsRun = gen;
 
     // Check if winner beats current live
-    const improvement = winner.overallTestWinRate - (state.bestEverWinRate || 45);
+    const improvement =
+      winner.overallTestWinRate - (state.bestEverWinRate || 45);
     if (winner.overallTestWinRate > state.bestEverWinRate) {
       state.bestEverWinRate = winner.overallTestWinRate;
       state.bestEverVariantId = winner.id;
@@ -431,7 +658,9 @@ export async function evolve(
     state.liveBrainId = winner.id;
     state.liveWeights = { ...winner.weights };
 
-    onProgress?.(`Gen ${gen} complete — Best: ${winner.name} at ${winner.overallTestWinRate}%`);
+    onProgress?.(
+      `Gen ${gen} complete — Best: ${winner.name} at ${winner.overallTestWinRate}%`,
+    );
   }
 
   state.status = "complete";

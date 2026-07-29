@@ -5,11 +5,30 @@ import { useStore } from "@/lib/store";
 import { useSport } from "@/lib/sport-context";
 import { BOOK_DISPLAY } from "@/lib/odds/the-odds-api";
 import PlayerAvatar from "@/components/ui/PlayerAvatar";
-import { savePropSnapshot, getPropLineMovement, type PropLineMovement } from "@/lib/odds/prop-line-tracker";
 import {
-  User, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight,
-  RefreshCw, ChevronDown, ChevronUp, Target, BarChart3, Clock,
-  Minus, Star, AlertCircle, Zap, Search, X, Brain,
+  savePropSnapshot,
+  getPropLineMovement,
+  type PropLineMovement,
+} from "@/lib/odds/prop-line-tracker";
+import {
+  User,
+  TrendingUp,
+  TrendingDown,
+  ArrowUpRight,
+  ArrowDownRight,
+  RefreshCw,
+  ChevronDown,
+  ChevronUp,
+  Target,
+  BarChart3,
+  Clock,
+  Minus,
+  Star,
+  AlertCircle,
+  Zap,
+  Search,
+  X,
+  Brain,
 } from "lucide-react";
 import BrainPickDetail from "@/components/dashboard/BrainPickDetail";
 import MatchupInsights from "@/components/dashboard/MatchupInsights";
@@ -28,24 +47,45 @@ interface PropLine {
 }
 
 interface StatBlock {
-  gamesPlayed?: number; era?: number; whip?: number; strikeouts?: number;
-  k9?: number; avgStrikeoutsPerGame?: number; avg?: number; ops?: number;
-  hits?: number; homeRuns?: number; rbi?: number; stolenBases?: number;
-  hitsPerGame?: number; tbPerGame?: number; wins?: number; losses?: number;
+  gamesPlayed?: number;
+  era?: number;
+  whip?: number;
+  strikeouts?: number;
+  k9?: number;
+  avgStrikeoutsPerGame?: number;
+  avg?: number;
+  ops?: number;
+  hits?: number;
+  homeRuns?: number;
+  rbi?: number;
+  stolenBases?: number;
+  hitsPerGame?: number;
+  tbPerGame?: number;
+  wins?: number;
+  losses?: number;
   totalBases?: number;
 }
 
 interface PlayerAnalysis {
   player: StatBlock & {
-    name: string; team: string; teamAbbrev: string; position: string;
-    number?: string; photo?: string;
+    name: string;
+    team: string;
+    teamAbbrev: string;
+    position: string;
+    number?: string;
+    photo?: string;
   };
   lastYearStats?: StatBlock;
   careerStats?: StatBlock;
   dataSource?: "current" | "lastYear" | "career";
   last10Games: Array<{
-    date: string; opponent: string; strikeouts?: number;
-    hitsB?: number; homeRuns?: number; totalBases?: number; rbi?: number;
+    date: string;
+    opponent: string;
+    strikeouts?: number;
+    hitsB?: number;
+    homeRuns?: number;
+    totalBases?: number;
+    rbi?: number;
   }>;
   vsOpponent: { games: number; avgStat: number; trend: string };
   recommendation: {
@@ -73,7 +113,10 @@ const MARKET_STAT_KEY: Record<string, string> = {
   batter_rbis: "rbi",
 };
 
-const SIDE_LABELS: Record<string, { label: string; color: string; icon: string }> = {
+const SIDE_LABELS: Record<
+  string,
+  { label: string; color: string; icon: string }
+> = {
   over: { label: "BET OVER", color: "text-neon", icon: "up" },
   lean_over: { label: "LEAN OVER", color: "text-neon/70", icon: "up" },
   under: { label: "BET UNDER", color: "text-purple", icon: "down" },
@@ -93,7 +136,9 @@ export default function PlayerProps() {
   const { addParlayLeg } = useStore();
   const { currentSport, config } = useSport();
   const [props, setProps] = useState<PropLine[]>([]);
-  const [selectedMarket, setSelectedMarket] = useState(config.propMarkets[0]?.key ?? "pitcher_strikeouts");
+  const [selectedMarket, setSelectedMarket] = useState(
+    config.propMarkets[0]?.key ?? "pitcher_strikeouts",
+  );
 
   // Reset market when sport changes
   useEffect(() => {
@@ -103,7 +148,9 @@ export default function PlayerProps() {
   const [loading, setLoading] = useState(true);
   const [isDemo, setIsDemo] = useState(false);
   const [expandedPlayer, setExpandedPlayer] = useState<string | null>(null);
-  const [playerAnalyses, setPlayerAnalyses] = useState<Record<string, PlayerAnalysis>>({});
+  const [playerAnalyses, setPlayerAnalyses] = useState<
+    Record<string, PlayerAnalysis>
+  >({});
   const [loadingAnalysis, setLoadingAnalysis] = useState<string | null>(null);
 
   // Search
@@ -113,10 +160,14 @@ export default function PlayerProps() {
   const [searchError, setSearchError] = useState("");
 
   // Brain accuracy badges (NBA only)
-  const [brainAccuracy, setBrainAccuracy] = useState<Record<string, { total: number; hits: number; winRate: number }>>({});
+  const [brainAccuracy, setBrainAccuracy] = useState<
+    Record<string, { total: number; hits: number; winRate: number }>
+  >({});
 
   // Line movement state — populated client-side only (avoids SSR hydration mismatch)
-  const [lineMovements, setLineMovements] = useState<Record<string, PropLineMovement | null>>({});
+  const [lineMovements, setLineMovements] = useState<
+    Record<string, PropLineMovement | null>
+  >({});
 
   // Populate line movements client-side after mount (never during SSR)
   useEffect(() => {
@@ -124,7 +175,10 @@ export default function PlayerProps() {
     const movements: Record<string, PropLineMovement | null> = {};
     for (const prop of props) {
       const key = `${prop.playerName}::${prop.market ?? selectedMarket}`;
-      movements[key] = getPropLineMovement(prop.playerName, prop.market ?? selectedMarket);
+      movements[key] = getPropLineMovement(
+        prop.playerName,
+        prop.market ?? selectedMarket,
+      );
     }
     setLineMovements(movements);
   }, [props, selectedMarket]);
@@ -132,11 +186,18 @@ export default function PlayerProps() {
   // Fetch brain accuracy when props load (NBA only)
   useEffect(() => {
     if (currentSport !== "nba" || props.length === 0) return;
-    const playerNames = [...new Set(props.map(p => p.playerName))].slice(0, 20);
+    const playerNames = [...new Set(props.map((p) => p.playerName))].slice(
+      0,
+      20,
+    );
     if (playerNames.length === 0) return;
-    fetch(`/api/nba-prop-accuracy?players=${encodeURIComponent(playerNames.join(","))}`)
-      .then(r => r.json())
-      .then(data => { if (data.accuracy) setBrainAccuracy(data.accuracy); })
+    fetch(
+      `/api/nba-prop-accuracy?players=${encodeURIComponent(playerNames.join(","))}`,
+    )
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.accuracy) setBrainAccuracy(data.accuracy);
+      })
       .catch(() => {});
   }, [props, currentSport]);
 
@@ -156,7 +217,9 @@ export default function PlayerProps() {
     // DON'T clear existing props while loading — show stale data until new arrives
     setLoading(true);
     try {
-      const res = await fetch(`/api/players?market=${selectedMarket}&sport=${config.oddsApiKey}&full=1`);
+      const res = await fetch(
+        `/api/players?market=${selectedMarket}&sport=${config.oddsApiKey}&full=1`,
+      );
       const data = await res.json();
       const newProps = data.props ?? [];
       // Only update if we actually got data (don't replace good data with empty)
@@ -164,13 +227,15 @@ export default function PlayerProps() {
         setProps(newProps);
         // Capture prop line snapshot for line movement tracking
         if (newProps.length > 0) {
-          savePropSnapshot(newProps.map((p: any) => ({
-            playerName: p.playerName,
-            propType: p.market ?? selectedMarket,
-            line: p.line,
-            bestOverOdds: p.bestOver?.price ?? -110,
-            bestUnderOdds: p.bestUnder?.price ?? -110,
-          })));
+          savePropSnapshot(
+            newProps.map((p: any) => ({
+              playerName: p.playerName,
+              propType: p.market ?? selectedMarket,
+              line: p.line,
+              bestOverOdds: p.bestOver?.price ?? -110,
+              bestUnderOdds: p.bestUnder?.price ?? -110,
+            })),
+          );
         }
       }
       setIsDemo(data.demo === true);
@@ -191,7 +256,8 @@ export default function PlayerProps() {
         market: selectedMarket,
         line: "0",
       });
-      const endpoint = currentSport === "nba" ? "/api/nba-player" : "/api/player-analysis";
+      const endpoint =
+        currentSport === "nba" ? "/api/nba-player" : "/api/player-analysis";
       const res = await fetch(`${endpoint}?${params}`);
       if (res.ok) {
         const data = await res.json();
@@ -242,7 +308,8 @@ export default function PlayerProps() {
     // Guard: synthesized/incomplete props can ship without bestOver/bestUnder.
     const best = side === "over" ? prop.bestOver : prop.bestUnder;
     if (!best || typeof best.price !== "number") return;
-    const fairProb = side === "over" ? prop.fairOverProb / 100 : prop.fairUnderProb / 100;
+    const fairProb =
+      side === "over" ? prop.fairOverProb / 100 : prop.fairUnderProb / 100;
     addParlayLeg({
       game: prop.playerName,
       market: "player_prop",
@@ -260,10 +327,17 @@ export default function PlayerProps() {
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <User className="w-5 h-5 text-electric" />
-            <h3 className="text-sm font-semibold text-silver uppercase tracking-wide">Player Props</h3>
+            <h3 className="text-sm font-semibold text-silver uppercase tracking-wide">
+              Player Props
+            </h3>
           </div>
-          <button onClick={fetchProps} className="p-1.5 hover:bg-slate/30 rounded transition-colors">
-            <RefreshCw className={`w-4 h-4 text-mercury ${loading ? "animate-spin" : ""}`} />
+          <button
+            onClick={fetchProps}
+            className="p-1.5 hover:bg-slate/30 rounded transition-colors"
+          >
+            <RefreshCw
+              className={`w-4 h-4 text-mercury ${loading ? "animate-spin" : ""}`}
+            />
           </button>
         </div>
 
@@ -280,7 +354,14 @@ export default function PlayerProps() {
               className="w-full pl-8 pr-3 py-2 bg-gunmetal/50 border border-slate/30 rounded-lg text-sm text-silver placeholder:text-mercury/40 focus:outline-none focus:border-electric/30"
             />
             {searchQuery && (
-              <button onClick={() => { setSearchQuery(""); setSearchResult(null); setSearchError(""); }} className="absolute right-2 top-1/2 -translate-y-1/2">
+              <button
+                onClick={() => {
+                  setSearchQuery("");
+                  setSearchResult(null);
+                  setSearchError("");
+                }}
+                className="absolute right-2 top-1/2 -translate-y-1/2"
+              >
                 <X className="w-3.5 h-3.5 text-mercury/50" />
               </button>
             )}
@@ -290,7 +371,11 @@ export default function PlayerProps() {
             disabled={searchLoading || !searchQuery.trim()}
             className="px-3 py-2 bg-electric/15 text-electric border border-electric/30 rounded-lg text-xs font-semibold hover:bg-electric/25 disabled:opacity-40 transition-colors flex-shrink-0"
           >
-            {searchLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : "Search"}
+            {searchLoading ? (
+              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              "Search"
+            )}
           </button>
         </div>
 
@@ -319,146 +404,228 @@ export default function PlayerProps() {
           <p className="text-xs text-danger">{searchError}</p>
         </div>
       )}
-      {searchResult && searchResult.player && (() => {
-        const sr: any = searchResult;
-        const gamesList: any[] = sr.last10Games ?? sr.player?.gameLog ?? [];
-        const teamLabel = sr.player?.team ?? sr.player?.teamAbbrev ?? "";
-        return (
-        <div className="px-3 sm:px-4 py-4 bg-electric/5 border-b border-electric/15">
-          {/* Player Card Header with Photo */}
-          <div className="flex gap-3 mb-3">
-            {/* Headshot */}
-            {searchResult.player.photo && (
-              <PlayerAvatar name={searchResult.player.name} photo={searchResult.player.photo} sport={currentSport as "mlb" | "nba"} size={64} className="sm:!w-20 sm:!h-20 !rounded-xl" />
-            )}
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="text-base sm:text-lg font-bold text-silver">{searchResult.player.name}</h3>
-                {searchResult.player.number && (
-                  <span className="text-xs font-mono text-electric">#{searchResult.player.number}</span>
+      {searchResult &&
+        searchResult.player &&
+        (() => {
+          const sr: any = searchResult;
+          const gamesList: any[] = sr.last10Games ?? sr.player?.gameLog ?? [];
+          const teamLabel = sr.player?.team ?? sr.player?.teamAbbrev ?? "";
+          return (
+            <div className="px-3 sm:px-4 py-4 bg-electric/5 border-b border-electric/15">
+              {/* Player Card Header with Photo */}
+              <div className="flex gap-3 mb-3">
+                {/* Headshot */}
+                {searchResult.player.photo && (
+                  <PlayerAvatar
+                    name={searchResult.player.name}
+                    photo={searchResult.player.photo}
+                    sport={currentSport as "mlb" | "nba"}
+                    size={64}
+                    className="sm:!w-20 sm:!h-20 !rounded-xl"
+                  />
                 )}
-              </div>
-              <div className="flex items-center gap-2 mt-0.5">
-                {teamLabel && <span className="text-xs px-2 py-0.5 rounded bg-electric/15 text-electric font-medium">{teamLabel}</span>}
-                {searchResult.player.position && <span className="text-xs px-2 py-0.5 rounded bg-gunmetal text-mercury">{searchResult.player.position}</span>}
-                {searchResult.player.gamesPlayed != null && <span className="text-[10px] text-mercury/50">{searchResult.player.gamesPlayed}G this season</span>}
-              </div>
-            </div>
-          </div>
-
-          {/* Data source notice */}
-          {searchResult.dataSource && searchResult.dataSource !== "current" && (
-            <div className="flex items-center gap-1.5 px-2 py-1.5 rounded bg-amber/5 border border-amber/15 mb-2">
-              <AlertCircle className="w-3 h-3 text-amber flex-shrink-0" />
-              <p className="text-[10px] text-amber">
-                {searchResult.dataSource === "lastYear" ? "Early season — showing last year's stats as primary" : "Showing career stats (no recent season data)"}
-              </p>
-            </div>
-          )}
-
-          {/* Current / Primary Stats */}
-          <p className="text-[9px] text-mercury uppercase tracking-wider mb-1 font-semibold">
-            {searchResult.dataSource === "lastYear" ? `${new Date().getFullYear() - 1} Season` : searchResult.dataSource === "career" ? "Career" : `${new Date().getFullYear()} Season`}
-          </p>
-          <div className="grid grid-cols-4 gap-1.5 sm:gap-2 mb-3">
-            <SeasonStatsGrid stats={searchResult.player} />
-          </div>
-
-          {/* Last Year Stats */}
-          {searchResult.lastYearStats && searchResult.dataSource === "current" && (
-            <div className="mb-3">
-              <p className="text-[9px] text-mercury uppercase tracking-wider mb-1 font-semibold">{new Date().getFullYear() - 1} Season</p>
-              <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
-                <SeasonStatsGrid stats={searchResult.lastYearStats} />
-              </div>
-            </div>
-          )}
-
-          {/* Career Stats */}
-          {searchResult.careerStats && (
-            <div className="mb-3">
-              <p className="text-[9px] text-mercury uppercase tracking-wider mb-1 font-semibold">Career</p>
-              <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
-                <SeasonStatsGrid stats={searchResult.careerStats} />
-              </div>
-            </div>
-          )}
-
-          {/* Last 10+ Games Chart */}
-          {gamesList.length > 0 && (
-            <div className="mb-3 rounded-lg bg-gunmetal/20 p-3">
-              <p className="text-[10px] text-mercury uppercase tracking-wider mb-2 font-semibold">
-                Last {gamesList.length} Games
-              </p>
-              <div className="flex items-end gap-1 h-20">
-                {gamesList.map((game: any, gi: number) => {
-                  const statKey = MARKET_STAT_KEY[selectedMarket] || "strikeouts";
-                  const val = game[statKey] ?? 0;
-                  const maxVal = Math.max(...gamesList.map((g: any) => g[statKey] ?? 0), 1);
-                  const height = maxVal > 0 ? (val / maxVal) * 100 : 0;
-                  return (
-                    <div key={gi} className="flex-1 flex flex-col items-center gap-0.5" title={`${game.opponent}: ${val}`}>
-                      <span className="text-[8px] font-mono text-silver font-bold">{val}</span>
-                      <div
-                        className="w-full rounded-t bg-gradient-to-t from-electric/60 to-electric/30 transition-all"
-                        style={{ height: `${Math.max(height, 6)}%` }}
-                      />
-                      <span className="text-[7px] text-mercury/50 truncate w-full text-center">
-                        {game.opponent?.split(" ").pop()?.slice(0, 3)}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-base sm:text-lg font-bold text-silver">
+                      {searchResult.player.name}
+                    </h3>
+                    {searchResult.player.number && (
+                      <span className="text-xs font-mono text-electric">
+                        #{searchResult.player.number}
                       </span>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Game log table */}
-              <div className="mt-3 space-y-0.5">
-                {gamesList.slice(-5).reverse().map((game: any, gi: number) => {
-                  const statKey = MARKET_STAT_KEY[selectedMarket] || "strikeouts";
-                  const val = game[statKey] ?? 0;
-                  return (
-                    <div key={gi} className="flex items-center gap-2 text-[10px]">
-                      <span className="text-mercury/50 w-16 truncate">{game.opponent?.split(" ").pop()}</span>
-                      <div className="flex-1 h-1 bg-gunmetal rounded-full overflow-hidden">
-                        <div className="h-full bg-electric/50 rounded-full" style={{ width: `${Math.min((val / Math.max(...gamesList.map((g: any) => g[statKey] ?? 0), 1)) * 100, 100)}%` }} />
-                      </div>
-                      <span className="font-mono text-silver font-bold w-5 text-right">{val}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Recommendation */}
-          {searchResult.recommendation && (
-            <div className={`rounded-lg p-3 border ${
-              searchResult.recommendation.side.includes("over") ? "bg-neon/5 border-neon/20" :
-              searchResult.recommendation.side.includes("under") ? "bg-purple/5 border-purple/20" :
-              "bg-gunmetal/30 border-slate/20"
-            }`}>
-              <div className="flex items-center gap-2 mb-2">
-                <Target className="w-4 h-4 text-gold" />
-                <span className={`text-sm font-bold ${SIDE_LABELS[searchResult.recommendation.side]?.color ?? "text-mercury"}`}>
-                  {SIDE_LABELS[searchResult.recommendation.side]?.label ?? "ANALYZING"}
-                </span>
-                <div className="ml-auto flex items-center gap-1.5">
-                  <div className="w-12 h-1.5 bg-gunmetal rounded-full overflow-hidden">
-                    <div className={`h-full rounded-full ${searchResult.recommendation.confidence > 50 ? "bg-neon" : "bg-amber"}`} style={{ width: `${searchResult.recommendation.confidence}%` }} />
+                    )}
                   </div>
-                  <span className="text-[10px] font-mono text-mercury">{searchResult.recommendation.confidence}%</span>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    {teamLabel && (
+                      <span className="text-xs px-2 py-0.5 rounded bg-electric/15 text-electric font-medium">
+                        {teamLabel}
+                      </span>
+                    )}
+                    {searchResult.player.position && (
+                      <span className="text-xs px-2 py-0.5 rounded bg-gunmetal text-mercury">
+                        {searchResult.player.position}
+                      </span>
+                    )}
+                    {searchResult.player.gamesPlayed != null && (
+                      <span className="text-[10px] text-mercury/50">
+                        {searchResult.player.gamesPlayed}G this season
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
-              {searchResult.recommendation.reasons.map((r: string, ri: number) => (
-                <p key={ri} className="text-[11px] text-mercury flex gap-1.5 mb-0.5">
-                  <span className="text-electric font-bold">{'>'}</span> {r}
-                </p>
-              ))}
+
+              {/* Data source notice */}
+              {searchResult.dataSource &&
+                searchResult.dataSource !== "current" && (
+                  <div className="flex items-center gap-1.5 px-2 py-1.5 rounded bg-amber/5 border border-amber/15 mb-2">
+                    <AlertCircle className="w-3 h-3 text-amber flex-shrink-0" />
+                    <p className="text-[10px] text-amber">
+                      {searchResult.dataSource === "lastYear"
+                        ? "Early season — showing last year's stats as primary"
+                        : "Showing career stats (no recent season data)"}
+                    </p>
+                  </div>
+                )}
+
+              {/* Current / Primary Stats */}
+              <p className="text-[9px] text-mercury uppercase tracking-wider mb-1 font-semibold">
+                {searchResult.dataSource === "lastYear"
+                  ? `${new Date().getFullYear() - 1} Season`
+                  : searchResult.dataSource === "career"
+                    ? "Career"
+                    : `${new Date().getFullYear()} Season`}
+              </p>
+              <div className="grid grid-cols-4 gap-1.5 sm:gap-2 mb-3">
+                <SeasonStatsGrid stats={searchResult.player} />
+              </div>
+
+              {/* Last Year Stats */}
+              {searchResult.lastYearStats &&
+                searchResult.dataSource === "current" && (
+                  <div className="mb-3">
+                    <p className="text-[9px] text-mercury uppercase tracking-wider mb-1 font-semibold">
+                      {new Date().getFullYear() - 1} Season
+                    </p>
+                    <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
+                      <SeasonStatsGrid stats={searchResult.lastYearStats} />
+                    </div>
+                  </div>
+                )}
+
+              {/* Career Stats */}
+              {searchResult.careerStats && (
+                <div className="mb-3">
+                  <p className="text-[9px] text-mercury uppercase tracking-wider mb-1 font-semibold">
+                    Career
+                  </p>
+                  <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
+                    <SeasonStatsGrid stats={searchResult.careerStats} />
+                  </div>
+                </div>
+              )}
+
+              {/* Last 10+ Games Chart */}
+              {gamesList.length > 0 && (
+                <div className="mb-3 rounded-lg bg-gunmetal/20 p-3">
+                  <p className="text-[10px] text-mercury uppercase tracking-wider mb-2 font-semibold">
+                    Last {gamesList.length} Games
+                  </p>
+                  <div className="flex items-end gap-1 h-20">
+                    {gamesList.map((game: any, gi: number) => {
+                      const statKey =
+                        MARKET_STAT_KEY[selectedMarket] || "strikeouts";
+                      const val = game[statKey] ?? 0;
+                      const maxVal = Math.max(
+                        ...gamesList.map((g: any) => g[statKey] ?? 0),
+                        1,
+                      );
+                      const height = maxVal > 0 ? (val / maxVal) * 100 : 0;
+                      return (
+                        <div
+                          key={gi}
+                          className="flex-1 flex flex-col items-center gap-0.5"
+                          title={`${game.opponent}: ${val}`}
+                        >
+                          <span className="text-[8px] font-mono text-silver font-bold">
+                            {val}
+                          </span>
+                          <div
+                            className="w-full rounded-t bg-gradient-to-t from-electric/60 to-electric/30 transition-all"
+                            style={{ height: `${Math.max(height, 6)}%` }}
+                          />
+                          <span className="text-[7px] text-mercury/50 truncate w-full text-center">
+                            {game.opponent?.split(" ").pop()?.slice(0, 3)}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Game log table */}
+                  <div className="mt-3 space-y-0.5">
+                    {gamesList
+                      .slice(-5)
+                      .reverse()
+                      .map((game: any, gi: number) => {
+                        const statKey =
+                          MARKET_STAT_KEY[selectedMarket] || "strikeouts";
+                        const val = game[statKey] ?? 0;
+                        return (
+                          <div
+                            key={gi}
+                            className="flex items-center gap-2 text-[10px]"
+                          >
+                            <span className="text-mercury/50 w-16 truncate">
+                              {game.opponent?.split(" ").pop()}
+                            </span>
+                            <div className="flex-1 h-1 bg-gunmetal rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-electric/50 rounded-full"
+                                style={{
+                                  width: `${Math.min((val / Math.max(...gamesList.map((g: any) => g[statKey] ?? 0), 1)) * 100, 100)}%`,
+                                }}
+                              />
+                            </div>
+                            <span className="font-mono text-silver font-bold w-5 text-right">
+                              {val}
+                            </span>
+                          </div>
+                        );
+                      })}
+                  </div>
+                </div>
+              )}
+
+              {/* Recommendation */}
+              {searchResult.recommendation && (
+                <div
+                  className={`rounded-lg p-3 border ${
+                    searchResult.recommendation.side.includes("over")
+                      ? "bg-neon/5 border-neon/20"
+                      : searchResult.recommendation.side.includes("under")
+                        ? "bg-purple/5 border-purple/20"
+                        : "bg-gunmetal/30 border-slate/20"
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <Target className="w-4 h-4 text-gold" />
+                    <span
+                      className={`text-sm font-bold ${SIDE_LABELS[searchResult.recommendation.side]?.color ?? "text-mercury"}`}
+                    >
+                      {SIDE_LABELS[searchResult.recommendation.side]?.label ??
+                        "ANALYZING"}
+                    </span>
+                    <div className="ml-auto flex items-center gap-1.5">
+                      <div className="w-12 h-1.5 bg-gunmetal rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full ${searchResult.recommendation.confidence > 50 ? "bg-neon" : "bg-amber"}`}
+                          style={{
+                            width: `${searchResult.recommendation.confidence}%`,
+                          }}
+                        />
+                      </div>
+                      <span className="text-[10px] font-mono text-mercury">
+                        {searchResult.recommendation.confidence}%
+                      </span>
+                    </div>
+                  </div>
+                  {searchResult.recommendation.reasons.map(
+                    (r: string, ri: number) => (
+                      <p
+                        key={ri}
+                        className="text-[11px] text-mercury flex gap-1.5 mb-0.5"
+                      >
+                        <span className="text-electric font-bold">{">"}</span>{" "}
+                        {r}
+                      </p>
+                    ),
+                  )}
+                </div>
+              )}
             </div>
-          )}
-        </div>
-        );
-      })()}
+          );
+        })()}
 
       {/* Props List */}
       <div className="divide-y divide-slate/15">
@@ -468,7 +635,9 @@ export default function PlayerProps() {
             <p className="text-sm text-mercury">Loading props...</p>
           </div>
         ) : !loading && props.length === 0 ? (
-          <div className="p-8 text-center text-mercury text-sm">No props available for this market</div>
+          <div className="p-8 text-center text-mercury text-sm">
+            No props available for this market
+          </div>
         ) : (
           props.map((prop, i) => {
             const isExpanded = expandedPlayer === prop.playerName;
@@ -476,10 +645,15 @@ export default function PlayerProps() {
             const isLoadingThis = loadingAnalysis === prop.playerName;
 
             return (
-              <div key={i} className={`transition-colors ${isExpanded ? "bg-gunmetal/20" : ""}`}>
+              <div
+                key={i}
+                className={`transition-colors ${isExpanded ? "bg-gunmetal/20" : ""}`}
+              >
                 {/* Main Row — clickable */}
                 <button
-                  onClick={() => togglePlayer(prop.playerName, prop.line, prop.team)}
+                  onClick={() =>
+                    togglePlayer(prop.playerName, prop.line, prop.team)
+                  }
                   className="w-full px-3 sm:px-4 py-3 flex items-center gap-3 hover:bg-gunmetal/30 active:bg-gunmetal/40 transition-colors text-left"
                 >
                   {/* Player Info — name always visible */}
@@ -492,34 +666,59 @@ export default function PlayerProps() {
                         sport={currentSport as "mlb" | "nba"}
                         size={22}
                       />
-                      <p className="text-sm font-semibold text-silver truncate">{prop.playerName}</p>
-                      {brainAccuracy[prop.playerName] && brainAccuracy[prop.playerName].total >= 3 && (
-                        <span className={`text-[9px] px-1 py-0.5 rounded font-mono flex-shrink-0 ${
-                          brainAccuracy[prop.playerName].winRate >= 60 ? "bg-neon/15 text-neon" :
-                          brainAccuracy[prop.playerName].winRate >= 50 ? "bg-amber/15 text-amber" :
-                          "bg-danger/15 text-danger"
-                        }`}>
-                          {brainAccuracy[prop.playerName].hits}-{brainAccuracy[prop.playerName].total - brainAccuracy[prop.playerName].hits}
-                        </span>
-                      )}
+                      <p className="text-sm font-semibold text-silver truncate">
+                        {prop.playerName}
+                      </p>
+                      {brainAccuracy[prop.playerName] &&
+                        brainAccuracy[prop.playerName].total >= 3 && (
+                          <span
+                            className={`text-[9px] px-1 py-0.5 rounded font-mono flex-shrink-0 ${
+                              brainAccuracy[prop.playerName].winRate >= 60
+                                ? "bg-neon/15 text-neon"
+                                : brainAccuracy[prop.playerName].winRate >= 50
+                                  ? "bg-amber/15 text-amber"
+                                  : "bg-danger/15 text-danger"
+                            }`}
+                          >
+                            {brainAccuracy[prop.playerName].hits}-
+                            {brainAccuracy[prop.playerName].total -
+                              brainAccuracy[prop.playerName].hits}
+                          </span>
+                        )}
                     </div>
                     <p className="text-[10px] text-mercury/60 truncate">
                       {prop.gameTime && (
-                        <span className="text-mercury/80">{new Date(prop.gameTime!).toLocaleString("en-US", { hour: "numeric", minute: "2-digit" })} — </span>
+                        <span className="text-mercury/80">
+                          {new Date(prop.gameTime!).toLocaleString("en-US", {
+                            hour: "numeric",
+                            minute: "2-digit",
+                          })}{" "}
+                          —{" "}
+                        </span>
                       )}
-                      {prop.team ? `${prop.team} • ` : ""}{MARKET_LABELS[prop.market] ?? prop.market}
+                      {prop.team ? `${prop.team} • ` : ""}
+                      {MARKET_LABELS[prop.market] ?? prop.market}
                     </p>
                   </div>
 
                   {/* Line + Movement indicator */}
                   <div className="flex items-center gap-1 flex-shrink-0">
-                    <span className="text-lg font-bold font-mono text-electric">{prop.line}</span>
+                    <span className="text-lg font-bold font-mono text-electric">
+                      {prop.line}
+                    </span>
                     {(() => {
-                      const mv = lineMovements[`${prop.playerName}::${prop.market ?? selectedMarket}`];
+                      const mv =
+                        lineMovements[
+                          `${prop.playerName}::${prop.market ?? selectedMarket}`
+                        ];
                       if (!mv || mv.direction === "stable") return null;
                       return (
-                        <span className={`text-[8px] font-mono font-bold ${mv.direction === "sharp_over" ? "text-neon" : "text-purple"}`} title={`Opened at ${mv.openingLine}`}>
-                          {mv.lineShift > 0 ? "↑" : "↓"}{Math.abs(mv.lineShift).toFixed(1)}
+                        <span
+                          className={`text-[8px] font-mono font-bold ${mv.direction === "sharp_over" ? "text-neon" : "text-purple"}`}
+                          title={`Opened at ${mv.openingLine}`}
+                        >
+                          {mv.lineShift > 0 ? "↑" : "↓"}
+                          {Math.abs(mv.lineShift).toFixed(1)}
                         </span>
                       );
                     })()}
@@ -540,9 +739,11 @@ export default function PlayerProps() {
                   {/* Recommendation badge (if analyzed) */}
                   {analysis && (
                     <div className="hidden sm:flex flex-shrink-0">
-                      {analysis.recommendation.side === "over" || analysis.recommendation.side === "lean_over" ? (
+                      {analysis.recommendation.side === "over" ||
+                      analysis.recommendation.side === "lean_over" ? (
                         <ArrowUpRight className="w-4 h-4 text-neon" />
-                      ) : analysis.recommendation.side === "under" || analysis.recommendation.side === "lean_under" ? (
+                      ) : analysis.recommendation.side === "under" ||
+                        analysis.recommendation.side === "lean_under" ? (
                         <ArrowDownRight className="w-4 h-4 text-purple" />
                       ) : (
                         <Minus className="w-4 h-4 text-mercury/50" />
@@ -550,7 +751,9 @@ export default function PlayerProps() {
                     </div>
                   )}
 
-                  <ChevronDown className={`w-4 h-4 text-mercury/50 flex-shrink-0 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+                  <ChevronDown
+                    className={`w-4 h-4 text-mercury/50 flex-shrink-0 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                  />
                 </button>
 
                 {/* Expanded Detail Panel */}
@@ -559,19 +762,30 @@ export default function PlayerProps() {
                     {isLoadingThis && !analysis ? (
                       <div className="flex items-center justify-center py-6 gap-2">
                         <RefreshCw className="w-4 h-4 text-mercury animate-spin" />
-                        <span className="text-sm text-mercury">Analyzing {prop.playerName}...</span>
+                        <span className="text-sm text-mercury">
+                          Analyzing {prop.playerName}...
+                        </span>
                       </div>
                     ) : (
                       <div className="space-y-3">
                         {/* All Books Odds Grid */}
                         <div className="rounded-lg bg-gunmetal/30 p-3">
-                          <p className="text-[11px] text-mercury uppercase tracking-wider mb-2 font-semibold">Odds by Sportsbook</p>
+                          <p className="text-[11px] text-mercury uppercase tracking-wider mb-2 font-semibold">
+                            Odds by Sportsbook
+                          </p>
                           <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
                             {(prop.books ?? []).map((book, bi) => {
-                              const isBestOver = book.bookmaker === prop.bestOver?.bookmaker && book.overPrice === prop.bestOver?.price;
-                              const isBestUnder = book.bookmaker === prop.bestUnder?.bookmaker && book.underPrice === prop.bestUnder?.price;
+                              const isBestOver =
+                                book.bookmaker === prop.bestOver?.bookmaker &&
+                                book.overPrice === prop.bestOver?.price;
+                              const isBestUnder =
+                                book.bookmaker === prop.bestUnder?.bookmaker &&
+                                book.underPrice === prop.bestUnder?.price;
                               return (
-                                <div key={bi} className="flex items-center justify-between px-2.5 py-2 rounded bg-bunker/60 border border-slate/20">
+                                <div
+                                  key={bi}
+                                  className="flex items-center justify-between px-2.5 py-2 rounded bg-bunker/60 border border-slate/20"
+                                >
                                   <span className="text-[11px] font-medium text-mercury truncate mr-2">
                                     {getBookShort(book.bookmaker)}
                                   </span>
@@ -588,7 +802,9 @@ export default function PlayerProps() {
                                         });
                                       }}
                                       className={`text-[11px] font-mono font-semibold px-1.5 py-0.5 rounded transition-all active:scale-95 ${
-                                        isBestOver ? "best-odds" : "text-neon/80 hover:bg-neon/10"
+                                        isBestOver
+                                          ? "best-odds"
+                                          : "text-neon/80 hover:bg-neon/10"
                                       }`}
                                     >
                                       O {formatOdds(book.overPrice)}
@@ -606,7 +822,9 @@ export default function PlayerProps() {
                                           });
                                         }}
                                         className={`text-[11px] font-mono font-semibold px-1.5 py-0.5 rounded transition-all active:scale-95 ${
-                                          isBestUnder ? "best-odds" : "text-purple/80 hover:bg-purple/10"
+                                          isBestUnder
+                                            ? "best-odds"
+                                            : "text-purple/80 hover:bg-purple/10"
                                         }`}
                                       >
                                         U {formatOdds(book.underPrice)}
@@ -627,7 +845,8 @@ export default function PlayerProps() {
                               <div className="flex items-center gap-2 mb-2">
                                 <BarChart3 className="w-3.5 h-3.5 text-electric" />
                                 <p className="text-[11px] text-mercury uppercase tracking-wider font-semibold">
-                                  {analysis.player.name} — {analysis.player.team}
+                                  {analysis.player.name} —{" "}
+                                  {analysis.player.team}
                                 </p>
                                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-electric/10 text-electric">
                                   {analysis.player.position}
@@ -636,26 +855,91 @@ export default function PlayerProps() {
                               <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                                 {(analysis.player as any).ppg !== undefined && (
                                   <>
-                                    <StatBox label="PPG" value={(analysis.player as any).ppg?.toFixed(1) ?? "—"} />
-                                    <StatBox label="RPG" value={(analysis.player as any).rpg?.toFixed(1) ?? "—"} />
-                                    <StatBox label="APG" value={(analysis.player as any).apg?.toFixed(1) ?? "—"} />
-                                    <StatBox label="HIT%" value={`${(analysis.player as any).hitRates?.[selectedMarket]?.rate ?? 50}%`} />
+                                    <StatBox
+                                      label="PPG"
+                                      value={
+                                        (analysis.player as any).ppg?.toFixed(
+                                          1,
+                                        ) ?? "—"
+                                      }
+                                    />
+                                    <StatBox
+                                      label="RPG"
+                                      value={
+                                        (analysis.player as any).rpg?.toFixed(
+                                          1,
+                                        ) ?? "—"
+                                      }
+                                    />
+                                    <StatBox
+                                      label="APG"
+                                      value={
+                                        (analysis.player as any).apg?.toFixed(
+                                          1,
+                                        ) ?? "—"
+                                      }
+                                    />
+                                    <StatBox
+                                      label="HIT%"
+                                      value={`${(analysis.player as any).hitRates?.[selectedMarket]?.rate ?? 50}%`}
+                                    />
                                   </>
                                 )}
                                 {analysis.player.era !== undefined && (
                                   <>
-                                    <StatBox label="ERA" value={analysis.player.era.toFixed(2)} />
-                                    <StatBox label="K/9" value={analysis.player.k9?.toFixed(1) ?? "—"} />
-                                    <StatBox label="WHIP" value={analysis.player.whip?.toFixed(2) ?? "—"} />
-                                    <StatBox label="Avg K/G" value={analysis.player.avgStrikeoutsPerGame?.toFixed(1) ?? "—"} />
+                                    <StatBox
+                                      label="ERA"
+                                      value={analysis.player.era.toFixed(2)}
+                                    />
+                                    <StatBox
+                                      label="K/9"
+                                      value={
+                                        analysis.player.k9?.toFixed(1) ?? "—"
+                                      }
+                                    />
+                                    <StatBox
+                                      label="WHIP"
+                                      value={
+                                        analysis.player.whip?.toFixed(2) ?? "—"
+                                      }
+                                    />
+                                    <StatBox
+                                      label="Avg K/G"
+                                      value={
+                                        analysis.player.avgStrikeoutsPerGame?.toFixed(
+                                          1,
+                                        ) ?? "—"
+                                      }
+                                    />
                                   </>
                                 )}
                                 {analysis.player.avg !== undefined && (
                                   <>
-                                    <StatBox label="AVG" value={analysis.player.avg.toFixed(3)} />
-                                    <StatBox label="OPS" value={analysis.player.ops?.toFixed(3) ?? "—"} />
-                                    <StatBox label="H/G" value={analysis.player.hitsPerGame?.toFixed(1) ?? "—"} />
-                                    <StatBox label="TB/G" value={analysis.player.tbPerGame?.toFixed(1) ?? "—"} />
+                                    <StatBox
+                                      label="AVG"
+                                      value={analysis.player.avg.toFixed(3)}
+                                    />
+                                    <StatBox
+                                      label="OPS"
+                                      value={
+                                        analysis.player.ops?.toFixed(3) ?? "—"
+                                      }
+                                    />
+                                    <StatBox
+                                      label="H/G"
+                                      value={
+                                        analysis.player.hitsPerGame?.toFixed(
+                                          1,
+                                        ) ?? "—"
+                                      }
+                                    />
+                                    <StatBox
+                                      label="TB/G"
+                                      value={
+                                        analysis.player.tbPerGame?.toFixed(1) ??
+                                        "—"
+                                      }
+                                    />
                                   </>
                                 )}
                               </div>
@@ -663,63 +947,126 @@ export default function PlayerProps() {
 
                             {/* Last 10 Games Sparkline */}
                             {(analysis.last10Games?.length ?? 0) > 0 && (
-                            <div className="rounded-lg bg-gunmetal/30 p-3">
-                              <div className="flex items-center gap-2 mb-2">
-                                <Clock className="w-3.5 h-3.5 text-amber" />
-                                <p className="text-[11px] text-mercury uppercase tracking-wider font-semibold">
-                                  Last {analysis.last10Games?.length ?? 0} Games
-                                </p>
-                                {(analysis.vsOpponent?.games ?? 0) > 0 && (
-                                  <span className="text-[10px] text-amber ml-auto">
-                                    vs Opp: {analysis.vsOpponent.avgStat?.toFixed(1) ?? "?"} avg ({analysis.vsOpponent.games}g)
-                                  </span>
-                                )}
-                              </div>
-                              <div className="flex items-end gap-1 h-16">
-                                {analysis.last10Games.map((game, gi) => {
-                                  const statKey = MARKET_STAT_KEY[selectedMarket] || "strikeouts";
-                                  const val = (game as any)[statKey] ?? 0;
-                                  const maxVal = Math.max(...analysis.last10Games.map((g: any) => g[statKey] ?? 0), prop.line + 2);
-                                  const height = maxVal > 0 ? (val / maxVal) * 100 : 0;
-                                  const isOver = val > prop.line;
-                                  return (
-                                    <div key={gi} className="flex-1 flex flex-col items-center gap-0.5" title={`${game.opponent}: ${val}`}>
-                                      <span className="text-[8px] font-mono text-mercury/50">{val}</span>
+                              <div className="rounded-lg bg-gunmetal/30 p-3">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <Clock className="w-3.5 h-3.5 text-amber" />
+                                  <p className="text-[11px] text-mercury uppercase tracking-wider font-semibold">
+                                    Last {analysis.last10Games?.length ?? 0}{" "}
+                                    Games
+                                  </p>
+                                  {(analysis.vsOpponent?.games ?? 0) > 0 && (
+                                    <span className="text-[10px] text-amber ml-auto">
+                                      vs Opp:{" "}
+                                      {analysis.vsOpponent.avgStat?.toFixed(
+                                        1,
+                                      ) ?? "?"}{" "}
+                                      avg ({analysis.vsOpponent.games}g)
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex items-end gap-1 h-16">
+                                  {analysis.last10Games.map((game, gi) => {
+                                    const statKey =
+                                      MARKET_STAT_KEY[selectedMarket] ||
+                                      "strikeouts";
+                                    const val = (game as any)[statKey] ?? 0;
+                                    const maxVal = Math.max(
+                                      ...analysis.last10Games.map(
+                                        (g: any) => g[statKey] ?? 0,
+                                      ),
+                                      prop.line + 2,
+                                    );
+                                    const height =
+                                      maxVal > 0 ? (val / maxVal) * 100 : 0;
+                                    const isOver = val > prop.line;
+                                    return (
                                       <div
-                                        className={`w-full rounded-t transition-all ${isOver ? "bg-neon/60" : "bg-danger/40"}`}
-                                        style={{ height: `${Math.max(height, 8)}%` }}
-                                      />
-                                      <span className="text-[7px] text-mercury/40 truncate w-full text-center">
-                                        {game.opponent?.split(" ").pop()?.slice(0, 3)}
-                                      </span>
-                                    </div>
-                                  );
-                                })}
+                                        key={gi}
+                                        className="flex-1 flex flex-col items-center gap-0.5"
+                                        title={`${game.opponent}: ${val}`}
+                                      >
+                                        <span className="text-[8px] font-mono text-mercury/50">
+                                          {val}
+                                        </span>
+                                        <div
+                                          className={`w-full rounded-t transition-all ${isOver ? "bg-neon/60" : "bg-danger/40"}`}
+                                          style={{
+                                            height: `${Math.max(height, 8)}%`,
+                                          }}
+                                        />
+                                        <span className="text-[7px] text-mercury/40 truncate w-full text-center">
+                                          {game.opponent
+                                            ?.split(" ")
+                                            .pop()
+                                            ?.slice(0, 3)}
+                                        </span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                                {/* Line marker */}
+                                <div className="relative h-0 -mt-8">
+                                  <div
+                                    className="absolute w-full border-t border-dashed border-electric/40"
+                                    style={{
+                                      bottom: `${(prop.line / Math.max(...(analysis.last10Games ?? []).map((g: any) => (g as any)[MARKET_STAT_KEY[selectedMarket] || "strikeouts"] ?? 0), prop.line + 2)) * 64}px`,
+                                    }}
+                                  />
+                                </div>
                               </div>
-                              {/* Line marker */}
-                              <div className="relative h-0 -mt-8">
-                                <div className="absolute w-full border-t border-dashed border-electric/40" style={{
-                                  bottom: `${(prop.line / Math.max(...(analysis.last10Games ?? []).map((g: any) => (g as any)[MARKET_STAT_KEY[selectedMarket] || "strikeouts"] ?? 0), prop.line + 2)) * 64}px`
-                                }} />
-                              </div>
-                            </div>
                             )}
 
                             {/* NBA-specific stats display */}
                             {(analysis.player as any)?.ppg !== undefined && (
                               <div className="rounded-lg bg-gunmetal/30 p-3">
                                 <div className="flex items-center gap-3 mb-2">
-                                  <PlayerAvatar name={analysis.player.name} photo={(analysis.player as any).photo} sport={currentSport as "mlb" | "nba"} size={48} className="!rounded-lg" />
+                                  <PlayerAvatar
+                                    name={analysis.player.name}
+                                    photo={(analysis.player as any).photo}
+                                    sport={currentSport as "mlb" | "nba"}
+                                    size={48}
+                                    className="!rounded-lg"
+                                  />
                                   <div>
-                                    <p className="text-xs font-semibold text-silver">{analysis.player.name}</p>
-                                    <p className="text-[10px] text-mercury">{(analysis.player as any).teamAbbrev} • {analysis.player.position} • #{(analysis.player as any).number}</p>
+                                    <p className="text-xs font-semibold text-silver">
+                                      {analysis.player.name}
+                                    </p>
+                                    <p className="text-[10px] text-mercury">
+                                      {(analysis.player as any).teamAbbrev} •{" "}
+                                      {analysis.player.position} • #
+                                      {(analysis.player as any).number}
+                                    </p>
                                   </div>
                                 </div>
                                 <div className="grid grid-cols-4 gap-1.5">
-                                  <StatBox label="PPG" value={(analysis.player as any).ppg?.toFixed(1) ?? "—"} />
-                                  <StatBox label="RPG" value={(analysis.player as any).rpg?.toFixed(1) ?? "—"} />
-                                  <StatBox label="APG" value={(analysis.player as any).apg?.toFixed(1) ?? "—"} />
-                                  <StatBox label="HIT%" value={`${(analysis.player as any).hitRates?.[selectedMarket]?.rate ?? 50}%`} />
+                                  <StatBox
+                                    label="PPG"
+                                    value={
+                                      (analysis.player as any).ppg?.toFixed(
+                                        1,
+                                      ) ?? "—"
+                                    }
+                                  />
+                                  <StatBox
+                                    label="RPG"
+                                    value={
+                                      (analysis.player as any).rpg?.toFixed(
+                                        1,
+                                      ) ?? "—"
+                                    }
+                                  />
+                                  <StatBox
+                                    label="APG"
+                                    value={
+                                      (analysis.player as any).apg?.toFixed(
+                                        1,
+                                      ) ?? "—"
+                                    }
+                                  />
+                                  <StatBox
+                                    label="HIT%"
+                                    value={`${(analysis.player as any).hitRates?.[selectedMarket]?.rate ?? 50}%`}
+                                  />
                                 </div>
                               </div>
                             )}
@@ -729,12 +1076,16 @@ export default function PlayerProps() {
                               playerName={prop.playerName}
                               market={prop.market}
                               line={prop.line}
-                              gameLog={(analysis as any).player?.gameLog ?? analysis.last10Games ?? []}
+                              gameLog={
+                                (analysis as any).player?.gameLog ??
+                                analysis.last10Games ??
+                                []
+                              }
                               seasonAvg={
-                                (analysis.player as any)?.ppg
-                                ?? analysis.player?.avgStrikeoutsPerGame
-                                ?? analysis.player?.hitsPerGame
-                                ?? analysis.player?.tbPerGame
+                                (analysis.player as any)?.ppg ??
+                                analysis.player?.avgStrikeoutsPerGame ??
+                                analysis.player?.hitsPerGame ??
+                                analysis.player?.tbPerGame
                               }
                               vsOpponent={analysis.vsOpponent}
                               position={analysis.player?.position}
@@ -745,53 +1096,98 @@ export default function PlayerProps() {
                               <div>
                                 <div className="flex items-center gap-1.5 mb-1.5">
                                   <Brain className="w-3.5 h-3.5 text-purple" />
-                                  <span className="text-[9px] text-mercury/60 uppercase tracking-wider font-semibold">Brain Analysis</span>
+                                  <span className="text-[9px] text-mercury/60 uppercase tracking-wider font-semibold">
+                                    Brain Analysis
+                                  </span>
                                 </div>
                                 <BrainPickDetail
-                                  reasoning={(analysis as any).brainProjection.reasoning}
-                                  seasonAvg={(analysis as any).brainProjection.seasonAvg}
-                                  last5Avg={(analysis as any).brainProjection.last5Avg}
-                                  projectedValue={(analysis as any).brainProjection.projectedValue}
-                                  probability={(analysis as any).brainProjection.probability}
+                                  reasoning={
+                                    (analysis as any).brainProjection.reasoning
+                                  }
+                                  seasonAvg={
+                                    (analysis as any).brainProjection.seasonAvg
+                                  }
+                                  last5Avg={
+                                    (analysis as any).brainProjection.last5Avg
+                                  }
+                                  projectedValue={
+                                    (analysis as any).brainProjection
+                                      .projectedValue
+                                  }
+                                  probability={
+                                    (analysis as any).brainProjection
+                                      .probability
+                                  }
                                 />
                               </div>
                             )}
 
                             {/* Recommendation */}
                             {analysis.recommendation && (
-                            <div className={`rounded-lg p-3 border ${
-                              analysis.recommendation.side?.includes("over") ? "bg-neon/5 border-neon/20" :
-                              analysis.recommendation.side?.includes("under") ? "bg-purple/5 border-purple/20" :
-                              "bg-gunmetal/30 border-slate/20"
-                            }`}>
-                              <div className="flex items-center gap-2 mb-2">
-                                <Target className="w-4 h-4 text-gold" />
-                                <span className={`text-sm font-bold ${SIDE_LABELS[analysis.recommendation.side].color}`}>
-                                  {SIDE_LABELS[analysis.recommendation.side].label}
-                                </span>
-                                <div className="ml-auto flex items-center gap-1">
-                                  <span className="text-[10px] text-mercury">Confidence:</span>
-                                  <div className="w-16 h-1.5 bg-gunmetal rounded-full overflow-hidden">
-                                    <div
-                                      className={`h-full rounded-full ${
-                                        analysis.recommendation.confidence > 50 ? "bg-neon" :
-                                        analysis.recommendation.confidence > 25 ? "bg-amber" : "bg-mercury"
-                                      }`}
-                                      style={{ width: `${analysis.recommendation.confidence}%` }}
-                                    />
+                              <div
+                                className={`rounded-lg p-3 border ${
+                                  analysis.recommendation.side?.includes("over")
+                                    ? "bg-neon/5 border-neon/20"
+                                    : analysis.recommendation.side?.includes(
+                                          "under",
+                                        )
+                                      ? "bg-purple/5 border-purple/20"
+                                      : "bg-gunmetal/30 border-slate/20"
+                                }`}
+                              >
+                                <div className="flex items-center gap-2 mb-2">
+                                  <Target className="w-4 h-4 text-gold" />
+                                  <span
+                                    className={`text-sm font-bold ${SIDE_LABELS[analysis.recommendation.side].color}`}
+                                  >
+                                    {
+                                      SIDE_LABELS[analysis.recommendation.side]
+                                        .label
+                                    }
+                                  </span>
+                                  <div className="ml-auto flex items-center gap-1">
+                                    <span className="text-[10px] text-mercury">
+                                      Confidence:
+                                    </span>
+                                    <div className="w-16 h-1.5 bg-gunmetal rounded-full overflow-hidden">
+                                      <div
+                                        className={`h-full rounded-full ${
+                                          analysis.recommendation.confidence >
+                                          50
+                                            ? "bg-neon"
+                                            : analysis.recommendation
+                                                  .confidence > 25
+                                              ? "bg-amber"
+                                              : "bg-mercury"
+                                        }`}
+                                        style={{
+                                          width: `${analysis.recommendation.confidence}%`,
+                                        }}
+                                      />
+                                    </div>
+                                    <span className="text-[10px] font-mono text-mercury">
+                                      {analysis.recommendation.confidence}%
+                                    </span>
                                   </div>
-                                  <span className="text-[10px] font-mono text-mercury">{analysis.recommendation.confidence}%</span>
+                                </div>
+                                <div className="space-y-1">
+                                  {(analysis.recommendation.reasons ?? []).map(
+                                    (reason: string, ri: number) => (
+                                      <div
+                                        key={ri}
+                                        className="flex items-start gap-1.5"
+                                      >
+                                        <span className="text-electric text-[10px] mt-0.5">
+                                          {">"}
+                                        </span>
+                                        <p className="text-xs text-mercury">
+                                          {reason}
+                                        </p>
+                                      </div>
+                                    ),
+                                  )}
                                 </div>
                               </div>
-                              <div className="space-y-1">
-                                {(analysis.recommendation.reasons ?? []).map((reason: string, ri: number) => (
-                                  <div key={ri} className="flex items-start gap-1.5">
-                                    <span className="text-electric text-[10px] mt-0.5">{'>'}</span>
-                                    <p className="text-xs text-mercury">{reason}</p>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
                             )}
                           </>
                         )}
@@ -804,25 +1200,38 @@ export default function PlayerProps() {
                             className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-neon/10 border border-neon/20 text-neon text-sm font-semibold hover:bg-neon/20 active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                           >
                             <ArrowUpRight className="w-4 h-4" />
-                            Over {prop.line} {typeof prop.bestOver?.price === "number" ? `(${formatOdds(prop.bestOver.price)})` : "(—)"}
+                            Over {prop.line}{" "}
+                            {typeof prop.bestOver?.price === "number"
+                              ? `(${formatOdds(prop.bestOver.price)})`
+                              : "(—)"}
                           </button>
                         ) : (
                           <div className="grid grid-cols-2 gap-2">
                             <button
                               onClick={() => handleAddProp(prop, "over")}
-                              disabled={typeof prop.bestOver?.price !== "number"}
+                              disabled={
+                                typeof prop.bestOver?.price !== "number"
+                              }
                               className="flex items-center justify-center gap-2 py-2.5 rounded-lg bg-neon/10 border border-neon/20 text-neon text-sm font-semibold hover:bg-neon/20 active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                             >
                               <ArrowUpRight className="w-4 h-4" />
-                              Over {prop.line} {typeof prop.bestOver?.price === "number" ? `(${formatOdds(prop.bestOver.price)})` : "(—)"}
+                              Over {prop.line}{" "}
+                              {typeof prop.bestOver?.price === "number"
+                                ? `(${formatOdds(prop.bestOver.price)})`
+                                : "(—)"}
                             </button>
                             <button
                               onClick={() => handleAddProp(prop, "under")}
-                              disabled={typeof prop.bestUnder?.price !== "number"}
+                              disabled={
+                                typeof prop.bestUnder?.price !== "number"
+                              }
                               className="flex items-center justify-center gap-2 py-2.5 rounded-lg bg-purple/10 border border-purple/20 text-purple text-sm font-semibold hover:bg-purple/20 active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                             >
                               <ArrowDownRight className="w-4 h-4" />
-                              Under {prop.line} {typeof prop.bestUnder?.price === "number" ? `(${formatOdds(prop.bestUnder.price)})` : "(—)"}
+                              Under {prop.line}{" "}
+                              {typeof prop.bestUnder?.price === "number"
+                                ? `(${formatOdds(prop.bestUnder.price)})`
+                                : "(—)"}
                             </button>
                           </div>
                         )}
@@ -871,11 +1280,22 @@ function SeasonStatsGrid({ stats }: { stats: any }) {
         <StatBox label="ERA" value={stats.era?.toFixed(2) ?? "—"} />
         <StatBox label="K/9" value={stats.k9?.toFixed(1) ?? "—"} />
         <StatBox label="WHIP" value={stats.whip?.toFixed(2) ?? "—"} />
-        <StatBox label="K/G" value={stats.avgStrikeoutsPerGame?.toFixed(1) ?? "—"} />
-        {stats.wins !== undefined && <StatBox label="W" value={String(stats.wins)} />}
-        {stats.losses !== undefined && <StatBox label="L" value={String(stats.losses)} />}
-        {stats.strikeouts !== undefined && <StatBox label="K" value={String(stats.strikeouts)} />}
-        {stats.gamesPlayed !== undefined && <StatBox label="GP" value={String(stats.gamesPlayed)} />}
+        <StatBox
+          label="K/G"
+          value={stats.avgStrikeoutsPerGame?.toFixed(1) ?? "—"}
+        />
+        {stats.wins !== undefined && (
+          <StatBox label="W" value={String(stats.wins)} />
+        )}
+        {stats.losses !== undefined && (
+          <StatBox label="L" value={String(stats.losses)} />
+        )}
+        {stats.strikeouts !== undefined && (
+          <StatBox label="K" value={String(stats.strikeouts)} />
+        )}
+        {stats.gamesPlayed !== undefined && (
+          <StatBox label="GP" value={String(stats.gamesPlayed)} />
+        )}
       </>
     );
   }

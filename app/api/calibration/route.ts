@@ -9,6 +9,10 @@ export async function GET() {
     const curve = await loadCalibration();
     return NextResponse.json({ ok: true, curve });
   } catch (e: any) {
-    return NextResponse.json({ ok: true, curve: null, message: "Calibration unavailable" });
+    return NextResponse.json({
+      ok: true,
+      curve: null,
+      message: "Calibration unavailable",
+    });
   }
 }

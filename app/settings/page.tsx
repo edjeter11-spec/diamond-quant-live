@@ -25,7 +25,9 @@ type SaveState = "idle" | "saving" | "saved" | "error";
 
 function StatusBadge({ state }: { state: SaveState }) {
   if (state === "saving")
-    return <span className="text-[10px] text-mercury/60 font-mono">Saving…</span>;
+    return (
+      <span className="text-[10px] text-mercury/60 font-mono">Saving…</span>
+    );
   if (state === "saved")
     return (
       <span className="inline-flex items-center gap-1 text-[10px] text-neon font-mono">
@@ -83,7 +85,10 @@ export default function SettingsPage() {
     });
 
     // Email opt-in
-    cloudGet<{ optIn: boolean } | null>("user_pref_email_" + user.id, null).then((v) => {
+    cloudGet<{ optIn: boolean } | null>(
+      "user_pref_email_" + user.id,
+      null,
+    ).then((v) => {
       if (v && typeof v === "object") setEmailOptIn(!!v.optIn);
     });
 
@@ -156,26 +161,33 @@ export default function SettingsPage() {
   // Auth gate
   if (authLoading) {
     return (
-      <div className="min-h-screen bg-void text-silver flex items-center justify-center">
+      <div className="min-h-screen text-silver flex items-center justify-center">
         <p className="text-sm text-mercury animate-pulse">Loading…</p>
       </div>
     );
   }
   if (!user) {
     return (
-      <div className="min-h-screen bg-void text-silver flex flex-col">
+      <div className="min-h-screen text-silver flex flex-col">
         <div className="max-w-2xl w-full mx-auto px-4 pt-6 pb-8">
           <div className="flex items-center gap-3 mb-6">
-            <Link href="/" className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg hover:bg-gunmetal/60 transition-colors" aria-label="Back to dashboard">
+            <Link
+              href="/"
+              className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg hover:bg-gunmetal/60 transition-colors"
+              aria-label="Back to dashboard"
+            >
               <ArrowLeft className="w-5 h-5 text-mercury" />
             </Link>
             <h1 className="text-xl font-bold text-white">Settings</h1>
           </div>
           <div className="glass rounded-xl border border-electric/30 p-6 text-center bg-gradient-to-br from-electric/5 to-purple/5">
             <SettingsIcon className="w-10 h-10 text-electric mx-auto mb-3" />
-            <p className="text-base text-silver font-bold">Sign in to manage settings</p>
+            <p className="text-base text-silver font-bold">
+              Sign in to manage settings
+            </p>
             <p className="text-xs text-mercury/70 mt-2 max-w-sm mx-auto">
-              Push alerts, Discord webhook, email digest — all sync across devices once you&apos;re in.
+              Push alerts, Discord webhook, email digest — all sync across
+              devices once you&apos;re in.
             </p>
             <Link
               href="/"
@@ -188,16 +200,31 @@ export default function SettingsPage() {
           {/* Feature preview cards so the page isn't dead empty */}
           <div className="mt-6 grid gap-3">
             <div className="glass rounded-xl border border-slate/20 p-4 opacity-50">
-              <p className="text-[11px] font-semibold text-mercury uppercase tracking-wider mb-2">🔔 Push Notifications</p>
-              <p className="text-xs text-mercury/60">Get +EV alerts pushed to your phone the moment edges hit. Filter by HIGH/MED/LOW confidence.</p>
+              <p className="text-[11px] font-semibold text-mercury uppercase tracking-wider mb-2">
+                🔔 Push Notifications
+              </p>
+              <p className="text-xs text-mercury/60">
+                Get +EV alerts pushed to your phone the moment edges hit. Filter
+                by HIGH/MED/LOW confidence.
+              </p>
             </div>
             <div className="glass rounded-xl border border-slate/20 p-4 opacity-50">
-              <p className="text-[11px] font-semibold text-mercury uppercase tracking-wider mb-2">🤖 Discord Webhook</p>
-              <p className="text-xs text-mercury/60">Auto-post daily picks, recaps, and arb alerts to your Discord server.</p>
+              <p className="text-[11px] font-semibold text-mercury uppercase tracking-wider mb-2">
+                🤖 Discord Webhook
+              </p>
+              <p className="text-xs text-mercury/60">
+                Auto-post daily picks, recaps, and arb alerts to your Discord
+                server.
+              </p>
             </div>
             <div className="glass rounded-xl border border-slate/20 p-4 opacity-50">
-              <p className="text-[11px] font-semibold text-mercury uppercase tracking-wider mb-2">📧 Email Digest</p>
-              <p className="text-xs text-mercury/60">Daily morning email with tonight's picks, top arbs, and yesterday's results.</p>
+              <p className="text-[11px] font-semibold text-mercury uppercase tracking-wider mb-2">
+                📧 Email Digest
+              </p>
+              <p className="text-xs text-mercury/60">
+                Daily morning email with tonight's picks, top arbs, and
+                yesterday's results.
+              </p>
             </div>
           </div>
         </div>
@@ -206,11 +233,15 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-void text-silver">
+    <div className="min-h-screen text-silver">
       <div className="max-w-2xl mx-auto px-4 pt-6 pb-8">
         {/* Header */}
         <div className="flex items-center gap-3 mb-6">
-          <Link href="/" className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg hover:bg-gunmetal/60 transition-colors" aria-label="Back to dashboard">
+          <Link
+            href="/"
+            className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg hover:bg-gunmetal/60 transition-colors"
+            aria-label="Back to dashboard"
+          >
             <ArrowLeft className="w-5 h-5 text-mercury" />
           </Link>
           <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-electric/20 to-purple/20 flex items-center justify-center border border-electric/20">
@@ -218,7 +249,9 @@ export default function SettingsPage() {
           </div>
           <div>
             <h1 className="text-xl font-bold text-white">Settings</h1>
-            <p className="text-xs text-mercury font-mono">PREFERENCES &amp; NOTIFICATIONS</p>
+            <p className="text-xs text-mercury font-mono">
+              PREFERENCES &amp; NOTIFICATIONS
+            </p>
           </div>
         </div>
 
@@ -233,7 +266,8 @@ export default function SettingsPage() {
           <div className="space-y-2">
             <PushOptIn />
             <p className="text-[10px] text-mercury/50 px-1">
-              Browser web-push for sharp picks. You&apos;ll only ping when the model finds an edge.
+              Browser web-push for sharp picks. You&apos;ll only ping when the
+              model finds an edge.
             </p>
           </div>
         </section>
@@ -251,8 +285,8 @@ export default function SettingsPage() {
           </div>
           <div className="glass rounded-xl border border-slate/30 p-4">
             <p className="text-[11px] text-mercury/70 mb-3">
-              Paste a Discord channel webhook URL to receive picks &amp; settle alerts directly in
-              your server.
+              Paste a Discord channel webhook URL to receive picks &amp; settle
+              alerts directly in your server.
             </p>
             <div className="flex gap-2">
               <input
@@ -290,9 +324,12 @@ export default function SettingsPage() {
               <Mail className="w-4 h-4 text-amber" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-silver">Daily recap email</p>
+              <p className="text-sm font-semibold text-silver">
+                Daily recap email
+              </p>
               <p className="text-[11px] text-mercury/70">
-                Morning email with yesterday&apos;s settled bets and today&apos;s top picks.
+                Morning email with yesterday&apos;s settled bets and
+                today&apos;s top picks.
               </p>
             </div>
             <button
@@ -301,7 +338,9 @@ export default function SettingsPage() {
               aria-checked={emailOptIn}
               onClick={() => toggleEmail(!emailOptIn)}
               className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${
-                emailOptIn ? "bg-neon/40 border border-neon/40" : "bg-gunmetal/60 border border-slate/40"
+                emailOptIn
+                  ? "bg-neon/40 border border-neon/40"
+                  : "bg-gunmetal/60 border border-slate/40"
               }`}
             >
               <span
@@ -359,8 +398,8 @@ export default function SettingsPage() {
           </div>
           <div className="glass rounded-xl border border-slate/30 p-4">
             <p className="text-[11px] text-mercury/70 mb-3">
-              Pre-fills new bet slips with this amount. Per-bet sizing still respects Kelly when
-              available.
+              Pre-fills new bet slips with this amount. Per-bet sizing still
+              respects Kelly when available.
             </p>
             <div className="flex gap-2 items-center">
               <div className="flex-1 relative">
@@ -396,7 +435,10 @@ export default function SettingsPage() {
           <p className="text-[10px] text-mercury/50">
             Preferences sync across devices via your account
           </p>
-          <Link href="/" className="text-[10px] text-electric hover:text-neon transition-colors">
+          <Link
+            href="/"
+            className="text-[10px] text-electric hover:text-neon transition-colors"
+          >
             ← Back to Dashboard
           </Link>
         </div>

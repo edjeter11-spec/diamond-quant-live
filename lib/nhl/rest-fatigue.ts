@@ -8,10 +8,10 @@ import { getNHLTeam } from "./teams";
 
 export interface NHLFatigueState {
   daysOfRest: number;
-  isBackToBack: boolean;     // played last night
-  isThirdInFour: boolean;    // 3rd game in 4 nights
-  travelHours: number;       // time zone diff from last game
-  fatigueEdge: number;       // negative = tired, positive = rested
+  isBackToBack: boolean; // played last night
+  isThirdInFour: boolean; // 3rd game in 4 nights
+  travelHours: number; // time zone diff from last game
+  fatigueEdge: number; // negative = tired, positive = rested
   factors: string[];
 }
 
@@ -35,7 +35,8 @@ export function computeNHLFatigue(
     };
   }
 
-  const diffMs = new Date(todayDate).getTime() - new Date(lastGameDate).getTime();
+  const diffMs =
+    new Date(todayDate).getTime() - new Date(lastGameDate).getTime();
   const days = Math.round(diffMs / (1000 * 60 * 60 * 24));
   const isB2B = days <= 1;
   const isThird = gamesLastFourNights >= 3;

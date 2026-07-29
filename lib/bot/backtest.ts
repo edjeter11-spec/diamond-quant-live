@@ -15,7 +15,7 @@ export interface BacktestResult {
   wins: number;
   losses: number;
   winRate: number;
-  profitLoss: number;     // on $100 flat bets
+  profitLoss: number; // on $100 flat bets
   roi: number;
   bestStreak: number;
   worstStreak: number;
@@ -25,16 +25,24 @@ export interface BacktestResult {
 export async function runBacktest(
   brain: BrainState,
   startDate: string,
-  endDate: string
+  endDate: string,
 ): Promise<BacktestResult> {
-  let wins = 0, losses = 0, pnl = 0;
-  let homePicks = 0, awayPicks = 0;
-  let currentStreak = 0, bestStreak = 0, worstStreak = 0;
+  let wins = 0,
+    losses = 0,
+    pnl = 0;
+  let homePicks = 0,
+    awayPicks = 0;
+  let currentStreak = 0,
+    bestStreak = 0,
+    worstStreak = 0;
   let totalGames = 0;
-  const byMonth: Record<string, { wins: number; losses: number; pnl: number }> = {};
+  const byMonth: Record<string, { wins: number; losses: number; pnl: number }> =
+    {};
 
   // Fetch games in the date range
-  const res = await fetch(`${MLB_API}/schedule?sportId=1&startDate=${startDate}&endDate=${endDate}&gameType=R&hydrate=probablePitcher`);
+  const res = await fetch(
+    `${MLB_API}/schedule?sportId=1&startDate=${startDate}&endDate=${endDate}&gameType=R&hydrate=probablePitcher`,
+  );
   if (!res.ok) throw new Error("Failed to fetch backtest data");
   const data = await res.json();
 
@@ -84,12 +92,14 @@ export async function runBacktest(
       // Check park memory
       const venue = game.venue?.name ?? "";
       if (brain.parkMemory && brain.parkMemory[venue]) {
-        const parkHome = brain.parkMemory[venue].homeWins / Math.max(brain.parkMemory[venue].games, 1);
+        const parkHome =
+          brain.parkMemory[venue].homeWins /
+          Math.max(brain.parkMemory[venue].games, 1);
         predictedHomeProb = predictedHomeProb * 0.85 + parkHome * 0.15;
       }
 
       // Apply brain weights
-      predictedHomeProb = Math.min(0.80, Math.max(0.20, predictedHomeProb));
+      predictedHomeProb = Math.min(0.8, Math.max(0.2, predictedHomeProb));
 
       // Make a pick: bet the side with >55% predicted prob
       const pickHome = predictedHomeProb > 0.55;
@@ -116,12 +126,14 @@ export async function runBacktest(
         byMonth[month].losses++;
         byMonth[month].pnl -= 100;
         currentStreak = Math.min(currentStreak - 1, -1);
-        if (Math.abs(currentStreak) > worstStreak) worstStreak = Math.abs(currentStreak);
+        if (Math.abs(currentStreak) > worstStreak)
+          worstStreak = Math.abs(currentStreak);
       }
     }
   }
 
-  const winRate = (wins + losses) > 0 ? Math.round((wins / (wins + losses)) * 1000) / 10 : 0;
+  const winRate =
+    wins + losses > 0 ? Math.round((wins / (wins + losses)) * 1000) / 10 : 0;
   const totalStaked = (wins + losses) * 100;
   const roi = totalStaked > 0 ? Math.round((pnl / totalStaked) * 1000) / 10 : 0;
 
@@ -137,6 +149,9 @@ export async function runBacktest(
     roi,
     bestStreak,
     worstStreak,
-    byMonth: Object.entries(byMonth).map(([month, data]) => ({ month, ...data })),
+    byMonth: Object.entries(byMonth).map(([month, data]) => ({
+      month,
+      ...data,
+    })),
   };
 }

@@ -4,12 +4,31 @@
 // home/away, B2B, opponent, recent form, pace, matchup history
 // ──────────────────────────────────────────────────────────
 
-import { fetchAllTrainingData, type NbaPlayerGameLog } from "./nba-stats-fetcher";
-import { projectProp, type ProjectionContext, type RecentFormData } from "./nba-prop-projector";
-import { learnFromPropResult, repairWeights, type NbaPropBrainState } from "./nba-prop-brain";
+import {
+  fetchAllTrainingData,
+  type NbaPlayerGameLog,
+} from "./nba-stats-fetcher";
+import {
+  projectProp,
+  type ProjectionContext,
+  type RecentFormData,
+} from "./nba-prop-projector";
+import {
+  learnFromPropResult,
+  repairWeights,
+  type NbaPropBrainState,
+} from "./nba-prop-brain";
 
-const PROP_TYPES = ["player_points", "player_rebounds", "player_assists"] as const;
-const STAT_KEYS = { player_points: "pts", player_rebounds: "reb", player_assists: "ast" } as const;
+const PROP_TYPES = [
+  "player_points",
+  "player_rebounds",
+  "player_assists",
+] as const;
+const STAT_KEYS = {
+  player_points: "pts",
+  player_rebounds: "reb",
+  player_assists: "ast",
+} as const;
 const MIN_GAMES_TO_QUIZ = 5; // need 5 games of data before quizzing
 
 export interface TrainingCheckpoint {
@@ -18,7 +37,11 @@ export interface TrainingCheckpoint {
   totalGames: number;
   lastDateProcessed: string;
   currentSeason: string;
-  accuracy: { points: { total: number; hits: number }; rebounds: { total: number; hits: number }; assists: { total: number; hits: number } };
+  accuracy: {
+    points: { total: number; hits: number };
+    rebounds: { total: number; hits: number };
+    assists: { total: number; hits: number };
+  };
   status: "running" | "complete" | "idle";
   startedAt: string;
 }
@@ -44,7 +67,14 @@ interface PlayerRollingState {
   fg3mSum: number;
   minSum: number;
   // Last N games for recent form
-  last10Games: Array<{ pts: number; reb: number; ast: number; date: string; opponent: string; isHome: boolean }>;
+  last10Games: Array<{
+    pts: number;
+    reb: number;
+    ast: number;
+    date: string;
+    opponent: string;
+    isHome: boolean;
+  }>;
   // Tracking
   lastGameDate: string;
   gamesInLast3Days: number; // for B2B detection
@@ -65,7 +95,7 @@ export async function deepTrainNbaProps(
   seasons: number[],
   onProgress?: (msg: string) => void,
   maxGames?: number, // for chunking: process at most N player-games
-  resumeFromDate?: string // for chunking: skip games before this date
+  resumeFromDate?: string, // for chunking: skip games before this date
 ): Promise<TrainingResult> {
   const start = Date.now();
   let updated = { ...brain };
@@ -73,7 +103,14 @@ export async function deepTrainNbaProps(
   onProgress?.("Fetching historical data...");
   const allLogs = await fetchAllTrainingData(seasons, onProgress);
   if (allLogs.length === 0) {
-    return { brain: updated, gamesProcessed: 0, playerGamesQuizzed: 0, propEventsTotal: 0, accuracy: {}, durationMs: Date.now() - start };
+    return {
+      brain: updated,
+      gamesProcessed: 0,
+      playerGamesQuizzed: 0,
+      propEventsTotal: 0,
+      accuracy: {},
+      durationMs: Date.now() - start,
+    };
   }
 
   onProgress?.(`Processing ${allLogs.length} player-games chronologically...`);
@@ -133,7 +170,10 @@ export async function deepTrainNbaProps(
       if (oppDef && oppDef.gamesTracked >= 10) {
         const oppPtsPerGame = oppDef.ptsAllowedSum / oppDef.gamesTracked;
         // Lower pts allowed = better defense = lower rank number
-        opponentDefRank = Math.max(1, Math.min(30, Math.round(30 - (oppPtsPerGame - 100) * 0.5)));
+        opponentDefRank = Math.max(
+          1,
+          Math.min(30, Math.round(30 - (oppPtsPerGame - 100) * 0.5)),
+        );
       }
 
       // Recent form from last 5 games
@@ -154,8 +194,12 @@ export async function deepTrainNbaProps(
       for (const propType of PROP_TYPES) {
         const statKey = STAT_KEYS[propType];
         const actual = log[statKey];
-        const seasonAvg = propType === "player_points" ? seasonAvgPts
-          : propType === "player_rebounds" ? seasonAvgReb : seasonAvgAst;
+        const seasonAvg =
+          propType === "player_points"
+            ? seasonAvgPts
+            : propType === "player_rebounds"
+              ? seasonAvgReb
+              : seasonAvgAst;
 
         if (seasonAvg <= 0) continue;
 
@@ -163,24 +207,42 @@ export async function deepTrainNbaProps(
         const line = Math.round(seasonAvg * 2) / 2; // round to nearest .5
 
         // Build recent form data for this stat type
-        const recentStatValues = last5.map(g =>
-          propType === "player_points" ? g.pts :
-          propType === "player_rebounds" ? g.reb : g.ast
+        const recentStatValues = last5.map((g) =>
+          propType === "player_points"
+            ? g.pts
+            : propType === "player_rebounds"
+              ? g.reb
+              : g.ast,
         );
-        const last10StatValues = last10.map(g =>
-          propType === "player_points" ? g.pts :
-          propType === "player_rebounds" ? g.reb : g.ast
+        const last10StatValues = last10.map((g) =>
+          propType === "player_points"
+            ? g.pts
+            : propType === "player_rebounds"
+              ? g.reb
+              : g.ast,
         );
 
-        const last5Avg = recentStatValues.length > 0
-          ? recentStatValues.reduce((s, v) => s + v, 0) / recentStatValues.length : seasonAvg;
-        const last10Avg = last10StatValues.length > 0
-          ? last10StatValues.reduce((s, v) => s + v, 0) / last10StatValues.length : seasonAvg;
+        const last5Avg =
+          recentStatValues.length > 0
+            ? recentStatValues.reduce((s, v) => s + v, 0) /
+              recentStatValues.length
+            : seasonAvg;
+        const last10Avg =
+          last10StatValues.length > 0
+            ? last10StatValues.reduce((s, v) => s + v, 0) /
+              last10StatValues.length
+            : seasonAvg;
 
         // Real variance from last 10 games
-        const variance = last10StatValues.length >= 5
-          ? Math.sqrt(last10StatValues.reduce((s, v) => s + Math.pow(v - last10Avg, 2), 0) / last10StatValues.length)
-          : seasonAvg * 0.30;
+        const variance =
+          last10StatValues.length >= 5
+            ? Math.sqrt(
+                last10StatValues.reduce(
+                  (s, v) => s + Math.pow(v - last10Avg, 2),
+                  0,
+                ) / last10StatValues.length,
+              )
+            : seasonAvg * 0.3;
 
         const recentForm: RecentFormData = {
           last5Avg,
@@ -191,8 +253,20 @@ export async function deepTrainNbaProps(
         };
 
         // ── PREDICT ──
-        const playerStats = { ppg: seasonAvgPts, rpg: seasonAvgReb, apg: seasonAvgAst, tpm: state.fg3mSum / state.gamesPlayed };
-        const projection = projectProp(playerStats, propType, line, updated.weights, context, recentForm);
+        const playerStats = {
+          ppg: seasonAvgPts,
+          rpg: seasonAvgReb,
+          apg: seasonAvgAst,
+          tpm: state.fg3mSum / state.gamesPlayed,
+        };
+        const projection = projectProp(
+          playerStats,
+          propType,
+          line,
+          updated.weights,
+          context,
+          recentForm,
+        );
 
         // ── REVEAL ──
         const hit = projection.side === "over" ? actual > line : actual < line;
@@ -230,7 +304,11 @@ export async function deepTrainNbaProps(
           playerId: log.playerId,
           team: log.team,
           gamesPlayed: 0,
-          ptsSum: 0, rebSum: 0, astSum: 0, fg3mSum: 0, minSum: 0,
+          ptsSum: 0,
+          rebSum: 0,
+          astSum: 0,
+          fg3mSum: 0,
+          minSum: 0,
           last10Games: [],
           lastGameDate: "",
           gamesInLast3Days: 0,
@@ -249,14 +327,19 @@ export async function deepTrainNbaProps(
 
       // Sliding window of last 10 games
       state.last10Games.push({
-        pts: log.pts, reb: log.reb, ast: log.ast,
-        date, opponent: log.opponent, isHome: log.isHome,
+        pts: log.pts,
+        reb: log.reb,
+        ast: log.ast,
+        date,
+        opponent: log.opponent,
+        isHome: log.isHome,
       });
       if (state.last10Games.length > 10) state.last10Games.shift();
 
       // Track wins for momentum
       if (log.wl === "W") state.winsInLast10++;
-      if (state.last10Games.length > 10) state.winsInLast10 = state.last10Games.filter(() => true).length; // simplified
+      if (state.last10Games.length > 10)
+        state.winsInLast10 = state.last10Games.filter(() => true).length; // simplified
 
       playerStates.set(log.playerId, state);
 
@@ -264,7 +347,12 @@ export async function deepTrainNbaProps(
       const defTeam = log.isHome ? log.opponent : log.team; // defensive team is the one defending
       // Actually: if player is home, the AWAY team is defending. We want opponent's defense.
       // Track: opponent allowed this player's stats
-      let def = teamDefense.get(log.opponent) ?? { ptsAllowedSum: 0, rebAllowedSum: 0, astAllowedSum: 0, gamesTracked: 0 };
+      let def = teamDefense.get(log.opponent) ?? {
+        ptsAllowedSum: 0,
+        rebAllowedSum: 0,
+        astAllowedSum: 0,
+        gamesTracked: 0,
+      };
       def.ptsAllowedSum += log.pts;
       def.rebAllowedSum += log.reb;
       def.astAllowedSum += log.ast;
@@ -277,16 +365,36 @@ export async function deepTrainNbaProps(
     // ── Learning rate decay ──
     if (propEventsTotal > 200000 && updated.learningRate > 0.005) {
       updated.learningRate = 0.005;
-    } else if (propEventsTotal > 100000 && updated.learningRate > 0.010) {
-      updated.learningRate = 0.010;
+    } else if (propEventsTotal > 100000 && updated.learningRate > 0.01) {
+      updated.learningRate = 0.01;
     }
 
     // Progress update every ~50 dates
     if (gamesProcessed % 2000 < dayLogs.length) {
-      const ptsAcc = accuracy.player_points.total > 0 ? (accuracy.player_points.hits / accuracy.player_points.total * 100).toFixed(1) : "0";
-      const rebAcc = accuracy.player_rebounds.total > 0 ? (accuracy.player_rebounds.hits / accuracy.player_rebounds.total * 100).toFixed(1) : "0";
-      const astAcc = accuracy.player_assists.total > 0 ? (accuracy.player_assists.hits / accuracy.player_assists.total * 100).toFixed(1) : "0";
-      onProgress?.(`${gamesProcessed} games | Quizzed: ${playerGamesQuizzed} | Pts: ${ptsAcc}% | Reb: ${rebAcc}% | Ast: ${astAcc}%`);
+      const ptsAcc =
+        accuracy.player_points.total > 0
+          ? (
+              (accuracy.player_points.hits / accuracy.player_points.total) *
+              100
+            ).toFixed(1)
+          : "0";
+      const rebAcc =
+        accuracy.player_rebounds.total > 0
+          ? (
+              (accuracy.player_rebounds.hits / accuracy.player_rebounds.total) *
+              100
+            ).toFixed(1)
+          : "0";
+      const astAcc =
+        accuracy.player_assists.total > 0
+          ? (
+              (accuracy.player_assists.hits / accuracy.player_assists.total) *
+              100
+            ).toFixed(1)
+          : "0";
+      onProgress?.(
+        `${gamesProcessed} games | Quizzed: ${playerGamesQuizzed} | Pts: ${ptsAcc}% | Reb: ${rebAcc}% | Ast: ${astAcc}%`,
+      );
     }
 
     // Chunk limit check
@@ -296,16 +404,25 @@ export async function deepTrainNbaProps(
   // Finalize
   updated.weights = repairWeights(updated.weights);
   updated.isPreTrained = true;
-  updated.trainedSeasons = seasons.map(s => `nba${s}`);
+  updated.trainedSeasons = seasons.map((s) => `nba${s}`);
   updated.totalGamesProcessed = gamesProcessed;
   updated.lastTrainedAt = new Date().toISOString();
 
-  const result: Record<string, { total: number; hits: number; winRate: number }> = {};
+  const result: Record<
+    string,
+    { total: number; hits: number; winRate: number }
+  > = {};
   for (const [key, val] of Object.entries(accuracy)) {
-    result[key] = { ...val, winRate: val.total > 0 ? Math.round((val.hits / val.total) * 1000) / 10 : 0 };
+    result[key] = {
+      ...val,
+      winRate:
+        val.total > 0 ? Math.round((val.hits / val.total) * 1000) / 10 : 0,
+    };
   }
 
-  onProgress?.(`Training complete! ${playerGamesQuizzed} player-games quizzed, ${propEventsTotal} prop events. Weights calibrated.`);
+  onProgress?.(
+    `Training complete! ${playerGamesQuizzed} player-games quizzed, ${propEventsTotal} prop events. Weights calibrated.`,
+  );
 
   return {
     brain: updated,

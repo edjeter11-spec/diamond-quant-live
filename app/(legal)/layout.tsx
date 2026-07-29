@@ -1,12 +1,19 @@
 import Link from "next/link";
 import { Diamond, ArrowLeft } from "lucide-react";
 
-export default function LegalLayout({ children }: { children: React.ReactNode }) {
+export default function LegalLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
-    <div className="min-h-screen bg-void text-silver">
+    <div className="min-h-screen text-silver">
       <header className="border-b border-slate/30 bg-bunker/80 backdrop-blur-lg sticky top-0 z-40">
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2 text-mercury hover:text-silver transition-colors">
+          <Link
+            href="/"
+            className="flex items-center gap-2 text-mercury hover:text-silver transition-colors"
+          >
             <ArrowLeft className="w-4 h-4" />
             <span className="text-sm">Back</span>
           </Link>
@@ -23,9 +30,16 @@ export default function LegalLayout({ children }: { children: React.ReactNode })
       </main>
       <footer className="border-t border-slate/20 mt-12 py-6 px-4">
         <div className="max-w-3xl mx-auto flex flex-wrap items-center justify-center gap-4 text-[11px] text-mercury/50">
-          <Link href="/terms" className="hover:text-mercury transition-colors">Terms</Link>
+          <Link href="/terms" className="hover:text-mercury transition-colors">
+            Terms
+          </Link>
           <span>·</span>
-          <Link href="/privacy" className="hover:text-mercury transition-colors">Privacy</Link>
+          <Link
+            href="/privacy"
+            className="hover:text-mercury transition-colors"
+          >
+            Privacy
+          </Link>
         </div>
       </footer>
     </div>

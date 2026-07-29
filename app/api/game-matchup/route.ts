@@ -10,7 +10,10 @@ export async function GET(req: Request) {
   const home = (searchParams.get("home") || "").toUpperCase();
   const away = (searchParams.get("away") || "").toUpperCase();
   if (!home || !away) {
-    return NextResponse.json({ error: "home + away required" }, { status: 400 });
+    return NextResponse.json(
+      { error: "home + away required" },
+      { status: 400 },
+    );
   }
 
   try {
@@ -47,23 +50,45 @@ export async function GET(req: Request) {
     }
     const homeOuts = impactfulOuts(homeInj);
     const awayOuts = impactfulOuts(awayInj);
-    if (homeOuts.length > 0) takeaways.push(`${home} missing ${homeOuts.length} (${homeOuts.slice(0, 2).map(p => p.name.split(" ").pop()).join(", ")})`);
-    if (awayOuts.length > 0) takeaways.push(`${away} missing ${awayOuts.length} (${awayOuts.slice(0, 2).map(p => p.name.split(" ").pop()).join(", ")})`);
+    if (homeOuts.length > 0)
+      takeaways.push(
+        `${home} missing ${homeOuts.length} (${homeOuts
+          .slice(0, 2)
+          .map((p) => p.name.split(" ").pop())
+          .join(", ")})`,
+      );
+    if (awayOuts.length > 0)
+      takeaways.push(
+        `${away} missing ${awayOuts.length} (${awayOuts
+          .slice(0, 2)
+          .map((p) => p.name.split(" ").pop())
+          .join(", ")})`,
+      );
     if (totalProj.paceNote) takeaways.push(totalProj.paceNote);
 
     return NextResponse.json({
       home,
       away,
-      rest: { home: homeRest, away: awayRest, edge: restEdge.edge, factors: restEdge.factors },
+      rest: {
+        home: homeRest,
+        away: awayRest,
+        edge: restEdge.edge,
+        factors: restEdge.factors,
+      },
       injuries: { home: homeInj, away: awayInj },
-      ratings: { home: homeRating, away: awayRating, netGap: Math.round(netGap * 10) / 10 },
+      ratings: {
+        home: homeRating,
+        away: awayRating,
+        netGap: Math.round(netGap * 10) / 10,
+      },
       total: totalProj,
       takeaways,
     });
   } catch (e: any) {
     console.error("game-matchup error:", e);
     return NextResponse.json({
-      home, away,
+      home,
+      away,
       rest: { home: null, away: null, edge: 0, factors: [] },
       injuries: { home: [], away: [] },
       ratings: { home: null, away: null, netGap: 0 },

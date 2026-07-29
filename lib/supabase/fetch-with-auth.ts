@@ -3,7 +3,10 @@
 
 import { supabase } from "./client";
 
-export async function fetchWithAuth(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
+export async function fetchWithAuth(
+  input: RequestInfo | URL,
+  init: RequestInit = {},
+): Promise<Response> {
   const headers = new Headers(init.headers || {});
   if (supabase) {
     try {

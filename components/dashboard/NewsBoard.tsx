@@ -1,7 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Newspaper, AlertTriangle, RefreshCw, Activity, Clock } from "lucide-react";
+import {
+  Newspaper,
+  AlertTriangle,
+  RefreshCw,
+  Activity,
+  Clock,
+} from "lucide-react";
 
 interface NewsItem {
   type: "injury" | "lineup" | "trade" | "general";
@@ -15,7 +21,12 @@ interface NewsItem {
 
 export default function NewsBoard() {
   const [items, setItems] = useState<NewsItem[]>([]);
-  const [counts, setCounts] = useState<{ out: number; doubtful: number; questionable: number; general: number } | null>(null);
+  const [counts, setCounts] = useState<{
+    out: number;
+    doubtful: number;
+    questionable: number;
+    general: number;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   const [updatedAt, setUpdatedAt] = useState<string>("");
 
@@ -40,10 +51,13 @@ export default function NewsBoard() {
   }, []);
 
   const statusColor = (s?: string) =>
-    s === "Out" ? "text-danger border-danger/30 bg-danger/10"
-      : s === "Doubtful" ? "text-amber border-amber/30 bg-amber/10"
-      : s === "Questionable" ? "text-electric border-electric/30 bg-electric/10"
-      : "text-mercury border-slate/30 bg-gunmetal/30";
+    s === "Out"
+      ? "text-danger border-danger/30 bg-danger/10"
+      : s === "Doubtful"
+        ? "text-amber border-amber/30 bg-amber/10"
+        : s === "Questionable"
+          ? "text-electric border-electric/30 bg-electric/10"
+          : "text-mercury border-slate/30 bg-gunmetal/30";
 
   const timeAgo = (iso: string) => {
     const ms = Date.now() - new Date(iso).getTime();
@@ -61,8 +75,12 @@ export default function NewsBoard() {
         <div className="px-4 py-3 bg-gradient-to-r from-electric/10 to-purple/5 border-b border-electric/15 flex items-center gap-3">
           <Newspaper className="w-5 h-5 text-electric" />
           <div className="flex-1">
-            <h2 className="text-sm font-bold text-silver">NBA News & Injuries</h2>
-            <p className="text-[10px] text-mercury/60">Live ESPN feed • refreshes every 5 min</p>
+            <h2 className="text-sm font-bold text-silver">
+              NBA News & Injuries
+            </h2>
+            <p className="text-[10px] text-mercury/60">
+              Live ESPN feed • refreshes every 5 min
+            </p>
           </div>
           <button
             onClick={load}
@@ -70,26 +88,39 @@ export default function NewsBoard() {
             title="Refresh"
             disabled={loading}
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
+            <RefreshCw
+              className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`}
+            />
           </button>
         </div>
 
-        {counts && (counts.out > 0 || counts.doubtful > 0 || counts.questionable > 0) && (
-          <div className="grid grid-cols-3 gap-px bg-slate/10">
-            <div className="px-3 py-2 text-center bg-bunker">
-              <p className="text-lg font-bold font-mono text-danger">{counts.out}</p>
-              <p className="text-[9px] text-mercury/60 uppercase">OUT</p>
+        {counts &&
+          (counts.out > 0 ||
+            counts.doubtful > 0 ||
+            counts.questionable > 0) && (
+            <div className="grid grid-cols-3 gap-px bg-slate/10">
+              <div className="px-3 py-2 text-center bg-bunker">
+                <p className="text-lg font-bold font-mono text-danger">
+                  {counts.out}
+                </p>
+                <p className="text-[9px] text-mercury/60 uppercase">OUT</p>
+              </div>
+              <div className="px-3 py-2 text-center bg-bunker">
+                <p className="text-lg font-bold font-mono text-amber">
+                  {counts.doubtful}
+                </p>
+                <p className="text-[9px] text-mercury/60 uppercase">Doubtful</p>
+              </div>
+              <div className="px-3 py-2 text-center bg-bunker">
+                <p className="text-lg font-bold font-mono text-electric">
+                  {counts.questionable}
+                </p>
+                <p className="text-[9px] text-mercury/60 uppercase">
+                  Questionable
+                </p>
+              </div>
             </div>
-            <div className="px-3 py-2 text-center bg-bunker">
-              <p className="text-lg font-bold font-mono text-amber">{counts.doubtful}</p>
-              <p className="text-[9px] text-mercury/60 uppercase">Doubtful</p>
-            </div>
-            <div className="px-3 py-2 text-center bg-bunker">
-              <p className="text-lg font-bold font-mono text-electric">{counts.questionable}</p>
-              <p className="text-[9px] text-mercury/60 uppercase">Questionable</p>
-            </div>
-          </div>
-        )}
+          )}
       </div>
 
       {loading && items.length === 0 ? (
@@ -108,28 +139,44 @@ export default function NewsBoard() {
             <div
               key={`${it.player}-${i}`}
               className={`glass rounded-xl p-3 flex items-start gap-3 border-l-4 ${
-                it.priority >= 8 ? "border-l-danger" : it.priority >= 5 ? "border-l-amber" : "border-l-electric/40"
+                it.priority >= 8
+                  ? "border-l-danger"
+                  : it.priority >= 5
+                    ? "border-l-amber"
+                    : "border-l-electric/40"
               }`}
             >
               <div className="flex-shrink-0 mt-0.5">
                 {it.type === "injury" ? (
-                  <AlertTriangle className={`w-4 h-4 ${it.priority >= 8 ? "text-danger" : "text-amber"}`} />
+                  <AlertTriangle
+                    className={`w-4 h-4 ${it.priority >= 8 ? "text-danger" : "text-amber"}`}
+                  />
                 ) : (
                   <Activity className="w-4 h-4 text-electric" />
                 )}
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap mb-1">
-                  <span className="text-sm font-semibold text-silver truncate">{it.player}</span>
-                  {it.team && <span className="text-[10px] text-mercury/50">{it.team}</span>}
+                  <span className="text-sm font-semibold text-silver truncate">
+                    {it.player}
+                  </span>
+                  {it.team && (
+                    <span className="text-[10px] text-mercury/50">
+                      {it.team}
+                    </span>
+                  )}
                   {it.status && (
-                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border ${statusColor(it.status)}`}>
+                    <span
+                      className={`px-1.5 py-0.5 rounded text-[9px] font-bold border ${statusColor(it.status)}`}
+                    >
                       {it.status.toUpperCase()}
                     </span>
                   )}
                 </div>
                 {it.description && (
-                  <p className="text-[11px] text-mercury/80 leading-tight line-clamp-2">{it.description}</p>
+                  <p className="text-[11px] text-mercury/80 leading-tight line-clamp-2">
+                    {it.description}
+                  </p>
                 )}
                 <div className="flex items-center gap-1 mt-1 text-[9px] text-mercury/40">
                   <Clock className="w-2.5 h-2.5" />

@@ -9,7 +9,8 @@ export const metadata: Metadata = {
   alternates: { canonical: `${SITE}/results` },
   openGraph: {
     title: "Diamond-Quant Live — 30-Day Track Record",
-    description: "Every pick logged, graded, and public. See how the quant brain is performing.",
+    description:
+      "Every pick logged, graded, and public. See how the quant brain is performing.",
     url: `${SITE}/results`,
     siteName: "Diamond-Quant Live",
     type: "website",
@@ -23,14 +24,22 @@ export const metadata: Metadata = {
 
 async function fetchStats() {
   try {
-    const res = await fetch(`${SITE}/api/results?days=30`, { next: { revalidate: 600 } });
+    const res = await fetch(`${SITE}/api/results?days=30`, {
+      next: { revalidate: 600 },
+    });
     if (!res.ok) return null;
     const d = await res.json();
     return d.ok ? d : null;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
-export default async function ResultsLayout({ children }: { children: React.ReactNode }) {
+export default async function ResultsLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const stats = await fetchStats();
   const overall = stats?.overall;
 
@@ -40,7 +49,8 @@ export default async function ResultsLayout({ children }: { children: React.Reac
     "@type": "WebPage",
     name: "Diamond-Quant Live — Track Record",
     url: `${SITE}/results`,
-    description: "Public track record for AI-driven sports betting picks. 30-day rolling window, all picks graded.",
+    description:
+      "Public track record for AI-driven sports betting picks. 30-day rolling window, all picks graded.",
     publisher: {
       "@type": "Organization",
       name: "Diamond-Quant Live",
@@ -59,7 +69,12 @@ export default async function ResultsLayout({ children }: { children: React.Reac
 
   return (
     <>
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }} />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c"),
+        }}
+      />
       {children}
     </>
   );

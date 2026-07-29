@@ -3,29 +3,34 @@
 // ──────────────────────────────────────────────────────────
 
 import type { ParlayLeg, ParlaySlip } from "./types";
-import { americanToDecimal, americanToImpliedProb, decimalToAmerican, kellyStake } from "./kelly";
+import {
+  americanToDecimal,
+  americanToImpliedProb,
+  decimalToAmerican,
+  kellyStake,
+} from "./kelly";
 
 // Known correlations between MLB bet types
 // Positive = outcomes tend to happen together
 // Negative = outcomes tend to be mutually exclusive
 const CORRELATION_MATRIX: Record<string, Record<string, number>> = {
-  "team_ml": {
-    "team_rl": 0.85,        // ML and run line are highly correlated
-    "team_total_over": 0.30, // winning team tends to score more
-    "opp_total_under": 0.25, // winner's pitcher tends to shut down
-    "pitcher_ks": 0.15,      // winning pitcher tends to go deeper
-    "hitter_hits": 0.20,     // winning team hitters do better
-    "hitter_hrs": 0.15,      // correlated with scoring
+  team_ml: {
+    team_rl: 0.85, // ML and run line are highly correlated
+    team_total_over: 0.3, // winning team tends to score more
+    opp_total_under: 0.25, // winner's pitcher tends to shut down
+    pitcher_ks: 0.15, // winning pitcher tends to go deeper
+    hitter_hits: 0.2, // winning team hitters do better
+    hitter_hrs: 0.15, // correlated with scoring
   },
-  "game_over": {
-    "team_total_over": 0.60, // game over = teams scoring
-    "hitter_hits": 0.35,     // more runs = more hits
-    "hitter_hrs": 0.25,      // more runs = more HRs
-    "pitcher_ks": -0.20,     // high scoring = less K dominance
+  game_over: {
+    team_total_over: 0.6, // game over = teams scoring
+    hitter_hits: 0.35, // more runs = more hits
+    hitter_hrs: 0.25, // more runs = more HRs
+    pitcher_ks: -0.2, // high scoring = less K dominance
   },
-  "game_under": {
-    "pitcher_ks": 0.30,      // low scoring = pitcher dominant
-    "hitter_hits": -0.30,    // fewer runs = fewer hits
+  game_under: {
+    pitcher_ks: 0.3, // low scoring = pitcher dominant
+    hitter_hits: -0.3, // fewer runs = fewer hits
   },
 };
 
@@ -39,8 +44,8 @@ function estimateCorrelation(leg1: ParlayLeg, leg2: ParlayLeg): number {
   const key1 = getCorrelationKey(leg1);
   const key2 = getCorrelationKey(leg2);
 
-  const baseCorr = CORRELATION_MATRIX[key1]?.[key2] ??
-                   CORRELATION_MATRIX[key2]?.[key1] ?? 0;
+  const baseCorr =
+    CORRELATION_MATRIX[key1]?.[key2] ?? CORRELATION_MATRIX[key2]?.[key1] ?? 0;
 
   return baseCorr;
 }
@@ -79,14 +84,20 @@ function correlationAdjustedProb(legs: ParlayLeg[]): number {
     }
   }
 
-  return Math.min(Math.max(independentProb + correlationAdjustment, 0.001), 0.99);
+  return Math.min(
+    Math.max(independentProb + correlationAdjustment, 0.001),
+    0.99,
+  );
 }
 
 // Build a full parlay slip with analysis
-export function buildParlay(legs: ParlayLeg[], bankroll: number = 1000): ParlaySlip {
+export function buildParlay(
+  legs: ParlayLeg[],
+  bankroll: number = 1000,
+): ParlaySlip {
   // Defensive: normalize fairProb to 0-1 range and clamp; some legacy callers
   // passed it as a percentage which silently inverted the parlay math.
-  const safeLegs: ParlayLeg[] = legs.map(leg => {
+  const safeLegs: ParlayLeg[] = legs.map((leg) => {
     let fp = leg.fairProb;
     if (fp > 1) fp = fp / 100;
     fp = Math.min(0.99, Math.max(0.01, fp));
@@ -100,9 +111,10 @@ export function buildParlay(legs: ParlayLeg[], bankroll: number = 1000): ParlayS
   // Correct EV: jointFairProb * decimalOdds - 1 (algebraically same as the
   // (fair - implied) / implied form, but more readable).
   const evPct = (corrAdjProb * combinedDecimalOdds - 1) * 100;
-  const suggestedStake = evPct > 0
-    ? kellyStake(corrAdjProb, combinedDecimalOdds, bankroll, 0.1) // 10% kelly for parlays
-    : 0;
+  const suggestedStake =
+    evPct > 0
+      ? kellyStake(corrAdjProb, combinedDecimalOdds, bankroll, 0.1) // 10% kelly for parlays
+      : 0;
 
   return {
     legs: safeLegs,
@@ -112,21 +124,33 @@ export function buildParlay(legs: ParlayLeg[], bankroll: number = 1000): ParlayS
     evPercentage: Math.round(evPct * 100) / 100,
     correlationAdjustedProb: Math.round(corrAdjProb * 10000) / 100,
     suggestedStake,
-    potentialPayout: Math.round(suggestedStake * combinedDecimalOdds * 100) / 100,
+    potentialPayout:
+      Math.round(suggestedStake * combinedDecimalOdds * 100) / 100,
   };
 }
 
 // Auto-generate smart parlays from available bets
 export function generateSmartParlays(
-  evBets: Array<{ game: string; market: string; pick: string; odds: number; fairProb: number; bookmaker: string }>,
-  maxLegs: number = 3
+  evBets: Array<{
+    game: string;
+    market: string;
+    pick: string;
+    odds: number;
+    fairProb: number;
+    bookmaker: string;
+  }>,
+  maxLegs: number = 3,
 ): ParlaySlip[] {
   const parlays: ParlaySlip[] = [];
 
   // Strategy 1: Cross-game ML parlay (uncorrelated)
-  const mlBets = evBets.filter(b => b.market === "moneyline" && b.fairProb > 0.55);
+  const mlBets = evBets.filter(
+    (b) => b.market === "moneyline" && b.fairProb > 0.55,
+  );
   if (mlBets.length >= 2) {
-    const uniqueGames = Array.from(new Map(mlBets.map(b => [b.game, b])).values());
+    const uniqueGames = Array.from(
+      new Map(mlBets.map((b) => [b.game, b])).values(),
+    );
     const topPicks = uniqueGames
       .sort((a, b) => b.fairProb - a.fairProb)
       .slice(0, maxLegs);

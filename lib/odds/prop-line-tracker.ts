@@ -23,12 +23,12 @@ export interface PropLineMovement {
   propType: string;
   openingLine: number;
   currentLine: number;
-  lineShift: number;        // positive = line moved up (sharp over)
+  lineShift: number; // positive = line moved up (sharp over)
   openingOverOdds: number;
   currentOverOdds: number;
-  oddsShift: number;        // negative = over got more expensive (sharp over)
+  oddsShift: number; // negative = over got more expensive (sharp over)
   direction: "sharp_over" | "sharp_under" | "stable";
-  signal: number;           // -1 to +1 for the brain's lineMovement factor
+  signal: number; // -1 to +1 for the brain's lineMovement factor
   firstSeen: string;
   lastUpdate: string;
 }
@@ -42,11 +42,21 @@ export function loadPropSnapshots(): PropLineSnapshot[] {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     return stored ? JSON.parse(stored) : [];
-  } catch { return []; }
+  } catch {
+    return [];
+  }
 }
 
 // ── Save a new snapshot ──
-export function savePropSnapshot(props: Array<{ playerName: string; propType: string; line: number; bestOverOdds: number; bestUnderOdds: number }>) {
+export function savePropSnapshot(
+  props: Array<{
+    playerName: string;
+    propType: string;
+    line: number;
+    bestOverOdds: number;
+    bestUnderOdds: number;
+  }>,
+) {
   if (typeof window === "undefined") return;
 
   const lines: Record<string, PropLineEntry> = {};
@@ -72,12 +82,15 @@ export function savePropSnapshot(props: Array<{ playerName: string; propType: st
 }
 
 // ── Get line movement for a specific player/prop ──
-export function getPropLineMovement(playerName: string, propType: string): PropLineMovement | null {
+export function getPropLineMovement(
+  playerName: string,
+  propType: string,
+): PropLineMovement | null {
   const snapshots = loadPropSnapshots();
   if (snapshots.length < 2) return null;
 
   const key = `${playerName}::${propType}`;
-  const first = snapshots.find(s => s.lines[key]);
+  const first = snapshots.find((s) => s.lines[key]);
   const last = snapshots[snapshots.length - 1];
 
   if (!first || !last?.lines[key]) return null;

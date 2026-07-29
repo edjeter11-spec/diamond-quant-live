@@ -23,8 +23,8 @@ interface HistoricalGame {
 
 // Fetch completed games for a date range from MLB Stats API
 export async function fetchHistoricalGames(
-  startDate: string,  // YYYY-MM-DD
-  endDate: string
+  startDate: string, // YYYY-MM-DD
+  endDate: string,
 ): Promise<HistoricalGame[]> {
   const url = `${MLB_API}/schedule?sportId=1&startDate=${startDate}&endDate=${endDate}&gameType=R&hydrate=probablePitcher`;
   const res = await fetch(url);
@@ -62,11 +62,13 @@ export async function fetchHistoricalGames(
 // Simulate what the model would have predicted and learn from actual results
 export function trainOnHistoricalGames(
   state: LearningState,
-  games: HistoricalGame[]
+  games: HistoricalGame[],
 ): { state: LearningState; stats: TrainingStats } {
   let updatedState = { ...state };
-  let mlWins = 0, mlLosses = 0;
-  let totalWins = 0, totalLosses = 0;
+  let mlWins = 0,
+    mlLosses = 0;
+  let totalWins = 0,
+    totalLosses = 0;
   let totalGames = 0;
 
   for (const game of games) {
@@ -97,7 +99,7 @@ export function trainOnHistoricalGames(
 
     updatedState = learnFromBet(updatedState, {
       market: "total",
-      fairProb: 0.50,
+      fairProb: 0.5,
       result: overHit ? "win" : "loss",
       evAtPlacement: 1.5,
     });

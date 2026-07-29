@@ -9,7 +9,11 @@ export async function GET() {
   const apiKey = getApiKey();
 
   if (!apiKey) {
-    return NextResponse.json({ arbitrage: [], evBets: [], error: "No API keys available" });
+    return NextResponse.json({
+      arbitrage: [],
+      evBets: [],
+      error: "No API keys available",
+    });
   }
 
   try {
@@ -35,6 +39,10 @@ export async function GET() {
     });
   } catch (error) {
     console.error("Arbitrage scan error:", error);
-    return NextResponse.json({ arbitrage: [], evBets: [], message: "Scan temporarily unavailable" });
+    return NextResponse.json({
+      arbitrage: [],
+      evBets: [],
+      message: "Scan temporarily unavailable",
+    });
   }
 }

@@ -14,7 +14,7 @@ const memoryCache = new Map<string, CacheEntry<any>>();
 export async function cachedFetch<T>(
   key: string,
   fetcher: () => Promise<T>,
-  ttlSeconds: number = 60
+  ttlSeconds: number = 60,
 ): Promise<T> {
   const cached = memoryCache.get(key);
   if (cached && Date.now() - cached.timestamp < cached.ttl * 1000) {
@@ -39,10 +39,13 @@ export async function cachedFetch<T>(
 export function backupOddsToStorage(data: any) {
   if (typeof window === "undefined") return;
   try {
-    localStorage.setItem("dq_odds_backup", JSON.stringify({
-      data,
-      timestamp: Date.now(),
-    }));
+    localStorage.setItem(
+      "dq_odds_backup",
+      JSON.stringify({
+        data,
+        timestamp: Date.now(),
+      }),
+    );
   } catch {}
 }
 

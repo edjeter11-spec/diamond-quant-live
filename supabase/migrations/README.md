@@ -3,14 +3,14 @@
 Run these **in order** via Supabase Dashboard → SQL Editor on a fresh project.
 Each file is idempotent (uses `CREATE TABLE IF NOT EXISTS` / `DROP POLICY IF EXISTS`).
 
-| # | File | What it creates |
-|---|---|---|
-| 1 | `001_setup.sql` | Core `app_state` key-value table + RLS |
-| 2 | `002_auth_and_users.sql` | `user_profiles`, `user_state`, `user_preferences`, `invites`, `rate_limits`, `shared_slips` + RLS + signup trigger |
-| 3 | `003_odds_history.sql` | `odds_history` snapshots for the odds movement tracker |
-| 4 | `004_prop_predictions.sql` | `prop_predictions` closed-loop learning table for the NBA prop brain |
-| 5 | `005_track_record.sql` | `daily_picks_log` for the public `/results` page + `is_premium` / Stripe columns on `user_profiles` |
-| 6 | `006_security_hardening.sql` | Tightens RLS: removes public DELETE on `odds_history`, restricts `shared_slips` inserts to JWT subject |
+| #   | File                         | What it creates                                                                                                    |
+| --- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| 1   | `001_setup.sql`              | Core `app_state` key-value table + RLS                                                                             |
+| 2   | `002_auth_and_users.sql`     | `user_profiles`, `user_state`, `user_preferences`, `invites`, `rate_limits`, `shared_slips` + RLS + signup trigger |
+| 3   | `003_odds_history.sql`       | `odds_history` snapshots for the odds movement tracker                                                             |
+| 4   | `004_prop_predictions.sql`   | `prop_predictions` closed-loop learning table for the NBA prop brain                                               |
+| 5   | `005_track_record.sql`       | `daily_picks_log` for the public `/results` page + `is_premium` / Stripe columns on `user_profiles`                |
+| 6   | `006_security_hardening.sql` | Tightens RLS: removes public DELETE on `odds_history`, restricts `shared_slips` inserts to JWT subject             |
 
 ## After running
 

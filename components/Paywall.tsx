@@ -19,7 +19,12 @@ interface PaywallProps {
  * - Non-signed-in users see a sign-up CTA
  * - Free users see an upgrade CTA with optional blurred preview
  */
-export default function Paywall({ feature, description, children, variant = "replace" }: PaywallProps) {
+export default function Paywall({
+  feature,
+  description,
+  children,
+  variant = "replace",
+}: PaywallProps) {
   const { user, profile, loading } = useAuth();
   const [showAuth, setShowAuth] = useState(false);
 
@@ -35,11 +40,17 @@ export default function Paywall({ feature, description, children, variant = "rep
   const gate = (
     <div className="glass rounded-xl border border-gold/30 bg-gradient-to-br from-gold/5 via-electric/5 to-purple/5 p-6 text-center space-y-4">
       <div className="w-12 h-12 mx-auto rounded-full bg-gold/15 border border-gold/30 flex items-center justify-center">
-        {user ? <Crown className="w-6 h-6 text-gold" /> : <Lock className="w-6 h-6 text-gold" />}
+        {user ? (
+          <Crown className="w-6 h-6 text-gold" />
+        ) : (
+          <Lock className="w-6 h-6 text-gold" />
+        )}
       </div>
       <div>
         <h3 className="text-lg font-bold text-silver mb-1">{feature}</h3>
-        <p className="text-xs text-mercury/70 leading-relaxed max-w-sm mx-auto">{description}</p>
+        <p className="text-xs text-mercury/70 leading-relaxed max-w-sm mx-auto">
+          {description}
+        </p>
       </div>
       <div className="flex flex-col gap-2 max-w-xs mx-auto">
         {user ? (
@@ -68,9 +79,13 @@ export default function Paywall({ feature, description, children, variant = "rep
             </Link>
           </>
         )}
-        <p className="text-[10px] text-mercury/40 mt-1">7-day free trial · cancel anytime</p>
+        <p className="text-[10px] text-mercury/40 mt-1">
+          7-day free trial · cancel anytime
+        </p>
       </div>
-      {showAuth && <AuthModal isOpen={showAuth} onClose={() => setShowAuth(false)} />}
+      {showAuth && (
+        <AuthModal isOpen={showAuth} onClose={() => setShowAuth(false)} />
+      )}
     </div>
   );
 
@@ -78,8 +93,12 @@ export default function Paywall({ feature, description, children, variant = "rep
   if (variant === "blur" && children) {
     return (
       <div className="relative">
-        <div className="blur-md pointer-events-none select-none opacity-40">{children}</div>
-        <div className="absolute inset-0 flex items-center justify-center p-4">{gate}</div>
+        <div className="blur-md pointer-events-none select-none opacity-40">
+          {children}
+        </div>
+        <div className="absolute inset-0 flex items-center justify-center p-4">
+          {gate}
+        </div>
       </div>
     );
   }
@@ -100,7 +119,9 @@ export function PaywallInline({ remaining }: { remaining: number }) {
       <Crown className="w-4 h-4 text-gold flex-shrink-0" />
       <p className="text-xs text-silver flex-1">
         <span className="font-bold">+{remaining} more picks</span> locked.{" "}
-        <span className="text-mercury/70">Upgrade to Pro for the full list.</span>
+        <span className="text-mercury/70">
+          Upgrade to Pro for the full list.
+        </span>
       </p>
       <Link
         href="/pricing"

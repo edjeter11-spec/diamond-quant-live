@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { getCached, setCache } from "@/lib/odds/server-cache";
 
 const GEMINI_KEY = process.env.GEMINI_API_KEY || "";
-const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
+const GEMINI_URL =
+  "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +23,10 @@ export async function GET(req: Request) {
   }
 
   // Cache for 30 min per game
-  const cacheKey = `summary_${sport}_${awayTeam}_${homeTeam}`.replace(/\s/g, "_");
+  const cacheKey = `summary_${sport}_${awayTeam}_${homeTeam}`.replace(
+    /\s/g,
+    "_",
+  );
   const cached = getCached(cacheKey, 1800_000);
   if (cached) return NextResponse.json(cached);
 
@@ -34,9 +38,10 @@ export async function GET(req: Request) {
   }
 
   try {
-    const sportContext = sport === "nba"
-      ? "NBA basketball game. Consider pace, defensive efficiency, rest days, home court advantage (~60% in NBA), and recent form."
-      : `MLB baseball game. Starting pitchers: ${awayPitcher} vs ${homePitcher}. Consider pitcher matchups, bullpen strength, park factors, and recent form.`;
+    const sportContext =
+      sport === "nba"
+        ? "NBA basketball game. Consider pace, defensive efficiency, rest days, home court advantage (~60% in NBA), and recent form."
+        : `MLB baseball game. Starting pitchers: ${awayPitcher} vs ${homePitcher}. Consider pitcher matchups, bullpen strength, park factors, and recent form.`;
 
     const prompt = `You are a sharp sports betting analyst. Give a 2-3 sentence analysis of this ${sportContext}
 
@@ -64,7 +69,8 @@ Be specific. Mention one key stat, matchup edge, or trend. End with a lean (whic
     }
 
     const data = await response.json();
-    const summary = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? "";
+    const summary =
+      data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? "";
 
     const result = { summary, source: "gemini" };
     setCache(cacheKey, result);

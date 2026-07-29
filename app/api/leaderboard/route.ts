@@ -44,20 +44,30 @@ function calcBestStreak(bets: any[]): number {
   let best = 0;
   let cur = 0;
   for (const b of bets) {
-    if (b.result === "win") { cur++; if (cur > best) best = cur; }
-    else if (b.result === "loss") cur = 0;
+    if (b.result === "win") {
+      cur++;
+      if (cur > best) best = cur;
+    } else if (b.result === "loss") cur = 0;
   }
   return best;
 }
 
 function calcStats(bets: any[]) {
-  const settled = bets.filter((b: any) => b.result === "win" || b.result === "loss");
+  const settled = bets.filter(
+    (b: any) => b.result === "win" || b.result === "loss",
+  );
   const wins = settled.filter((b: any) => b.result === "win").length;
   const losses = settled.filter((b: any) => b.result === "loss").length;
-  const totalStaked = settled.reduce((s: number, b: any) => s + (b.stake ?? 0), 0);
-  const totalReturns = settled.reduce((s: number, b: any) => s + (b.payout ?? 0), 0);
+  const totalStaked = settled.reduce(
+    (s: number, b: any) => s + (b.stake ?? 0),
+    0,
+  );
+  const totalReturns = settled.reduce(
+    (s: number, b: any) => s + (b.payout ?? 0),
+    0,
+  );
   const profit = totalReturns - totalStaked;
-  const winRate = (wins + losses) > 0 ? (wins / (wins + losses)) * 100 : 0;
+  const winRate = wins + losses > 0 ? (wins / (wins + losses)) * 100 : 0;
   const roi = totalStaked > 0 ? (profit / totalStaked) * 100 : 0;
   const bestStreak = calcBestStreak(settled);
 
@@ -66,11 +76,16 @@ function calcStats(bets: any[]) {
   for (const b of bets) {
     if (b.market) marketCounts[b.market] = (marketCounts[b.market] ?? 0) + 1;
   }
-  const favoriteMarket = Object.entries(marketCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+  const favoriteMarket =
+    Object.entries(marketCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
 
   // Sport breakdown
-  const mlbBets = bets.filter((b: any) => b.game && /\bMLB\b|\bmlb\b/.test(b.game)).length;
-  const nbaBets = bets.filter((b: any) => b.game && /\bNBA\b|\bnba\b/.test(b.game)).length;
+  const mlbBets = bets.filter(
+    (b: any) => b.game && /\bMLB\b|\bmlb\b/.test(b.game),
+  ).length;
+  const nbaBets = bets.filter(
+    (b: any) => b.game && /\bNBA\b|\bnba\b/.test(b.game),
+  ).length;
   const totalTagged = mlbBets + nbaBets || 1;
 
   return {
@@ -89,7 +104,11 @@ function calcStats(bets: any[]) {
 
 export async function GET(req: NextRequest) {
   const supabase = getSupabase();
-  if (!supabase) return NextResponse.json({ entries: [], error: "Supabase not configured" }, { status: 503 });
+  if (!supabase)
+    return NextResponse.json(
+      { entries: [], error: "Supabase not configured" },
+      { status: 503 },
+    );
 
   try {
     const { searchParams } = req.nextUrl;
@@ -107,7 +126,8 @@ export async function GET(req: NextRequest) {
         .single();
 
       let bets: any[] = (stateRow?.value as any[]) ?? [];
-      if (cutoff) bets = bets.filter((b: any) => new Date(b.timestamp) >= cutoff);
+      if (cutoff)
+        bets = bets.filter((b: any) => new Date(b.timestamp) >= cutoff);
 
       const stats = calcStats(bets);
       return NextResponse.json({ userStats: stats });
@@ -138,7 +158,8 @@ export async function GET(req: NextRequest) {
     const entries = [];
     for (const profile of profiles) {
       let bets = betsByUser.get(profile.id) ?? [];
-      if (cutoff) bets = bets.filter((b: any) => new Date(b.timestamp) >= cutoff);
+      if (cutoff)
+        bets = bets.filter((b: any) => new Date(b.timestamp) >= cutoff);
 
       const stats = calcStats(bets);
       if (stats.totalBets < 5) continue; // Min 5 settled bets
@@ -157,7 +178,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ entries: entries.slice(0, 50) });
   } catch (err) {
     console.error("leaderboard error:", err);
-    return NextResponse.json({ entries: [], message: "Leaderboard temporarily unavailable" });
+    return NextResponse.json({
+      entries: [],
+      message: "Leaderboard temporarily unavailable",
+    });
   }
 }
 

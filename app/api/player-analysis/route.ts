@@ -11,17 +11,23 @@ export async function GET(req: Request) {
   const opponent = searchParams.get("opponent") || undefined;
 
   if (!name) {
-    return NextResponse.json({ error: "Player name required" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Player name required" },
+      { status: 400 },
+    );
   }
 
   try {
     const analysis = await analyzePlayer(name, market, line, opponent);
 
     if (!analysis) {
-      return NextResponse.json({
-        error: "Player not found or no stats available",
-        name,
-      }, { status: 404 });
+      return NextResponse.json(
+        {
+          error: "Player not found or no stats available",
+          name,
+        },
+        { status: 404 },
+      );
     }
 
     return NextResponse.json(analysis);

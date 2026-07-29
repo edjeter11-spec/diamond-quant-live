@@ -10,13 +10,13 @@ export type Sport = "mlb" | "nba" | "nfl" | "nhl";
 export interface SportConfig {
   sport: Sport;
   name: string;
-  accent: string;          // tailwind color class
-  accentHex: string;       // hex for dynamic styles
-  oddsApiKey: string;      // sport key for The Odds API
+  accent: string; // tailwind color class
+  accentHex: string; // hex for dynamic styles
+  oddsApiKey: string; // sport key for The Odds API
   // Model labels
-  model1Label: string;     // "Pitcher" or "Net Rating"
-  model2Label: string;     // "Market"
-  model3Label: string;     // "Trend" or "Form"
+  model1Label: string; // "Pitcher" or "Net Rating"
+  model2Label: string; // "Market"
+  model3Label: string; // "Trend" or "Form"
   // Brain key in Supabase
   brainKey: string;
   botKey: string;
@@ -114,5 +114,6 @@ interface SportStore {
 export const useSport = create<SportStore>((set) => ({
   currentSport: "mlb",
   config: SPORT_CONFIGS.mlb,
-  setSport: (sport) => set({ currentSport: sport, config: SPORT_CONFIGS[sport] }),
+  setSport: (sport) =>
+    set({ currentSport: sport, config: SPORT_CONFIGS[sport] }),
 }));

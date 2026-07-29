@@ -12,7 +12,10 @@ interface Props {
   source?: string;
 }
 
-export default function EmailCaptureModal({ delayMs = 20000, source = "track-record" }: Props) {
+export default function EmailCaptureModal({
+  delayMs = 20000,
+  source = "track-record",
+}: Props) {
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -49,7 +52,9 @@ export default function EmailCaptureModal({ delayMs = 20000, source = "track-rec
   }, [delayMs]);
 
   const close = (reason: "dismissed" | "subscribed") => {
-    try { localStorage.setItem(STORAGE_KEY, reason); } catch {}
+    try {
+      localStorage.setItem(STORAGE_KEY, reason);
+    } catch {}
     setOpen(false);
   };
 
@@ -92,7 +97,7 @@ export default function EmailCaptureModal({ delayMs = 20000, source = "track-rec
       window.removeEventListener("keydown", onKey);
       document.body.style.overflow = prev;
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   if (!open) return null;
@@ -104,7 +109,11 @@ export default function EmailCaptureModal({ delayMs = 20000, source = "track-rec
       aria-modal="true"
       aria-labelledby="email-modal-title"
     >
-      <div className="absolute inset-0 bg-void/70 backdrop-blur-sm" onClick={() => close("dismissed")} aria-hidden="true" />
+      <div
+        className="absolute inset-0 bg-void/70 backdrop-blur-sm"
+        onClick={() => close("dismissed")}
+        aria-hidden="true"
+      />
       <div className="relative max-w-md w-full bg-bunker border border-gold/30 rounded-2xl shadow-2xl shadow-gold/10 p-6 animate-slide-up">
         <button
           onClick={() => close("dismissed")}
@@ -120,16 +129,25 @@ export default function EmailCaptureModal({ delayMs = 20000, source = "track-rec
               <CheckCircle className="w-7 h-7 text-neon" />
             </div>
             <h2 className="text-lg font-bold text-silver">You're in.</h2>
-            <p className="text-sm text-mercury/80">Tomorrow morning you'll get tonight's top pick + yesterday's W-L recap.</p>
+            <p className="text-sm text-mercury/80">
+              Tomorrow morning you'll get tonight's top pick + yesterday's W-L
+              recap.
+            </p>
           </div>
         ) : (
           <>
             <div className="w-12 h-12 rounded-full bg-gradient-to-br from-gold/20 to-electric/10 border border-gold/30 flex items-center justify-center mb-3">
               <Mail className="w-6 h-6 text-gold" />
             </div>
-            <h2 id="email-modal-title" className="text-xl font-bold text-silver leading-tight">Get tonight's top pick — free</h2>
+            <h2
+              id="email-modal-title"
+              className="text-xl font-bold text-silver leading-tight"
+            >
+              Get tonight's top pick — free
+            </h2>
             <p className="text-sm text-mercury/70 mt-2 leading-relaxed">
-              One email per day. The brain's highest-confidence pick, yesterday's W-L, and tonight's live arbs. Unsubscribe anytime.
+              One email per day. The brain's highest-confidence pick,
+              yesterday's W-L, and tonight's live arbs. Unsubscribe anytime.
             </p>
 
             <form onSubmit={submit} className="mt-5 space-y-3">
@@ -150,10 +168,16 @@ export default function EmailCaptureModal({ delayMs = 20000, source = "track-rec
                 disabled={submitting}
                 className="group w-full min-h-[48px] rounded-xl bg-gradient-to-r from-gold via-yellow-400 to-gold text-bunker font-bold text-sm shadow-lg shadow-gold/20 hover:shadow-gold/40 hover:scale-[1.01] active:scale-95 disabled:opacity-60 transition-all flex items-center justify-center gap-2"
               >
-                {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                {submitting ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Sparkles className="w-4 h-4" />
+                )}
                 {submitting ? "Subscribing..." : "Send Me Tonight's Pick"}
               </button>
-              <p className="text-[10px] text-mercury/40 text-center">No spam. No credit card. Cancel anytime.</p>
+              <p className="text-[10px] text-mercury/40 text-center">
+                No spam. No credit card. Cancel anytime.
+              </p>
             </form>
           </>
         )}

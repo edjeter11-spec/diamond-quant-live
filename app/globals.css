@@ -1,60 +1,95 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap");
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  --void: #0a0a0f;
-  --bunker: #0f1117;
-  --gunmetal: #1a1d2e;
-  --neon: #00ff88;
-  --electric: #00d4ff;
-  --gold: #ffd700;
-  --danger: #ff3b5c;
+  --void: #05070d;
+  --bunker: #0a0e17;
+  --gunmetal: #121727;
+  --neon: #2ee6a6;
+  --electric: #4cc9ff;
+  --gold: #f5c451;
+  --danger: #ff5c7a;
 }
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: #2a2d3e #0f1117;
+  scrollbar-color: #232a3d #0a0e17;
 }
 
 *::-webkit-scrollbar {
   width: 6px;
 }
 *::-webkit-scrollbar-track {
-  background: #0f1117;
+  background: #0a0e17;
 }
 *::-webkit-scrollbar-thumb {
-  background: #2a2d3e;
+  background: #232a3d;
   border-radius: 3px;
 }
 *::-webkit-scrollbar-thumb:hover {
-  background: #3a3d4e;
+  background: #323a52;
 }
 
 html {
   scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
   background: var(--void);
-  color: #c4c8d8;
-  font-family: 'Inter', system-ui, sans-serif;
+  color: #e6eaf4;
+  font-family:
+    "Inter",
+    system-ui,
+    -apple-system,
+    sans-serif;
   overflow-x: hidden;
+  overscroll-behavior-y: none;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
 }
 
+/* Aurora backdrop — fixed layer so iOS Safari keeps it steady while scrolling.
+   Subtle mint + indigo glows over deep ink navy; replaces the old grid look. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      ellipse 80% 50% at 15% -10%,
+      rgba(46, 230, 166, 0.07),
+      transparent 60%
+    ),
+    radial-gradient(
+      ellipse 70% 55% at 90% 5%,
+      rgba(76, 110, 245, 0.08),
+      transparent 55%
+    ),
+    radial-gradient(
+      ellipse 90% 60% at 50% 110%,
+      rgba(76, 201, 255, 0.05),
+      transparent 60%
+    ),
+    var(--void);
+}
+
 /* Better focus ring — accessibility + polish */
 *:focus-visible {
-  outline: 2px solid rgba(0, 212, 255, 0.6);
+  outline: 2px solid rgba(76, 201, 255, 0.6);
   outline-offset: 2px;
   border-radius: 6px;
 }
 /* Don't double-up rings on form inputs that already have rings */
-input:focus-visible, textarea:focus-visible, select:focus-visible {
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
   outline: none;
 }
 
@@ -65,7 +100,9 @@ input:focus-visible, textarea:focus-visible, select:focus-visible {
 
 /* Respect user motion preference — kill scale-ups + animations for those who need it */
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
+  *,
+  *::before,
+  *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
@@ -83,69 +120,85 @@ input:focus-visible, textarea:focus-visible, select:focus-visible {
 /* Neon glow effects */
 @layer utilities {
   .glow-neon {
-    box-shadow: 0 0 8px rgba(0, 255, 136, 0.3), 0 0 20px rgba(0, 255, 136, 0.1);
+    box-shadow:
+      0 0 8px rgba(46, 230, 166, 0.25),
+      0 0 20px rgba(46, 230, 166, 0.08);
   }
   .glow-gold {
-    box-shadow: 0 0 8px rgba(255, 215, 0, 0.3), 0 0 20px rgba(255, 215, 0, 0.1);
+    box-shadow:
+      0 0 8px rgba(245, 196, 81, 0.25),
+      0 0 20px rgba(245, 196, 81, 0.08);
   }
   .glow-danger {
-    box-shadow: 0 0 8px rgba(255, 59, 92, 0.3), 0 0 20px rgba(255, 59, 92, 0.1);
+    box-shadow:
+      0 0 8px rgba(255, 92, 122, 0.25),
+      0 0 20px rgba(255, 92, 122, 0.08);
   }
   .glow-electric {
-    box-shadow: 0 0 8px rgba(0, 212, 255, 0.3), 0 0 20px rgba(0, 212, 255, 0.1);
+    box-shadow:
+      0 0 8px rgba(76, 201, 255, 0.25),
+      0 0 20px rgba(76, 201, 255, 0.08);
   }
 
   .text-glow-neon {
-    text-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
+    text-shadow: 0 0 10px rgba(46, 230, 166, 0.45);
   }
   .text-glow-gold {
-    text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+    text-shadow: 0 0 10px rgba(245, 196, 81, 0.45);
   }
 
   .border-glow-neon {
-    border-color: rgba(0, 255, 136, 0.3);
+    border-color: rgba(46, 230, 166, 0.3);
   }
 
-  /* Glass card */
+  /* Glass card — navy surface, soft border, faint top highlight */
   .glass {
-    background: rgba(15, 17, 23, 0.8);
-    backdrop-filter: blur(12px);
-    border: 1px solid rgba(42, 45, 62, 0.5);
+    background: rgba(10, 14, 23, 0.72);
+    backdrop-filter: blur(14px);
+    border: 1px solid rgba(35, 42, 61, 0.55);
+    box-shadow:
+      inset 0 1px 0 rgba(230, 234, 244, 0.03),
+      0 4px 24px rgba(0, 0, 0, 0.25);
   }
 
   .glass-hover:hover {
-    background: rgba(26, 29, 46, 0.8);
-    border-color: rgba(0, 255, 136, 0.2);
+    background: rgba(18, 23, 39, 0.8);
+    border-color: rgba(46, 230, 166, 0.18);
   }
 
-  /* Gradient backgrounds */
+  /* Legacy grid class — now a whisper-quiet dot matrix (aurora does the work) */
   .bg-grid {
-    background-image:
-      linear-gradient(rgba(42, 45, 62, 0.3) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(42, 45, 62, 0.3) 1px, transparent 1px);
-    background-size: 40px 40px;
+    background-image: radial-gradient(
+      rgba(142, 154, 181, 0.05) 1px,
+      transparent 1px
+    );
+    background-size: 28px 28px;
   }
 
   /* Best odds highlight */
   .best-odds {
-    background: rgba(0, 255, 136, 0.08);
-    border: 1px solid rgba(0, 255, 136, 0.25);
-    color: #00ff88;
+    background: rgba(46, 230, 166, 0.08);
+    border: 1px solid rgba(46, 230, 166, 0.25);
+    color: #2ee6a6;
   }
 
   /* Arbitrage flash */
   .arb-alert {
-    background: linear-gradient(135deg, rgba(255, 215, 0, 0.15), rgba(255, 215, 0, 0.05));
-    border: 1px solid rgba(255, 215, 0, 0.4);
+    background: linear-gradient(
+      135deg,
+      rgba(245, 196, 81, 0.15),
+      rgba(245, 196, 81, 0.05)
+    );
+    border: 1px solid rgba(245, 196, 81, 0.4);
     animation: pulse-neon 2s ease-in-out infinite;
   }
 
   /* Positive/Negative EV */
   .ev-positive {
-    color: #00ff88;
+    color: #2ee6a6;
   }
   .ev-negative {
-    color: #ff3b5c;
+    color: #ff5c7a;
   }
 
   /* Ticker animation */
@@ -163,21 +216,39 @@ input:focus-visible, textarea:focus-visible, select:focus-visible {
 }
 
 /* Hide scrollbar for mobile tab nav */
-.scrollbar-hide::-webkit-scrollbar { display: none; }
-.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
 
 /* Prevent text selection on buttons for mobile */
-button { -webkit-tap-highlight-color: transparent; }
+button {
+  -webkit-tap-highlight-color: transparent;
+}
 
 /* Mobile safe area padding */
-@supports(padding: max(0px)) {
-  .safe-bottom { padding-bottom: max(0.5rem, env(safe-area-inset-bottom)); }
+@supports (padding: max(0px)) {
+  .safe-bottom {
+    padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+  }
+  .safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
 }
 
 /* Number counter animation */
 @keyframes count-up {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .count-animate {
@@ -189,18 +260,22 @@ button { -webkit-tap-highlight-color: transparent; }
   position: relative;
 }
 .live-pulse::before {
-  content: '';
+  content: "";
   position: absolute;
   top: 50%;
   left: 50%;
   width: 8px;
   height: 8px;
-  background: #ff3b5c;
+  background: #ff5c7a;
   border-radius: 50%;
   transform: translate(-50%, -50%);
   animation: live-ring 1.5s ease-out infinite;
 }
 @keyframes live-ring {
-  0% { box-shadow: 0 0 0 0 rgba(255, 59, 92, 0.6); }
-  100% { box-shadow: 0 0 0 12px rgba(255, 59, 92, 0); }
+  0% {
+    box-shadow: 0 0 0 0 rgba(255, 92, 122, 0.6);
+  }
+  100% {
+    box-shadow: 0 0 0 12px rgba(255, 92, 122, 0);
+  }
 }

@@ -28,10 +28,13 @@ export interface AuthedUser {
  * Client must send: Authorization: Bearer <access_token>
  * (Supabase access token from session.access_token)
  */
-export async function getUserFromRequest(req: Request): Promise<AuthedUser | null> {
+export async function getUserFromRequest(
+  req: Request,
+): Promise<AuthedUser | null> {
   if (!SUPABASE_URL || !SUPABASE_ANON) return null;
 
-  const authHeader = req.headers.get("authorization") || req.headers.get("Authorization");
+  const authHeader =
+    req.headers.get("authorization") || req.headers.get("Authorization");
   if (!authHeader?.startsWith("Bearer ")) return null;
 
   const token = authHeader.slice(7);

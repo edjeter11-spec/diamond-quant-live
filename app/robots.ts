@@ -6,12 +6,7 @@ export default function robots(): MetadataRoute.Robots {
       {
         userAgent: "*",
         allow: "/",
-        disallow: [
-          "/api/",
-          "/admin",
-          "/settings",
-          "/slip/",
-        ],
+        disallow: ["/api/", "/admin", "/settings", "/slip/"],
       },
     ],
     sitemap: "https://diamond-quant-live.vercel.app/sitemap.xml",

@@ -10,18 +10,39 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 
-export const supabase = SUPABASE_URL && SUPABASE_KEY
-  ? createClient(SUPABASE_URL, SUPABASE_KEY)
-  : null;
+// The Supabase JS SDK's default fetch has no timeout — when the DB/schema
+// cache is degraded (observed: "PGRST002 ... Retrying" looping) a single
+// query can hang for minutes with nothing upstream able to bound it. This
+// wraps every request the SDK makes in a hard timeout so callers' own
+// try/catch (cloudGet/cloudSet already have one) actually gets a chance to
+// fall back instead of hanging the whole route.
+function timeoutFetch(timeoutMs: number): typeof fetch {
+  return (input, init) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    return fetch(input, { ...init, signal: controller.signal }).finally(() =>
+      clearTimeout(timer),
+    );
+  };
+}
+
+export const supabase =
+  SUPABASE_URL && SUPABASE_KEY
+    ? createClient(SUPABASE_URL, SUPABASE_KEY, {
+        global: { fetch: timeoutFetch(8000) },
+      })
+    : null;
 
 // Server-side admin client — bypasses RLS. Use for trusted writes from API
 // routes/cron. Falls back to the anon client if SERVICE_KEY isn't set, so
 // the surface stays the same (just RLS-restricted).
-const supabaseWriter = typeof window === "undefined" && SUPABASE_URL && SERVICE_KEY
-  ? createClient(SUPABASE_URL, SERVICE_KEY, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    })
-  : supabase;
+const supabaseWriter =
+  typeof window === "undefined" && SUPABASE_URL && SERVICE_KEY
+    ? createClient(SUPABASE_URL, SERVICE_KEY, {
+        auth: { persistSession: false, autoRefreshToken: false },
+        global: { fetch: timeoutFetch(8000) },
+      })
+    : supabase;
 
 // Key-value store using a single "app_state" table
 // This avoids needing to create complex table schemas
@@ -59,7 +80,10 @@ export async function cloudGet<T>(key: string, fallback: T): Promise<T> {
 
 // ── Write to cloud + localStorage ──
 
-export async function cloudSet(key: string, value: any): Promise<{ ok: boolean; error?: string }> {
+export async function cloudSet(
+  key: string,
+  value: any,
+): Promise<{ ok: boolean; error?: string }> {
   // Always write to localStorage as backup
   if (typeof window !== "undefined") {
     try {
@@ -76,7 +100,7 @@ export async function cloudSet(key: string, value: any): Promise<{ ok: boolean; 
       .from(TABLE)
       .upsert(
         { key, value, updated_at: new Date().toISOString() },
-        { onConflict: "key" }
+        { onConflict: "key" },
       );
 
     if (error) {
@@ -87,15 +111,22 @@ export async function cloudSet(key: string, value: any): Promise<{ ok: boolean; 
           .from(TABLE)
           .upsert(
             { key, value, updated_at: new Date().toISOString() },
-            { onConflict: "key" }
+            { onConflict: "key" },
           );
         if (retry.error) {
-          console.error(`[cloudSet] retry failed for "${key}":`, retry.error.message);
+          console.error(
+            `[cloudSet] retry failed for "${key}":`,
+            retry.error.message,
+          );
           return { ok: false, error: retry.error.message };
         }
         return { ok: true };
       }
-      console.error(`[cloudSet] upsert failed for "${key}":`, error.message, error.code);
+      console.error(
+        `[cloudSet] upsert failed for "${key}":`,
+        error.message,
+        error.code,
+      );
       return { ok: false, error: error.message };
     }
     return { ok: true };
@@ -113,10 +144,10 @@ async function createTable() {
   // The user needs to create it via the Supabase dashboard
   console.warn(
     "[DQ] Supabase table 'app_state' not found. " +
-    "Please go to your Supabase dashboard → SQL Editor and run:\n" +
-    "CREATE TABLE app_state (key TEXT PRIMARY KEY, value JSONB, updated_at TIMESTAMPTZ DEFAULT NOW());\n" +
-    "ALTER TABLE app_state ENABLE ROW LEVEL SECURITY;\n" +
-    "CREATE POLICY \"Allow all\" ON app_state FOR ALL USING (true) WITH CHECK (true);"
+      "Please go to your Supabase dashboard → SQL Editor and run:\n" +
+      "CREATE TABLE app_state (key TEXT PRIMARY KEY, value JSONB, updated_at TIMESTAMPTZ DEFAULT NOW());\n" +
+      "ALTER TABLE app_state ENABLE ROW LEVEL SECURITY;\n" +
+      'CREATE POLICY "Allow all" ON app_state FOR ALL USING (true) WITH CHECK (true);',
   );
 }
 

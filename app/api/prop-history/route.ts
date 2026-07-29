@@ -18,9 +18,14 @@ export async function GET(req: NextRequest) {
     const today = new Date().toISOString().split("T")[0];
     const todayKey = `prop_picks_today_${sport}_${today}`;
     const todayData = await cloudGet<any>(todayKey, null);
-    const pending = (todayData?.picks ?? []).filter((p: any) => !p.result).map((p: any) => ({
-      ...p, date: today, sport, result: "pending",
-    }));
+    const pending = (todayData?.picks ?? [])
+      .filter((p: any) => !p.result)
+      .map((p: any) => ({
+        ...p,
+        date: today,
+        sport,
+        result: "pending",
+      }));
 
     // Merge pending + history, but dedup by player::propType::date so a pick
     // already in history (graded) takes precedence over the same pick in today's
@@ -51,23 +56,43 @@ export async function GET(req: NextRequest) {
     });
     const all = merged.slice(0, limit);
 
-    const graded = history.filter((p: any) => p.result === "win" || p.result === "loss" || p.result === "push");
+    const graded = history.filter(
+      (p: any) =>
+        p.result === "win" || p.result === "loss" || p.result === "push",
+    );
     const wins = graded.filter((p: any) => p.result === "win").length;
     const losses = graded.filter((p: any) => p.result === "loss").length;
     const pushes = graded.filter((p: any) => p.result === "push").length;
-    const winRate = graded.length > 0 ? Math.round((wins / Math.max(wins + losses, 1)) * 1000) / 10 : 0;
+    const winRate =
+      graded.length > 0
+        ? Math.round((wins / Math.max(wins + losses, 1)) * 1000) / 10
+        : 0;
 
-    return NextResponse.json({
-      ok: true,
-      picks: all,
-      stats: {
-        graded: graded.length,
-        wins, losses, pushes,
-        pending: pending.length,
-        winRate,
+    return NextResponse.json(
+      {
+        ok: true,
+        picks: all,
+        stats: {
+          graded: graded.length,
+          wins,
+          losses,
+          pushes,
+          pending: pending.length,
+          winRate,
+        },
       },
-    }, { headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300" } });
+      {
+        headers: {
+          "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300",
+        },
+      },
+    );
   } catch (error: any) {
-    return NextResponse.json({ ok: false, error: error.message, picks: [], stats: {} });
+    return NextResponse.json({
+      ok: false,
+      error: error.message,
+      picks: [],
+      stats: {},
+    });
   }
 }

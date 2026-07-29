@@ -28,22 +28,24 @@ async function loadMovements(sport: string): Promise<Movement[]> {
 
   const apiSport = sport === "nba" ? "basketball_nba" : "baseball_mlb";
   inflight = fetch(`/api/sharp-money?sport=${apiSport}`)
-    .then(r => r.ok ? r.json() : { movements: [] })
-    .then(data => {
+    .then((r) => (r.ok ? r.json() : { movements: [] }))
+    .then((data) => {
       const movements: Movement[] = data.movements ?? [];
       cache = { sport, movements, ts: Date.now() };
       return movements;
     })
     .catch(() => [])
-    .finally(() => { inflight = null; });
+    .finally(() => {
+      inflight = null;
+    });
   return inflight;
 }
 
 interface Props {
   gameId: string;
-  market: string;        // "moneyline" | "spread" | "total"
-  pickText?: string;     // optional — to determine direction intent (e.g. "Yankees ML")
-  teamOrSide?: string;   // "home" | "away" | team abbrev — for direction interpretation
+  market: string; // "moneyline" | "spread" | "total"
+  pickText?: string; // optional — to determine direction intent (e.g. "Yankees ML")
+  teamOrSide?: string; // "home" | "away" | team abbrev — for direction interpretation
 }
 
 // Match UI market to odds_history market naming
@@ -63,14 +65,16 @@ export default function LineMovementBadge({ gameId, market }: Props) {
   useEffect(() => {
     if (!gameId || !market) return;
     let cancelled = false;
-    loadMovements(currentSport).then(movs => {
+    loadMovements(currentSport).then((movs) => {
       if (cancelled) return;
       const match = movs
-        .filter(m => m.game_id === gameId && matchesMarket(market, m.market))
+        .filter((m) => m.game_id === gameId && matchesMarket(market, m.market))
         .sort((a, b) => b.delta - a.delta)[0]; // biggest move wins
       if (match) setMovement(match);
     });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [gameId, market, currentSport]);
 
   if (!movement) return null;
@@ -82,8 +86,8 @@ export default function LineMovementBadge({ gameId, market }: Props) {
   const color = movement.is_sharp
     ? "text-amber border-amber/40 bg-amber/10"
     : movement.direction === "up"
-    ? "text-neon border-neon/30 bg-neon/10"
-    : "text-danger border-danger/30 bg-danger/10";
+      ? "text-neon border-neon/30 bg-neon/10"
+      : "text-danger border-danger/30 bg-danger/10";
 
   return (
     <span
@@ -92,7 +96,8 @@ export default function LineMovementBadge({ gameId, market }: Props) {
     >
       {movement.is_sharp && <Zap className="w-2.5 h-2.5" />}
       <Icon className="w-2.5 h-2.5" />
-      {movement.delta}{movement.market === "ML" ? "%" : "pt"}
+      {movement.delta}
+      {movement.market === "ML" ? "%" : "pt"}
     </span>
   );
 }

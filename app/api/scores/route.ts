@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
-import { fetchTodayGames, fetchGamesForDate, getGameStatus, getTeamAbbrev } from "@/lib/mlb/stats-api";
+import {
+  fetchTodayGames,
+  fetchGamesForDate,
+  getGameStatus,
+  getTeamAbbrev,
+} from "@/lib/mlb/stats-api";
 
 export const revalidate = 15;
 
@@ -20,7 +25,7 @@ async function fetchNbaScoreboard(date: string): Promise<any[]> {
   try {
     const res = await fetch(
       `https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=${date}`,
-      { next: { revalidate: 60 } }
+      { next: { revalidate: 60 } },
     );
     if (!res.ok) return [];
     const data = await res.json();
@@ -41,7 +46,10 @@ export async function GET(req: Request) {
     return getMlbScores();
   } catch (error) {
     console.error("Scores API error:", error);
-    return NextResponse.json({ games: [], message: "Scores temporarily unavailable" });
+    return NextResponse.json({
+      games: [],
+      message: "Scores temporarily unavailable",
+    });
   }
 }
 
@@ -77,8 +85,13 @@ async function getMlbScores() {
       if (!Number.isFinite(startMs)) return true;
       const aged = now - startMs > STALE_MS;
       if (g.status === "final" && aged) return false;
-      if (g.status === "live" && aged && (g.inning ?? 0) <= 1
-          && (g.homeScore ?? 0) + (g.awayScore ?? 0) === 0) return false;
+      if (
+        g.status === "live" &&
+        aged &&
+        (g.inning ?? 0) <= 1 &&
+        (g.homeScore ?? 0) + (g.awayScore ?? 0) === 0
+      )
+        return false;
       return true;
     };
 
@@ -99,11 +112,18 @@ async function getMlbScores() {
 
     return NextResponse.json(
       { games: formatted, timestamp: new Date().toISOString() },
-      { headers: { "Cache-Control": "public, s-maxage=30, stale-while-revalidate=300" } },
+      {
+        headers: {
+          "Cache-Control": "public, s-maxage=30, stale-while-revalidate=300",
+        },
+      },
     );
   } catch (error) {
     console.error("MLB Scores API error:", error);
-    return NextResponse.json({ games: [], message: "Scores temporarily unavailable" });
+    return NextResponse.json({
+      games: [],
+      message: "Scores temporarily unavailable",
+    });
   }
 }
 
@@ -132,7 +152,12 @@ async function getNbaScores() {
       awayAbbrev: (away.team?.abbreviation ?? "").toUpperCase(),
       homeScore: parseInt(home.score ?? "0"),
       awayScore: parseInt(away.score ?? "0"),
-      status: statusLower === "in" ? "live" : statusLower === "final" ? "final" : "pre",
+      status:
+        statusLower === "in"
+          ? "live"
+          : statusLower === "final"
+            ? "final"
+            : "pre",
       inning: 0,
       inningHalf: "top",
       outs: 0,
@@ -182,6 +207,10 @@ async function getNbaScores() {
 
   return NextResponse.json(
     { games, timestamp: new Date().toISOString() },
-    { headers: { "Cache-Control": "public, s-maxage=30, stale-while-revalidate=300" } },
+    {
+      headers: {
+        "Cache-Control": "public, s-maxage=30, stale-while-revalidate=300",
+      },
+    },
   );
 }

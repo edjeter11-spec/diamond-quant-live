@@ -3,7 +3,13 @@
 // Live win probability modeling with dynamic weight shifts
 // ──────────────────────────────────────────────────────────
 
-import type { TeamStats, GameState, WeatherData, UmpireData, PitcherStats } from "./types";
+import type {
+  TeamStats,
+  GameState,
+  WeatherData,
+  UmpireData,
+  PitcherStats,
+} from "./types";
 
 interface ModelWeights {
   pitching: number;
@@ -24,7 +30,7 @@ const BASE_WEIGHTS: ModelWeights = {
   baserunning: 0.05,
   weather: 0.08,
   umpire: 0.07,
-  momentum: 0.10,
+  momentum: 0.1,
 };
 
 // Dynamic weight adjustment based on game state
@@ -36,7 +42,7 @@ function getDynamicWeights(gameState: GameState): ModelWeights {
   // Late innings: bullpen becomes king
   if (inning >= 7) {
     w.pitching = 0.05;
-    w.bullpen = 0.40;
+    w.bullpen = 0.4;
     w.momentum = 0.15;
   } else if (inning >= 5) {
     w.pitching = 0.15;
@@ -60,7 +66,9 @@ function getDynamicWeights(gameState: GameState): ModelWeights {
   }
 
   // Runners on base: hitting and baserunning spike
-  const runnersOn = [runners.first, runners.second, runners.third].filter(Boolean).length;
+  const runnersOn = [runners.first, runners.second, runners.third].filter(
+    Boolean,
+  ).length;
   if (runnersOn >= 2) {
     w.hitting += 0.05;
     w.baserunning += 0.03;
@@ -79,14 +87,25 @@ function getDynamicWeights(gameState: GameState): ModelWeights {
 
 // Pitcher fatigue model
 function calculateFatigue(pitcher: PitcherStats): number {
-  const baseFatigue = Math.min(pitcher.pitchCount / 110, 1.0);
-  // Velocity drop correlates with fatigue
-  const velocityDrop = Math.max(0, (94 - pitcher.velocity) / 10);
+  const pitchCount = Number.isFinite(pitcher?.pitchCount)
+    ? Math.max(0, pitcher.pitchCount)
+    : 0;
+  const baseFatigue = Math.min(pitchCount / 110, 1.0);
+  // Velocity drop correlates with fatigue. Missing/zero velocity means
+  // "no data", NOT a 94mph drop — treat as no velocity signal.
+  const velocity =
+    Number.isFinite(pitcher?.velocity) && pitcher.velocity > 60
+      ? pitcher.velocity
+      : 94;
+  const velocityDrop = Math.max(0, (94 - velocity) / 10);
   return Math.min(1.0, baseFatigue * 0.7 + velocityDrop * 0.3);
 }
 
 // Weather impact on scoring
-function weatherImpact(weather?: WeatherData): { hitting: number; pitching: number } {
+function weatherImpact(weather?: WeatherData): {
+  hitting: number;
+  pitching: number;
+} {
   if (!weather || weather.roofClosed) return { hitting: 0, pitching: 0 };
 
   let hittingBoost = 0;
@@ -118,7 +137,10 @@ function umpireImpact(umpire?: UmpireData): { strikezone: number } {
 }
 
 // Calculate momentum score based on score and inning
-function calculateMomentum(gameState: GameState): { home: number; away: number } {
+function calculateMomentum(gameState: GameState): {
+  home: number;
+  away: number;
+} {
   const { homeScore, visitorScore, inning, halfInning } = gameState;
   const scoreDiff = homeScore - visitorScore;
 
@@ -126,12 +148,16 @@ function calculateMomentum(gameState: GameState): { home: number; away: number }
   let homeBonus = inning >= 7 ? 0.03 : 0;
   if (halfInning === "bottom") homeBonus += 0.02;
 
-  // Leading team momentum scales with inning
-  const leadFactor = (scoreDiff / 10) * (inning / 9);
+  // Leading team momentum scales with inning (capped so blowouts/extra
+  // innings can't push the momentum score outside its 0-1 rating scale)
+  const leadFactor = Math.max(
+    -0.45,
+    Math.min(0.45, (scoreDiff / 10) * (Math.min(inning, 9) / 9)),
+  );
 
   return {
-    home: 0.5 + leadFactor + homeBonus,
-    away: 0.5 - leadFactor - homeBonus,
+    home: Math.max(0, Math.min(1, 0.5 + leadFactor + homeBonus)),
+    away: Math.max(0, Math.min(1, 0.5 - leadFactor - homeBonus)),
   };
 }
 
@@ -142,7 +168,8 @@ function scoreBasedWinProb(gameState: GameState): number {
 
   // Total half-innings remaining (18 total in regulation)
   const totalHalfInnings = 18;
-  const completedHalfInnings = (inning - 1) * 2 + (halfInning === "bottom" ? 1 : 0);
+  const completedHalfInnings =
+    (inning - 1) * 2 + (halfInning === "bottom" ? 1 : 0);
   const outsCompleted = completedHalfInnings * 3 + outs;
   const totalOuts = totalHalfInnings * 3;
   const gameProgress = outsCompleted / totalOuts; // 0 to 1
@@ -163,7 +190,7 @@ export function calculateLiveEdge(
   away: TeamStats,
   gameState: GameState,
   weather?: WeatherData,
-  umpire?: UmpireData
+  umpire?: UmpireData,
 ): number {
   const weights = getDynamicWeights(gameState);
   const wxImpact = weatherImpact(weather);
@@ -176,27 +203,34 @@ export function calculateLiveEdge(
 
   // Composite scores
   const homeComposite =
-    (home.pitching * (1 - homeFatigue) * weights.pitching) +
-    ((home.hitting + wxImpact.hitting * 100) * weights.hitting) +
-    (home.bullpen * weights.bullpen) +
-    (home.defense * weights.defense) +
-    (home.baserunning * weights.baserunning) +
-    (umpImpact.strikezone * 50 * weights.umpire) +
-    (momentum.home * 100 * weights.momentum) +
-    (wxImpact.pitching * 100 * weights.weather);
+    home.pitching * (1 - homeFatigue) * weights.pitching +
+    (home.hitting + wxImpact.hitting * 100) * weights.hitting +
+    home.bullpen * weights.bullpen +
+    home.defense * weights.defense +
+    home.baserunning * weights.baserunning +
+    umpImpact.strikezone * 50 * weights.umpire +
+    momentum.home * 100 * weights.momentum +
+    wxImpact.pitching * 100 * weights.weather;
 
   const awayComposite =
-    (away.pitching * (1 - awayFatigue) * weights.pitching) +
-    ((away.hitting + wxImpact.hitting * 100) * weights.hitting) +
-    (away.bullpen * weights.bullpen) +
-    (away.defense * weights.defense) +
-    (away.baserunning * weights.baserunning) +
-    (-umpImpact.strikezone * 50 * weights.umpire) +
-    (momentum.away * 100 * weights.momentum) +
-    (wxImpact.pitching * 100 * weights.weather);
+    away.pitching * (1 - awayFatigue) * weights.pitching +
+    (away.hitting + wxImpact.hitting * 100) * weights.hitting +
+    away.bullpen * weights.bullpen +
+    away.defense * weights.defense +
+    away.baserunning * weights.baserunning +
+    -umpImpact.strikezone * 50 * weights.umpire +
+    momentum.away * 100 * weights.momentum +
+    wxImpact.pitching * 100 * weights.weather;
 
-  // Raw model probability
-  const modelProb = 1 / (1 + Math.exp(-(homeComposite - awayComposite) / 15));
+  // Raw model probability (NaN-guard: bad stat feed → coin flip, not NaN)
+  const compositeDiff = homeComposite - awayComposite;
+  const modelProb = Number.isFinite(compositeDiff)
+    ? 1 / (1 + Math.exp(-compositeDiff / 15))
+    : 0.5;
+
+  // Probabilities served downstream stay inside (0.01, 0.99)
+  const clampProb = (p: number) =>
+    Math.min(0.99, Math.max(0.01, Number.isFinite(p) ? p : 0.5));
 
   // If game is live, blend with score-based probability
   if (gameState.isLive && gameState.inning > 0) {
@@ -205,11 +239,11 @@ export function calculateLiveEdge(
 
     // As game progresses, actual score matters more than model
     const blendFactor = gameProgress * 0.7;
-    return scoreProb * blendFactor + modelProb * (1 - blendFactor);
+    return clampProb(scoreProb * blendFactor + modelProb * (1 - blendFactor));
   }
 
-  // Home field advantage for pre-game: ~54%
-  return modelProb * 0.96 + 0.04;
+  // Home field advantage for pre-game: shifts 50% → 52%
+  return clampProb(modelProb * 0.96 + 0.04);
 }
 
 // Explain why the model likes a bet
@@ -218,34 +252,48 @@ export function generateReasoning(
   away: TeamStats,
   gameState: GameState,
   weather?: WeatherData,
-  umpire?: UmpireData
+  umpire?: UmpireData,
 ): string[] {
   const reasons: string[] = [];
   const homeFatigue = calculateFatigue(gameState.homePitcher);
   const awayFatigue = calculateFatigue(gameState.visitorPitcher);
 
   if (homeFatigue > 0.6) {
-    reasons.push(`${gameState.homePitcher.name} showing fatigue (${gameState.homePitcher.pitchCount} pitches, velocity down)`);
+    reasons.push(
+      `${gameState.homePitcher.name} showing fatigue (${gameState.homePitcher.pitchCount} pitches, velocity down)`,
+    );
   }
   if (awayFatigue > 0.6) {
-    reasons.push(`${gameState.visitorPitcher.name} showing fatigue (${gameState.visitorPitcher.pitchCount} pitches, velocity down)`);
+    reasons.push(
+      `${gameState.visitorPitcher.name} showing fatigue (${gameState.visitorPitcher.pitchCount} pitches, velocity down)`,
+    );
   }
 
   if (home.bullpen > away.bullpen + 15) {
-    reasons.push(`${home.name} bullpen significantly stronger (${home.bullpen} vs ${away.bullpen})`);
+    reasons.push(
+      `${home.name} bullpen significantly stronger (${home.bullpen} vs ${away.bullpen})`,
+    );
   } else if (away.bullpen > home.bullpen + 15) {
-    reasons.push(`${away.name} bullpen significantly stronger (${away.bullpen} vs ${home.bullpen})`);
+    reasons.push(
+      `${away.name} bullpen significantly stronger (${away.bullpen} vs ${home.bullpen})`,
+    );
   }
 
   if (home.hitting > away.hitting + 10) {
-    reasons.push(`${home.name} offense is hot (hitting rating ${home.hitting} vs ${away.hitting})`);
+    reasons.push(
+      `${home.name} offense is hot (hitting rating ${home.hitting} vs ${away.hitting})`,
+    );
   } else if (away.hitting > home.hitting + 10) {
-    reasons.push(`${away.name} offense is hot (hitting rating ${away.hitting} vs ${home.hitting})`);
+    reasons.push(
+      `${away.name} offense is hot (hitting rating ${away.hitting} vs ${home.hitting})`,
+    );
   }
 
   if (weather && !weather.roofClosed) {
     if (weather.windDirection === "out" && weather.windSpeed > 10) {
-      reasons.push(`Wind blowing out at ${weather.windSpeed}mph — expect more runs`);
+      reasons.push(
+        `Wind blowing out at ${weather.windSpeed}mph — expect more runs`,
+      );
     }
     if (weather.temperature > 85) {
       reasons.push(`Hot day (${weather.temperature}°F) — ball carries further`);
@@ -253,23 +301,50 @@ export function generateReasoning(
   }
 
   if (umpire && Math.abs(umpire.runScoringIndex - 8.5) > 1) {
-    const tendency = umpire.runScoringIndex > 8.5 ? "hitter-friendly" : "pitcher-friendly";
-    reasons.push(`Ump ${umpire.name} is ${tendency} (${umpire.runScoringIndex} runs/game avg)`);
+    const tendency =
+      umpire.runScoringIndex > 8.5 ? "hitter-friendly" : "pitcher-friendly";
+    reasons.push(
+      `Ump ${umpire.name} is ${tendency} (${umpire.runScoringIndex} runs/game avg)`,
+    );
   }
 
-  if (gameState.inning >= 7 && Math.abs(gameState.homeScore - gameState.visitorScore) <= 1) {
+  if (
+    gameState.inning >= 7 &&
+    Math.abs(gameState.homeScore - gameState.visitorScore) <= 1
+  ) {
     reasons.push("Late & close — bullpen matchup is decisive");
   }
 
-  const runnersOn = [gameState.runners.first, gameState.runners.second, gameState.runners.third].filter(Boolean).length;
+  const runnersOn = [
+    gameState.runners.first,
+    gameState.runners.second,
+    gameState.runners.third,
+  ].filter(Boolean).length;
   if (runnersOn >= 2 && gameState.outs < 2) {
-    reasons.push(`High-leverage spot: ${runnersOn} runners on, ${gameState.outs} outs`);
+    reasons.push(
+      `High-leverage spot: ${runnersOn} runners on, ${gameState.outs} outs`,
+    );
   }
 
-  if (home.recentForm > 0.7) reasons.push(`${home.name} on a heater (${(home.recentForm * 100).toFixed(0)}% last 10)`);
-  if (away.recentForm > 0.7) reasons.push(`${away.name} on a heater (${(away.recentForm * 100).toFixed(0)}% last 10)`);
+  if (home.recentForm > 0.7)
+    reasons.push(
+      `${home.name} on a heater (${(home.recentForm * 100).toFixed(0)}% last 10)`,
+    );
+  if (away.recentForm > 0.7)
+    reasons.push(
+      `${away.name} on a heater (${(away.recentForm * 100).toFixed(0)}% last 10)`,
+    );
 
-  return reasons.length > 0 ? reasons : ["Model sees fair value — no strong edge factors"];
+  return reasons.length > 0
+    ? reasons
+    : ["Model sees fair value — no strong edge factors"];
 }
 
-export { getDynamicWeights, calculateFatigue, weatherImpact, umpireImpact, calculateMomentum, scoreBasedWinProb };
+export {
+  getDynamicWeights,
+  calculateFatigue,
+  weatherImpact,
+  umpireImpact,
+  calculateMomentum,
+  scoreBasedWinProb,
+};

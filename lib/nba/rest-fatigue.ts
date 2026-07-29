@@ -16,11 +16,11 @@ import { getCached, setCache } from "@/lib/odds/server-cache";
 
 export interface RestState {
   teamAbbrev: string;
-  daysRest: number;              // days since last game (0 = back-to-back)
-  gamesInLast4Nights: number;    // window count
-  isB2B: boolean;                // shortcut for daysRest === 0
-  is3In4: boolean;                // 3 games in last 4 nights including tonight
-  fatigueScore: number;          // 0-10, higher = more fatigued
+  daysRest: number; // days since last game (0 = back-to-back)
+  gamesInLast4Nights: number; // window count
+  isB2B: boolean; // shortcut for daysRest === 0
+  is3In4: boolean; // 3 games in last 4 nights including tonight
+  fatigueScore: number; // 0-10, higher = more fatigued
   summary: string;
 }
 
@@ -37,19 +37,22 @@ async function fetchScoreboard(date: string): Promise<any[]> {
   try {
     const res = await fetch(
       `https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=${date}`,
-      { next: { revalidate: 3600 } }
+      { next: { revalidate: 3600 } },
     );
     if (!res.ok) return [];
     const data = await res.json();
     return data.events ?? [];
-  } catch { return []; }
+  } catch {
+    return [];
+  }
 }
 
 // Does this ESPN event contain a game played by a team with this abbrev?
 function teamPlayedInEvent(event: any, abbrev: string): boolean {
   const competitors = event.competitions?.[0]?.competitors ?? [];
-  return competitors.some((c: any) =>
-    (c.team?.abbreviation ?? "").toUpperCase() === abbrev.toUpperCase()
+  return competitors.some(
+    (c: any) =>
+      (c.team?.abbreviation ?? "").toUpperCase() === abbrev.toUpperCase(),
   );
 }
 
@@ -81,7 +84,9 @@ export async function getRestState(abbrev: string): Promise<RestState> {
   let daysRest = 5; // default if no games found in window
   let gamesInLast4Nights = 0;
   for (const { offset, events } of daysChecked) {
-    const played = events.some((e: any) => teamPlayedInEvent(e, abbrev) && isGameCompleted(e));
+    const played = events.some(
+      (e: any) => teamPlayedInEvent(e, abbrev) && isGameCompleted(e),
+    );
     if (played) {
       gamesInLast4Nights++;
       if (daysRest === 5) daysRest = offset; // first (most recent) game found
@@ -101,11 +106,15 @@ export async function getRestState(abbrev: string): Promise<RestState> {
 
   // Summary
   let summary: string;
-  if (isB2B && is3In4) summary = `${abbrev} in 3-in-4 AND on B2B — major fade spot`;
-  else if (is3In4) summary = `${abbrev} playing 3rd game in 4 nights — legs are tired`;
+  if (isB2B && is3In4)
+    summary = `${abbrev} in 3-in-4 AND on B2B — major fade spot`;
+  else if (is3In4)
+    summary = `${abbrev} playing 3rd game in 4 nights — legs are tired`;
   else if (isB2B) summary = `${abbrev} on 2nd night of back-to-back`;
-  else if (daysRest >= 3) summary = `${abbrev} rested (${daysRest}+ days since last game)`;
-  else summary = `${abbrev} on normal rest (${daysRest} day${daysRest !== 1 ? "s" : ""})`;
+  else if (daysRest >= 3)
+    summary = `${abbrev} rested (${daysRest}+ days since last game)`;
+  else
+    summary = `${abbrev} on normal rest (${daysRest} day${daysRest !== 1 ? "s" : ""})`;
 
   const result: RestState = {
     teamAbbrev: abbrev,
@@ -126,17 +135,38 @@ export async function getRestState(abbrev: string): Promise<RestState> {
  * Positive = home team favored by the fatigue gap.
  * Typical range: -3 to +3 in extreme cases (B2B vs rested), usually ±1.
  */
-export function computeRestEdge(home: RestState, away: RestState): { edge: number; factors: string[] } {
+export function computeRestEdge(
+  home: RestState,
+  away: RestState,
+): { edge: number; factors: string[] } {
   let edge = 0;
   const factors: string[] = [];
 
   // B2B = -1.5 pts; 3-in-4 = -1.0 pts; rested advantage = +0.5
-  if (home.isB2B) { edge -= 1.5; factors.push(home.summary); }
-  if (away.isB2B) { edge += 1.5; factors.push(away.summary); }
-  if (home.is3In4) { edge -= 1.0; factors.push(`${home.teamAbbrev} 3-in-4 — legs`); }
-  if (away.is3In4) { edge += 1.0; factors.push(`${away.teamAbbrev} 3-in-4 — legs`); }
-  if (home.daysRest >= 3 && away.daysRest <= 1) { edge += 0.5; factors.push(`${home.teamAbbrev} rested vs tired ${away.teamAbbrev}`); }
-  if (away.daysRest >= 3 && home.daysRest <= 1) { edge -= 0.5; factors.push(`${away.teamAbbrev} rested vs tired ${home.teamAbbrev}`); }
+  if (home.isB2B) {
+    edge -= 1.5;
+    factors.push(home.summary);
+  }
+  if (away.isB2B) {
+    edge += 1.5;
+    factors.push(away.summary);
+  }
+  if (home.is3In4) {
+    edge -= 1.0;
+    factors.push(`${home.teamAbbrev} 3-in-4 — legs`);
+  }
+  if (away.is3In4) {
+    edge += 1.0;
+    factors.push(`${away.teamAbbrev} 3-in-4 — legs`);
+  }
+  if (home.daysRest >= 3 && away.daysRest <= 1) {
+    edge += 0.5;
+    factors.push(`${home.teamAbbrev} rested vs tired ${away.teamAbbrev}`);
+  }
+  if (away.daysRest >= 3 && home.daysRest <= 1) {
+    edge -= 0.5;
+    factors.push(`${away.teamAbbrev} rested vs tired ${home.teamAbbrev}`);
+  }
 
   return { edge, factors };
 }

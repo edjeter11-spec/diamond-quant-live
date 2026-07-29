@@ -11,13 +11,20 @@ function getSupabase() {
 
 export async function GET(req: NextRequest) {
   const supabase = getSupabase();
-  if (!supabase) return NextResponse.json({ accuracy: {}, error: "Supabase not configured" }, { status: 503 });
+  if (!supabase)
+    return NextResponse.json(
+      { accuracy: {}, error: "Supabase not configured" },
+      { status: 503 },
+    );
 
   const { searchParams } = new URL(req.url);
   const players = searchParams.get("players"); // comma-separated
 
   if (!players) {
-    return NextResponse.json({ error: "Missing players param" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Missing players param" },
+      { status: 400 },
+    );
   }
 
   // Cache key based on player names
@@ -26,7 +33,10 @@ export async function GET(req: NextRequest) {
   if (cached) return NextResponse.json(cached);
 
   try {
-    const playerNames = players.split(",").map(p => p.trim()).filter(Boolean);
+    const playerNames = players
+      .split(",")
+      .map((p) => p.trim())
+      .filter(Boolean);
 
     // Query all graded predictions for these players
     const { data, error } = await supabase
@@ -41,26 +51,45 @@ export async function GET(req: NextRequest) {
     }
 
     // Aggregate per player + prop type
-    const accuracy: Record<string, {
-      player: string;
-      total: number;
-      hits: number;
-      winRate: number;
-      byType: Record<string, { predictions: number; hits: number; winRate: number }>;
-    }> = {};
+    const accuracy: Record<
+      string,
+      {
+        player: string;
+        total: number;
+        hits: number;
+        winRate: number;
+        byType: Record<
+          string,
+          { predictions: number; hits: number; winRate: number }
+        >;
+      }
+    > = {};
 
     for (const row of data ?? []) {
       const key = row.player_name;
       if (!accuracy[key]) {
-        accuracy[key] = { player: key, total: 0, hits: 0, winRate: 0, byType: {} };
+        accuracy[key] = {
+          player: key,
+          total: 0,
+          hits: 0,
+          winRate: 0,
+          byType: {},
+        };
       }
       accuracy[key].total++;
       if (row.hit) accuracy[key].hits++;
 
-      const pt = accuracy[key].byType[row.prop_type] ?? { predictions: 0, hits: 0, winRate: 0 };
+      const pt = accuracy[key].byType[row.prop_type] ?? {
+        predictions: 0,
+        hits: 0,
+        winRate: 0,
+      };
       pt.predictions++;
       if (row.hit) pt.hits++;
-      pt.winRate = pt.predictions > 0 ? Math.round((pt.hits / pt.predictions) * 1000) / 10 : 0;
+      pt.winRate =
+        pt.predictions > 0
+          ? Math.round((pt.hits / pt.predictions) * 1000) / 10
+          : 0;
       accuracy[key].byType[row.prop_type] = pt;
     }
 

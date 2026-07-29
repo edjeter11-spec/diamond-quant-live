@@ -38,11 +38,15 @@ export default function PricingPage() {
   };
 
   return (
-    <div className="min-h-screen bg-void text-silver">
+    <div className="min-h-screen text-silver">
       <div className="max-w-md mx-auto px-4 pt-6 pb-12">
         {/* Header */}
         <div className="flex items-center gap-3 mb-8">
-          <Link href="/" className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg hover:bg-gunmetal/60 transition-colors" aria-label="Back to dashboard">
+          <Link
+            href="/"
+            className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg hover:bg-gunmetal/60 transition-colors"
+            aria-label="Back to dashboard"
+          >
             <ArrowLeft className="w-5 h-5 text-mercury" />
           </Link>
           <h1 className="text-2xl font-bold text-white">Pro</h1>
@@ -51,12 +55,16 @@ export default function PricingPage() {
         {/* Single Pro card */}
         <div className="glass rounded-2xl p-6 border-2 border-gold/30 bg-gradient-to-br from-gold/5 via-electric/5 to-purple/5">
           <div className="text-center mb-6">
-            <p className="text-[10px] font-bold text-gold uppercase tracking-wider mb-2">7-Day Free Trial</p>
+            <p className="text-[10px] font-bold text-gold uppercase tracking-wider mb-2">
+              7-Day Free Trial
+            </p>
             <div className="flex items-baseline justify-center gap-1">
               <span className="text-5xl font-bold text-white">$15</span>
               <span className="text-sm text-mercury">/month</span>
             </div>
-            <p className="text-xs text-mercury/60 mt-2">Cancel anytime. No credit card surprises.</p>
+            <p className="text-xs text-mercury/60 mt-2">
+              Cancel anytime. No credit card surprises.
+            </p>
           </div>
 
           <ul className="space-y-3 mb-6">
@@ -73,7 +81,11 @@ export default function PricingPage() {
             disabled={loading}
             className="w-full min-h-[52px] rounded-xl font-bold text-base bg-gradient-to-r from-gold via-yellow-400 to-gold text-bunker shadow-lg shadow-gold/30 hover:shadow-gold/50 hover:scale-[1.01] active:scale-[0.98] disabled:opacity-60 transition-all flex items-center justify-center gap-2"
           >
-            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+            {loading ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Sparkles className="w-4 h-4" />
+            )}
             {loading ? "Loading..." : "Start Free Trial"}
             <span>→</span>
           </button>
@@ -81,7 +93,8 @@ export default function PricingPage() {
 
         {/* Subtle free-tier note */}
         <p className="text-center text-[11px] text-mercury/50 mt-6">
-          Browse the board free without an account — Pro unlocks every pick + the brain.
+          Browse the board free without an account — Pro unlocks every pick +
+          the brain.
         </p>
       </div>
     </div>

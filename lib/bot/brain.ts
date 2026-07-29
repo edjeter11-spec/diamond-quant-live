@@ -29,7 +29,7 @@ export interface GameMemory {
   id: string;
   date: string;
   game: string;
-  prediction: number;    // predicted home win prob
+  prediction: number; // predicted home win prob
   actual: "home" | "away" | "tie";
   totalPredicted: number;
   totalActual: number;
@@ -52,7 +52,7 @@ export interface BrainState {
   lastTrainedAt: string;
 
   // Training data
-  trainedSeasons: string[];  // ["2024", "2025"]
+  trainedSeasons: string[]; // ["2024", "2025"]
   totalGamesProcessed: number;
   totalPredictionsMade: number;
 
@@ -64,14 +64,17 @@ export interface BrainState {
   markets: Record<string, MarketProfile>;
 
   // Memory
-  recentGames: GameMemory[];  // last 100 games
-  logs: ModelLog[];           // last 200 log entries
+  recentGames: GameMemory[]; // last 100 games
+  logs: ModelLog[]; // last 200 log entries
 
   // Pitcher-specific memory
   pitcherMemory: Record<string, PitcherMemory>;
 
   // Park-specific memory
-  parkMemory: Record<string, { games: number; homeWins: number; avgRuns: number; nrfiRate: number }>;
+  parkMemory: Record<
+    string,
+    { games: number; homeWins: number; avgRuns: number; nrfiRate: number }
+  >;
 
   // Matchup memory (team vs team)
   matchupMemory: Record<string, { games: number; homeWins: number }>;
@@ -96,8 +99,14 @@ export interface PitcherMemory {
 
 // Default untrained state
 const DEFAULT_WEIGHTS: ModelWeights = {
-  pitching: 0.28, hitting: 0.22, bullpen: 0.12, defense: 0.08,
-  weather: 0.08, umpire: 0.07, momentum: 0.10, homeField: 0.05,
+  pitching: 0.28,
+  hitting: 0.22,
+  bullpen: 0.12,
+  defense: 0.08,
+  weather: 0.08,
+  umpire: 0.07,
+  momentum: 0.1,
+  homeField: 0.05,
 };
 
 function createFreshBrain(): BrainState {
@@ -112,10 +121,42 @@ function createFreshBrain(): BrainState {
     weights: { ...DEFAULT_WEIGHTS },
     initialWeights: { ...DEFAULT_WEIGHTS },
     markets: {
-      moneyline: { totalBets: 0, wins: 0, losses: 0, brierScore: 0.25, avgEV: 0, dynamicThreshold: 1.5, winRate: 50 },
-      total: { totalBets: 0, wins: 0, losses: 0, brierScore: 0.25, avgEV: 0, dynamicThreshold: 2.0, winRate: 50 },
-      spread: { totalBets: 0, wins: 0, losses: 0, brierScore: 0.25, avgEV: 0, dynamicThreshold: 2.0, winRate: 50 },
-      player_prop: { totalBets: 0, wins: 0, losses: 0, brierScore: 0.25, avgEV: 0, dynamicThreshold: 1.5, winRate: 50 },
+      moneyline: {
+        totalBets: 0,
+        wins: 0,
+        losses: 0,
+        brierScore: 0.25,
+        avgEV: 0,
+        dynamicThreshold: 1.5,
+        winRate: 50,
+      },
+      total: {
+        totalBets: 0,
+        wins: 0,
+        losses: 0,
+        brierScore: 0.25,
+        avgEV: 0,
+        dynamicThreshold: 2.0,
+        winRate: 50,
+      },
+      spread: {
+        totalBets: 0,
+        wins: 0,
+        losses: 0,
+        brierScore: 0.25,
+        avgEV: 0,
+        dynamicThreshold: 2.0,
+        winRate: 50,
+      },
+      player_prop: {
+        totalBets: 0,
+        wins: 0,
+        losses: 0,
+        brierScore: 0.25,
+        avgEV: 0,
+        dynamicThreshold: 1.5,
+        winRate: 50,
+      },
     },
     recentGames: [],
     logs: [],
@@ -142,13 +183,19 @@ export function loadBrain(): BrainState {
 // Repair drifted weights — if any weight is below 4% or above 35%, reset to healthy defaults
 function repairWeights(brain: BrainState): BrainState {
   const w = brain.weights;
-  const needsRepair = Object.values(w).some(v => v < 0.03 || v > 0.36);
+  const needsRepair = Object.values(w).some((v) => v < 0.03 || v > 0.36);
   if (!needsRepair) return brain;
 
   // Reset to healthy baseline but keep some of the learned adjustments
   const healthy: ModelWeights = {
-    pitching: 0.25, hitting: 0.20, bullpen: 0.14, defense: 0.08,
-    weather: 0.06, umpire: 0.06, momentum: 0.12, homeField: 0.09,
+    pitching: 0.25,
+    hitting: 0.2,
+    bullpen: 0.14,
+    defense: 0.08,
+    weather: 0.06,
+    umpire: 0.06,
+    momentum: 0.12,
+    homeField: 0.09,
   };
 
   // Blend: 70% healthy + 30% current (clamped)
@@ -164,7 +211,12 @@ function repairWeights(brain: BrainState): BrainState {
   }
 
   brain.weights = healthy;
-  brain.logs.push({ timestamp: new Date().toISOString(), type: "adjust", message: "Weights repaired — detected extreme drift, blended back to healthy baseline" });
+  brain.logs.push({
+    timestamp: new Date().toISOString(),
+    type: "adjust",
+    message:
+      "Weights repaired — detected extreme drift, blended back to healthy baseline",
+  });
   return brain;
 }
 
@@ -182,7 +234,9 @@ export async function loadBrainFromCloud(): Promise<BrainState> {
       }
       // Save to localStorage as cache
       if (typeof window !== "undefined") {
-        try { localStorage.setItem("dq_brain", JSON.stringify(repaired)); } catch {}
+        try {
+          localStorage.setItem("dq_brain", JSON.stringify(repaired));
+        } catch {}
       }
       return repaired;
     }
@@ -201,7 +255,9 @@ export function saveBrain(brain: BrainState) {
 
   // localStorage (sync, instant)
   if (typeof window !== "undefined") {
-    try { localStorage.setItem("dq_brain", JSON.stringify(brain)); } catch {}
+    try {
+      localStorage.setItem("dq_brain", JSON.stringify(brain));
+    } catch {}
   }
 
   // Cloud (throttled — max 1 write per minute to save Supabase IO)
@@ -226,7 +282,12 @@ async function saveBrainToCloud(brain: BrainState) {
   } catch {}
 }
 
-function addLog(brain: BrainState, type: ModelLog["type"], message: string, data?: any) {
+function addLog(
+  brain: BrainState,
+  type: ModelLog["type"],
+  message: string,
+  data?: any,
+) {
   brain.logs.push({ timestamp: new Date().toISOString(), type, message, data });
 }
 
@@ -240,7 +301,10 @@ function bumpVersion(brain: BrainState) {
 
 // ── Pre-Training on Historical Seasons ──
 
-export async function preTrainBrain(brain: BrainState, seasons: number[]): Promise<BrainState> {
+export async function preTrainBrain(
+  brain: BrainState,
+  seasons: number[],
+): Promise<BrainState> {
   const MLB_API = "https://statsapi.mlb.com/api/v1";
   let updated = { ...brain };
 
@@ -253,9 +317,13 @@ export async function preTrainBrain(brain: BrainState, seasons: number[]): Promi
     addLog(updated, "train", `Starting training on ${season} MLB season...`);
 
     // Fetch in monthly chunks
-    const months = season === new Date().getFullYear()
-      ? Array.from({ length: new Date().getMonth() + 1 }, (_, i) => i + 1).filter(m => m >= 3)
-      : [3, 4, 5, 6, 7, 8, 9, 10];
+    const months =
+      season === new Date().getFullYear()
+        ? Array.from(
+            { length: new Date().getMonth() + 1 },
+            (_, i) => i + 1,
+          ).filter((m) => m >= 3)
+        : [3, 4, 5, 6, 7, 8, 9, 10];
 
     let seasonGames = 0;
     let seasonHomeWins = 0;
@@ -268,7 +336,7 @@ export async function preTrainBrain(brain: BrainState, seasons: number[]): Promi
 
       try {
         const res = await fetch(
-          `${MLB_API}/schedule?sportId=1&startDate=${startDate}&endDate=${endDate}&gameType=R`
+          `${MLB_API}/schedule?sportId=1&startDate=${startDate}&endDate=${endDate}&gameType=R`,
         );
         if (!res.ok) continue;
         const data = await res.json();
@@ -305,14 +373,18 @@ export async function preTrainBrain(brain: BrainState, seasons: number[]): Promi
             const parkMem = venueName ? updated.parkMemory[venueName] : null;
             if (parkMem && parkMem.games >= 5) {
               const parkRate = parkMem.homeWins / parkMem.games;
-              predictedHomeProb = predictedHomeProb * 0.80 + parkRate * 0.20;
+              predictedHomeProb = predictedHomeProb * 0.8 + parkRate * 0.2;
             }
 
-            predictedHomeProb = Math.max(0.38, Math.min(0.65, predictedHomeProb));
+            predictedHomeProb = Math.max(
+              0.38,
+              Math.min(0.65, predictedHomeProb),
+            );
 
             // ── Update matchup memory for future games ──
             if (awayTeam && homeTeam) {
-              if (!updated.matchupMemory[mKey]) updated.matchupMemory[mKey] = { games: 0, homeWins: 0 };
+              if (!updated.matchupMemory[mKey])
+                updated.matchupMemory[mKey] = { games: 0, homeWins: 0 };
               updated.matchupMemory[mKey].games++;
               if (homeWon) updated.matchupMemory[mKey].homeWins++;
             }
@@ -320,7 +392,12 @@ export async function preTrainBrain(brain: BrainState, seasons: number[]): Promi
             // ── Update park memory for future games ──
             if (venueName) {
               if (!updated.parkMemory[venueName]) {
-                updated.parkMemory[venueName] = { games: 0, homeWins: 0, avgRuns: 8.5, nrfiRate: 70 };
+                updated.parkMemory[venueName] = {
+                  games: 0,
+                  homeWins: 0,
+                  avgRuns: 8.5,
+                  nrfiRate: 70,
+                };
               }
               const pk = updated.parkMemory[venueName];
               const alpha = Math.min(0.05, 1 / (pk.games + 1));
@@ -338,10 +415,11 @@ export async function preTrainBrain(brain: BrainState, seasons: number[]): Promi
             });
 
             // Total: use park avg if known, else 8.5
-            const totalLine = (parkMem && parkMem.games >= 5) ? parkMem.avgRuns : 8.5;
+            const totalLine =
+              parkMem && parkMem.games >= 5 ? parkMem.avgRuns : 8.5;
             updated = learnFromResult(updated, {
               market: "total",
-              predictedProb: 0.50,
+              predictedProb: 0.5,
               won: totalRuns > totalLine,
               ev: 1.5,
             });
@@ -355,19 +433,29 @@ export async function preTrainBrain(brain: BrainState, seasons: number[]): Promi
     updated.trainedSeasons.push(String(season));
     updated.totalGamesProcessed += seasonGames;
 
-    const homeWinPct = seasonGames > 0 ? ((seasonHomeWins / seasonGames) * 100).toFixed(1) : "0";
-    const overPct = seasonGames > 0 ? ((seasonTotalOver / seasonGames) * 100).toFixed(1) : "0";
+    const homeWinPct =
+      seasonGames > 0 ? ((seasonHomeWins / seasonGames) * 100).toFixed(1) : "0";
+    const overPct =
+      seasonGames > 0
+        ? ((seasonTotalOver / seasonGames) * 100).toFixed(1)
+        : "0";
 
-    addLog(updated, "train",
+    addLog(
+      updated,
+      "train",
       `Completed ${season}: ${seasonGames} games, ${homeWinPct}% home wins, ${overPct}% overs (>8.5)`,
-      { seasonGames, homeWinPct, overPct }
+      { seasonGames, homeWinPct, overPct },
     );
   }
 
   updated.isPreTrained = true;
   updated.lastTrainedAt = new Date().toISOString();
   bumpVersion(updated);
-  addLog(updated, "train", `Pre-training complete. Model ${updated.version} — ${updated.totalGamesProcessed} total games processed`);
+  addLog(
+    updated,
+    "train",
+    `Pre-training complete. Model ${updated.version} — ${updated.totalGamesProcessed} total games processed`,
+  );
 
   saveBrain(updated);
   return updated;
@@ -377,7 +465,7 @@ export async function preTrainBrain(brain: BrainState, seasons: number[]): Promi
 
 export function learnFromResult(
   brain: BrainState,
-  result: { market: string; predictedProb: number; won: boolean; ev: number }
+  result: { market: string; predictedProb: number; won: boolean; ev: number },
 ): BrainState {
   const updated = { ...brain };
   const lr = updated.learningRate;
@@ -396,13 +484,17 @@ export function learnFromResult(
     const alpha = Math.min(0.1, 2 / (market.totalBets + 1));
     market.brierScore = market.brierScore * (1 - alpha) + brier * alpha;
     market.avgEV = market.avgEV * (1 - alpha) + result.ev * alpha;
-    market.winRate = market.totalBets > 0 ? (market.wins / market.totalBets) * 100 : 50;
+    market.winRate =
+      market.totalBets > 0 ? (market.wins / market.totalBets) * 100 : 50;
 
     // Dynamic threshold adjustment
     if (market.totalBets >= 20) {
       if (market.winRate > 55 && market.brierScore < 0.22) {
-        market.dynamicThreshold = Math.max(0.5, market.dynamicThreshold - lr * 0.5);
-      } else if (market.winRate < 45 || market.brierScore > 0.30) {
+        market.dynamicThreshold = Math.max(
+          0.5,
+          market.dynamicThreshold - lr * 0.5,
+        );
+      } else if (market.winRate < 45 || market.brierScore > 0.3) {
         market.dynamicThreshold = Math.min(8.0, market.dynamicThreshold + lr);
       }
     }
@@ -410,8 +502,8 @@ export function learnFromResult(
 
   // Adjust weights — with GUARDRAILS to prevent drift to extremes
   const w = { ...updated.weights };
-  const FLOOR = 0.04;  // no weight below 4%
-  const CEIL = 0.35;   // no weight above 35%
+  const FLOOR = 0.04; // no weight below 4%
+  const CEIL = 0.35; // no weight above 35%
 
   if (!result.won && predicted > 0.6) {
     w.pitching = Math.max(FLOOR, w.pitching - lr * 0.1);
@@ -454,7 +546,7 @@ export function learnFromGame(
     homePitcher?: string;
     awayPitcher?: string;
     venue?: string;
-  }
+  },
 ): BrainState {
   let updated = { ...brain };
   const totalRuns = game.homeScore + game.awayScore;
@@ -463,33 +555,48 @@ export function learnFromGame(
   updated = learnFromResult(updated, {
     market: "moneyline",
     predictedProb: game.predictedHomeProb,
-    won: game.homeWon ? game.predictedHomeProb > 0.5 : game.predictedHomeProb < 0.5,
+    won: game.homeWon
+      ? game.predictedHomeProb > 0.5
+      : game.predictedHomeProb < 0.5,
     ev: 2.0,
   });
 
   // Total lesson
   updated = learnFromResult(updated, {
     market: "total",
-    predictedProb: 0.50,
+    predictedProb: 0.5,
     won: totalRuns > 8.5,
     ev: 1.5,
   });
 
   // Build lessons learned
   const lessons: string[] = [];
-  const wasConfident = game.predictedHomeProb > 0.6 || game.predictedHomeProb < 0.4;
-  const wasRight = game.homeWon ? game.predictedHomeProb > 0.5 : game.predictedHomeProb < 0.5;
+  const wasConfident =
+    game.predictedHomeProb > 0.6 || game.predictedHomeProb < 0.4;
+  const wasRight = game.homeWon
+    ? game.predictedHomeProb > 0.5
+    : game.predictedHomeProb < 0.5;
 
   if (wasConfident && !wasRight) {
-    lessons.push(`Overconfident on ${game.gameName} — predicted ${(game.predictedHomeProb * 100).toFixed(0)}% but lost. Reducing certainty weights.`);
+    lessons.push(
+      `Overconfident on ${game.gameName} — predicted ${(game.predictedHomeProb * 100).toFixed(0)}% but lost. Reducing certainty weights.`,
+    );
   } else if (!wasConfident && wasRight) {
-    lessons.push(`Caught upset in ${game.gameName} — model was uncertain but correct. Reinforcing.`);
+    lessons.push(
+      `Caught upset in ${game.gameName} — model was uncertain but correct. Reinforcing.`,
+    );
   } else if (wasConfident && wasRight) {
     lessons.push(`Strong read on ${game.gameName} — confirmed model's edge.`);
   }
 
-  if (totalRuns > 12) lessons.push(`High-scoring game (${totalRuns} runs) — weather or bullpen factor?`);
-  if (totalRuns < 4) lessons.push(`Pitchers duel (${totalRuns} runs) — may need to weight pitching higher for this matchup type.`);
+  if (totalRuns > 12)
+    lessons.push(
+      `High-scoring game (${totalRuns} runs) — weather or bullpen factor?`,
+    );
+  if (totalRuns < 4)
+    lessons.push(
+      `Pitchers duel (${totalRuns} runs) — may need to weight pitching higher for this matchup type.`,
+    );
 
   // Store in memory
   updated.recentGames.push({
@@ -514,23 +621,40 @@ export function learnFromGame(
     const key = pitcherName.toLowerCase();
     if (!updated.pitcherMemory[key]) {
       updated.pitcherMemory[key] = {
-        name: pitcherName, gamesTracked: 0, wins: 0, losses: 0, winRate: 0,
-        avgERAWhenWin: 0, avgERAWhenLoss: 0, nrfiCount: 0, nrfiRate: 0, vsTeams: {},
+        name: pitcherName,
+        gamesTracked: 0,
+        wins: 0,
+        losses: 0,
+        winRate: 0,
+        avgERAWhenWin: 0,
+        avgERAWhenLoss: 0,
+        nrfiCount: 0,
+        nrfiRate: 0,
+        vsTeams: {},
       };
     }
     const pm = updated.pitcherMemory[key];
     pm.gamesTracked++;
-    const pitcherWon = (pitcherName === game.homePitcher && game.homeWon) || (pitcherName === game.awayPitcher && !game.homeWon);
+    const pitcherWon =
+      (pitcherName === game.homePitcher && game.homeWon) ||
+      (pitcherName === game.awayPitcher && !game.homeWon);
     if (pitcherWon) pm.wins++;
     else pm.losses++;
-    pm.winRate = pm.gamesTracked > 0 ? Math.round((pm.wins / pm.gamesTracked) * 1000) / 10 : 50;
+    pm.winRate =
+      pm.gamesTracked > 0
+        ? Math.round((pm.wins / pm.gamesTracked) * 1000) / 10
+        : 50;
     if (firstInningClean) pm.nrfiCount++;
-    pm.nrfiRate = pm.gamesTracked > 0 ? Math.round((pm.nrfiCount / pm.gamesTracked) * 1000) / 10 : 65;
+    pm.nrfiRate =
+      pm.gamesTracked > 0
+        ? Math.round((pm.nrfiCount / pm.gamesTracked) * 1000) / 10
+        : 65;
 
     // vs-team tracking
-    const opponent = pitcherName === game.homePitcher
-      ? game.gameName.split(" @ ")[0] ?? ""
-      : game.gameName.split(" @ ")[1] ?? "";
+    const opponent =
+      pitcherName === game.homePitcher
+        ? (game.gameName.split(" @ ")[0] ?? "")
+        : (game.gameName.split(" @ ")[1] ?? "");
     if (opponent) {
       const oppKey = opponent.toLowerCase().trim();
       if (!pm.vsTeams[oppKey]) pm.vsTeams[oppKey] = { games: 0, wins: 0 };
@@ -542,16 +666,27 @@ export function learnFromGame(
   // Keep pitcher memory from bloating (max 200 pitchers)
   const pitcherKeys = Object.keys(updated.pitcherMemory);
   if (pitcherKeys.length > 200) {
-    const sorted = pitcherKeys.sort((a, b) => (updated.pitcherMemory[b]?.gamesTracked ?? 0) - (updated.pitcherMemory[a]?.gamesTracked ?? 0));
+    const sorted = pitcherKeys.sort(
+      (a, b) =>
+        (updated.pitcherMemory[b]?.gamesTracked ?? 0) -
+        (updated.pitcherMemory[a]?.gamesTracked ?? 0),
+    );
     const keep = new Set(sorted.slice(0, 150));
-    for (const k of pitcherKeys) { if (!keep.has(k)) delete updated.pitcherMemory[k]; }
+    for (const k of pitcherKeys) {
+      if (!keep.has(k)) delete updated.pitcherMemory[k];
+    }
   }
 
   // ── Park memory ──
   if (!updated.parkMemory) updated.parkMemory = {};
   if (game.venue) {
     if (!updated.parkMemory[game.venue]) {
-      updated.parkMemory[game.venue] = { games: 0, homeWins: 0, avgRuns: 8.5, nrfiRate: 70 };
+      updated.parkMemory[game.venue] = {
+        games: 0,
+        homeWins: 0,
+        avgRuns: 8.5,
+        nrfiRate: 70,
+      };
     }
     const pk = updated.parkMemory[game.venue];
     const alpha = Math.min(0.05, 1 / (pk.games + 1));
@@ -574,10 +709,12 @@ export function learnFromGame(
     if (game.homeWon) updated.matchupMemory[matchupKey].homeWins++;
   }
 
-  addLog(updated, "learn",
+  addLog(
+    updated,
+    "learn",
     `${game.gameName}: ${game.homeWon ? "Home" : "Away"} won ${game.homeScore}-${game.awayScore}. ` +
-    `Model predicted ${(game.predictedHomeProb * 100).toFixed(0)}% home. ${wasRight ? "CORRECT" : "WRONG"}.`,
-    { lessons }
+      `Model predicted ${(game.predictedHomeProb * 100).toFixed(0)}% home. ${wasRight ? "CORRECT" : "WRONG"}.`,
+    { lessons },
   );
 
   saveBrain(updated);
@@ -587,15 +724,24 @@ export function learnFromGame(
 // ── Get current model info ──
 
 export function getBrainSummary(brain: BrainState) {
-  const totalBets = Object.values(brain.markets).reduce((s, m) => s + m.totalBets, 0);
-  const totalWins = Object.values(brain.markets).reduce((s, m) => s + m.wins, 0);
+  const totalBets = Object.values(brain.markets).reduce(
+    (s, m) => s + m.totalBets,
+    0,
+  );
+  const totalWins = Object.values(brain.markets).reduce(
+    (s, m) => s + m.wins,
+    0,
+  );
   const overallWinRate = totalBets > 0 ? (totalWins / totalBets) * 100 : 50;
-  const avgBrier = Object.values(brain.markets).reduce((s, m) => s + m.brierScore, 0) / Math.max(Object.keys(brain.markets).length, 1);
+  const avgBrier =
+    Object.values(brain.markets).reduce((s, m) => s + m.brierScore, 0) /
+    Math.max(Object.keys(brain.markets).length, 1);
 
   // Weight changes from initial
   const weightChanges: Record<string, number> = {};
   for (const key of Object.keys(brain.weights) as (keyof ModelWeights)[]) {
-    weightChanges[key] = Math.round((brain.weights[key] - brain.initialWeights[key]) * 1000) / 10;
+    weightChanges[key] =
+      Math.round((brain.weights[key] - brain.initialWeights[key]) * 1000) / 10;
   }
 
   return {
@@ -620,6 +766,11 @@ export function getBrainSummary(brain: BrainState) {
       .filter((p: any) => p.gamesTracked >= 10)
       .sort((a: any, b: any) => b.winRate - a.winRate)
       .slice(0, 5)
-      .map((p: any) => ({ name: p.name, winRate: p.winRate, games: p.gamesTracked, nrfiRate: p.nrfiRate })),
+      .map((p: any) => ({
+        name: p.name,
+        winRate: p.winRate,
+        games: p.gamesTracked,
+        nrfiRate: p.nrfiRate,
+      })),
   };
 }

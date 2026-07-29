@@ -2,7 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { cloudGet, cloudSet } from "@/lib/supabase/client";
 import { loadNbaPropBrainFromCloud } from "@/lib/bot/nba-prop-brain";
 import { projectProp } from "@/lib/bot/nba-prop-projector";
-import { buildReasoning, type BrainReasoning } from "@/lib/bot/prop-reasoning";
+import {
+  buildReasoning,
+  buildPickMath,
+  reasoningToStrings,
+  type BrainReasoning,
+  type PickMath,
+} from "@/lib/bot/prop-reasoning";
 import { fetchNBAInjuries } from "@/lib/nba/injuries";
 import { getNBATeamAbbrev } from "@/lib/nba/stats-api";
 import { getDefensiveRank } from "@/lib/nba/pace-ratings";
@@ -29,6 +35,16 @@ export interface PropPickOfDay {
   reasoning?: BrainReasoning;
   seasonAvg?: number;
   last5Avg?: number;
+  // ── Math breakdown + sportsbook context (additive; UI renders these) ──
+  marketOdds?: number; // American odds used for the pick side
+  bestBook?: string; // book offering the best price on the pick side
+  bestOdds?: number; // that best price
+  modelProb?: number; // model probability, percent
+  impliedProb?: number; // de-vigged market implied probability, percent
+  fairOdds?: number; // model prob as fair American odds
+  edgePct?: number; // modelProb − impliedProb (percentage points)
+  evPct?: number; // EV% of stake at marketOdds
+  reasons?: string[]; // 3-6 plain-English strings citing the numbers
 }
 
 export interface PropPicksToday {
@@ -45,50 +61,113 @@ const CACHE_TTL_MS = 2 * 60 * 60 * 1000; // 2 hours
 // Used only when no live odds are posted. Injury-filtered at runtime.
 const NBA_STAR_FALLBACK = [
   // Top scorers covering all 30 teams (2024-25 season averages, rosters approximate)
-  { playerName: "Shai Gilgeous-Alexander", team: "OKC", ppg: 32.3, rpg: 5.2, apg: 6.4 },
-  { playerName: "Nikola Jokic",            team: "DEN", ppg: 29.6, rpg: 13.0, apg: 10.2 },
-  { playerName: "Giannis Antetokounmpo",   team: "MIL", ppg: 30.4, rpg: 11.9, apg: 6.5 },
-  { playerName: "Luka Doncic",             team: "LAL", ppg: 28.7, rpg: 8.5, apg: 7.8 },
-  { playerName: "Jayson Tatum",            team: "BOS", ppg: 26.9, rpg: 8.3, apg: 5.2 },
-  { playerName: "Anthony Davis",           team: "DAL", ppg: 26.2, rpg: 12.6, apg: 3.5 },
-  { playerName: "Donovan Mitchell",        team: "CLE", ppg: 24.9, rpg: 4.5, apg: 5.0 },
-  { playerName: "Kevin Durant",            team: "HOU", ppg: 27.1, rpg: 6.3, apg: 4.0 },
-  { playerName: "LeBron James",            team: "LAL", ppg: 23.7, rpg: 8.3, apg: 9.0 },
-  { playerName: "Stephen Curry",           team: "GSW", ppg: 26.4, rpg: 4.8, apg: 5.2 },
-  { playerName: "Trae Young",              team: "ATL", ppg: 22.6, rpg: 3.0, apg: 11.1 },
-  { playerName: "Damian Lillard",          team: "POR", ppg: 24.3, rpg: 4.4, apg: 7.2 },
-  { playerName: "Devin Booker",            team: "PHX", ppg: 25.1, rpg: 4.9, apg: 7.1 },
-  { playerName: "Jalen Brunson",           team: "NYK", ppg: 25.9, rpg: 3.7, apg: 6.7 },
-  { playerName: "Cade Cunningham",         team: "DET", ppg: 25.7, rpg: 4.4, apg: 9.1 },
-  { playerName: "Tyrese Haliburton",       team: "IND", ppg: 21.5, rpg: 3.5, apg: 9.5 },
-  { playerName: "DeMar DeRozan",           team: "SAC", ppg: 22.9, rpg: 4.0, apg: 4.6 },
-  { playerName: "Anthony Edwards",         team: "MIN", ppg: 27.8, rpg: 5.5, apg: 4.5 },
-  { playerName: "Ja Morant",               team: "MEM", ppg: 24.5, rpg: 4.5, apg: 8.2 },
-  { playerName: "Paolo Banchero",          team: "ORL", ppg: 23.5, rpg: 7.0, apg: 5.0 },
-  { playerName: "LaMelo Ball",             team: "CHA", ppg: 25.6, rpg: 4.8, apg: 7.0 },
-  { playerName: "Scottie Barnes",          team: "TOR", ppg: 19.5, rpg: 8.0, apg: 5.5 },
-  { playerName: "Mikal Bridges",           team: "NYK", ppg: 17.5, rpg: 4.0, apg: 3.5 },
-  { playerName: "Domantas Sabonis",        team: "SAC", ppg: 19.0, rpg: 13.5, apg: 6.0 },
-  { playerName: "Karl-Anthony Towns",      team: "NYK", ppg: 24.0, rpg: 12.5, apg: 3.0 },
-  { playerName: "Victor Wembanyama",       team: "SAS", ppg: 23.0, rpg: 11.0, apg: 3.5 },
-  { playerName: "Joel Embiid",             team: "PHI", ppg: 28.0, rpg: 11.0, apg: 4.5 },
-  { playerName: "Tyrese Maxey",            team: "PHI", ppg: 25.0, rpg: 3.5, apg: 6.5 },
-  { playerName: "Bam Adebayo",             team: "MIA", ppg: 19.0, rpg: 10.0, apg: 4.0 },
-  { playerName: "Tyler Herro",             team: "MIA", ppg: 22.0, rpg: 5.0, apg: 5.0 },
-  { playerName: "Zion Williamson",         team: "NOP", ppg: 24.0, rpg: 7.0, apg: 5.0 },
-  { playerName: "Cam Thomas",              team: "BKN", ppg: 23.0, rpg: 3.5, apg: 4.0 },
-  { playerName: "Coby White",              team: "CHI", ppg: 20.5, rpg: 4.0, apg: 4.5 },
-  { playerName: "Jaren Jackson Jr.",       team: "MEM", ppg: 22.5, rpg: 5.5, apg: 2.0 },
-  { playerName: "Lauri Markkanen",         team: "UTA", ppg: 22.0, rpg: 6.5, apg: 1.5 },
-  { playerName: "James Harden",            team: "LAC", ppg: 19.5, rpg: 5.5, apg: 8.5 },
+  {
+    playerName: "Shai Gilgeous-Alexander",
+    team: "OKC",
+    ppg: 32.3,
+    rpg: 5.2,
+    apg: 6.4,
+  },
+  { playerName: "Nikola Jokic", team: "DEN", ppg: 29.6, rpg: 13.0, apg: 10.2 },
+  {
+    playerName: "Giannis Antetokounmpo",
+    team: "MIL",
+    ppg: 30.4,
+    rpg: 11.9,
+    apg: 6.5,
+  },
+  { playerName: "Luka Doncic", team: "LAL", ppg: 28.7, rpg: 8.5, apg: 7.8 },
+  { playerName: "Jayson Tatum", team: "BOS", ppg: 26.9, rpg: 8.3, apg: 5.2 },
+  { playerName: "Anthony Davis", team: "DAL", ppg: 26.2, rpg: 12.6, apg: 3.5 },
+  {
+    playerName: "Donovan Mitchell",
+    team: "CLE",
+    ppg: 24.9,
+    rpg: 4.5,
+    apg: 5.0,
+  },
+  { playerName: "Kevin Durant", team: "HOU", ppg: 27.1, rpg: 6.3, apg: 4.0 },
+  { playerName: "LeBron James", team: "LAL", ppg: 23.7, rpg: 8.3, apg: 9.0 },
+  { playerName: "Stephen Curry", team: "GSW", ppg: 26.4, rpg: 4.8, apg: 5.2 },
+  { playerName: "Trae Young", team: "ATL", ppg: 22.6, rpg: 3.0, apg: 11.1 },
+  { playerName: "Damian Lillard", team: "POR", ppg: 24.3, rpg: 4.4, apg: 7.2 },
+  { playerName: "Devin Booker", team: "PHX", ppg: 25.1, rpg: 4.9, apg: 7.1 },
+  { playerName: "Jalen Brunson", team: "NYK", ppg: 25.9, rpg: 3.7, apg: 6.7 },
+  { playerName: "Cade Cunningham", team: "DET", ppg: 25.7, rpg: 4.4, apg: 9.1 },
+  {
+    playerName: "Tyrese Haliburton",
+    team: "IND",
+    ppg: 21.5,
+    rpg: 3.5,
+    apg: 9.5,
+  },
+  { playerName: "DeMar DeRozan", team: "SAC", ppg: 22.9, rpg: 4.0, apg: 4.6 },
+  { playerName: "Anthony Edwards", team: "MIN", ppg: 27.8, rpg: 5.5, apg: 4.5 },
+  { playerName: "Ja Morant", team: "MEM", ppg: 24.5, rpg: 4.5, apg: 8.2 },
+  { playerName: "Paolo Banchero", team: "ORL", ppg: 23.5, rpg: 7.0, apg: 5.0 },
+  { playerName: "LaMelo Ball", team: "CHA", ppg: 25.6, rpg: 4.8, apg: 7.0 },
+  { playerName: "Scottie Barnes", team: "TOR", ppg: 19.5, rpg: 8.0, apg: 5.5 },
+  { playerName: "Mikal Bridges", team: "NYK", ppg: 17.5, rpg: 4.0, apg: 3.5 },
+  {
+    playerName: "Domantas Sabonis",
+    team: "SAC",
+    ppg: 19.0,
+    rpg: 13.5,
+    apg: 6.0,
+  },
+  {
+    playerName: "Karl-Anthony Towns",
+    team: "NYK",
+    ppg: 24.0,
+    rpg: 12.5,
+    apg: 3.0,
+  },
+  {
+    playerName: "Victor Wembanyama",
+    team: "SAS",
+    ppg: 23.0,
+    rpg: 11.0,
+    apg: 3.5,
+  },
+  { playerName: "Joel Embiid", team: "PHI", ppg: 28.0, rpg: 11.0, apg: 4.5 },
+  { playerName: "Tyrese Maxey", team: "PHI", ppg: 25.0, rpg: 3.5, apg: 6.5 },
+  { playerName: "Bam Adebayo", team: "MIA", ppg: 19.0, rpg: 10.0, apg: 4.0 },
+  { playerName: "Tyler Herro", team: "MIA", ppg: 22.0, rpg: 5.0, apg: 5.0 },
+  { playerName: "Zion Williamson", team: "NOP", ppg: 24.0, rpg: 7.0, apg: 5.0 },
+  { playerName: "Cam Thomas", team: "BKN", ppg: 23.0, rpg: 3.5, apg: 4.0 },
+  { playerName: "Coby White", team: "CHI", ppg: 20.5, rpg: 4.0, apg: 4.5 },
+  {
+    playerName: "Jaren Jackson Jr.",
+    team: "MEM",
+    ppg: 22.5,
+    rpg: 5.5,
+    apg: 2.0,
+  },
+  { playerName: "Lauri Markkanen", team: "UTA", ppg: 22.0, rpg: 6.5, apg: 1.5 },
+  { playerName: "James Harden", team: "LAC", ppg: 19.5, rpg: 5.5, apg: 8.5 },
 ];
 
 // Lines to test per player (slightly offset from their average to create over/under signal)
-function getFallbackLines(player: typeof NBA_STAR_FALLBACK[0]) {
+function getFallbackLines(player: (typeof NBA_STAR_FALLBACK)[0]) {
   return [
-    { market: "player_points", label: "Points", line: Math.round(player.ppg * 2) / 2, stat: { ppg: player.ppg, rpg: player.rpg, apg: player.apg } },
-    { market: "player_rebounds", label: "Rebounds", line: Math.round(player.rpg * 2) / 2, stat: { ppg: player.ppg, rpg: player.rpg, apg: player.apg } },
-    { market: "player_assists", label: "Assists", line: Math.round(player.apg * 2) / 2, stat: { ppg: player.ppg, rpg: player.rpg, apg: player.apg } },
+    {
+      market: "player_points",
+      label: "Points",
+      line: Math.round(player.ppg * 2) / 2,
+      stat: { ppg: player.ppg, rpg: player.rpg, apg: player.apg },
+    },
+    {
+      market: "player_rebounds",
+      label: "Rebounds",
+      line: Math.round(player.rpg * 2) / 2,
+      stat: { ppg: player.ppg, rpg: player.rpg, apg: player.apg },
+    },
+    {
+      market: "player_assists",
+      label: "Assists",
+      line: Math.round(player.apg * 2) / 2,
+      stat: { ppg: player.ppg, rpg: player.rpg, apg: player.apg },
+    },
   ];
 }
 
@@ -115,7 +194,11 @@ export async function GET(req: NextRequest) {
     const weights = brain?.weights;
     if (!weights) {
       // 200 with empty picks — UI shows empty state instead of red error.
-      return NextResponse.json({ ok: true, picks: [], message: "Brain not yet trained" });
+      return NextResponse.json({
+        ok: true,
+        picks: [],
+        message: "Brain not yet trained",
+      });
     }
 
     const allProjections: Array<PropPickOfDay & { score: number }> = [];
@@ -123,33 +206,50 @@ export async function GET(req: NextRequest) {
     // ── Step 1: Collect all live props from the Odds API ──
     let livePropsFound = 0;
     const allLiveProps: Array<{
-      playerName: string; team: string; line: number; market: string;
-      gameTime?: string; bestOver?: { price: number; bookmaker: string };
+      playerName: string;
+      team: string;
+      line: number;
+      market: string;
+      gameTime?: string;
+      bestOver?: { price: number; bookmaker: string };
       bestUnder?: { price: number; bookmaker: string };
     }> = [];
 
     try {
       const markets = ["player_points", "player_rebounds", "player_assists"];
-      // Always use the production alias — VERCEL_URL is a per-deploy URL that may lag
-      const baseUrl = "https://diamond-quant-live.vercel.app";
+      // In dev, call localhost instead of reaching production over the real
+      // internet. Production still uses the public alias since VERCEL_URL's
+      // per-deploy URL may lag or sit behind preview auth.
+      const baseUrl =
+        process.env.NODE_ENV === "development"
+          ? req.nextUrl.origin
+          : "https://diamond-quant-live.vercel.app";
 
       for (const market of markets) {
         try {
           const today = new Date().toISOString().split("T")[0];
-          const res = await fetch(`${baseUrl}/api/players?sport=basketball_nba&market=${market}`, {
-            signal: AbortSignal.timeout(20000),
-            next: { revalidate: 600 }, // use CDN/fetch cache to avoid redundant Odds API hits
-          });
+          const res = await fetch(
+            `${baseUrl}/api/players?sport=basketball_nba&market=${market}`,
+            {
+              signal: AbortSignal.timeout(20000),
+              next: { revalidate: 600 }, // use CDN/fetch cache to avoid redundant Odds API hits
+            },
+          );
           if (!res.ok) continue;
           const data = await res.json();
           const props = data.props ?? [];
           livePropsFound += props.length;
-          const todayET = new Date().toLocaleDateString("en-US", { timeZone: "America/New_York" });
+          const todayET = new Date().toLocaleDateString("en-US", {
+            timeZone: "America/New_York",
+          });
           for (const prop of props) {
             if (!prop.playerName || !prop.line || prop.line <= 0) continue;
             // Skip props for tomorrow's games — only surface tonight's slate
             if (prop.gameTime) {
-              const gameDay = new Date(prop.gameTime).toLocaleDateString("en-US", { timeZone: "America/New_York" });
+              const gameDay = new Date(prop.gameTime).toLocaleDateString(
+                "en-US",
+                { timeZone: "America/New_York" },
+              );
               if (gameDay !== todayET) continue;
             }
             allLiveProps.push({ ...prop, market });
@@ -159,8 +259,14 @@ export async function GET(req: NextRequest) {
     } catch {}
 
     // ── Step 2: Fetch real stats for top players in parallel ──
-    const baseUrl = `https://${process.env.VERCEL_URL || "diamond-quant-live.vercel.app"}`;
-    const playerStatsMap = new Map<string, { ppg: number; rpg: number; apg: number; last5Avg?: number }>();
+    const statsBaseUrl =
+      process.env.NODE_ENV === "development"
+        ? req.nextUrl.origin
+        : `https://${process.env.VERCEL_URL || "diamond-quant-live.vercel.app"}`;
+    const playerStatsMap = new Map<
+      string,
+      { ppg: number; rpg: number; apg: number; last5Avg?: number }
+    >();
 
     if (allLiveProps.length > 0) {
       // Dedupe players, prefer points market for the stat lookup
@@ -177,24 +283,36 @@ export async function GET(req: NextRequest) {
       await Promise.allSettled(
         topPlayers.map(async (name) => {
           try {
-            const lineForPlayer = allLiveProps.find(p => p.playerName === name && p.market === "player_points")?.line ?? 20;
+            const lineForPlayer =
+              allLiveProps.find(
+                (p) => p.playerName === name && p.market === "player_points",
+              )?.line ?? 20;
             const res = await fetch(
-              `${baseUrl}/api/nba-player?name=${encodeURIComponent(name)}&market=player_points&line=${lineForPlayer}`,
-              { signal: AbortSignal.timeout(4000) }
+              `${statsBaseUrl}/api/nba-player?name=${encodeURIComponent(name)}&market=player_points&line=${lineForPlayer}`,
+              { signal: AbortSignal.timeout(4000) },
             );
             if (res.ok) {
               const data = await res.json();
               const p = data.player;
               if (p?.ppg !== undefined) {
                 const log = data.player?.gameLog ?? [];
-                const last5Avg = log.length >= 3
-                  ? log.slice(0, 5).reduce((s: number, g: any) => s + (g.points ?? 0), 0) / Math.min(log.length, 5)
-                  : undefined;
-                playerStatsMap.set(name, { ppg: p.ppg ?? lineForPlayer, rpg: p.rpg ?? 5, apg: p.apg ?? 3, last5Avg });
+                const last5Avg =
+                  log.length >= 3
+                    ? log
+                        .slice(0, 5)
+                        .reduce((s: number, g: any) => s + (g.points ?? 0), 0) /
+                      Math.min(log.length, 5)
+                    : undefined;
+                playerStatsMap.set(name, {
+                  ppg: p.ppg ?? lineForPlayer,
+                  rpg: p.rpg ?? 5,
+                  apg: p.apg ?? 3,
+                  last5Avg,
+                });
               }
             }
           } catch {}
-        })
+        }),
       );
     }
 
@@ -219,7 +337,11 @@ export async function GET(req: NextRequest) {
         const { market } = prop;
         const realStats = playerStatsMap.get(prop.playerName);
         const seasonAvg = realStats
-          ? (market === "player_points" ? realStats.ppg : market === "player_rebounds" ? realStats.rpg : realStats.apg)
+          ? market === "player_points"
+            ? realStats.ppg
+            : market === "player_rebounds"
+              ? realStats.rpg
+              : realStats.apg
           : prop.line;
         const statApprox = realStats
           ? { ppg: realStats.ppg, rpg: realStats.rpg, apg: realStats.apg }
@@ -229,40 +351,127 @@ export async function GET(req: NextRequest) {
         // prop.team is "Away @ Home"; we don't always know which side the player
         // is on, so try matching to player's known team from playerMemory; fall back
         // to averaging both teams' positional def vs the player's position.
-        const teamHalves = (prop.team ?? "").split(" @ ").map((s: string) => getNBATeamAbbrev(s.trim())).filter(Boolean) as string[];
+        const teamHalves = (prop.team ?? "")
+          .split(" @ ")
+          .map((s: string) => getNBATeamAbbrev(s.trim()))
+          .filter(Boolean) as string[];
         let oppDefRank = 15;
         if (teamHalves.length === 2) {
           // Look up player's team in brain memory to determine which side they're on
-          const memTeam = (brain.playerMemory?.[prop.playerName.toLowerCase().replace(/\s+/g, "_")]?.team || "").toUpperCase();
-          const opponent = memTeam === teamHalves[0] ? teamHalves[1] : memTeam === teamHalves[1] ? teamHalves[0] : null;
+          const memTeam = (
+            brain.playerMemory?.[
+              prop.playerName.toLowerCase().replace(/\s+/g, "_")
+            ]?.team || ""
+          ).toUpperCase();
+          const opponent =
+            memTeam === teamHalves[0]
+              ? teamHalves[1]
+              : memTeam === teamHalves[1]
+                ? teamHalves[0]
+                : null;
           if (opponent) {
             oppDefRank = getPositionalDefRank(prop.playerName, opponent);
           } else {
             // Player's team unknown — average positional def from both teams
             oppDefRank = Math.round(
               (getPositionalDefRank(prop.playerName, teamHalves[0]) +
-                getPositionalDefRank(prop.playerName, teamHalves[1])) / 2
+                getPositionalDefRank(prop.playerName, teamHalves[1])) /
+                2,
             );
           }
         }
         const proj = projectProp(
-          statApprox, market, prop.line, weights,
-          { isHome: false, isB2B: false, leagueAvgTotal: 224, opponentDefRank: oppDefRank },
-          last5Avg && realStats ? { last5Avg, last10Avg: last5Avg, seasonAvg, gamesPlayed: 30, variance: seasonAvg * 0.3 } : undefined
+          statApprox,
+          market,
+          prop.line,
+          weights,
+          {
+            isHome: false,
+            isB2B: false,
+            leagueAvgTotal: 224,
+            opponentDefRank: oppDefRank,
+          },
+          last5Avg && realStats
+            ? {
+                last5Avg,
+                last10Avg: last5Avg,
+                seasonAvg,
+                gamesPlayed: 30,
+                variance: seasonAvg * 0.3,
+              }
+            : undefined,
         );
-        const label = market === "player_points" ? "Points" : market === "player_rebounds" ? "Rebounds" : "Assists";
+        const label =
+          market === "player_points"
+            ? "Points"
+            : market === "player_rebounds"
+              ? "Rebounds"
+              : "Assists";
         const conviction = Math.abs(proj.probability - 0.5);
         const score = conviction * proj.confidence;
-        const tier: "HIGH" | "MEDIUM" | "LEAN" = proj.confidence >= 60 ? "HIGH" : proj.confidence >= 40 ? "MEDIUM" : "LEAN";
-        const reasoning = buildReasoning(proj.factors, prop.line, proj.side, seasonAvg, label, last5Avg);
+        const tier: "HIGH" | "MEDIUM" | "LEAN" =
+          proj.confidence >= 60
+            ? "HIGH"
+            : proj.confidence >= 40
+              ? "MEDIUM"
+              : "LEAN";
+        const reasoning = buildReasoning(
+          proj.factors,
+          prop.line,
+          proj.side,
+          seasonAvg,
+          label,
+          last5Avg,
+        );
+        // Best price on the pick side + opposite side (for proper de-vig)
+        const pickOdds =
+          proj.side === "over"
+            ? (prop.bestOver?.price ?? -110)
+            : (prop.bestUnder?.price ?? -110);
+        const oppOdds =
+          proj.side === "over" ? prop.bestUnder?.price : prop.bestOver?.price;
+        const pickBook =
+          proj.side === "over"
+            ? (prop.bestOver?.bookmaker ?? "")
+            : (prop.bestUnder?.bookmaker ?? "");
+        const math: PickMath = buildPickMath(
+          proj.probability,
+          pickOdds,
+          oppOdds,
+        );
+        const reasons = reasoningToStrings(reasoning, {
+          projection: proj.projectedValue,
+          math,
+          bookmaker: pickBook,
+        });
         allProjections.push({
-          playerName: prop.playerName, team: prop.team ?? "", propType: label, market,
-          line: prop.line, side: proj.side, probability: proj.probability,
+          playerName: prop.playerName,
+          team: prop.team ?? "",
+          propType: label,
+          market,
+          line: prop.line,
+          side: proj.side,
+          probability: proj.probability,
           projectedValue: Math.round(proj.projectedValue * 10) / 10,
-          odds: proj.side === "over" ? (prop.bestOver?.price ?? -110) : (prop.bestUnder?.price ?? -110),
-          bookmaker: proj.side === "over" ? (prop.bestOver?.bookmaker ?? "") : (prop.bestUnder?.bookmaker ?? ""),
-          gameTime: prop.gameTime ?? "", brainConfidence: Math.round(proj.confidence),
-          tier, liveOdds: true, score, reasoning, seasonAvg, last5Avg,
+          odds: pickOdds,
+          bookmaker: pickBook,
+          gameTime: prop.gameTime ?? "",
+          brainConfidence: Math.round(proj.confidence),
+          tier,
+          liveOdds: true,
+          score,
+          reasoning,
+          seasonAvg,
+          last5Avg,
+          marketOdds: pickOdds,
+          bestBook: pickBook,
+          bestOdds: pickOdds,
+          modelProb: math.modelProb,
+          impliedProb: math.impliedProb,
+          fairOdds: math.fairOdds,
+          edgePct: math.edgePct,
+          evPct: math.evPct,
+          reasons,
         });
       }
     }
@@ -287,25 +496,38 @@ export async function GET(req: NextRequest) {
       // actual scoreboard data, more reliable during playoffs/finals).
       let teamsPlayingToday: Set<string> = new Set();
       try {
-        const evRes = await fetch("https://diamond-quant-live.vercel.app/api/players?sport=basketball_nba&market=player_points", { signal: AbortSignal.timeout(8000) });
+        const evRes = await fetch(
+          `${statsBaseUrl}/api/players?sport=basketball_nba&market=player_points`,
+          { signal: AbortSignal.timeout(8000) },
+        );
         if (evRes.ok) {
           const evData = await evRes.json();
-          for (const ev of (evData.events ?? [])) {
+          for (const ev of evData.events ?? []) {
             const [away, home] = (ev.game ?? "").split(" @ ");
-            if (away) { const a = getNBATeamAbbrev(away.trim()); if (a) teamsPlayingToday.add(a.toUpperCase()); }
-            if (home) { const a = getNBATeamAbbrev(home.trim()); if (a) teamsPlayingToday.add(a.toUpperCase()); }
+            if (away) {
+              const a = getNBATeamAbbrev(away.trim());
+              if (a) teamsPlayingToday.add(a.toUpperCase());
+            }
+            if (home) {
+              const a = getNBATeamAbbrev(home.trim());
+              if (a) teamsPlayingToday.add(a.toUpperCase());
+            }
           }
         }
       } catch {}
       // Backstop: read directly from /api/nba-scores if events source is empty
       if (teamsPlayingToday.size === 0) {
         try {
-          const sRes = await fetch("https://diamond-quant-live.vercel.app/api/nba-scores", { signal: AbortSignal.timeout(8000) });
+          const sRes = await fetch(`${statsBaseUrl}/api/nba-scores`, {
+            signal: AbortSignal.timeout(8000),
+          });
           if (sRes.ok) {
             const sData = await sRes.json();
-            for (const g of (sData.games ?? [])) {
-              if (g.awayAbbrev) teamsPlayingToday.add(String(g.awayAbbrev).toUpperCase());
-              if (g.homeAbbrev) teamsPlayingToday.add(String(g.homeAbbrev).toUpperCase());
+            for (const g of sData.games ?? []) {
+              if (g.awayAbbrev)
+                teamsPlayingToday.add(String(g.awayAbbrev).toUpperCase());
+              if (g.homeAbbrev)
+                teamsPlayingToday.add(String(g.homeAbbrev).toUpperCase());
             }
           }
         } catch {}
@@ -314,13 +536,17 @@ export async function GET(req: NextRequest) {
       // fallback entirely — better to show 0 picks than picks from wrong teams.
       if (teamsPlayingToday.size === 0) {
         // Return empty picks rather than projecting players who aren't playing
-        return NextResponse.json({ ok: true, picks: [], message: "No NBA games scheduled today" });
+        return NextResponse.json({
+          ok: true,
+          picks: [],
+          message: "No NBA games scheduled today",
+        });
       }
 
       // Strict: only players whose team is playing today. No "show everyone"
       // fallback — better to render 0 picks than picks from wrong teams (e.g.
       // Curry showing up during a Knicks/Spurs Finals).
-      const healthyFallback = NBA_STAR_FALLBACK.filter(p => {
+      const healthyFallback = NBA_STAR_FALLBACK.filter((p) => {
         if (injuredNames.has(p.playerName.toLowerCase())) return false;
         return teamsPlayingToday.has(p.team.toUpperCase());
       });
@@ -328,13 +554,20 @@ export async function GET(req: NextRequest) {
       // Map team -> opponent for accurate matchup defense
       const opponentByTeam: Record<string, string> = {};
       try {
-        const evRes = await fetch("https://diamond-quant-live.vercel.app/api/players?sport=basketball_nba&market=player_points", { signal: AbortSignal.timeout(8000) });
+        const evRes = await fetch(
+          `${statsBaseUrl}/api/players?sport=basketball_nba&market=player_points`,
+          { signal: AbortSignal.timeout(8000) },
+        );
         if (evRes.ok) {
           const evData = await evRes.json();
-          for (const ev of (evData.events ?? [])) {
+          for (const ev of evData.events ?? []) {
             const [away, home] = (ev.game ?? "").split(" @ ");
-            const awayAb = away ? getNBATeamAbbrev(away.trim())?.toUpperCase() : "";
-            const homeAb = home ? getNBATeamAbbrev(home.trim())?.toUpperCase() : "";
+            const awayAb = away
+              ? getNBATeamAbbrev(away.trim())?.toUpperCase()
+              : "";
+            const homeAb = home
+              ? getNBATeamAbbrev(home.trim())?.toUpperCase()
+              : "";
             if (awayAb && homeAb) {
               opponentByTeam[awayAb] = homeAb;
               opponentByTeam[homeAb] = awayAb;
@@ -345,24 +578,72 @@ export async function GET(req: NextRequest) {
 
       for (const player of healthyFallback) {
         const opponent = opponentByTeam[player.team.toUpperCase()];
-        const oppDefRank = opponent ? getPositionalDefRank(player.playerName, opponent) : 15;
+        const oppDefRank = opponent
+          ? getPositionalDefRank(player.playerName, opponent)
+          : 15;
         for (const { market, label, line, stat } of getFallbackLines(player)) {
           if (line <= 0) continue;
-          const proj = projectProp(stat, market, line, weights, { isHome: false, isB2B: false, leagueAvgTotal: 224, opponentDefRank: oppDefRank });
+          const proj = projectProp(stat, market, line, weights, {
+            isHome: false,
+            isB2B: false,
+            leagueAvgTotal: 224,
+            opponentDefRank: oppDefRank,
+          });
           const conviction = Math.abs(proj.probability - 0.5);
           const score = conviction * proj.confidence;
-          const tier: "HIGH" | "MEDIUM" | "LEAN" = proj.confidence >= 60 ? "HIGH" : proj.confidence >= 40 ? "MEDIUM" : "LEAN";
-          const seasonAvg = market === "player_points" ? player.ppg
-            : market === "player_rebounds" ? player.rpg
-            : player.apg;
-          const reasoning = buildReasoning(proj.factors, line, proj.side, seasonAvg, label, undefined);
+          const tier: "HIGH" | "MEDIUM" | "LEAN" =
+            proj.confidence >= 60
+              ? "HIGH"
+              : proj.confidence >= 40
+                ? "MEDIUM"
+                : "LEAN";
+          const seasonAvg =
+            market === "player_points"
+              ? player.ppg
+              : market === "player_rebounds"
+                ? player.rpg
+                : player.apg;
+          const reasoning = buildReasoning(
+            proj.factors,
+            line,
+            proj.side,
+            seasonAvg,
+            label,
+            undefined,
+          );
+          // No live odds — assume standard -110 juice both ways (de-vig → 50%)
+          const math: PickMath = buildPickMath(proj.probability, -110, -110);
+          const reasons = reasoningToStrings(reasoning, {
+            projection: proj.projectedValue,
+            math,
+          });
           allProjections.push({
-            playerName: player.playerName, team: player.team, propType: label, market,
-            line, side: proj.side, probability: proj.probability,
+            playerName: player.playerName,
+            team: player.team,
+            propType: label,
+            market,
+            line,
+            side: proj.side,
+            probability: proj.probability,
             projectedValue: Math.round(proj.projectedValue * 10) / 10,
-            odds: -110, bookmaker: "", gameTime: "",
+            odds: -110,
+            bookmaker: "",
+            gameTime: "",
             brainConfidence: Math.round(proj.confidence),
-            tier, liveOdds: false, score, reasoning, seasonAvg,
+            tier,
+            liveOdds: false,
+            score,
+            reasoning,
+            seasonAvg,
+            marketOdds: -110,
+            bestBook: "",
+            bestOdds: -110,
+            modelProb: math.modelProb,
+            impliedProb: math.impliedProb,
+            fairOdds: math.fairOdds,
+            edgePct: math.edgePct,
+            evPct: math.evPct,
+            reasons,
           });
         }
       }
@@ -391,6 +672,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: true, ...result, cached: false });
   } catch (error: any) {
     console.error("prop-picks-today error:", error);
-    return NextResponse.json({ ok: true, picks: [], message: "Picks temporarily unavailable" });
+    return NextResponse.json({
+      ok: true,
+      picks: [],
+      message: "Picks temporarily unavailable",
+    });
   }
 }

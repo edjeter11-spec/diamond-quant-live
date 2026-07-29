@@ -63,12 +63,17 @@ export async function fetchTodayNFLGames(): Promise<any[]> {
 export function getNFLGameStatus(event: any): "final" | "live" | "pre" {
   const status = event.status?.type?.name ?? "";
   if (status.includes("FINAL")) return "final";
-  if (status.includes("IN_PROGRESS") || status.includes("HALFTIME")) return "live";
+  if (status.includes("IN_PROGRESS") || status.includes("HALFTIME"))
+    return "live";
   return "pre";
 }
 
 // Box score → player stats array
-export async function fetchNFLBoxScore(gameId: string): Promise<{ playerName: string; position: string; stats: Partial<NFLGameLog> }[]> {
+export async function fetchNFLBoxScore(
+  gameId: string,
+): Promise<
+  { playerName: string; position: string; stats: Partial<NFLGameLog> }[]
+> {
   try {
     const res = await fetch(
       `https://site.api.espn.com/apis/site/v2/sports/football/nfl/summary?event=${gameId}`,
@@ -76,7 +81,11 @@ export async function fetchNFLBoxScore(gameId: string): Promise<{ playerName: st
     );
     if (!res.ok) return [];
     const data = await res.json();
-    const players: { playerName: string; position: string; stats: Partial<NFLGameLog> }[] = [];
+    const players: {
+      playerName: string;
+      position: string;
+      stats: Partial<NFLGameLog>;
+    }[] = [];
 
     // ESPN boxscore.players → array of teams → each has statistics by category
     for (const team of data.boxscore?.players ?? []) {
@@ -97,7 +106,9 @@ export async function fetchNFLBoxScore(gameId: string): Promise<{ playerName: st
               if (label === "YDS") stats.passYds = v;
               else if (label === "TD") stats.passTds = v;
               else if (label === "C/ATT") {
-                const [c, a] = String(values[i] ?? "0/0").split("/").map(Number);
+                const [c, a] = String(values[i] ?? "0/0")
+                  .split("/")
+                  .map(Number);
                 stats.passCompletions = c || 0;
                 stats.passAttempts = a || 0;
               }
@@ -115,7 +126,12 @@ export async function fetchNFLBoxScore(gameId: string): Promise<{ playerName: st
           // Merge if same player appears in multiple categories
           const existing = players.find((p) => p.playerName === name);
           if (existing) Object.assign(existing.stats, stats);
-          else players.push({ playerName: name, position: athlete.athlete?.position?.abbreviation ?? "", stats });
+          else
+            players.push({
+              playerName: name,
+              position: athlete.athlete?.position?.abbreviation ?? "",
+              stats,
+            });
         }
       }
     }
@@ -142,7 +158,9 @@ export async function searchNFLPlayer(name: string): Promise<string | null> {
 }
 
 // Season averages for a player by ESPN ID
-export async function fetchPlayerSeasonStats(playerId: string): Promise<NFLPlayerSeasonAvg | null> {
+export async function fetchPlayerSeasonStats(
+  playerId: string,
+): Promise<NFLPlayerSeasonAvg | null> {
   try {
     const res = await fetch(
       `https://site.api.espn.com/apis/common/v3/sports/football/nfl/athletes/${playerId}/statistics`,
@@ -152,9 +170,13 @@ export async function fetchPlayerSeasonStats(playerId: string): Promise<NFLPlaye
     const data = await res.json();
     const splits = data.splits?.categories ?? [];
     let games = 0;
-    let passYds = 0, passTds = 0, passAtt = 0;
-    let rushYds = 0, rushAtt = 0;
-    let rec = 0, recYds = 0;
+    let passYds = 0,
+      passTds = 0,
+      passAtt = 0;
+    let rushYds = 0,
+      rushAtt = 0;
+    let rec = 0,
+      recYds = 0;
     for (const cat of splits) {
       const stats = cat.stats ?? [];
       for (const s of stats) {

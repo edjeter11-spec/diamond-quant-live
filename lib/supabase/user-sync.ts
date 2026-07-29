@@ -8,22 +8,33 @@ import { supabase } from "./client";
 
 // Keys that are USER-PRIVATE (stored in user_state table)
 const PRIVATE_KEYS = new Set([
-  "bankroll", "betHistory", "savedParlays",
-  "smart_bot", "smart_bot_nba",
-  "user_clv_mlb", "user_clv_nba",
+  "bankroll",
+  "betHistory",
+  "savedParlays",
+  "smart_bot",
+  "smart_bot_nba",
+  "user_clv_mlb",
+  "user_clv_nba",
 ]);
 
 // Keys that are GLOBAL (stored in app_state table)
 const GLOBAL_KEYS = new Set([
-  "brain", "brain_nba", "elo_mlb", "elo_nba",
-  "model_accuracy", "clv_mlb", "clv_nba",
+  "brain",
+  "brain_nba",
+  "elo_mlb",
+  "elo_nba",
+  "model_accuracy",
+  "clv_mlb",
+  "clv_nba",
 ]);
 
 // ── Get current user ID from Supabase session ──
 async function getCurrentUserId(): Promise<string | null> {
   if (!supabase) return null;
   try {
-    const { data: { session } } = await supabase.auth.getSession();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
     return session?.user?.id ?? null;
   } catch {
     return null;
@@ -78,10 +89,12 @@ export async function userSet(key: string, value: any): Promise<void> {
   if (!supabase || !userId) return;
 
   try {
-    await supabase.from("user_state").upsert(
-      { user_id: userId, key, value, updated_at: new Date().toISOString() },
-      { onConflict: "user_id,key" }
-    );
+    await supabase
+      .from("user_state")
+      .upsert(
+        { user_id: userId, key, value, updated_at: new Date().toISOString() },
+        { onConflict: "user_id,key" },
+      );
   } catch {}
 }
 
@@ -107,7 +120,10 @@ export async function userGetAll(): Promise<Record<string, any>> {
 }
 
 // ── Migrate localStorage data to user_state on first login ──
-export async function migrateLocalToUser(): Promise<{ migrated: string[]; skipped: string[] }> {
+export async function migrateLocalToUser(): Promise<{
+  migrated: string[];
+  skipped: string[];
+}> {
   const userId = await getCurrentUserId();
   if (!supabase || !userId) return { migrated: [], skipped: [] };
 
@@ -117,7 +133,10 @@ export async function migrateLocalToUser(): Promise<{ migrated: string[]; skippe
   for (const key of PRIVATE_KEYS) {
     try {
       const localData = localStorage.getItem(`dq_${key}`);
-      if (!localData) { skipped.push(key); continue; }
+      if (!localData) {
+        skipped.push(key);
+        continue;
+      }
 
       // Check if user already has this key in cloud
       const { data: existing } = await supabase
@@ -127,7 +146,10 @@ export async function migrateLocalToUser(): Promise<{ migrated: string[]; skippe
         .eq("key", key)
         .single();
 
-      if (existing) { skipped.push(key); continue; }
+      if (existing) {
+        skipped.push(key);
+        continue;
+      }
 
       // Migrate
       const value = JSON.parse(localData);
@@ -160,5 +182,5 @@ export function isLoggedIn(): boolean {
   if (typeof window === "undefined") return false;
   // Check for Supabase auth token in localStorage
   const keys = Object.keys(localStorage);
-  return keys.some(k => k.startsWith("sb-") && k.endsWith("-auth-token"));
+  return keys.some((k) => k.startsWith("sb-") && k.endsWith("-auth-token"));
 }

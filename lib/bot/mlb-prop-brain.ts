@@ -5,18 +5,18 @@
 // ──────────────────────────────────────────────────────────
 
 export interface MLBPropWeights {
-  seasonAverage: number;    // baseline per-game rate
-  last10Avg: number;        // recent form (heavy in MLB — bats run hot/cold)
-  homeAway: number;         // home vs away splits
+  seasonAverage: number; // baseline per-game rate
+  last10Avg: number; // recent form (heavy in MLB — bats run hot/cold)
+  homeAway: number; // home vs away splits
   oppositionStrength: number; // opposing pitcher ERA / lineup strength
-  parkFactor: number;       // ballpark hitter-friendly / pitcher-friendly
-  restDays: number;         // pitcher rest, hitter back-to-back fatigue
-  lineMovement: number;     // sharp money signal
+  parkFactor: number; // ballpark hitter-friendly / pitcher-friendly
+  restDays: number; // pitcher rest, hitter back-to-back fatigue
+  lineMovement: number; // sharp money signal
 }
 
 const DEFAULT_WEIGHTS: MLBPropWeights = {
   seasonAverage: 0.22,
-  last10Avg: 0.28,        // recent form heaviest — MLB is streaky
+  last10Avg: 0.28, // recent form heaviest — MLB is streaky
   homeAway: 0.12,
   oppositionStrength: 0.18,
   parkFactor: 0.08,
@@ -36,7 +36,13 @@ export interface MLBMarketProfile {
 }
 
 function defaultMarketProfile(): MLBMarketProfile {
-  return { totalPredictions: 0, hits: 0, misses: 0, brierScore: 0.25, winRate: 50 };
+  return {
+    totalPredictions: 0,
+    hits: 0,
+    misses: 0,
+    brierScore: 0.25,
+    winRate: 50,
+  };
 }
 
 export interface MLBPlayerMemory {
@@ -45,7 +51,10 @@ export interface MLBPlayerMemory {
   totalPredictions: number;
   hits: number;
   winRate: number;
-  byPropType: Record<string, { predictions: number; hits: number; winRate: number }>;
+  byPropType: Record<
+    string,
+    { predictions: number; hits: number; winRate: number }
+  >;
   lastUpdated: string;
 }
 
@@ -78,7 +87,8 @@ export function repairWeights(w: MLBPropWeights): MLBPropWeights {
   // Normalize to sum to 1.0
   const sum = keys.reduce((s, k) => s + clamped[k], 0);
   if (sum > 0) {
-    for (const k of keys) clamped[k] = Math.round((clamped[k] / sum) * 10000) / 10000;
+    for (const k of keys)
+      clamped[k] = Math.round((clamped[k] / sum) * 10000) / 10000;
   }
   return clamped;
 }
@@ -113,13 +123,18 @@ export function createDefaultMLBBrain(): MLBPropBrainState {
 export async function loadMLBPropBrainFromCloud(): Promise<MLBPropBrainState> {
   try {
     const { cloudGet } = await import("@/lib/supabase/client");
-    const data = await cloudGet<MLBPropBrainState | null>("mlb_prop_brain", null);
+    const data = await cloudGet<MLBPropBrainState | null>(
+      "mlb_prop_brain",
+      null,
+    );
     if (data && data.version) return data;
   } catch {}
   return createDefaultMLBBrain();
 }
 
-export async function saveMLBPropBrainToCloud(brain: MLBPropBrainState): Promise<void> {
+export async function saveMLBPropBrainToCloud(
+  brain: MLBPropBrainState,
+): Promise<void> {
   try {
     const { cloudSet } = await import("@/lib/supabase/client");
     const trimmed = {
@@ -130,10 +145,16 @@ export async function saveMLBPropBrainToCloud(brain: MLBPropBrainState): Promise
   } catch {}
 }
 
-function trimPlayerMemory(mem: Record<string, MLBPlayerMemory>): Record<string, MLBPlayerMemory> {
+function trimPlayerMemory(
+  mem: Record<string, MLBPlayerMemory>,
+): Record<string, MLBPlayerMemory> {
   const entries = Object.entries(mem);
   if (entries.length <= PLAYER_CAP) return mem;
-  entries.sort((a, b) => new Date(b[1].lastUpdated).getTime() - new Date(a[1].lastUpdated).getTime());
+  entries.sort(
+    (a, b) =>
+      new Date(b[1].lastUpdated).getTime() -
+      new Date(a[1].lastUpdated).getTime(),
+  );
   const kept: Record<string, MLBPlayerMemory> = {};
   for (const [k, v] of entries.slice(0, PLAYER_CAP)) kept[k] = v;
   return kept;
@@ -160,22 +181,35 @@ export function learnFromMLBResult(
   // Update market profile
   const m = updated.markets[result.propType] ?? defaultMarketProfile();
   m.totalPredictions++;
-  if (result.hit) m.hits++; else m.misses++;
-  m.brierScore = ((m.brierScore * (m.totalPredictions - 1)) + Math.pow(result.predictedProb - (result.hit ? 1 : 0), 2)) / m.totalPredictions;
-  m.winRate = Math.round((m.hits / Math.max(m.totalPredictions, 1)) * 1000) / 10;
+  if (result.hit) m.hits++;
+  else m.misses++;
+  m.brierScore =
+    (m.brierScore * (m.totalPredictions - 1) +
+      Math.pow(result.predictedProb - (result.hit ? 1 : 0), 2)) /
+    m.totalPredictions;
+  m.winRate =
+    Math.round((m.hits / Math.max(m.totalPredictions, 1)) * 1000) / 10;
   updated.markets[result.propType] = m;
 
   // Update player memory
   const pid = result.playerName.toLowerCase().replace(/\s+/g, "_");
   const mem = updated.playerMemory[pid] ?? {
-    name: result.playerName, team: result.team,
-    totalPredictions: 0, hits: 0, winRate: 50,
-    byPropType: {}, lastUpdated: new Date().toISOString(),
+    name: result.playerName,
+    team: result.team,
+    totalPredictions: 0,
+    hits: 0,
+    winRate: 50,
+    byPropType: {},
+    lastUpdated: new Date().toISOString(),
   };
   mem.totalPredictions++;
   if (result.hit) mem.hits++;
   mem.winRate = Math.round((mem.hits / mem.totalPredictions) * 1000) / 10;
-  const bt = mem.byPropType[result.propType] ?? { predictions: 0, hits: 0, winRate: 50 };
+  const bt = mem.byPropType[result.propType] ?? {
+    predictions: 0,
+    hits: 0,
+    winRate: 50,
+  };
   bt.predictions++;
   if (result.hit) bt.hits++;
   bt.winRate = Math.round((bt.hits / bt.predictions) * 1000) / 10;
@@ -191,7 +225,10 @@ export function learnFromMLBResult(
     const k = f.name as keyof MLBPropWeights;
     // factor contribution * error → adjust weight in opposite direction
     const grad = -updated.learningRate * error * f.signal;
-    updated.weights[k] = Math.max(WEIGHT_FLOOR, Math.min(WEIGHT_CEILING, updated.weights[k] + grad));
+    updated.weights[k] = Math.max(
+      WEIGHT_FLOOR,
+      Math.min(WEIGHT_CEILING, updated.weights[k] + grad),
+    );
   }
   updated.weights = repairWeights(updated.weights);
 

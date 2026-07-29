@@ -22,10 +22,9 @@ export async function fetchTodayNHLGames(): Promise<any[]> {
   try {
     // NHL API uses YYYY-MM-DD format
     const today = new Date().toISOString().split("T")[0];
-    const res = await fetch(
-      `https://api-web.nhle.com/v1/schedule/${today}`,
-      { next: { revalidate: 300 } },
-    );
+    const res = await fetch(`https://api-web.nhle.com/v1/schedule/${today}`, {
+      next: { revalidate: 300 },
+    });
     if (!res.ok) return [];
     const data = await res.json();
     const games: any[] = [];
@@ -48,7 +47,21 @@ export function getNHLGameStatus(game: any): "pre" | "live" | "final" {
 }
 
 // Box score for a single game (NHL API)
-export async function fetchNHLBoxScore(gameId: string): Promise<{ playerName: string; team: string; position: string; stats: { goals: number; assists: number; points: number; shots: number; saves?: number; toi?: string } }[]> {
+export async function fetchNHLBoxScore(gameId: string): Promise<
+  {
+    playerName: string;
+    team: string;
+    position: string;
+    stats: {
+      goals: number;
+      assists: number;
+      points: number;
+      shots: number;
+      saves?: number;
+      toi?: string;
+    };
+  }[]
+> {
   try {
     const res = await fetch(
       `https://api-web.nhle.com/v1/gamecenter/${gameId}/boxscore`,
@@ -56,16 +69,27 @@ export async function fetchNHLBoxScore(gameId: string): Promise<{ playerName: st
     );
     if (!res.ok) return [];
     const data = await res.json();
-    const out: { playerName: string; team: string; position: string; stats: { goals: number; assists: number; points: number; shots: number; saves?: number; toi?: string } }[] = [];
+    const out: {
+      playerName: string;
+      team: string;
+      position: string;
+      stats: {
+        goals: number;
+        assists: number;
+        points: number;
+        shots: number;
+        saves?: number;
+        toi?: string;
+      };
+    }[] = [];
 
     const processSide = (side: any, teamAbbrev: string) => {
-      const all = [
-        ...(side?.forwards ?? []),
-        ...(side?.defense ?? []),
-      ];
+      const all = [...(side?.forwards ?? []), ...(side?.defense ?? [])];
       for (const p of all) {
         out.push({
-          playerName: p.name?.default ?? `${p.firstName?.default ?? ""} ${p.lastName?.default ?? ""}`.trim(),
+          playerName:
+            p.name?.default ??
+            `${p.firstName?.default ?? ""} ${p.lastName?.default ?? ""}`.trim(),
           team: teamAbbrev,
           position: p.position ?? "F",
           stats: {
@@ -79,7 +103,9 @@ export async function fetchNHLBoxScore(gameId: string): Promise<{ playerName: st
       }
       for (const g of side?.goalies ?? []) {
         out.push({
-          playerName: g.name?.default ?? `${g.firstName?.default ?? ""} ${g.lastName?.default ?? ""}`.trim(),
+          playerName:
+            g.name?.default ??
+            `${g.firstName?.default ?? ""} ${g.lastName?.default ?? ""}`.trim(),
           team: teamAbbrev,
           position: "G",
           stats: {

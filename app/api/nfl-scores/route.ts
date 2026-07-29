@@ -27,10 +27,18 @@ export async function GET() {
         venue: comp?.venue?.fullName ?? "",
       };
     });
-    return NextResponse.json({ games }, {
-      headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300" },
-    });
+    return NextResponse.json(
+      { games },
+      {
+        headers: {
+          "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300",
+        },
+      },
+    );
   } catch (e: any) {
-    return NextResponse.json({ games: [], error: e?.message ?? "fail" }, { status: 200 });
+    return NextResponse.json(
+      { games: [], error: e?.message ?? "fail" },
+      { status: 200 },
+    );
   }
 }

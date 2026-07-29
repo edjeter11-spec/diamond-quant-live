@@ -3,7 +3,17 @@
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/lib/supabase/auth";
 import AuthModal from "./AuthModal";
-import { User, LogOut, Settings, Crown, Copy, Check, ChevronDown, Brain, Trophy } from "lucide-react";
+import {
+  User,
+  LogOut,
+  Settings,
+  Crown,
+  Copy,
+  Check,
+  ChevronDown,
+  Brain,
+  Trophy,
+} from "lucide-react";
 
 export default function AuthButton() {
   const { user, profile, isAdmin, signOut, loading } = useAuth();
@@ -15,7 +25,10 @@ export default function AuthButton() {
   // Close dropdown on outside click
   useEffect(() => {
     function handleClick(e: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(e.target as Node)
+      ) {
         setShowDropdown(false);
       }
     }
@@ -32,7 +45,9 @@ export default function AuthButton() {
   };
 
   if (loading) {
-    return <div className="w-8 h-8 rounded-full bg-gunmetal/50 animate-pulse" />;
+    return (
+      <div className="w-8 h-8 rounded-full bg-gunmetal/50 animate-pulse" />
+    );
   }
 
   // Not logged in
@@ -52,7 +67,11 @@ export default function AuthButton() {
   }
 
   // Logged in
-  const initial = (profile?.display_name?.[0] || user.email?.[0] || "?").toUpperCase();
+  const initial = (
+    profile?.display_name?.[0] ||
+    user.email?.[0] ||
+    "?"
+  ).toUpperCase();
   const avatarUrl = profile?.avatar_url || user.user_metadata?.avatar_url;
 
   return (
@@ -62,13 +81,19 @@ export default function AuthButton() {
         className="flex items-center gap-1.5 px-1.5 py-1 rounded-lg hover:bg-gunmetal/50 transition-colors"
       >
         {avatarUrl ? (
-          <img src={avatarUrl} alt="" className="w-7 h-7 rounded-full border border-neon/30" />
+          <img
+            src={avatarUrl}
+            alt=""
+            className="w-7 h-7 rounded-full border border-neon/30"
+          />
         ) : (
           <div className="w-7 h-7 rounded-full bg-neon/20 border border-neon/30 flex items-center justify-center text-neon text-xs font-bold">
             {initial}
           </div>
         )}
-        <ChevronDown className={`w-3 h-3 text-mercury/50 transition-transform ${showDropdown ? "rotate-180" : ""}`} />
+        <ChevronDown
+          className={`w-3 h-3 text-mercury/50 transition-transform ${showDropdown ? "rotate-180" : ""}`}
+        />
       </button>
 
       {/* Dropdown */}
@@ -78,7 +103,11 @@ export default function AuthButton() {
           <div className="px-4 py-3 border-b border-slate/20">
             <div className="flex items-center gap-2">
               {avatarUrl ? (
-                <img src={avatarUrl} alt="" className="w-9 h-9 rounded-full border border-neon/30" />
+                <img
+                  src={avatarUrl}
+                  alt=""
+                  className="w-9 h-9 rounded-full border border-neon/30"
+                />
               ) : (
                 <div className="w-9 h-9 rounded-full bg-neon/20 border border-neon/30 flex items-center justify-center text-neon text-sm font-bold">
                   {initial}
@@ -86,10 +115,16 @@ export default function AuthButton() {
               )}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1">
-                  <p className="text-sm font-semibold text-silver truncate">{profile?.display_name || "User"}</p>
-                  {isAdmin && <Crown className="w-3 h-3 text-gold flex-shrink-0" />}
+                  <p className="text-sm font-semibold text-silver truncate">
+                    {profile?.display_name || "User"}
+                  </p>
+                  {isAdmin && (
+                    <Crown className="w-3 h-3 text-gold flex-shrink-0" />
+                  )}
                 </div>
-                <p className="text-[10px] text-mercury/50 truncate">{user.email}</p>
+                <p className="text-[10px] text-mercury/50 truncate">
+                  {user.email}
+                </p>
               </div>
             </div>
           </div>
@@ -97,17 +132,27 @@ export default function AuthButton() {
           {/* Invite code */}
           {profile?.invite_code && (
             <div className="px-4 py-2.5 border-b border-slate/20">
-              <p className="text-[9px] text-mercury/50 uppercase tracking-wider mb-1">Your Invite Code</p>
+              <p className="text-[9px] text-mercury/50 uppercase tracking-wider mb-1">
+                Your Invite Code
+              </p>
               <div className="flex items-center gap-2">
-                <code className="text-sm font-mono text-neon font-bold tracking-wider">{profile.invite_code}</code>
+                <code className="text-sm font-mono text-neon font-bold tracking-wider">
+                  {profile.invite_code}
+                </code>
                 <button
                   onClick={copyInviteCode}
                   className="p-1 rounded hover:bg-gunmetal/50 transition-colors"
                   title="Copy invite code"
                 >
-                  {copied ? <Check className="w-3.5 h-3.5 text-neon" /> : <Copy className="w-3.5 h-3.5 text-mercury/50" />}
+                  {copied ? (
+                    <Check className="w-3.5 h-3.5 text-neon" />
+                  ) : (
+                    <Copy className="w-3.5 h-3.5 text-mercury/50" />
+                  )}
                 </button>
-                <span className="text-[9px] text-mercury/40 ml-auto">{profile.invites_remaining} left</span>
+                <span className="text-[9px] text-mercury/40 ml-auto">
+                  {profile.invites_remaining} left
+                </span>
               </div>
             </div>
           )}
@@ -141,7 +186,10 @@ export default function AuthButton() {
               Settings
             </a>
             <button
-              onClick={() => { signOut(); setShowDropdown(false); }}
+              onClick={() => {
+                signOut();
+                setShowDropdown(false);
+              }}
               className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-danger hover:bg-danger/5 transition-colors"
             >
               <LogOut className="w-3.5 h-3.5" />

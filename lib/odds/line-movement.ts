@@ -12,13 +12,13 @@ const STEAM_WINDOW_MS = 2 * 60 * 60 * 1000; // 2h
 
 // ── Snapshot shape ──
 export interface OddsSnapshot {
-  ts: number;          // unix ms
-  homeML?: number;     // american
+  ts: number; // unix ms
+  homeML?: number; // american
   awayML?: number;
-  total?: number;      // O/U line
+  total?: number; // O/U line
   overPrice?: number;
   underPrice?: number;
-  spread?: number;     // home spread (pts)
+  spread?: number; // home spread (pts)
   spreadPrice?: number;
 }
 
@@ -26,11 +26,11 @@ export type MarketKey = "ml" | "spread" | "total";
 
 export interface LineMovement {
   direction: "home" | "away" | "over" | "under" | "stable";
-  magnitude: number;        // total movement, cents (ML) or points (spread/total)
-  isSteam: boolean;         // sharp move within window
-  openOdds: number;         // earliest captured price/line
-  movement: string;         // human description, e.g. "+15 to home"
-  ageMs: number;            // age of the open snapshot
+  magnitude: number; // total movement, cents (ML) or points (spread/total)
+  isSteam: boolean; // sharp move within window
+  openOdds: number; // earliest captured price/line
+  movement: string; // human description, e.g. "+15 to home"
+  ageMs: number; // age of the open snapshot
 }
 
 function snapKey(gameId: string, market: MarketKey): string {
@@ -49,7 +49,7 @@ export async function snapshotOdds(
   _sport: string,
   gameId: string,
   market: MarketKey,
-  odds: Partial<OddsSnapshot>
+  odds: Partial<OddsSnapshot>,
 ): Promise<void> {
   if (!gameId || !market) return;
   const key = snapKey(gameId, market);
@@ -60,7 +60,8 @@ export async function snapshotOdds(
 
     // De-dup: if last snap is identical & <60s old, skip write
     const last = arr[arr.length - 1];
-    if (last && Date.now() - last.ts < 60 * 1000 && shallowSameOdds(last, next)) return;
+    if (last && Date.now() - last.ts < 60 * 1000 && shallowSameOdds(last, next))
+      return;
 
     arr.push(next);
     while (arr.length > MAX_SNAPSHOTS) arr.shift(); // FIFO drop
@@ -71,9 +72,14 @@ export async function snapshotOdds(
 }
 
 function shallowSameOdds(a: OddsSnapshot, b: OddsSnapshot): boolean {
-  return a.homeML === b.homeML && a.awayML === b.awayML &&
-    a.total === b.total && a.overPrice === b.overPrice &&
-    a.underPrice === b.underPrice && a.spread === b.spread;
+  return (
+    a.homeML === b.homeML &&
+    a.awayML === b.awayML &&
+    a.total === b.total &&
+    a.overPrice === b.overPrice &&
+    a.underPrice === b.underPrice &&
+    a.spread === b.spread
+  );
 }
 
 // ── PUBLIC: getLineMovement ──
@@ -84,7 +90,7 @@ function shallowSameOdds(a: OddsSnapshot, b: OddsSnapshot): boolean {
 export async function getLineMovement(
   gameId: string,
   market: MarketKey,
-  currentOdds: Partial<OddsSnapshot>
+  currentOdds: Partial<OddsSnapshot>,
 ): Promise<LineMovement> {
   const key = snapKey(gameId, market);
   let snaps: OddsSnapshot[] = [];
@@ -95,7 +101,14 @@ export async function getLineMovement(
   }
 
   if (!Array.isArray(snaps) || snaps.length === 0) {
-    return { direction: "stable", magnitude: 0, isSteam: false, openOdds: 0, movement: "no history", ageMs: 0 };
+    return {
+      direction: "stable",
+      magnitude: 0,
+      isSteam: false,
+      openOdds: 0,
+      movement: "no history",
+      ageMs: 0,
+    };
   }
 
   const open = snaps[0];
@@ -120,12 +133,21 @@ export async function getLineMovement(
     else if (awayShorten >= 5 && awayShorten > homeShorten) direction = "away";
 
     const isSteam = inSteamWindow && magnitude >= 15 && direction !== "stable";
-    const sign = (direction === "home" ? homeShorten : awayShorten) >= 0 ? "+" : "-";
-    const movement = direction === "stable"
-      ? `flat (open ${openHome >= 0 ? "+" : ""}${openHome}/${openAway >= 0 ? "+" : ""}${openAway})`
-      : `${sign}${Math.abs(direction === "home" ? homeShorten : awayShorten)}c to ${direction}`;
+    const sign =
+      (direction === "home" ? homeShorten : awayShorten) >= 0 ? "+" : "-";
+    const movement =
+      direction === "stable"
+        ? `flat (open ${openHome >= 0 ? "+" : ""}${openHome}/${openAway >= 0 ? "+" : ""}${openAway})`
+        : `${sign}${Math.abs(direction === "home" ? homeShorten : awayShorten)}c to ${direction}`;
 
-    return { direction, magnitude, isSteam, openOdds: openHome, movement, ageMs };
+    return {
+      direction,
+      magnitude,
+      isSteam,
+      openOdds: openHome,
+      movement,
+      ageMs,
+    };
   }
 
   if (market === "spread") {
@@ -137,10 +159,18 @@ export async function getLineMovement(
     if (delta <= -0.5) direction = "home";
     else if (delta >= 0.5) direction = "away";
     const isSteam = inSteamWindow && magnitude >= 1.0 && direction !== "stable";
-    const movement = direction === "stable"
-      ? `flat (${openSpread > 0 ? "+" : ""}${openSpread})`
-      : `${delta > 0 ? "+" : ""}${delta.toFixed(1)} to ${direction}`;
-    return { direction, magnitude, isSteam, openOdds: openSpread, movement, ageMs };
+    const movement =
+      direction === "stable"
+        ? `flat (${openSpread > 0 ? "+" : ""}${openSpread})`
+        : `${delta > 0 ? "+" : ""}${delta.toFixed(1)} to ${direction}`;
+    return {
+      direction,
+      magnitude,
+      isSteam,
+      openOdds: openSpread,
+      movement,
+      ageMs,
+    };
   }
 
   // total
@@ -152,10 +182,18 @@ export async function getLineMovement(
   if (delta >= 0.5) direction = "over";
   else if (delta <= -0.5) direction = "under";
   const isSteam = inSteamWindow && magnitude >= 1.0 && direction !== "stable";
-  const movement = direction === "stable"
-    ? `flat (${openTotal})`
-    : `${delta > 0 ? "+" : ""}${delta.toFixed(1)} to ${direction}`;
-  return { direction, magnitude, isSteam, openOdds: openTotal, movement, ageMs };
+  const movement =
+    direction === "stable"
+      ? `flat (${openTotal})`
+      : `${delta > 0 ? "+" : ""}${delta.toFixed(1)} to ${direction}`;
+  return {
+    direction,
+    magnitude,
+    isSteam,
+    openOdds: openTotal,
+    movement,
+    ageMs,
+  };
 }
 
 // ── PUBLIC: detectSteamMoves ──
@@ -181,15 +219,25 @@ export async function detectSteamMoves(allGames: any[]): Promise<SteamGame[]> {
 
       try {
         const [ml, spread, total] = await Promise.all([
-          getLineMovement(id, "ml", { homeML: first.homeML, awayML: first.awayML }),
+          getLineMovement(id, "ml", {
+            homeML: first.homeML,
+            awayML: first.awayML,
+          }),
           getLineMovement(id, "spread", { spread: first.homeSpread }),
-          getLineMovement(id, "total", { total: first.total, overPrice: first.overPrice, underPrice: first.underPrice }),
+          getLineMovement(id, "total", {
+            total: first.total,
+            overPrice: first.overPrice,
+            underPrice: first.underPrice,
+          }),
         ]);
-        if (ml.isSteam) results.push({ gameId: id, market: "ml", movement: ml });
-        if (spread.isSteam) results.push({ gameId: id, market: "spread", movement: spread });
-        if (total.isSteam) results.push({ gameId: id, market: "total", movement: total });
+        if (ml.isSteam)
+          results.push({ gameId: id, market: "ml", movement: ml });
+        if (spread.isSteam)
+          results.push({ gameId: id, market: "spread", movement: spread });
+        if (total.isSteam)
+          results.push({ gameId: id, market: "total", movement: total });
       } catch {}
-    })
+    }),
   );
 
   return results;
@@ -201,7 +249,17 @@ export function snapshotGameMarkets(gameId: string, oddsLines: any[]): void {
   if (!gameId || !Array.isArray(oddsLines) || oddsLines.length === 0) return;
   const first = oddsLines[0];
   // Don't await — fire-and-forget
-  void snapshotOdds("", gameId, "ml", { homeML: first.homeML, awayML: first.awayML });
-  void snapshotOdds("", gameId, "spread", { spread: first.homeSpread, spreadPrice: first.spreadPrice });
-  void snapshotOdds("", gameId, "total", { total: first.total, overPrice: first.overPrice, underPrice: first.underPrice });
+  void snapshotOdds("", gameId, "ml", {
+    homeML: first.homeML,
+    awayML: first.awayML,
+  });
+  void snapshotOdds("", gameId, "spread", {
+    spread: first.homeSpread,
+    spreadPrice: first.spreadPrice,
+  });
+  void snapshotOdds("", gameId, "total", {
+    total: first.total,
+    overPrice: first.overPrice,
+    underPrice: first.underPrice,
+  });
 }

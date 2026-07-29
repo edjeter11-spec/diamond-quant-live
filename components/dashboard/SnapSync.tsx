@@ -4,7 +4,13 @@ import { useState, useRef, useCallback } from "react";
 import { useStore } from "@/lib/store";
 import { americanToDecimal } from "@/lib/model/kelly";
 import {
-  Camera, Upload, CheckCircle, RefreshCw, AlertTriangle, Image as ImageIcon, Zap,
+  Camera,
+  Upload,
+  CheckCircle,
+  RefreshCw,
+  AlertTriangle,
+  Image as ImageIcon,
+  Zap,
 } from "lucide-react";
 
 interface ScannedSlip {
@@ -24,7 +30,9 @@ interface ScannedSlip {
 
 export default function SnapSync() {
   const { addBet, settleBet, betHistory } = useStore();
-  const [mode, setMode] = useState<"idle" | "scanning" | "review" | "success" | "error">("idle");
+  const [mode, setMode] = useState<
+    "idle" | "scanning" | "review" | "success" | "error"
+  >("idle");
   const [slip, setSlip] = useState<ScannedSlip | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState("");
@@ -55,7 +63,8 @@ export default function SnapSync() {
           setSlip(data.slip);
           setMode("review");
         } else {
-          const errText = data.error ?? "Couldn't read the slip — try a clearer screenshot";
+          const errText =
+            data.error ?? "Couldn't read the slip — try a clearer screenshot";
           setErrorMsg(String(errText).slice(0, 200));
           setMode("error");
         }
@@ -67,23 +76,29 @@ export default function SnapSync() {
     reader.readAsDataURL(file);
   }, []);
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    const file = e.dataTransfer.files[0];
-    if (file && file.type.startsWith("image/")) handleFile(file);
-  }, [handleFile]);
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      const file = e.dataTransfer.files[0];
+      if (file && file.type.startsWith("image/")) handleFile(file);
+    },
+    [handleFile],
+  );
 
-  const handlePaste = useCallback((e: React.ClipboardEvent) => {
-    const items = e.clipboardData?.items;
-    if (!items) return;
-    for (const item of Array.from(items)) {
-      if (item.type.startsWith("image/")) {
-        const file = item.getAsFile();
-        if (file) handleFile(file);
-        break;
+  const handlePaste = useCallback(
+    (e: React.ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (const item of Array.from(items)) {
+        if (item.type.startsWith("image/")) {
+          const file = item.getAsFile();
+          if (file) handleFile(file);
+          break;
+        }
       }
-    }
-  }, [handleFile]);
+    },
+    [handleFile],
+  );
 
   const confirmBet = () => {
     if (!slip) return;
@@ -91,24 +106,27 @@ export default function SnapSync() {
     // Gemini returns status as "pending" | "won" | "lost" — map to our internal type
     const rawStatus = (slip.status ?? "pending").toLowerCase();
     const detectedResult: "pending" | "win" | "loss" | "push" =
-      rawStatus === "won" || rawStatus === "win" ? "win"
-      : rawStatus === "lost" || rawStatus === "loss" ? "loss"
-      : rawStatus === "push" ? "push"
-      : "pending";
+      rawStatus === "won" || rawStatus === "win"
+        ? "win"
+        : rawStatus === "lost" || rawStatus === "loss"
+          ? "loss"
+          : rawStatus === "push"
+            ? "push"
+            : "pending";
 
     const isParlay = slip.betType === "parlay" && slip.legs.length > 1;
     const bet = isParlay
       ? {
-          game: slip.legs.map(l => l.game).join(" + "),
+          game: slip.legs.map((l) => l.game).join(" + "),
           market: "parlay",
-          pick: slip.legs.map(l => l.pick).join(" / "),
+          pick: slip.legs.map((l) => l.pick).join(" / "),
           bookmaker: slip.sportsbook ?? "Unknown",
           odds: slip.odds,
           stake: slip.stake,
           result: "pending" as const,
           payout: 0,
           isParlay: true,
-          parlayLegs: slip.legs.map(l => l.pick),
+          parlayLegs: slip.legs.map((l) => l.pick),
           evAtPlacement: 0,
         }
       : {
@@ -132,18 +150,19 @@ export default function SnapSync() {
         const { betHistory: latest } = useStore.getState();
         const just = latest[latest.length - 1];
         if (just) {
-          const payout = detectedResult === "win"
-            ? bet.stake * americanToDecimal(bet.odds)
-            : detectedResult === "push"
-              ? bet.stake
-              : 0;
+          const payout =
+            detectedResult === "win"
+              ? bet.stake * americanToDecimal(bet.odds)
+              : detectedResult === "push"
+                ? bet.stake
+                : 0;
           settleBet(just.id, detectedResult, payout);
           setSuccessMsg(
             detectedResult === "win"
               ? `Win logged — +$${(payout - bet.stake).toFixed(2)} to bankroll`
               : detectedResult === "loss"
                 ? `Loss logged — -$${bet.stake.toFixed(2)} from bankroll`
-                : "Push logged — stake returned"
+                : "Push logged — stake returned",
           );
         }
       }, 50);
@@ -177,8 +196,12 @@ export default function SnapSync() {
       <div className="px-4 py-3 border-b border-slate/50 flex items-center gap-2">
         <Camera className="w-5 h-5 text-electric" />
         <div>
-          <h3 className="text-sm font-semibold text-silver uppercase tracking-wide">Snap & Sync</h3>
-          <p className="text-[10px] text-mercury/60">Screenshot your bet slip — AI reads it instantly</p>
+          <h3 className="text-sm font-semibold text-silver uppercase tracking-wide">
+            Snap & Sync
+          </h3>
+          <p className="text-[10px] text-mercury/60">
+            Screenshot your bet slip — AI reads it instantly
+          </p>
         </div>
       </div>
 
@@ -192,8 +215,12 @@ export default function SnapSync() {
           >
             <div className="text-center mb-4">
               <Upload className="w-7 h-7 text-mercury/30 mx-auto mb-1.5" />
-              <p className="text-xs text-mercury font-medium">Import a bet slip to your bankroll</p>
-              <p className="text-[10px] text-mercury/50 mt-0.5">AI reads it, auto-settles wins/losses, and syncs across devices</p>
+              <p className="text-xs text-mercury font-medium">
+                Import a bet slip to your bankroll
+              </p>
+              <p className="text-[10px] text-mercury/50 mt-0.5">
+                AI reads it, auto-settles wins/losses, and syncs across devices
+              </p>
             </div>
 
             <div className="grid grid-cols-2 gap-2 mb-2">
@@ -248,12 +275,20 @@ export default function SnapSync() {
           <div className="text-center py-6">
             {preview && (
               <div className="w-32 h-32 mx-auto mb-3 rounded-lg overflow-hidden border border-slate/30">
-                <img src={preview} alt="Scanning" className="w-full h-full object-cover opacity-50" />
+                <img
+                  src={preview}
+                  alt="Scanning"
+                  className="w-full h-full object-cover opacity-50"
+                />
               </div>
             )}
             <RefreshCw className="w-6 h-6 text-electric animate-spin mx-auto mb-2" />
-            <p className="text-sm text-electric font-medium">Reading your bet slip...</p>
-            <p className="text-[10px] text-mercury/50 mt-1">AI is extracting teams, odds, and stakes</p>
+            <p className="text-sm text-electric font-medium">
+              Reading your bet slip...
+            </p>
+            <p className="text-[10px] text-mercury/50 mt-1">
+              AI is extracting teams, odds, and stakes
+            </p>
           </div>
         )}
 
@@ -263,14 +298,22 @@ export default function SnapSync() {
             <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-electric/5 border border-electric/15">
               <Zap className="w-4 h-4 text-electric" />
               <p className="text-xs text-electric font-medium flex-1">
-                Found a {slip.legs.length > 1 ? `${slip.legs.length}-leg parlay` : "straight bet"} on {slip.sportsbook ?? "Unknown"}
+                Found a{" "}
+                {slip.legs.length > 1
+                  ? `${slip.legs.length}-leg parlay`
+                  : "straight bet"}{" "}
+                on {slip.sportsbook ?? "Unknown"}
               </p>
               {slip.status && slip.status !== "pending" && (
-                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
-                  slip.status === "won" ? "bg-neon/20 text-neon" :
-                  slip.status === "lost" ? "bg-danger/20 text-danger" :
-                  "bg-mercury/20 text-mercury"
-                }`}>
+                <span
+                  className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                    slip.status === "won"
+                      ? "bg-neon/20 text-neon"
+                      : slip.status === "lost"
+                        ? "bg-danger/20 text-danger"
+                        : "bg-mercury/20 text-mercury"
+                  }`}
+                >
                   {slip.status.toUpperCase()}
                 </span>
               )}
@@ -278,16 +321,20 @@ export default function SnapSync() {
 
             {/* Result override — let user correct detected status */}
             <div className="flex items-center gap-1.5">
-              <span className="text-[10px] text-mercury/60 uppercase tracking-wider flex-shrink-0">Result:</span>
+              <span className="text-[10px] text-mercury/60 uppercase tracking-wider flex-shrink-0">
+                Result:
+              </span>
               {(["pending", "won", "lost"] as const).map((s) => (
                 <button
                   key={s}
                   onClick={() => setSlip({ ...slip, status: s })}
                   className={`flex-1 py-1 rounded text-[10px] font-semibold border transition-colors ${
                     slip.status === s
-                      ? s === "won" ? "bg-neon/20 border-neon/40 text-neon"
-                        : s === "lost" ? "bg-danger/20 border-danger/40 text-danger"
-                        : "bg-amber/20 border-amber/40 text-amber"
+                      ? s === "won"
+                        ? "bg-neon/20 border-neon/40 text-neon"
+                        : s === "lost"
+                          ? "bg-danger/20 border-danger/40 text-danger"
+                          : "bg-amber/20 border-amber/40 text-amber"
                       : "bg-gunmetal/40 border-slate/30 text-mercury/70 hover:border-electric/30"
                   }`}
                 >
@@ -299,35 +346,52 @@ export default function SnapSync() {
             {/* Slip preview */}
             <div className="rounded-lg bg-gunmetal/30 p-3 space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-xs text-mercury uppercase">{slip.sportsbook}</span>
-                <span className="text-xs font-mono text-silver">{slip.betType?.toUpperCase()}</span>
+                <span className="text-xs text-mercury uppercase">
+                  {slip.sportsbook}
+                </span>
+                <span className="text-xs font-mono text-silver">
+                  {slip.betType?.toUpperCase()}
+                </span>
               </div>
 
               {slip.legs.map((leg, i) => (
-                <div key={i} className="flex items-center gap-2 px-2 py-1.5 rounded bg-bunker/50">
+                <div
+                  key={i}
+                  className="flex items-center gap-2 px-2 py-1.5 rounded bg-bunker/50"
+                >
                   <span className="w-4 h-4 rounded-full bg-electric/15 text-electric text-[9px] font-bold flex items-center justify-center flex-shrink-0">
                     {i + 1}
                   </span>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs text-silver truncate">{leg.pick}</p>
-                    <p className="text-[9px] text-mercury/60 truncate">{leg.game} • {leg.market}</p>
+                    <p className="text-[9px] text-mercury/60 truncate">
+                      {leg.game} • {leg.market}
+                    </p>
                   </div>
-                  <span className="text-xs font-mono text-silver">{formatOdds(leg.odds)}</span>
+                  <span className="text-xs font-mono text-silver">
+                    {formatOdds(leg.odds)}
+                  </span>
                 </div>
               ))}
 
               <div className="flex items-center justify-between pt-2 border-t border-slate/20">
                 <div>
                   <p className="text-[9px] text-mercury">Risk</p>
-                  <p className="text-sm font-mono font-bold text-silver">${slip.stake}</p>
+                  <p className="text-sm font-mono font-bold text-silver">
+                    ${slip.stake}
+                  </p>
                 </div>
                 <div className="text-center">
                   <p className="text-[9px] text-mercury">Odds</p>
-                  <p className="text-sm font-mono font-bold text-electric">{formatOdds(slip.odds)}</p>
+                  <p className="text-sm font-mono font-bold text-electric">
+                    {formatOdds(slip.odds)}
+                  </p>
                 </div>
                 <div className="text-right">
                   <p className="text-[9px] text-mercury">To Win</p>
-                  <p className="text-sm font-mono font-bold text-neon">${slip.toWin}</p>
+                  <p className="text-sm font-mono font-bold text-neon">
+                    ${slip.toWin}
+                  </p>
                 </div>
               </div>
             </div>
@@ -356,7 +420,9 @@ export default function SnapSync() {
           <div className="text-center py-6 animate-slide-up">
             <CheckCircle className="w-10 h-10 text-neon mx-auto mb-2" />
             <p className="text-sm text-neon font-semibold">Bet logged!</p>
-            <p className="text-[10px] text-mercury/60 mt-1">{successMsg || "Added to your bankroll — syncs across devices"}</p>
+            <p className="text-[10px] text-mercury/60 mt-1">
+              {successMsg || "Added to your bankroll — syncs across devices"}
+            </p>
           </div>
         )}
 
@@ -365,7 +431,10 @@ export default function SnapSync() {
           <div className="text-center py-6">
             <AlertTriangle className="w-8 h-8 text-danger/50 mx-auto mb-2" />
             <p className="text-sm text-danger">{errorMsg}</p>
-            <button onClick={reset} className="mt-3 px-4 py-2 rounded-lg bg-gunmetal/50 text-mercury text-xs hover:bg-gunmetal/70 transition-colors">
+            <button
+              onClick={reset}
+              className="mt-3 px-4 py-2 rounded-lg bg-gunmetal/50 text-mercury text-xs hover:bg-gunmetal/70 transition-colors"
+            >
               Try Again
             </button>
           </div>

@@ -16,23 +16,30 @@ export default function Error({
     // Auto-recover: try resetting once on first paint. If the underlying
     // problem was transient (sport-tab switch with stale state), this masks it.
     const t = setTimeout(() => {
-      try { reset(); } catch {}
+      try {
+        reset();
+      } catch {}
     }, 100);
     return () => clearTimeout(t);
   }, [error, reset]);
 
   return (
-    <div className="min-h-screen bg-void flex items-center justify-center px-6">
+    <div className="min-h-screen flex items-center justify-center px-6">
       <div className="max-w-md w-full text-center">
         <div className="w-16 h-16 rounded-2xl bg-danger/10 border border-danger/25 flex items-center justify-center mx-auto mb-6">
           <AlertTriangle className="w-8 h-8 text-danger" />
         </div>
-        <h1 className="text-xl font-semibold text-silver mb-2">Something broke</h1>
+        <h1 className="text-xl font-semibold text-silver mb-2">
+          Something broke
+        </h1>
         <p className="text-sm text-mercury/70 mb-2">
-          We hit an unexpected error. Try reloading — if it keeps happening, take a screenshot and tell us.
+          We hit an unexpected error. Try reloading — if it keeps happening,
+          take a screenshot and tell us.
         </p>
         {error?.digest && (
-          <p className="text-[10px] text-mercury/40 font-mono mb-6">ref: {error.digest}</p>
+          <p className="text-[10px] text-mercury/40 font-mono mb-6">
+            ref: {error.digest}
+          </p>
         )}
         <div className="flex items-center justify-center gap-3 mt-6">
           <button

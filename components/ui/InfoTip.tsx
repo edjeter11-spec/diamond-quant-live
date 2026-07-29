@@ -61,7 +61,10 @@ export default function InfoTip({
       {children}
       <button
         type="button"
-        onClick={(e) => { e.stopPropagation(); setOpen(o => !o); }}
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((o) => !o);
+        }}
         onMouseEnter={() => setOpen(true)}
         onMouseLeave={() => setOpen(false)}
         className="inline-flex items-center justify-center min-w-[44px] min-h-[32px] -mx-2 -my-1 px-2 py-1 text-mercury/40 hover:text-electric transition-colors"
@@ -74,8 +77,12 @@ export default function InfoTip({
           className="absolute z-50 left-1/2 -translate-x-1/2 top-full mt-1.5 w-64 rounded-lg border border-slate/40 bg-bunker/95 backdrop-blur-md shadow-xl p-2.5 text-left pointer-events-none"
           role="tooltip"
         >
-          <span className="block text-[11px] font-semibold text-electric mb-0.5">{entry.title}</span>
-          <span className="block text-[10px] text-mercury/80 leading-relaxed normal-case">{entry.body}</span>
+          <span className="block text-[11px] font-semibold text-electric mb-0.5">
+            {entry.title}
+          </span>
+          <span className="block text-[10px] text-mercury/80 leading-relaxed normal-case">
+            {entry.body}
+          </span>
         </span>
       )}
     </span>

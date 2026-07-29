@@ -7,12 +7,17 @@ import { createClient } from "@supabase/supabase-js";
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
 
-export const supabase = supabaseUrl && supabaseKey
-  ? createClient(supabaseUrl, supabaseKey)
-  : null;
+export const supabase =
+  supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
 
 export interface RoomUpdate {
-  type: "lineup_change" | "pitching_change" | "weather_update" | "odds_alert" | "chat" | "parlay_shared";
+  type:
+    | "lineup_change"
+    | "pitching_change"
+    | "weather_update"
+    | "odds_alert"
+    | "chat"
+    | "parlay_shared";
   userId: string;
   userName: string;
   data: any;
@@ -35,7 +40,9 @@ export function subscribeToRoom(
   userId: string,
   userName: string,
   onUpdate: (update: RoomUpdate) => void,
-  onPresence: (users: Array<{ id: string; name: string; isOnline: boolean }>) => void
+  onPresence: (
+    users: Array<{ id: string; name: string; isOnline: boolean }>,
+  ) => void,
 ) {
   if (!supabase) {
     console.warn("Supabase not configured — room features disabled");
@@ -64,7 +71,10 @@ export function subscribeToRoom(
   // Subscribe and track presence
   channel.subscribe(async (status) => {
     if (status === "SUBSCRIBED") {
-      await channel.track({ name: userName, joinedAt: new Date().toISOString() });
+      await channel.track({
+        name: userName,
+        joinedAt: new Date().toISOString(),
+      });
     }
   });
 
@@ -72,10 +82,7 @@ export function subscribeToRoom(
 }
 
 // Send an update to the room
-export function sendRoomUpdate(
-  roomId: string,
-  update: RoomUpdate
-) {
+export function sendRoomUpdate(roomId: string, update: RoomUpdate) {
   if (!supabase) return;
 
   const channel = supabase.channel(`room:${roomId}`);
@@ -91,7 +98,7 @@ export function shareParlay(
   roomId: string,
   userId: string,
   userName: string,
-  parlay: any
+  parlay: any,
 ) {
   sendRoomUpdate(roomId, {
     type: "parlay_shared",

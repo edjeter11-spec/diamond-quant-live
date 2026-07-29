@@ -4,8 +4,19 @@ import { useState, useEffect } from "react";
 import { useStore } from "@/lib/store";
 import { useMemo } from "react";
 import {
-  Trophy, Brain, Target, ChevronDown, ArrowUpRight, ArrowDownRight,
-  Star, Flame, CircleDot, TrendingUp, Clock, RefreshCw, Zap,
+  Trophy,
+  Brain,
+  Target,
+  ChevronDown,
+  ArrowUpRight,
+  ArrowDownRight,
+  Star,
+  Flame,
+  CircleDot,
+  TrendingUp,
+  Clock,
+  RefreshCw,
+  Zap,
 } from "lucide-react";
 import { getDeepLink } from "@/lib/odds/sportsbooks";
 import { getConfidenceTier } from "@/lib/ui/confidence-tier";
@@ -58,8 +69,10 @@ export default function TopPropsOfDay() {
   const playerTeamMap = useMemo(() => {
     const map = new Map<string, string>();
     for (const s of scores) {
-      if (s.homePitcher && s.homePitcher !== "TBD") map.set(s.homePitcher.toLowerCase(), s.homeAbbrev);
-      if (s.awayPitcher && s.awayPitcher !== "TBD") map.set(s.awayPitcher.toLowerCase(), s.awayAbbrev);
+      if (s.homePitcher && s.homePitcher !== "TBD")
+        map.set(s.homePitcher.toLowerCase(), s.homeAbbrev);
+      if (s.awayPitcher && s.awayPitcher !== "TBD")
+        map.set(s.awayPitcher.toLowerCase(), s.awayAbbrev);
     }
     return map;
   }, [scores]);
@@ -69,7 +82,11 @@ export default function TopPropsOfDay() {
     if (found) return found;
     // Fallback: show first team abbreviation from game
     const parts = (gameStr ?? "").split(" @ ");
-    return parts.map(t => t.split(" ").pop()?.slice(0, 3).toUpperCase()).join("/") || "?";
+    return (
+      parts
+        .map((t) => t.split(" ").pop()?.slice(0, 3).toUpperCase())
+        .join("/") || "?"
+    );
   }
   const [topProps, setTopProps] = useState<PropAnalysis[]>([]);
   const [loading, setLoading] = useState(true);
@@ -92,8 +109,10 @@ export default function TopPropsOfDay() {
     try {
       const results = await Promise.all(
         markets.map((m) =>
-          fetch(`/api/players?market=${m}`).then((r) => r.json()).catch(() => ({ props: [] }))
-        )
+          fetch(`/api/players?market=${m}`)
+            .then((r) => r.json())
+            .catch(() => ({ props: [] })),
+        ),
       );
 
       const allProps: Array<{ prop: any; market: string }> = [];
@@ -118,7 +137,7 @@ export default function TopPropsOfDay() {
         const pick = scored[i];
         try {
           const res = await fetch(
-            `/api/player-analysis?name=${encodeURIComponent(pick.playerName)}&market=${pick.market}&line=${pick.line}`
+            `/api/player-analysis?name=${encodeURIComponent(pick.playerName)}&market=${pick.market}&line=${pick.line}`,
           );
           if (res.ok) {
             const analysis = await res.json();
@@ -126,17 +145,39 @@ export default function TopPropsOfDay() {
             const gameLog = analysis.last10Games ?? [];
             const statKey = isPitcher ? "strikeouts" : "hitsB";
             const values = gameLog.map((g: any) => g[statKey] ?? 0);
-            const avg = values.length > 0 ? values.reduce((a: number, b: number) => a + b, 0) / values.length : 0;
-            const overCount = values.filter((v: number) => v > pick.line).length;
+            const avg =
+              values.length > 0
+                ? values.reduce((a: number, b: number) => a + b, 0) /
+                  values.length
+                : 0;
+            const overCount = values.filter(
+              (v: number) => v > pick.line,
+            ).length;
 
             pick.stats.last10Avg = Math.round(avg * 100) / 100;
-            pick.stats.hitRate = values.length > 0 ? Math.round((overCount / values.length) * 100) : 50;
+            pick.stats.hitRate =
+              values.length > 0
+                ? Math.round((overCount / values.length) * 100)
+                : 50;
 
             const last5 = values.slice(-5);
             const first5 = values.slice(0, 5);
-            const avgLast5 = last5.length > 0 ? last5.reduce((a: number, b: number) => a + b, 0) / last5.length : 0;
-            const avgFirst5 = first5.length > 0 ? first5.reduce((a: number, b: number) => a + b, 0) / first5.length : 0;
-            pick.stats.trend = avgLast5 > avgFirst5 + 0.2 ? "up" : avgLast5 < avgFirst5 - 0.2 ? "down" : "flat";
+            const avgLast5 =
+              last5.length > 0
+                ? last5.reduce((a: number, b: number) => a + b, 0) /
+                  last5.length
+                : 0;
+            const avgFirst5 =
+              first5.length > 0
+                ? first5.reduce((a: number, b: number) => a + b, 0) /
+                  first5.length
+                : 0;
+            pick.stats.trend =
+              avgLast5 > avgFirst5 + 0.2
+                ? "up"
+                : avgLast5 < avgFirst5 - 0.2
+                  ? "down"
+                  : "flat";
 
             pick.reasoning = buildDetailedReasoning(pick, analysis);
             pick.aiSummary = buildAISummary(pick, analysis);
@@ -151,7 +192,10 @@ export default function TopPropsOfDay() {
               } else if (side === "under" || side === "lean_under") {
                 pick.recommendation = "UNDER";
               }
-              pick.confidence = Math.max(pick.confidence, analysis.recommendation.confidence);
+              pick.confidence = Math.max(
+                pick.confidence,
+                analysis.recommendation.confidence,
+              );
             }
           }
         } catch {}
@@ -170,7 +214,9 @@ export default function TopPropsOfDay() {
     return (
       <div className="glass rounded-xl p-6 text-center">
         <RefreshCw className="w-5 h-5 text-gold/30 animate-spin mx-auto mb-2" />
-        <p className="text-xs text-mercury">Analyzing player props across all markets...</p>
+        <p className="text-xs text-mercury">
+          Analyzing player props across all markets...
+        </p>
       </div>
     );
   }
@@ -181,7 +227,9 @@ export default function TopPropsOfDay() {
       <div className="glass rounded-xl p-6 text-center">
         <Trophy className="w-6 h-6 text-mercury/20 mx-auto mb-2" />
         <p className="text-sm text-mercury">No prop picks available yet</p>
-        <p className="text-[10px] text-mercury/50 mt-1">Books haven't posted enough lines for analysis</p>
+        <p className="text-[10px] text-mercury/50 mt-1">
+          Books haven't posted enough lines for analysis
+        </p>
       </div>
     );
   }
@@ -196,11 +244,20 @@ export default function TopPropsOfDay() {
       <div className="px-3 sm:px-4 py-3 border-b border-gold/15 bg-gold/5 flex items-center gap-2">
         <Trophy className="w-5 h-5 text-gold" />
         <div className="flex-1">
-          <h2 className="text-sm font-bold text-silver uppercase tracking-wider">Top 5 Player Props</h2>
-          <p className="text-[9px] text-mercury/60">AI-analyzed picks across all prop markets today</p>
+          <h2 className="text-sm font-bold text-silver uppercase tracking-wider">
+            Top 5 Player Props
+          </h2>
+          <p className="text-[9px] text-mercury/60">
+            AI-analyzed picks across all prop markets today
+          </p>
         </div>
-        <button onClick={buildTopProps} className="p-1.5 hover:bg-gunmetal/30 rounded transition-colors">
-          <RefreshCw className={`w-3.5 h-3.5 text-mercury ${loading ? "animate-spin" : ""}`} />
+        <button
+          onClick={buildTopProps}
+          className="p-1.5 hover:bg-gunmetal/30 rounded transition-colors"
+        >
+          <RefreshCw
+            className={`w-3.5 h-3.5 text-mercury ${loading ? "animate-spin" : ""}`}
+          />
         </button>
       </div>
 
@@ -219,25 +276,43 @@ export default function TopPropsOfDay() {
                 className="w-full px-3 sm:px-4 py-3 flex items-center gap-2 hover:bg-gunmetal/20 active:bg-gunmetal/30 transition-colors text-left"
               >
                 {/* Rank */}
-                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${
-                  i < 3 ? "bg-gold/15 text-gold" : "bg-gunmetal text-mercury"
-                }`}>
+                <div
+                  className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${
+                    i < 3 ? "bg-gold/15 text-gold" : "bg-gunmetal text-mercury"
+                  }`}
+                >
                   {pick.rank}
                 </div>
 
                 {/* Player + Market */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5">
-                    <MarketIcon className={`w-3 h-3 ${isOver ? "text-neon" : "text-purple"} flex-shrink-0`} />
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-electric/15 text-electric font-bold flex-shrink-0">{getTeamAbbrev(pick.playerName, pick.team)}</span>
-                    <p className="text-xs sm:text-sm font-semibold text-silver truncate">{pick.playerName}</p>
+                    <MarketIcon
+                      className={`w-3 h-3 ${isOver ? "text-neon" : "text-purple"} flex-shrink-0`}
+                    />
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-electric/15 text-electric font-bold flex-shrink-0">
+                      {getTeamAbbrev(pick.playerName, pick.team)}
+                    </span>
+                    <p className="text-xs sm:text-sm font-semibold text-silver truncate">
+                      {pick.playerName}
+                    </p>
                   </div>
                   <p className="text-[9px] sm:text-[10px] text-mercury/60 flex items-center gap-1.5 flex-wrap">
                     {pick.gameTime && (
                       <span className="text-mercury/80">
-                        {new Date(pick.gameTime).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} — </span>
+                        {new Date(pick.gameTime).toLocaleString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                          hour: "numeric",
+                          minute: "2-digit",
+                        })}{" "}
+                        —{" "}
+                      </span>
                     )}
-                    <span>{MARKET_LABELS[pick.market] ?? pick.market} — {pick.recommendation} {pick.line}</span>
+                    <span>
+                      {MARKET_LABELS[pick.market] ?? pick.market} —{" "}
+                      {pick.recommendation} {pick.line}
+                    </span>
                     {pick.isSynthesized && (
                       <span
                         className="inline-flex items-center px-1 py-0.5 rounded bg-electric/15 border border-electric/30 text-electric text-[8px] font-bold"
@@ -251,7 +326,9 @@ export default function TopPropsOfDay() {
 
                 {/* Odds + Confidence */}
                 <div className="text-right flex-shrink-0">
-                  <p className={`text-xs font-mono font-bold ${isOver ? "text-neon" : "text-purple"}`}>
+                  <p
+                    className={`text-xs font-mono font-bold ${isOver ? "text-neon" : "text-purple"}`}
+                  >
                     {pick.recommendation} {formatOdds(pick.bestOdds)}
                   </p>
                   {(() => {
@@ -259,15 +336,22 @@ export default function TopPropsOfDay() {
                     return (
                       <div className="flex items-center gap-1 justify-end">
                         <div className="w-8 h-1 bg-gunmetal rounded-full overflow-hidden">
-                          <div className={`h-full rounded-full ${tier.bar}`} style={{ width: `${pick.confidence}%` }} />
+                          <div
+                            className={`h-full rounded-full ${tier.bar}`}
+                            style={{ width: `${pick.confidence}%` }}
+                          />
                         </div>
-                        <span className={`text-[9px] ${tier.text}`}>{pick.confidence}%</span>
+                        <span className={`text-[9px] ${tier.text}`}>
+                          {pick.confidence}%
+                        </span>
                       </div>
                     );
                   })()}
                 </div>
 
-                <ChevronDown className={`w-3.5 h-3.5 text-mercury/40 flex-shrink-0 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+                <ChevronDown
+                  className={`w-3.5 h-3.5 text-mercury/40 flex-shrink-0 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                />
               </button>
 
               {/* Expanded Detail */}
@@ -276,34 +360,56 @@ export default function TopPropsOfDay() {
                   {/* AI Summary */}
                   <div className="flex gap-2 p-3 rounded-lg bg-electric/5 border border-electric/15">
                     <Brain className="w-4 h-4 text-electric flex-shrink-0 mt-0.5" />
-                    <p className="text-[11px] text-silver leading-relaxed">{pick.aiSummary}</p>
+                    <p className="text-[11px] text-silver leading-relaxed">
+                      {pick.aiSummary}
+                    </p>
                   </div>
 
                   {/* Quick Stats */}
                   <div className="grid grid-cols-4 gap-1.5">
                     <div className="text-center p-1.5 rounded bg-gunmetal/40">
-                      <p className="text-sm font-bold font-mono text-silver">{pick.stats.last10Avg}</p>
-                      <p className="text-[8px] text-mercury uppercase">L10 Avg</p>
+                      <p className="text-sm font-bold font-mono text-silver">
+                        {pick.stats.last10Avg}
+                      </p>
+                      <p className="text-[8px] text-mercury uppercase">
+                        L10 Avg
+                      </p>
                     </div>
                     <div className="text-center p-1.5 rounded bg-gunmetal/40">
-                      <p className={`text-sm font-bold font-mono ${pick.stats.hitRate > 55 ? "text-neon" : pick.stats.hitRate < 45 ? "text-danger" : "text-silver"}`}>
+                      <p
+                        className={`text-sm font-bold font-mono ${pick.stats.hitRate > 55 ? "text-neon" : pick.stats.hitRate < 45 ? "text-danger" : "text-silver"}`}
+                      >
                         {pick.stats.hitRate}%
                       </p>
-                      <p className="text-[8px] text-mercury uppercase">Hit Rate</p>
+                      <p className="text-[8px] text-mercury uppercase">
+                        Hit Rate
+                      </p>
                     </div>
                     <div className="text-center p-1.5 rounded bg-gunmetal/40">
-                      <p className={`text-sm font-bold font-mono ${pick.evEdge > 3 ? "text-neon" : "text-silver"}`}>
+                      <p
+                        className={`text-sm font-bold font-mono ${pick.evEdge > 3 ? "text-neon" : "text-silver"}`}
+                      >
                         +{(pick.evEdge ?? 0).toFixed(1)}%
                       </p>
-                      <p className="text-[8px] text-mercury uppercase">EV Edge</p>
+                      <p className="text-[8px] text-mercury uppercase">
+                        EV Edge
+                      </p>
                     </div>
                     {(() => {
                       const fp = pick.fairProb ?? 50;
                       const tier = getConfidenceTier(fp);
                       return (
-                        <div className={`text-center p-1.5 rounded border ${tier.bg} ${tier.border}`}>
-                          <p className={`text-sm font-bold font-mono ${tier.text}`}>{fp.toFixed(0)}%</p>
-                          <p className="text-[8px] text-mercury uppercase">Fair Prob</p>
+                        <div
+                          className={`text-center p-1.5 rounded border ${tier.bg} ${tier.border}`}
+                        >
+                          <p
+                            className={`text-sm font-bold font-mono ${tier.text}`}
+                          >
+                            {fp.toFixed(0)}%
+                          </p>
+                          <p className="text-[8px] text-mercury uppercase">
+                            Fair Prob
+                          </p>
                         </div>
                       );
                     })()}
@@ -312,10 +418,20 @@ export default function TopPropsOfDay() {
                   {/* Trend */}
                   <div className="flex items-center gap-2 px-2">
                     <span className="text-[10px] text-mercury">Trend:</span>
-                    <span className={`text-[10px] font-semibold ${
-                      pick.stats.trend === "up" ? "text-neon" : pick.stats.trend === "down" ? "text-danger" : "text-mercury"
-                    }`}>
-                      {pick.stats.trend === "up" ? "Trending UP" : pick.stats.trend === "down" ? "Trending DOWN" : "Steady"}
+                    <span
+                      className={`text-[10px] font-semibold ${
+                        pick.stats.trend === "up"
+                          ? "text-neon"
+                          : pick.stats.trend === "down"
+                            ? "text-danger"
+                            : "text-mercury"
+                      }`}
+                    >
+                      {pick.stats.trend === "up"
+                        ? "Trending UP"
+                        : pick.stats.trend === "down"
+                          ? "Trending DOWN"
+                          : "Steady"}
                     </span>
                   </div>
 
@@ -326,8 +442,11 @@ export default function TopPropsOfDay() {
                     </p>
                     <div className="space-y-1">
                       {pick.reasoning.map((r, ri) => (
-                        <p key={ri} className="text-[11px] text-mercury flex gap-1.5">
-                          <span className="text-neon font-bold">{'>'}</span> {r}
+                        <p
+                          key={ri}
+                          className="text-[11px] text-mercury flex gap-1.5"
+                        >
+                          <span className="text-neon font-bold">{">"}</span> {r}
                         </p>
                       ))}
                     </div>
@@ -364,7 +483,11 @@ export default function TopPropsOfDay() {
                           : "bg-purple/10 border border-purple/20 text-purple hover:bg-purple/20"
                       }`}
                     >
-                      {isOver ? <ArrowUpRight className="w-3.5 h-3.5" /> : <ArrowDownRight className="w-3.5 h-3.5" />}
+                      {isOver ? (
+                        <ArrowUpRight className="w-3.5 h-3.5" />
+                      ) : (
+                        <ArrowDownRight className="w-3.5 h-3.5" />
+                      )}
                       Add to Parlay
                     </button>
                   </div>
@@ -390,15 +513,19 @@ function scoreAndAnalyzeProp(prop: any, market: string): PropAnalysis | null {
 
   // Determine which side has more value
   const isOver = overProb > 0.52;
-  const side = isOver ? "OVER" as const : "UNDER" as const;
+  const side = isOver ? ("OVER" as const) : ("UNDER" as const);
   const bestOdds = isOver ? prop.bestOver.price : prop.bestUnder.price;
   const bestBook = isOver ? prop.bestOver.bookmaker : prop.bestUnder.bookmaker;
   const fairProb = isOver ? overProb : underProb;
 
   // EV edge — with safety for bad odds data
   if (bestOdds === 0 || !isFinite(bestOdds)) return null;
-  const impliedProb = bestOdds > 0 ? 100 / (bestOdds + 100) : Math.abs(bestOdds) / (Math.abs(bestOdds) + 100);
-  if (impliedProb <= 0 || impliedProb >= 1 || !isFinite(impliedProb)) return null;
+  const impliedProb =
+    bestOdds > 0
+      ? 100 / (bestOdds + 100)
+      : Math.abs(bestOdds) / (Math.abs(bestOdds) + 100);
+  if (impliedProb <= 0 || impliedProb >= 1 || !isFinite(impliedProb))
+    return null;
   const evEdge = ((fairProb - impliedProb) / impliedProb) * 100;
   if (!isFinite(evEdge)) return null;
 
@@ -407,7 +534,7 @@ function scoreAndAnalyzeProp(prop: any, market: string): PropAnalysis | null {
   const probDeviation = Math.abs(fairProb - 0.5) * 100;
   const confidence = Math.min(
     Math.max(Math.round(evEdge * 3 + probDeviation * 2 + bookCount * 5), 0),
-    90
+    90,
   );
 
   if (confidence < 15) return null;
@@ -429,7 +556,9 @@ function scoreAndAnalyzeProp(prop: any, market: string): PropAnalysis | null {
     reasoning: [
       `Fair probability: ${(fairProb * 100).toFixed(1)}% ${side} (de-vigged from ${bookCount} books)`,
       `Best price: ${bestOdds > 0 ? "+" : ""}${bestOdds} at ${bestBook}`,
-      evEdge > 3 ? `Strong +${evEdge.toFixed(1)}% edge over market` : `+${evEdge.toFixed(1)}% edge`,
+      evEdge > 3
+        ? `Strong +${evEdge.toFixed(1)}% edge over market`
+        : `+${evEdge.toFixed(1)}% edge`,
     ],
     aiSummary: `The model favors ${side} ${prop.line} ${MARKET_LABELS[market] ?? market} for ${prop.playerName}. Best available at ${bestBook}.`,
     stats: {
@@ -450,24 +579,34 @@ function buildDetailedReasoning(pick: PropAnalysis, analysis: any): string[] {
   if (pick.stats.last10Avg > 0) {
     const diff = pick.stats.last10Avg - pick.line;
     if (isOver && diff > 0) {
-      r.push(`Averaging ${pick.stats.last10Avg} ${ml} over last 10 games — ${Math.abs(diff).toFixed(1)} above the ${pick.line} line`);
+      r.push(
+        `Averaging ${pick.stats.last10Avg} ${ml} over last 10 games — ${Math.abs(diff).toFixed(1)} above the ${pick.line} line`,
+      );
     } else if (!isOver && diff < 0) {
-      r.push(`Averaging ${pick.stats.last10Avg} ${ml} over last 10 games — ${Math.abs(diff).toFixed(1)} below the ${pick.line} line`);
+      r.push(
+        `Averaging ${pick.stats.last10Avg} ${ml} over last 10 games — ${Math.abs(diff).toFixed(1)} below the ${pick.line} line`,
+      );
     } else {
-      r.push(`Averaging ${pick.stats.last10Avg} ${ml} over last 10 games (line: ${pick.line})`);
+      r.push(
+        `Averaging ${pick.stats.last10Avg} ${ml} over last 10 games (line: ${pick.line})`,
+      );
     }
   }
 
   // Hit rate
   if (pick.stats.hitRate > 60) {
-    r.push(`Hit the ${isOver ? "over" : "under"} in ${pick.stats.hitRate}% of recent games — strong consistency`);
+    r.push(
+      `Hit the ${isOver ? "over" : "under"} in ${pick.stats.hitRate}% of recent games — strong consistency`,
+    );
   } else if (pick.stats.hitRate > 50) {
     r.push(`Over rate: ${pick.stats.hitRate}% in recent games`);
   }
 
   // Trend
   if (pick.stats.trend === "up" && isOver) {
-    r.push("Trending upward — recent performance better than earlier in the stretch");
+    r.push(
+      "Trending upward — recent performance better than earlier in the stretch",
+    );
   } else if (pick.stats.trend === "down" && !isOver) {
     r.push("Trending downward — supports the under");
   }
@@ -475,18 +614,26 @@ function buildDetailedReasoning(pick: PropAnalysis, analysis: any): string[] {
   // Season stats context
   if (analysis.player) {
     if (analysis.player.k9 && analysis.player.k9 > 9) {
-      r.push(`Elite strikeout rate: ${analysis.player.k9.toFixed(1)} K/9 this season`);
+      r.push(
+        `Elite strikeout rate: ${analysis.player.k9.toFixed(1)} K/9 this season`,
+      );
     }
-    if (analysis.player.avg && analysis.player.avg > 0.290) {
-      r.push(`Batting ${analysis.player.avg.toFixed(3)} — well above league average`);
+    if (analysis.player.avg && analysis.player.avg > 0.29) {
+      r.push(
+        `Batting ${analysis.player.avg.toFixed(3)} — well above league average`,
+      );
     }
-    if (analysis.player.ops && analysis.player.ops > 0.850) {
-      r.push(`${analysis.player.ops.toFixed(3)} OPS — big power numbers support total bases`);
+    if (analysis.player.ops && analysis.player.ops > 0.85) {
+      r.push(
+        `${analysis.player.ops.toFixed(3)} OPS — big power numbers support total bases`,
+      );
     }
   }
 
   // EV edge
-  r.push(`${pick.evEdge > 3 ? "Strong" : "Positive"} +${pick.evEdge.toFixed(1)}% EV edge at ${pick.bestBook} (${pick.bestOdds > 0 ? "+" : ""}${pick.bestOdds})`);
+  r.push(
+    `${pick.evEdge > 3 ? "Strong" : "Positive"} +${pick.evEdge.toFixed(1)}% EV edge at ${pick.bestBook} (${pick.bestOdds > 0 ? "+" : ""}${pick.bestOdds})`,
+  );
 
   return r;
 }

@@ -9,17 +9,22 @@ const DISMISS_KEY = "dq_conv_banner_dismissed_v1";
 
 export default function ConversionBanner() {
   const { user, profile, loading } = useAuth();
-  const [stats, setStats] = useState<{ winRate: number; recent: number } | null>(null);
+  const [stats, setStats] = useState<{
+    winRate: number;
+    recent: number;
+  } | null>(null);
   const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
-    try { setDismissed(localStorage.getItem(DISMISS_KEY) === "true"); } catch {}
+    try {
+      setDismissed(localStorage.getItem(DISMISS_KEY) === "true");
+    } catch {}
   }, []);
 
   useEffect(() => {
     fetch("/api/prop-history?sport=nba&limit=200")
-      .then(r => r.json())
-      .then(d => {
+      .then((r) => r.json())
+      .then((d) => {
         if (d.ok && d.stats?.graded > 0) {
           setStats({ winRate: d.stats.winRate, recent: d.stats.graded });
         }
@@ -31,7 +36,9 @@ export default function ConversionBanner() {
   if (profile?.is_premium || profile?.is_admin) return null;
 
   const handleDismiss = () => {
-    try { localStorage.setItem(DISMISS_KEY, "true"); } catch {}
+    try {
+      localStorage.setItem(DISMISS_KEY, "true");
+    } catch {}
     setDismissed(true);
   };
 
@@ -43,12 +50,18 @@ export default function ConversionBanner() {
           <p className="text-xs text-silver">
             {stats && stats.recent > 5 ? (
               <>
-                <span className="font-bold text-gold">{stats.winRate}%</span> win rate on last {stats.recent} graded prop picks.{" "}
-                <span className="text-mercury/70">Pro unlocks all picks + brain stats + parlay builder.</span>
+                <span className="font-bold text-gold">{stats.winRate}%</span>{" "}
+                win rate on last {stats.recent} graded prop picks.{" "}
+                <span className="text-mercury/70">
+                  Pro unlocks all picks + brain stats + parlay builder.
+                </span>
               </>
             ) : (
               <>
-                <span className="font-bold text-gold">Pro unlocks everything</span> — full prop list, AI brain stats, parlay builder, arb alerts.{" "}
+                <span className="font-bold text-gold">
+                  Pro unlocks everything
+                </span>{" "}
+                — full prop list, AI brain stats, parlay builder, arb alerts.{" "}
                 <span className="text-mercury/70">7-day free trial.</span>
               </>
             )}

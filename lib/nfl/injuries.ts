@@ -53,7 +53,9 @@ export async function fetchNFLInjuries(): Promise<NFLInjuryReport[]> {
   }
 }
 
-export async function isNFLPlayerInjured(playerName: string): Promise<NFLInjuredPlayer | null> {
+export async function isNFLPlayerInjured(
+  playerName: string,
+): Promise<NFLInjuredPlayer | null> {
   const reports = await fetchNFLInjuries();
   const lower = playerName.toLowerCase();
   for (const team of reports) {
@@ -64,17 +66,26 @@ export async function isNFLPlayerInjured(playerName: string): Promise<NFLInjured
   return null;
 }
 
-export async function getNFLTeamInjuries(teamAbbrev: string): Promise<NFLInjuredPlayer[]> {
+export async function getNFLTeamInjuries(
+  teamAbbrev: string,
+): Promise<NFLInjuredPlayer[]> {
   const reports = await fetchNFLInjuries();
-  const team = reports.find((r) => r.team.toUpperCase() === teamAbbrev.toUpperCase());
+  const team = reports.find(
+    (r) => r.team.toUpperCase() === teamAbbrev.toUpperCase(),
+  );
   return team?.players ?? [];
 }
 
 // Convert injury status → projection impact (multiplier on the player's projection)
-export function nflInjuryImpact(status: string): { skipProjection: boolean; multiplier: number } {
+export function nflInjuryImpact(status: string): {
+  skipProjection: boolean;
+  multiplier: number;
+} {
   const s = status.toLowerCase();
-  if (s.includes("out") || s.includes("ir")) return { skipProjection: true, multiplier: 0 };
+  if (s.includes("out") || s.includes("ir"))
+    return { skipProjection: true, multiplier: 0 };
   if (s.includes("doubtful")) return { skipProjection: true, multiplier: 0.4 };
-  if (s.includes("questionable")) return { skipProjection: false, multiplier: 0.85 };
+  if (s.includes("questionable"))
+    return { skipProjection: false, multiplier: 0.85 };
   return { skipProjection: false, multiplier: 1 };
 }

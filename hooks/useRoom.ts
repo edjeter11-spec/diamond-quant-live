@@ -2,7 +2,12 @@
 
 import { useEffect, useRef, useCallback } from "react";
 import { useStore } from "@/lib/store";
-import { subscribeToRoom, sendRoomUpdate, generateRoomCode, type RoomUpdate } from "@/lib/realtime/supabase";
+import {
+  subscribeToRoom,
+  sendRoomUpdate,
+  generateRoomCode,
+  type RoomUpdate,
+} from "@/lib/realtime/supabase";
 
 export function useRoom(userName: string = "User") {
   const { roomId, setRoomId, setRoomUsers } = useStore();
@@ -15,9 +20,12 @@ export function useRoom(userName: string = "User") {
     return code;
   }, [setRoomId]);
 
-  const joinRoom = useCallback((code: string) => {
-    setRoomId(code);
-  }, [setRoomId]);
+  const joinRoom = useCallback(
+    (code: string) => {
+      setRoomId(code);
+    },
+    [setRoomId],
+  );
 
   const leaveRoom = useCallback(() => {
     if (channelRef.current) {
@@ -28,15 +36,18 @@ export function useRoom(userName: string = "User") {
     setRoomUsers([]);
   }, [setRoomId, setRoomUsers]);
 
-  const sendUpdate = useCallback((update: Omit<RoomUpdate, "userId" | "userName" | "timestamp">) => {
-    if (!roomId) return;
-    sendRoomUpdate(roomId, {
-      ...update,
-      userId: userIdRef.current,
-      userName,
-      timestamp: new Date().toISOString(),
-    });
-  }, [roomId, userName]);
+  const sendUpdate = useCallback(
+    (update: Omit<RoomUpdate, "userId" | "userName" | "timestamp">) => {
+      if (!roomId) return;
+      sendRoomUpdate(roomId, {
+        ...update,
+        userId: userIdRef.current,
+        userName,
+        timestamp: new Date().toISOString(),
+      });
+    },
+    [roomId, userName],
+  );
 
   useEffect(() => {
     if (!roomId) return;
@@ -50,7 +61,7 @@ export function useRoom(userName: string = "User") {
       },
       (users) => {
         setRoomUsers(users);
-      }
+      },
     );
 
     channelRef.current = channel;

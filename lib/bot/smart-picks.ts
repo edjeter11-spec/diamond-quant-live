@@ -3,7 +3,11 @@
 // Also handles auto-learning and per-model accuracy tracking
 // ──────────────────────────────────────────────────────────
 
-import { americanToDecimal, americanToImpliedProb, kellyStake } from "@/lib/model/kelly";
+import {
+  americanToDecimal,
+  americanToImpliedProb,
+  kellyStake,
+} from "@/lib/model/kelly";
 import { loadBrain, saveBrain, learnFromGame, type BrainState } from "./brain";
 import type { GameAnalysis, GamePick } from "./three-models";
 
@@ -28,7 +32,9 @@ export function loadModelAccuracy(): ModelAccuracy {
 
 export function saveModelAccuracy(acc: ModelAccuracy) {
   if (typeof window !== "undefined") {
-    try { localStorage.setItem("dq_model_accuracy", JSON.stringify(acc)); } catch {}
+    try {
+      localStorage.setItem("dq_model_accuracy", JSON.stringify(acc));
+    } catch {}
   }
   // Cloud sync
   syncAccuracyToCloud(acc);
@@ -91,7 +97,8 @@ const STARTING_BANKROLL = 5000;
 
 // Sport-aware load/save — MLB and NBA have separate bot states
 export function loadSmartBot(sport: string = "mlb"): SmartBotState {
-  if (typeof window === "undefined") return { bankroll: STARTING_BANKROLL, picks: [], dailyPnL: {} };
+  if (typeof window === "undefined")
+    return { bankroll: STARTING_BANKROLL, picks: [], dailyPnL: {} };
   const key = sport === "nba" ? "dq_smart_bot_nba" : "dq_smart_bot";
   try {
     const stored = localStorage.getItem(key);
@@ -103,12 +110,17 @@ export function loadSmartBot(sport: string = "mlb"): SmartBotState {
 export function saveSmartBot(state: SmartBotState, sport: string = "mlb") {
   if (typeof window !== "undefined") {
     const key = sport === "nba" ? "dq_smart_bot_nba" : "dq_smart_bot";
-    try { localStorage.setItem(key, JSON.stringify(state)); } catch {}
+    try {
+      localStorage.setItem(key, JSON.stringify(state));
+    } catch {}
   }
   syncSmartBotToCloud(state, sport);
 }
 
-async function syncSmartBotToCloud(state: SmartBotState, sport: string = "mlb") {
+async function syncSmartBotToCloud(
+  state: SmartBotState,
+  sport: string = "mlb",
+) {
   try {
     const { cloudSet } = await import("@/lib/supabase/client");
     const cloudKey = sport === "nba" ? "smart_bot_nba" : "smart_bot";
@@ -120,20 +132,23 @@ async function syncSmartBotToCloud(state: SmartBotState, sport: string = "mlb") 
 
 export function generateSmartPicks(
   analyses: GameAnalysis[],
-  bankroll: number
+  bankroll: number,
 ): SmartBotPick[] {
   const today = new Date().toISOString().split("T")[0];
 
   // Sort: HIGH confidence first, then MEDIUM, then by consensus probability strength
   const ranked = [...analyses]
-    .filter(a => a.consensus.confidence !== "NO_PLAY")
+    .filter((a) => a.consensus.confidence !== "NO_PLAY")
     .sort((a, b) => {
       const confOrder: Record<string, number> = { HIGH: 0, MEDIUM: 1, LOW: 2 };
       const aConf = confOrder[a.consensus.confidence] ?? 2;
       const bConf = confOrder[b.consensus.confidence] ?? 2;
       if (aConf !== bConf) return aConf - bConf;
       // Within same confidence, pick the one with strongest probability lean
-      return Math.abs(b.consensus.homeWinProb - 0.5) - Math.abs(a.consensus.homeWinProb - 0.5);
+      return (
+        Math.abs(b.consensus.homeWinProb - 0.5) -
+        Math.abs(a.consensus.homeWinProb - 0.5)
+      );
     });
 
   const picks: SmartBotPick[] = [];
@@ -146,11 +161,13 @@ export function generateSmartPicks(
     usedGames.add(gameName);
 
     // Decide side
-    const isHome = game.consensus.homeWinProb > 0.50;
+    const isHome = game.consensus.homeWinProb > 0.5;
     const pickTeam = isHome ? game.homeTeam : game.awayTeam;
     const pickOdds = isHome ? game.bestHomeML : game.bestAwayML;
     const pickBook = isHome ? game.bestHomeBook : game.bestAwayBook;
-    const fairProb = isHome ? game.consensus.homeWinProb : 1 - game.consensus.homeWinProb;
+    const fairProb = isHome
+      ? game.consensus.homeWinProb
+      : 1 - game.consensus.homeWinProb;
 
     if (pickOdds === -999 || pickOdds === 0) continue;
 
@@ -164,8 +181,12 @@ export function generateSmartPicks(
       `Market Model: ${(game.marketModel.homeWinProb * 100).toFixed(0)}% home — ${game.marketModel.factors[0] ?? ""}`,
       `Elo Power: ${(game.trendModel.homeWinProb * 100).toFixed(0)}% home — ${game.trendModel.factors[0] ?? ""}`,
       `Consensus: ${(game.consensus.homeWinProb * 100).toFixed(1)}% home | Models ${game.consensus.modelsAgree ? "AGREE" : "DISAGREE"}`,
-      game.homePitcher ? `Home: ${game.homePitcher.name} (${game.homePitcher.era} ERA, ${game.homePitcher.whip} WHIP)` : "",
-      game.awayPitcher ? `Away: ${game.awayPitcher.name} (${game.awayPitcher.era} ERA, ${game.awayPitcher.whip} WHIP)` : "",
+      game.homePitcher
+        ? `Home: ${game.homePitcher.name} (${game.homePitcher.era} ERA, ${game.homePitcher.whip} WHIP)`
+        : "",
+      game.awayPitcher
+        ? `Away: ${game.awayPitcher.name} (${game.awayPitcher.era} ERA, ${game.awayPitcher.whip} WHIP)`
+        : "",
     ].filter(Boolean);
 
     picks.push({
@@ -197,17 +218,20 @@ export function generateSmartPicks(
 export function settleAndLearn(
   botState: SmartBotState,
   scores: any[],
-  sport: string = "mlb"
+  sport: string = "mlb",
 ): { botState: SmartBotState; accuracy: ModelAccuracy } {
   let accuracy = loadModelAccuracy();
   let changed = false;
 
-  const updatedPicks = botState.picks.map(pick => {
+  const updatedPicks = botState.picks.map((pick) => {
     if (pick.result !== "pending") return pick;
 
-    const norm = (s: string | undefined | null) => (s ?? "").toLowerCase().trim();
+    const norm = (s: string | undefined | null) =>
+      (s ?? "").toLowerCase().trim();
     const teamMatch = (pickTeam: string, fullName: string, abbrev: string) => {
-      const a = norm(pickTeam), f = norm(fullName), ab = norm(abbrev);
+      const a = norm(pickTeam),
+        f = norm(fullName),
+        ab = norm(abbrev);
       if (!a) return false;
       if (ab && a === ab) return true;
       if (f && (f.includes(a) || a.includes(f))) return true;
@@ -234,8 +258,12 @@ export function settleAndLearn(
     // Determine result
     let result: SmartBotPick["result"] = "loss";
     let payout = 0;
-    const pickedHome = pick.pick.includes(score.homeTeam) || pick.pick.includes(score.homeAbbrev);
-    const pickedAway = pick.pick.includes(score.awayTeam) || pick.pick.includes(score.awayAbbrev);
+    const pickedHome =
+      pick.pick.includes(score.homeTeam) ||
+      pick.pick.includes(score.homeAbbrev);
+    const pickedAway =
+      pick.pick.includes(score.awayTeam) ||
+      pick.pick.includes(score.awayAbbrev);
 
     if ((pickedHome && homeWon) || (pickedAway && awayWon)) {
       result = "win";
@@ -260,19 +288,26 @@ export function settleAndLearn(
     // Update per-model accuracy
     accuracy.pitcher.total++;
     if (pitcherCorrect) accuracy.pitcher.correct++;
-    accuracy.pitcher.winRate = Math.round((accuracy.pitcher.correct / accuracy.pitcher.total) * 1000) / 10;
+    accuracy.pitcher.winRate =
+      Math.round((accuracy.pitcher.correct / accuracy.pitcher.total) * 1000) /
+      10;
 
     accuracy.market.total++;
     if (marketCorrect) accuracy.market.correct++;
-    accuracy.market.winRate = Math.round((accuracy.market.correct / accuracy.market.total) * 1000) / 10;
+    accuracy.market.winRate =
+      Math.round((accuracy.market.correct / accuracy.market.total) * 1000) / 10;
 
     accuracy.trend.total++;
     if (trendCorrect) accuracy.trend.correct++;
-    accuracy.trend.winRate = Math.round((accuracy.trend.correct / accuracy.trend.total) * 1000) / 10;
+    accuracy.trend.winRate =
+      Math.round((accuracy.trend.correct / accuracy.trend.total) * 1000) / 10;
 
     accuracy.consensus.total++;
     if (consensusCorrect) accuracy.consensus.correct++;
-    accuracy.consensus.winRate = Math.round((accuracy.consensus.correct / accuracy.consensus.total) * 1000) / 10;
+    accuracy.consensus.winRate =
+      Math.round(
+        (accuracy.consensus.correct / accuracy.consensus.total) * 1000,
+      ) / 10;
 
     accuracy.lastUpdated = new Date().toISOString();
 
@@ -305,13 +340,18 @@ export function settleAndLearn(
 
   // Recalculate bankroll
   const totalStaked = updatedPicks.reduce((s, p) => s + p.stake, 0);
-  const totalReturns = updatedPicks.filter(p => p.result !== "pending").reduce((s, p) => s + p.payout, 0);
-  const pendingStake = updatedPicks.filter(p => p.result === "pending").reduce((s, p) => s + p.stake, 0);
+  const totalReturns = updatedPicks
+    .filter((p) => p.result !== "pending")
+    .reduce((s, p) => s + p.payout, 0);
+  const pendingStake = updatedPicks
+    .filter((p) => p.result === "pending")
+    .reduce((s, p) => s + p.stake, 0);
 
   // Daily P&L
   const dailyPnL: Record<string, number> = {};
-  for (const pick of updatedPicks.filter(p => p.result !== "pending")) {
-    dailyPnL[pick.date] = (dailyPnL[pick.date] ?? 0) + (pick.payout - pick.stake);
+  for (const pick of updatedPicks.filter((p) => p.result !== "pending")) {
+    dailyPnL[pick.date] =
+      (dailyPnL[pick.date] ?? 0) + (pick.payout - pick.stake);
   }
 
   const newState: SmartBotState = {

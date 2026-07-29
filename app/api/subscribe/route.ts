@@ -30,22 +30,36 @@ function rateLimit(ip: string): boolean {
 
 export async function POST(req: NextRequest) {
   try {
-    const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+    const ip =
+      req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
     if (!rateLimit(ip)) {
-      return NextResponse.json({ ok: false, error: "Too many attempts — try later" }, { status: 429 });
+      return NextResponse.json(
+        { ok: false, error: "Too many attempts — try later" },
+        { status: 429 },
+      );
     }
     const body = await req.json().catch(() => ({}));
-    const email = String(body.email ?? "").trim().toLowerCase();
+    const email = String(body.email ?? "")
+      .trim()
+      .toLowerCase();
     const source = String(body.source ?? "track-record").slice(0, 40);
     const utm = body.utm && typeof body.utm === "object" ? body.utm : undefined;
 
     if (!isValidEmail(email)) {
-      return NextResponse.json({ ok: false, error: "Invalid email" }, { status: 400 });
+      return NextResponse.json(
+        { ok: false, error: "Invalid email" },
+        { status: 400 },
+      );
     }
 
-    const list = ((await cloudGet<Subscriber[]>("email_subscribers", [])) ?? []) as Subscriber[];
+    const list = ((await cloudGet<Subscriber[]>("email_subscribers", [])) ??
+      []) as Subscriber[];
     if (list.some((s) => s.email === email)) {
-      return NextResponse.json({ ok: true, message: "Already subscribed", duplicate: true });
+      return NextResponse.json({
+        ok: true,
+        message: "Already subscribed",
+        duplicate: true,
+      });
     }
 
     const next: Subscriber[] = [
@@ -55,15 +69,22 @@ export async function POST(req: NextRequest) {
 
     const result = await cloudSet("email_subscribers", next);
     if (!result.ok) {
-      return NextResponse.json({ ok: false, error: result.error ?? "Save failed" }, { status: 500 });
+      return NextResponse.json(
+        { ok: false, error: result.error ?? "Save failed" },
+        { status: 500 },
+      );
     }
     return NextResponse.json({ ok: true, count: next.length });
   } catch (error: any) {
-    return NextResponse.json({ ok: false, error: error?.message ?? "Failed" }, { status: 500 });
+    return NextResponse.json(
+      { ok: false, error: error?.message ?? "Failed" },
+      { status: 500 },
+    );
   }
 }
 
 export async function GET() {
-  const list = ((await cloudGet<Subscriber[]>("email_subscribers", [])) ?? []) as Subscriber[];
+  const list = ((await cloudGet<Subscriber[]>("email_subscribers", [])) ??
+    []) as Subscriber[];
   return NextResponse.json({ count: list.length });
 }

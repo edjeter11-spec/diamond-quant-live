@@ -4,11 +4,16 @@
 
 import { cloudGet } from "@/lib/supabase/client";
 
-interface PropHistItem { result?: string }
+interface PropHistItem {
+  result?: string;
+}
 
 async function getLiveStats() {
   try {
-    const history = ((await cloudGet<PropHistItem[]>("prop_pick_history_nba", [])) ?? []) as PropHistItem[];
+    const history = ((await cloudGet<PropHistItem[]>(
+      "prop_pick_history_nba",
+      [],
+    )) ?? []) as PropHistItem[];
     const wins = history.filter((p) => p.result === "win").length;
     const losses = history.filter((p) => p.result === "loss").length;
     const total = wins + losses;
@@ -27,7 +32,8 @@ export default async function StructuredData() {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
     name: "Diamond-Quant Live",
-    description: "AI-powered NBA & MLB sports betting analytics. Self-evolving prop brain, live arbitrage scanner, +EV pick finder.",
+    description:
+      "AI-powered NBA & MLB sports betting analytics. Self-evolving prop brain, live arbitrage scanner, +EV pick finder.",
     url: "https://diamond-quant-live.vercel.app",
     applicationCategory: "FinanceApplication",
     operatingSystem: "Any (Web)",
@@ -38,13 +44,16 @@ export default async function StructuredData() {
       priceValidUntil: "2026-12-31",
       availability: "https://schema.org/InStock",
     },
-    aggregateRating: stats.total >= 20 ? {
-      "@type": "AggregateRating",
-      ratingValue: Math.min(5, 3 + (stats.winRate - 50) / 10).toFixed(1),
-      reviewCount: stats.total,
-      bestRating: 5,
-      worstRating: 1,
-    } : undefined,
+    aggregateRating:
+      stats.total >= 20
+        ? {
+            "@type": "AggregateRating",
+            ratingValue: Math.min(5, 3 + (stats.winRate - 50) / 10).toFixed(1),
+            reviewCount: stats.total,
+            bestRating: 5,
+            worstRating: 1,
+          }
+        : undefined,
   };
 
   // Organization
@@ -74,9 +83,10 @@ export default async function StructuredData() {
         name: "What's the win rate?",
         acceptedAnswer: {
           "@type": "Answer",
-          text: stats.total > 0
-            ? `${stats.winRate}% on ${stats.total} graded NBA prop picks. Track record is public and verified against ESPN box scores.`
-            : "Track record is public — graded against ESPN box scores after every game.",
+          text:
+            stats.total > 0
+              ? `${stats.winRate}% on ${stats.total} graded NBA prop picks. Track record is public and verified against ESPN box scores.`
+              : "Track record is public — graded against ESPN box scores after every game.",
         },
       },
       {
@@ -99,7 +109,8 @@ export default async function StructuredData() {
   };
 
   // Escape `</` so a stray "</script>" in any string field can't break out
-  const safeJson = (obj: unknown) => JSON.stringify(obj).replace(/</g, "\\u003c");
+  const safeJson = (obj: unknown) =>
+    JSON.stringify(obj).replace(/</g, "\\u003c");
 
   return (
     <>

@@ -42,8 +42,15 @@ async function loadIndex(): Promise<Map<string, number>> {
       try {
         const raw = localStorage.getItem(CACHE_KEY);
         if (raw) {
-          const parsed = JSON.parse(raw) as { ts: number; entries: PlayerEntry[] };
-          if (parsed.ts && Date.now() - parsed.ts < CACHE_TTL_MS && parsed.entries?.length > 0) {
+          const parsed = JSON.parse(raw) as {
+            ts: number;
+            entries: PlayerEntry[];
+          };
+          if (
+            parsed.ts &&
+            Date.now() - parsed.ts < CACHE_TTL_MS &&
+            parsed.entries?.length > 0
+          ) {
             const byNameLower = buildMap(parsed.entries);
             memoryCache = { byNameLower };
             return byNameLower;
@@ -61,7 +68,10 @@ async function loadIndex(): Promise<Map<string, number>> {
       if (entries.length === 0) return new Map();
       if (typeof window !== "undefined") {
         try {
-          localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), entries }));
+          localStorage.setItem(
+            CACHE_KEY,
+            JSON.stringify({ ts: Date.now(), entries }),
+          );
         } catch {}
       }
       const byNameLower = buildMap(entries);
@@ -95,22 +105,28 @@ function resolveSync(name: string, map: Map<string, number>): number | null {
  * users see every time a tab unmounts and remounts.
  */
 export function useNbaPlayerId(name: string | undefined | null): number | null {
-  const initial = name && memoryCache ? resolveSync(name, memoryCache.byNameLower) : null;
+  const initial =
+    name && memoryCache ? resolveSync(name, memoryCache.byNameLower) : null;
   const [id, setId] = useState<number | null>(initial);
 
   useEffect(() => {
-    if (!name) { setId(null); return; }
+    if (!name) {
+      setId(null);
+      return;
+    }
     if (memoryCache) {
       const sync = resolveSync(name, memoryCache.byNameLower);
       setId(sync);
       return;
     }
     let cancelled = false;
-    loadIndex().then(map => {
+    loadIndex().then((map) => {
       if (cancelled) return;
       setId(resolveSync(name, map));
     });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [name]);
 
   return id;
@@ -141,8 +157,15 @@ async function loadMlbIndex(): Promise<Map<string, number>> {
       try {
         const raw = localStorage.getItem(MLB_CACHE_KEY);
         if (raw) {
-          const parsed = JSON.parse(raw) as { ts: number; entries: PlayerEntry[] };
-          if (parsed.ts && Date.now() - parsed.ts < CACHE_TTL_MS && parsed.entries?.length > 0) {
+          const parsed = JSON.parse(raw) as {
+            ts: number;
+            entries: PlayerEntry[];
+          };
+          if (
+            parsed.ts &&
+            Date.now() - parsed.ts < CACHE_TTL_MS &&
+            parsed.entries?.length > 0
+          ) {
             const byNameLower = buildMap(parsed.entries);
             mlbMemoryCache = { byNameLower };
             return byNameLower;
@@ -157,7 +180,12 @@ async function loadMlbIndex(): Promise<Map<string, number>> {
       const entries: PlayerEntry[] = data?.players ?? [];
       if (entries.length === 0) return new Map();
       if (typeof window !== "undefined") {
-        try { localStorage.setItem(MLB_CACHE_KEY, JSON.stringify({ ts: Date.now(), entries })); } catch {}
+        try {
+          localStorage.setItem(
+            MLB_CACHE_KEY,
+            JSON.stringify({ ts: Date.now(), entries }),
+          );
+        } catch {}
       }
       const byNameLower = buildMap(entries);
       mlbMemoryCache = { byNameLower };
@@ -172,10 +200,16 @@ async function loadMlbIndex(): Promise<Map<string, number>> {
 }
 
 export function useMlbPlayerId(name: string | undefined | null): number | null {
-  const initial = name && mlbMemoryCache ? resolveSync(name, mlbMemoryCache.byNameLower) : null;
+  const initial =
+    name && mlbMemoryCache
+      ? resolveSync(name, mlbMemoryCache.byNameLower)
+      : null;
   const [id, setId] = useState<number | null>(initial);
   useEffect(() => {
-    if (!name) { setId(null); return; }
+    if (!name) {
+      setId(null);
+      return;
+    }
     if (mlbMemoryCache) {
       setId(resolveSync(name, mlbMemoryCache.byNameLower));
       return;
@@ -185,7 +219,9 @@ export function useMlbPlayerId(name: string | undefined | null): number | null {
       if (cancelled) return;
       setId(resolveSync(name, map));
     });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [name]);
   return id;
 }

@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
     const all = await fetchNBAInjuries();
 
     if (team) {
-      const teamReport = all.find(r => r.teamAbbrev === team.toUpperCase());
+      const teamReport = all.find((r) => r.teamAbbrev === team.toUpperCase());
       return NextResponse.json({ team, injuries: teamReport?.players ?? [] });
     }
 

@@ -10,10 +10,10 @@
 export type NHLPosition = "F" | "D" | "G";
 
 interface NHLPositionDefense {
-  F: number;     // vs forwards
-  D: number;     // vs defensemen
+  F: number; // vs forwards
+  D: number; // vs defensemen
   Shots: number; // vs shots on goal
-  PP: number;    // power play allowed (higher = gives more PP time)
+  PP: number; // power play allowed (higher = gives more PP time)
 }
 
 export const NHL_POS_DEFENSE: Record<string, NHLPositionDefense> = {
@@ -51,7 +51,10 @@ export const NHL_POS_DEFENSE: Record<string, NHLPositionDefense> = {
   WPG: { F: 38, D: 40, Shots: 40, PP: 40 },
 };
 
-export function getNHLDefVsPosition(teamAbbrev: string, position: NHLPosition): number {
+export function getNHLDefVsPosition(
+  teamAbbrev: string,
+  position: NHLPosition,
+): number {
   const t = NHL_POS_DEFENSE[teamAbbrev.toUpperCase()];
   if (!t) return 50;
   if (position === "G") return t.Shots; // shots faced

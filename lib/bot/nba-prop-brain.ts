@@ -6,27 +6,27 @@
 
 // ── Weight System ──
 export interface NbaPropWeights {
-  seasonAverage: number;    // baseline PPG/RPG/APG
-  recentForm: number;       // last 5 games trend
-  matchupDefense: number;   // opponent defensive rating vs position
-  homeAway: number;         // home/away splits
-  restSchedule: number;     // B2B, rest days
-  paceContext: number;      // game pace/tempo
-  lineMovement: number;     // sharp money signal
+  seasonAverage: number; // baseline PPG/RPG/APG
+  recentForm: number; // last 5 games trend
+  matchupDefense: number; // opponent defensive rating vs position
+  homeAway: number; // home/away splits
+  restSchedule: number; // B2B, rest days
+  paceContext: number; // game pace/tempo
+  lineMovement: number; // sharp money signal
 }
 
 const DEFAULT_WEIGHTS: NbaPropWeights = {
   seasonAverage: 0.25,
-  recentForm: 0.20,
+  recentForm: 0.2,
   matchupDefense: 0.18,
-  homeAway: 0.10,
-  restSchedule: 0.10,
-  paceContext: 0.10,
+  homeAway: 0.1,
+  restSchedule: 0.1,
+  paceContext: 0.1,
   lineMovement: 0.07,
 };
 
 const WEIGHT_FLOOR = 0.03;
-const WEIGHT_CEILING = 0.30;
+const WEIGHT_CEILING = 0.3;
 const PLAYER_MEMORY_CAP = 300;
 
 // ── Per-Player Memory ──
@@ -39,9 +39,12 @@ export interface PlayerPropMemory {
   misses: number;
   winRate: number;
   brierScore: number;
-  avgOvershoot: number;      // tendency: positive = brain predicts too high
-  consistencyScore: number;  // 0-1: 1 = very consistent player
-  byPropType: Record<string, { predictions: number; hits: number; winRate: number }>;
+  avgOvershoot: number; // tendency: positive = brain predicts too high
+  consistencyScore: number; // 0-1: 1 = very consistent player
+  byPropType: Record<
+    string,
+    { predictions: number; hits: number; winRate: number }
+  >;
   lastUpdated: string;
 }
 
@@ -57,7 +60,15 @@ export interface PropMarketProfile {
 }
 
 function defaultMarketProfile(): PropMarketProfile {
-  return { totalPredictions: 0, hits: 0, misses: 0, brierScore: 0.25, avgEV: 0, winRate: 50, dynamicThreshold: 2.0 };
+  return {
+    totalPredictions: 0,
+    hits: 0,
+    misses: 0,
+    brierScore: 0.25,
+    avgEV: 0,
+    winRate: 50,
+    dynamicThreshold: 2.0,
+  };
 }
 
 // ── Audit Result ──
@@ -106,7 +117,9 @@ export function loadNbaPropBrain(): NbaPropBrainState {
 
 export function saveNbaPropBrain(brain: NbaPropBrainState) {
   if (typeof window !== "undefined") {
-    try { localStorage.setItem("dq_nba_prop_brain", JSON.stringify(brain)); } catch {}
+    try {
+      localStorage.setItem("dq_nba_prop_brain", JSON.stringify(brain));
+    } catch {}
   }
   syncBrainToCloud(brain);
 }
@@ -129,11 +142,17 @@ async function syncBrainToCloud(brain: NbaPropBrainState) {
   } catch {}
 }
 
-function trimPlayerMemory(mem: Record<string, PlayerPropMemory>): Record<string, PlayerPropMemory> {
+function trimPlayerMemory(
+  mem: Record<string, PlayerPropMemory>,
+): Record<string, PlayerPropMemory> {
   const entries = Object.entries(mem);
   if (entries.length <= PLAYER_MEMORY_CAP) return mem;
   // Evict by oldest lastUpdated
-  entries.sort((a, b) => new Date(b[1].lastUpdated).getTime() - new Date(a[1].lastUpdated).getTime());
+  entries.sort(
+    (a, b) =>
+      new Date(b[1].lastUpdated).getTime() -
+      new Date(a[1].lastUpdated).getTime(),
+  );
   const kept: Record<string, PlayerPropMemory> = {};
   for (const [key, val] of entries.slice(0, PLAYER_MEMORY_CAP)) kept[key] = val;
   return kept;
@@ -143,13 +162,18 @@ function trimPlayerMemory(mem: Record<string, PlayerPropMemory>): Record<string,
 export async function loadNbaPropBrainFromCloud(): Promise<NbaPropBrainState> {
   try {
     const { cloudGet } = await import("@/lib/supabase/client");
-    const data = await cloudGet<NbaPropBrainState | null>("nba_prop_brain", null);
+    const data = await cloudGet<NbaPropBrainState | null>(
+      "nba_prop_brain",
+      null,
+    );
     if (data && data.version) return data;
   } catch {}
   return createDefaultBrain();
 }
 
-export async function saveNbaPropBrainToCloud(brain: NbaPropBrainState): Promise<void> {
+export async function saveNbaPropBrainToCloud(
+  brain: NbaPropBrainState,
+): Promise<void> {
   try {
     const { cloudSet } = await import("@/lib/supabase/client");
     await cloudSet("nba_prop_brain", {
@@ -194,7 +218,8 @@ export function repairWeights(weights: NbaPropWeights): NbaPropWeights {
   let needsRepair = false;
 
   for (const k of keys) {
-    if (repaired[k] < WEIGHT_FLOOR || repaired[k] > WEIGHT_CEILING) needsRepair = true;
+    if (repaired[k] < WEIGHT_FLOOR || repaired[k] > WEIGHT_CEILING)
+      needsRepair = true;
     repaired[k] = Math.max(WEIGHT_FLOOR, Math.min(WEIGHT_CEILING, repaired[k]));
   }
 
@@ -221,7 +246,7 @@ export function learnFromPropResult(
     line: number;
     hit: boolean;
     factors: Array<{ name: string; contribution: number; signal: number }>;
-  }
+  },
 ): NbaPropBrainState {
   const updated = { ...brain };
   updated.epoch++;
@@ -236,11 +261,14 @@ export function learnFromPropResult(
   else market.misses++;
   // EMA on Brier score (α = 0.1)
   market.brierScore = market.brierScore * 0.9 + brierScore * 0.1;
-  market.winRate = market.totalPredictions > 0 ? Math.round((market.hits / market.totalPredictions) * 1000) / 10 : 50;
+  market.winRate =
+    market.totalPredictions > 0
+      ? Math.round((market.hits / market.totalPredictions) * 1000) / 10
+      : 50;
   // Dynamic threshold adjustment
   if (market.winRate > 55 && market.brierScore < 0.22) {
     market.dynamicThreshold = Math.max(1.0, market.dynamicThreshold - 0.1);
-  } else if (market.winRate < 45 || market.brierScore > 0.30) {
+  } else if (market.winRate < 45 || market.brierScore > 0.3) {
     market.dynamicThreshold = Math.min(5.0, market.dynamicThreshold + 0.2);
   }
   updated.markets[result.propType] = market;
@@ -251,8 +279,13 @@ export function learnFromPropResult(
     name: result.playerName,
     playerId: result.playerId ?? 0,
     team: result.team ?? "",
-    totalPredictions: 0, hits: 0, misses: 0, winRate: 0,
-    brierScore: 0.25, avgOvershoot: 0, consistencyScore: 0.5,
+    totalPredictions: 0,
+    hits: 0,
+    misses: 0,
+    winRate: 0,
+    brierScore: 0.25,
+    avgOvershoot: 0,
+    consistencyScore: 0.5,
     byPropType: {},
     lastUpdated: new Date().toISOString(),
   };
@@ -260,18 +293,24 @@ export function learnFromPropResult(
   player.totalPredictions++;
   if (result.hit) player.hits++;
   else player.misses++;
-  player.winRate = Math.round((player.hits / player.totalPredictions) * 1000) / 10;
+  player.winRate =
+    Math.round((player.hits / player.totalPredictions) * 1000) / 10;
   player.brierScore = player.brierScore * 0.85 + brierScore * 0.15;
 
   // Overshoot: how much brain's implied value differs from actual
-  const impliedValue = result.predictedSide === "over"
-    ? result.line + (result.predictedProb - 0.5) * result.line * 0.3
-    : result.line - (result.predictedProb - 0.5) * result.line * 0.3;
+  const impliedValue =
+    result.predictedSide === "over"
+      ? result.line + (result.predictedProb - 0.5) * result.line * 0.3
+      : result.line - (result.predictedProb - 0.5) * result.line * 0.3;
   const overshoot = impliedValue - result.actualValue;
   player.avgOvershoot = player.avgOvershoot * 0.8 + overshoot * 0.2;
 
   // Per-prop-type
-  const pt = player.byPropType[result.propType] ?? { predictions: 0, hits: 0, winRate: 0 };
+  const pt = player.byPropType[result.propType] ?? {
+    predictions: 0,
+    hits: 0,
+    winRate: 0,
+  };
   pt.predictions++;
   if (result.hit) pt.hits++;
   pt.winRate = Math.round((pt.hits / pt.predictions) * 1000) / 10;
@@ -321,8 +360,16 @@ export function learnFromPropResult(
 export function getPlayerAccuracy(
   brain: NbaPropBrainState,
   playerName: string,
-  propType?: string
-): { total: number; hits: number; winRate: number; byType: Record<string, { predictions: number; hits: number; winRate: number }> } | null {
+  propType?: string,
+): {
+  total: number;
+  hits: number;
+  winRate: number;
+  byType: Record<
+    string,
+    { predictions: number; hits: number; winRate: number }
+  >;
+} | null {
   const playerKey = playerName.toLowerCase().replace(/\s+/g, "_");
   const player = brain.playerMemory[playerKey];
   if (!player || player.totalPredictions < 1) return null;
@@ -330,7 +377,12 @@ export function getPlayerAccuracy(
   if (propType) {
     const pt = player.byPropType[propType];
     if (!pt || pt.predictions < 1) return null;
-    return { total: pt.predictions, hits: pt.hits, winRate: pt.winRate, byType: player.byPropType };
+    return {
+      total: pt.predictions,
+      hits: pt.hits,
+      winRate: pt.winRate,
+      byType: player.byPropType,
+    };
   }
 
   return {
@@ -343,9 +395,10 @@ export function getPlayerAccuracy(
 
 // ── Brain Summary ──
 export function getBrainSummary(brain: NbaPropBrainState) {
-  const overallWinRate = brain.totalPredictions > 0
-    ? Math.round((brain.totalHits / brain.totalPredictions) * 1000) / 10
-    : 0;
+  const overallWinRate =
+    brain.totalPredictions > 0
+      ? Math.round((brain.totalHits / brain.totalPredictions) * 1000) / 10
+      : 0;
   return {
     version: brain.version,
     epoch: brain.epoch,

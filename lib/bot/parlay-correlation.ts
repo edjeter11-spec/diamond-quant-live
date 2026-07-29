@@ -7,30 +7,65 @@
 
 export interface CorrelationResult {
   type: "positive" | "negative" | "neutral";
-  strength: number;     // 0-1 (0 = independent, 1 = perfectly correlated)
+  strength: number; // 0-1 (0 = independent, 1 = perfectly correlated)
   explanation: string;
-  boostPct: number;     // positive = parlay is better than independent odds suggest
+  boostPct: number; // positive = parlay is better than independent odds suggest
 }
 
 interface ParlayLeg {
-  game: string;       // "Raptors @ Cavaliers"
-  pick: string;       // "Cavaliers ML" or "Booker Over 25.5 Points"
-  market: string;     // "moneyline", "total", "spread", "player_points", etc.
+  game: string; // "Raptors @ Cavaliers"
+  pick: string; // "Cavaliers ML" or "Booker Over 25.5 Points"
+  market: string; // "moneyline", "total", "spread", "player_points", etc.
   team?: string;
   playerName?: string;
-  side?: string;       // "over", "under", "home", "away"
+  side?: string; // "over", "under", "home", "away"
 }
 
 // ── Known Correlation Patterns ──
 const CORRELATIONS = {
   // Same-game correlations
-  TEAM_ML_PLAYER_OVER: { type: "positive" as const, strength: 0.35, boost: 8, desc: "Team wins → star players score more (more competitive minutes)" },
-  TEAM_ML_OPPONENT_UNDER: { type: "positive" as const, strength: 0.25, boost: 5, desc: "Team wins → opponent stars score less (garbage time, blowouts)" },
-  OVER_TOTAL_PLAYER_OVER: { type: "positive" as const, strength: 0.40, boost: 10, desc: "High-scoring game → more points for everyone" },
-  UNDER_TOTAL_PLAYER_UNDER: { type: "positive" as const, strength: 0.35, boost: 8, desc: "Low-scoring game → fewer individual stats" },
-  TEAM_ML_PLAYER_UNDER_SAME: { type: "negative" as const, strength: 0.30, boost: -7, desc: "Conflict: picking team to win but their player to underperform" },
-  PLAYER_OVER_PLAYER_OVER_SAME_TEAM: { type: "negative" as const, strength: 0.15, boost: -3, desc: "Two players on same team both going over — minutes/touches compete" },
-  PLAYER_OVER_PLAYER_OVER_OPP_TEAMS: { type: "neutral" as const, strength: 0.05, boost: 0, desc: "Players on opposing teams are roughly independent" },
+  TEAM_ML_PLAYER_OVER: {
+    type: "positive" as const,
+    strength: 0.35,
+    boost: 8,
+    desc: "Team wins → star players score more (more competitive minutes)",
+  },
+  TEAM_ML_OPPONENT_UNDER: {
+    type: "positive" as const,
+    strength: 0.25,
+    boost: 5,
+    desc: "Team wins → opponent stars score less (garbage time, blowouts)",
+  },
+  OVER_TOTAL_PLAYER_OVER: {
+    type: "positive" as const,
+    strength: 0.4,
+    boost: 10,
+    desc: "High-scoring game → more points for everyone",
+  },
+  UNDER_TOTAL_PLAYER_UNDER: {
+    type: "positive" as const,
+    strength: 0.35,
+    boost: 8,
+    desc: "Low-scoring game → fewer individual stats",
+  },
+  TEAM_ML_PLAYER_UNDER_SAME: {
+    type: "negative" as const,
+    strength: 0.3,
+    boost: -7,
+    desc: "Conflict: picking team to win but their player to underperform",
+  },
+  PLAYER_OVER_PLAYER_OVER_SAME_TEAM: {
+    type: "negative" as const,
+    strength: 0.15,
+    boost: -3,
+    desc: "Two players on same team both going over — minutes/touches compete",
+  },
+  PLAYER_OVER_PLAYER_OVER_OPP_TEAMS: {
+    type: "neutral" as const,
+    strength: 0.05,
+    boost: 0,
+    desc: "Players on opposing teams are roughly independent",
+  },
 };
 
 // ── Extract game info from pick string ──
@@ -44,8 +79,16 @@ function parseLeg(leg: ParlayLeg): {
 } {
   const pick = leg.pick.toLowerCase();
   const isML = leg.market === "moneyline" || pick.includes(" ml");
-  const isTotal = leg.market === "total" || pick.includes("over") || pick.includes("under");
   const isProp = leg.market?.startsWith("player_") || !!leg.playerName;
+  // A leg is a game TOTAL only if its market says so, or if it mentions
+  // over/under AND is not a player prop. (Previously "Booker Over 25.5"
+  // classified as a total, firing the game-total correlation on prop pairs.)
+  const isTotal =
+    leg.market === "total" ||
+    (!isProp &&
+      leg.market !== "moneyline" &&
+      leg.market !== "spread" &&
+      (pick.includes("over") || pick.includes("under")));
   const isOver = pick.includes("over") || leg.side === "over";
 
   // Extract team from ML pick: "Cavaliers ML" → "cavaliers"
@@ -56,18 +99,30 @@ function parseLeg(leg: ParlayLeg): {
 
   return {
     gameKey: leg.game.toLowerCase(),
-    isML, isTotal, isProp, isOver, teamPicked,
+    isML,
+    isTotal,
+    isProp,
+    isOver,
+    teamPicked,
   };
 }
 
 // ── Analyze correlation between two legs ──
-function analyzePair(legA: ParlayLeg, legB: ParlayLeg): CorrelationResult | null {
+function analyzePair(
+  legA: ParlayLeg,
+  legB: ParlayLeg,
+): CorrelationResult | null {
   const a = parseLeg(legA);
   const b = parseLeg(legB);
 
   // Different games = mostly independent
   if (a.gameKey !== b.gameKey) {
-    return { type: "neutral", strength: 0.02, explanation: "Different games — nearly independent", boostPct: 0 };
+    return {
+      type: "neutral",
+      strength: 0.02,
+      explanation: "Different games — nearly independent",
+      boostPct: 0,
+    };
   }
 
   // Same game correlations:
@@ -75,26 +130,61 @@ function analyzePair(legA: ParlayLeg, legB: ParlayLeg): CorrelationResult | null
   // 1. Team ML + Player Over (same team) = POSITIVE
   if (a.isML && b.isProp && b.isOver) {
     const teamInPick = a.teamPicked ?? "";
-    const playerTeam = (legB.team ?? legB.game.split("@")[1] ?? "").toLowerCase().trim();
+    const playerTeam = (legB.team ?? legB.game.split("@")[1] ?? "")
+      .toLowerCase()
+      .trim();
     if (playerTeam.includes(teamInPick) || teamInPick.includes(playerTeam)) {
-      return { ...CORRELATIONS.TEAM_ML_PLAYER_OVER, explanation: `${legA.pick} + ${legB.pick}: ${CORRELATIONS.TEAM_ML_PLAYER_OVER.desc}`, boostPct: CORRELATIONS.TEAM_ML_PLAYER_OVER.boost };
+      return {
+        ...CORRELATIONS.TEAM_ML_PLAYER_OVER,
+        explanation: `${legA.pick} + ${legB.pick}: ${CORRELATIONS.TEAM_ML_PLAYER_OVER.desc}`,
+        boostPct: CORRELATIONS.TEAM_ML_PLAYER_OVER.boost,
+      };
     }
   }
-  if (b.isML && a.isProp && a.isOver) {
+  if (b.isML && a.isProp) {
     return analyzePair(legB, legA); // swap and retry
+  }
+
+  // 1b. Team ML + Player UNDER on the SAME team = NEGATIVE (conflict)
+  if (a.isML && b.isProp && !b.isOver) {
+    const teamInPick = a.teamPicked ?? "";
+    const playerTeam = (legB.team ?? "").toLowerCase().trim();
+    if (
+      teamInPick &&
+      playerTeam &&
+      (playerTeam.includes(teamInPick) || teamInPick.includes(playerTeam))
+    ) {
+      return {
+        ...CORRELATIONS.TEAM_ML_PLAYER_UNDER_SAME,
+        explanation: `${legA.pick} + ${legB.pick}: ${CORRELATIONS.TEAM_ML_PLAYER_UNDER_SAME.desc}`,
+        boostPct: CORRELATIONS.TEAM_ML_PLAYER_UNDER_SAME.boost,
+      };
+    }
   }
 
   // 2. Game Over + Player Over = POSITIVE
   if (a.isTotal && a.isOver && b.isProp && b.isOver) {
-    return { ...CORRELATIONS.OVER_TOTAL_PLAYER_OVER, explanation: `Game over + player over: ${CORRELATIONS.OVER_TOTAL_PLAYER_OVER.desc}`, boostPct: CORRELATIONS.OVER_TOTAL_PLAYER_OVER.boost };
+    return {
+      ...CORRELATIONS.OVER_TOTAL_PLAYER_OVER,
+      explanation: `Game over + player over: ${CORRELATIONS.OVER_TOTAL_PLAYER_OVER.desc}`,
+      boostPct: CORRELATIONS.OVER_TOTAL_PLAYER_OVER.boost,
+    };
   }
   if (b.isTotal && b.isOver && a.isProp && a.isOver) {
-    return { ...CORRELATIONS.OVER_TOTAL_PLAYER_OVER, explanation: `Game over + player over: ${CORRELATIONS.OVER_TOTAL_PLAYER_OVER.desc}`, boostPct: CORRELATIONS.OVER_TOTAL_PLAYER_OVER.boost };
+    return {
+      ...CORRELATIONS.OVER_TOTAL_PLAYER_OVER,
+      explanation: `Game over + player over: ${CORRELATIONS.OVER_TOTAL_PLAYER_OVER.desc}`,
+      boostPct: CORRELATIONS.OVER_TOTAL_PLAYER_OVER.boost,
+    };
   }
 
   // 3. Game Under + Player Under = POSITIVE
   if (a.isTotal && !a.isOver && b.isProp && !b.isOver) {
-    return { ...CORRELATIONS.UNDER_TOTAL_PLAYER_UNDER, explanation: `Game under + player under: ${CORRELATIONS.UNDER_TOTAL_PLAYER_UNDER.desc}`, boostPct: CORRELATIONS.UNDER_TOTAL_PLAYER_UNDER.boost };
+    return {
+      ...CORRELATIONS.UNDER_TOTAL_PLAYER_UNDER,
+      explanation: `Game under + player under: ${CORRELATIONS.UNDER_TOTAL_PLAYER_UNDER.desc}`,
+      boostPct: CORRELATIONS.UNDER_TOTAL_PLAYER_UNDER.boost,
+    };
   }
 
   // 4. Two player overs on same team = SLIGHT NEGATIVE
@@ -102,7 +192,11 @@ function analyzePair(legA: ParlayLeg, legB: ParlayLeg): CorrelationResult | null
     const teamA = (legA.team ?? "").toLowerCase();
     const teamB = (legB.team ?? "").toLowerCase();
     if (teamA && teamB && teamA === teamB) {
-      return { ...CORRELATIONS.PLAYER_OVER_PLAYER_OVER_SAME_TEAM, explanation: `Both ${legA.playerName} and ${legB.playerName} over on same team — usage conflict`, boostPct: CORRELATIONS.PLAYER_OVER_PLAYER_OVER_SAME_TEAM.boost };
+      return {
+        ...CORRELATIONS.PLAYER_OVER_PLAYER_OVER_SAME_TEAM,
+        explanation: `Both ${legA.playerName} and ${legB.playerName} over on same team — usage conflict`,
+        boostPct: CORRELATIONS.PLAYER_OVER_PLAYER_OVER_SAME_TEAM.boost,
+      };
     }
   }
 
@@ -112,9 +206,9 @@ function analyzePair(legA: ParlayLeg, legB: ParlayLeg): CorrelationResult | null
 // ── Analyze full parlay for correlations ──
 export function analyzeParlay(legs: ParlayLeg[]): {
   correlations: CorrelationResult[];
-  overallBoost: number;    // net % boost/penalty
-  recommendation: string;  // "Strong correlated parlay" / "Warning: conflicting legs"
-  score: number;           // -100 to +100
+  overallBoost: number; // net % boost/penalty
+  recommendation: string; // "Strong correlated parlay" / "Warning: conflicting legs"
+  score: number; // -100 to +100
 } {
   const correlations: CorrelationResult[] = [];
 
@@ -128,9 +222,21 @@ export function analyzeParlay(legs: ParlayLeg[]): {
     }
   }
 
-  const overallBoost = correlations.reduce((s, c) => s + c.boostPct, 0);
-  const positiveCount = correlations.filter(c => c.type === "positive").length;
-  const negativeCount = correlations.filter(c => c.type === "negative").length;
+  // Bounded: many stacked pairs can't compound past ±15% — correlation is
+  // an adjustment, never a bigger effect than the legs themselves.
+  const overallBoost = Math.max(
+    -15,
+    Math.min(
+      15,
+      correlations.reduce((s, c) => s + c.boostPct, 0),
+    ),
+  );
+  const positiveCount = correlations.filter(
+    (c) => c.type === "positive",
+  ).length;
+  const negativeCount = correlations.filter(
+    (c) => c.type === "negative",
+  ).length;
 
   let recommendation: string;
   let score: number;

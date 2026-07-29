@@ -17,7 +17,7 @@ import {
 // Find arbitrage opportunities across books
 export function findArbitrage(
   oddsLines: OddsLine[],
-  gameName: string
+  gameName: string,
 ): ArbitrageOpportunity[] {
   const arbs: ArbitrageOpportunity[] = [];
   const parts = gameName.split(" @ ");
@@ -29,28 +29,42 @@ export function findArbitrage(
     for (let j = i + 1; j < oddsLines.length; j++) {
       // Home on book i, Away on book j
       checkArb(
-        oddsLines[i], oddsLines[j],
-        oddsLines[i].homeML, oddsLines[j].awayML,
-        "moneyline", gameName, `${homeTeam} ML`, `${awayTeam} ML`,
-        arbs
+        oddsLines[i],
+        oddsLines[j],
+        oddsLines[i].homeML,
+        oddsLines[j].awayML,
+        "moneyline",
+        gameName,
+        `${homeTeam} ML`,
+        `${awayTeam} ML`,
+        arbs,
       );
 
       // Away on book i, Home on book j
       checkArb(
-        oddsLines[i], oddsLines[j],
-        oddsLines[i].awayML, oddsLines[j].homeML,
-        "moneyline", gameName, `${awayTeam} ML`, `${homeTeam} ML`,
-        arbs
+        oddsLines[i],
+        oddsLines[j],
+        oddsLines[i].awayML,
+        oddsLines[j].homeML,
+        "moneyline",
+        gameName,
+        `${awayTeam} ML`,
+        `${homeTeam} ML`,
+        arbs,
       );
 
       // Over on book i, Under on book j
       if (oddsLines[i].total === oddsLines[j].total && oddsLines[i].total > 0) {
         checkArb(
-          oddsLines[i], oddsLines[j],
-          oddsLines[i].overPrice, oddsLines[j].underPrice,
-          "total", gameName,
-          `Over ${oddsLines[i].total}`, `Under ${oddsLines[j].total}`,
-          arbs
+          oddsLines[i],
+          oddsLines[j],
+          oddsLines[i].overPrice,
+          oddsLines[j].underPrice,
+          "total",
+          gameName,
+          `Over ${oddsLines[i].total}`,
+          `Under ${oddsLines[j].total}`,
+          arbs,
         );
       }
     }
@@ -68,7 +82,7 @@ function checkArb(
   game: string,
   pick1: string,
   pick2: string,
-  results: ArbitrageOpportunity[]
+  results: ArbitrageOpportunity[],
 ) {
   if (odds1 === 0 || odds2 === 0) return;
 
@@ -83,7 +97,7 @@ function checkArb(
     const dec2 = americanToDecimal(odds2);
     const stake1 = totalStake * (imp1 / (imp1 + imp2));
     const stake2 = totalStake * (imp2 / (imp1 + imp2));
-    const profit = (stake1 * dec1) - totalStake;
+    const profit = stake1 * dec1 - totalStake;
 
     results.push({
       type,
@@ -103,7 +117,7 @@ export function findEVBets(
   oddsLines: OddsLine[],
   gameName: string,
   modelProb?: number, // our engine's probability
-  bankroll: number = 1000
+  bankroll: number = 1000,
 ): EVBet[] {
   const evBets: EVBet[] = [];
 
@@ -122,14 +136,50 @@ export function findEVBets(
   // Check each book for +EV against fair line
   for (const line of oddsLines) {
     // Home ML — use actual team name
-    checkEV(line, line.homeML, homeProb, "moneyline", `${homeTeam} ML`, gameName, bankroll, evBets);
+    checkEV(
+      line,
+      line.homeML,
+      homeProb,
+      "moneyline",
+      `${homeTeam} ML`,
+      gameName,
+      bankroll,
+      evBets,
+    );
     // Away ML — use actual team name
-    checkEV(line, line.awayML, awayProb, "moneyline", `${awayTeam} ML`, gameName, bankroll, evBets);
+    checkEV(
+      line,
+      line.awayML,
+      awayProb,
+      "moneyline",
+      `${awayTeam} ML`,
+      gameName,
+      bankroll,
+      evBets,
+    );
     // Over/Under — include game name for clarity
     if (line.total > 0) {
       const { overProb } = getTotalConsensus(oddsLines);
-      checkEV(line, line.overPrice, overProb, "total", `${awayTeam}/${homeTeam} Over ${line.total}`, gameName, bankroll, evBets);
-      checkEV(line, line.underPrice, 1 - overProb, "total", `${awayTeam}/${homeTeam} Under ${line.total}`, gameName, bankroll, evBets);
+      checkEV(
+        line,
+        line.overPrice,
+        overProb,
+        "total",
+        `${awayTeam}/${homeTeam} Over ${line.total}`,
+        gameName,
+        bankroll,
+        evBets,
+      );
+      checkEV(
+        line,
+        line.underPrice,
+        1 - overProb,
+        "total",
+        `${awayTeam}/${homeTeam} Under ${line.total}`,
+        gameName,
+        bankroll,
+        evBets,
+      );
     }
   }
 
@@ -144,7 +194,7 @@ function checkEV(
   pick: string,
   game: string,
   bankroll: number,
-  results: EVBet[]
+  results: EVBet[],
 ) {
   if (odds === 0) return;
 
@@ -153,7 +203,8 @@ function checkEV(
   const ev = evPercentage(fairProb, decimalOdds);
   const confidence = getConfidence(ev);
 
-  if (ev > 1.0) { // minimum 1% edge
+  if (ev > 1.0) {
+    // minimum 1% edge
     results.push({
       game,
       market,
@@ -173,7 +224,10 @@ function checkEV(
 }
 
 // Get market consensus from all books (de-vigged average)
-function getMarketConsensus(oddsLines: OddsLine[]): { fairHomeProb: number; fairAwayProb: number } {
+function getMarketConsensus(oddsLines: OddsLine[]): {
+  fairHomeProb: number;
+  fairAwayProb: number;
+} {
   if (oddsLines.length === 0) return { fairHomeProb: 0.5, fairAwayProb: 0.5 };
 
   let totalHomeProb = 0;
@@ -209,15 +263,31 @@ function getTotalConsensus(oddsLines: OddsLine[]): { overProb: number } {
 // Detect sharp line movement (significant line change)
 export function detectLineMovement(
   currentOdds: OddsLine[],
-  previousOdds: OddsLine[]
-): Array<{ bookmaker: string; market: string; oldOdds: number; newOdds: number; movement: number }> {
-  const movements: Array<{ bookmaker: string; market: string; oldOdds: number; newOdds: number; movement: number }> = [];
+  previousOdds: OddsLine[],
+): Array<{
+  bookmaker: string;
+  market: string;
+  oldOdds: number;
+  newOdds: number;
+  movement: number;
+}> {
+  const movements: Array<{
+    bookmaker: string;
+    market: string;
+    oldOdds: number;
+    newOdds: number;
+    movement: number;
+  }> = [];
 
   for (const current of currentOdds) {
     const prev = previousOdds.find((p) => p.bookmaker === current.bookmaker);
     if (!prev) continue;
+    // 0 = no line posted; comparing against it fabricates a phantom move
+    if (current.homeML === 0 || prev.homeML === 0) continue;
 
-    const homeMove = americanToImpliedProb(current.homeML) - americanToImpliedProb(prev.homeML);
+    const homeMove =
+      americanToImpliedProb(current.homeML) -
+      americanToImpliedProb(prev.homeML);
     if (Math.abs(homeMove) > 0.02) {
       movements.push({
         bookmaker: current.bookmaker,

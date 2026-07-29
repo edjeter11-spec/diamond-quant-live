@@ -30,7 +30,9 @@ interface PinnedParlay {
 
 // ET date (sports day). After midnight ET, counts as the next day.
 function etDateString(d = new Date()): string {
-  const et = new Date(d.toLocaleString("en-US", { timeZone: "America/New_York" }));
+  const et = new Date(
+    d.toLocaleString("en-US", { timeZone: "America/New_York" }),
+  );
   return `${et.getFullYear()}-${String(et.getMonth() + 1).padStart(2, "0")}-${String(et.getDate()).padStart(2, "0")}`;
 }
 
@@ -39,21 +41,31 @@ function etDateOf(iso: string): string {
 }
 
 function scorePick(p: { confidence: string; evPercentage?: number }): number {
-  const confScore = p.confidence === "HIGH" ? 3 : p.confidence === "MEDIUM" ? 2 : p.confidence === "LOW" ? 1 : 0;
+  const confScore =
+    p.confidence === "HIGH"
+      ? 3
+      : p.confidence === "MEDIUM"
+        ? 2
+        : p.confidence === "LOW"
+          ? 1
+          : 0;
   return confScore * 5 + (p.evPercentage ?? 0);
 }
 
 function toAmericanParlay(legs: ParlayLeg[]): number {
   const decimal = legs.reduce((acc, p) => {
-    const dec = p.odds > 0 ? (p.odds / 100) + 1 : (100 / Math.abs(p.odds)) + 1;
+    const dec = p.odds > 0 ? p.odds / 100 + 1 : 100 / Math.abs(p.odds) + 1;
     return acc * dec;
   }, 1);
-  return decimal >= 2 ? Math.round((decimal - 1) * 100) : Math.round(-100 / (decimal - 1));
+  return decimal >= 2
+    ? Math.round((decimal - 1) * 100)
+    : Math.round(-100 / (decimal - 1));
 }
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const sport = (searchParams.get("sport") ?? "mlb").toLowerCase() as "nba" | "mlb";
+  const sport = (searchParams.get("sport") ?? "mlb").toLowerCase() as
+    "nba" | "mlb";
   const force = searchParams.get("force") === "true";
   const isNBA = sport === "nba";
   const today = etDateString();
@@ -68,8 +80,15 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    // Hit the public alias — VERCEL_URL can sit behind preview auth.
-    const baseUrl = "https://diamond-quant-live.vercel.app";
+    // Use the incoming request's own origin so local dev calls local dev
+    // instead of reaching out to production over the real internet (that
+    // was silently true before — every local /api/parlay-today request
+    // was calling https://diamond-quant-live.vercel.app internally, which
+    // hangs for minutes whenever prod is slow/cold/rate-limited).
+    const baseUrl =
+      process.env.NODE_ENV === "development"
+        ? req.nextUrl.origin
+        : "https://diamond-quant-live.vercel.app";
     const sportKey = isNBA ? "basketball_nba" : "baseball_mlb";
 
     // Fetch odds (contains evBets with confidence/EV). When the odds source
@@ -77,7 +96,9 @@ export async function GET(req: NextRequest) {
     // candidates below — a parlay built entirely from props is still a parlay.
     let games: any[] = [];
     try {
-      const oddsRes = await fetch(`${baseUrl}/api/odds?sport=${sportKey}`, { signal: AbortSignal.timeout(15000) });
+      const oddsRes = await fetch(`${baseUrl}/api/odds?sport=${sportKey}`, {
+        signal: AbortSignal.timeout(15000),
+      });
       if (oddsRes.ok) {
         const oddsData = await oddsRes.json();
         games = oddsData.games ?? [];
@@ -108,61 +129,75 @@ export async function GET(req: NextRequest) {
     }
 
     // Choose target day: today if any today games, else earliest future day
-    const todayCandidates = candidates.filter(c => c.day === today);
-    const targetDay = todayCandidates.length > 0
-      ? today
-      : [...new Set(candidates.map(c => c.day))].sort()[0] ?? today;
+    const todayCandidates = candidates.filter((c) => c.day === today);
+    const targetDay =
+      todayCandidates.length > 0
+        ? today
+        : ([...new Set(candidates.map((c) => c.day))].sort()[0] ?? today);
     const dayLabel = targetDay === today ? "Today" : "Tomorrow";
 
     let pool = candidates
-      .filter(c => c.day === targetDay)
-      .filter(c => c.confidence === "HIGH" || c.confidence === "MEDIUM" || c.evPercentage > 1)
+      .filter((c) => c.day === targetDay)
+      .filter(
+        (c) =>
+          c.confidence === "HIGH" ||
+          c.confidence === "MEDIUM" ||
+          c.evPercentage > 1,
+      )
       .sort((a, b) => scorePick(b) - scorePick(a));
 
     // Fetch player props as additional mixed candidates (NBA + MLB now).
     // When the odds-side games list is empty, props become the entire parlay.
     const propCandidates: Candidate[] = [];
-    const markets = isNBA ? [
-      { key: "player_points", label: "Points" },
-      { key: "player_rebounds", label: "Rebounds" },
-      { key: "player_assists", label: "Assists" },
-    ] : [
-      { key: "pitcher_strikeouts", label: "Ks" },
-      { key: "batter_hits", label: "Hits" },
-      { key: "batter_total_bases", label: "Total Bases" },
-    ];
-    await Promise.all(markets.map(async ({ key, label }) => {
-      try {
-        const r = await fetch(`${baseUrl}/api/players?sport=${sportKey}&market=${key}`, { signal: AbortSignal.timeout(8000) });
-        if (!r.ok) return;
-        const data = await r.json();
-        for (const prop of data.props ?? []) {
-          if (!prop.playerName || !prop.line) continue;
-          const gameDay = prop.gameTime ? etDateOf(prop.gameTime) : today;
-          if (gameDay !== targetDay) continue;
-          const overProb = prop.fairOverProb ?? 50;
-          const underProb = prop.fairUnderProb ?? 50;
-          const favourOver = overProb >= underProb;
-          const best = favourOver ? prop.bestOver : prop.bestUnder;
-          if (!best?.price) continue;
-          const topProb = Math.max(overProb, underProb);
-          if (topProb < 55) continue;
-          propCandidates.push({
-            id: `prop-${key}-${prop.playerName}`,
-            game: prop.playerName,
-            pick: `${prop.playerName} ${favourOver ? "Over" : "Under"} ${prop.line} ${label}`,
-            market: "player_prop",
-            odds: best.price,
-            bookmaker: best.bookmaker,
-            evPercentage: Math.round((topProb - 50) * 2 * 10) / 10,
-            fairProb: topProb,
-            confidence: topProb >= 65 ? "HIGH" : topProb >= 58 ? "MEDIUM" : "LOW",
-            commenceTime: prop.gameTime,
-            day: gameDay,
-          });
-        }
-      } catch {}
-    }));
+    const markets = isNBA
+      ? [
+          { key: "player_points", label: "Points" },
+          { key: "player_rebounds", label: "Rebounds" },
+          { key: "player_assists", label: "Assists" },
+        ]
+      : [
+          { key: "pitcher_strikeouts", label: "Ks" },
+          { key: "batter_hits", label: "Hits" },
+          { key: "batter_total_bases", label: "Total Bases" },
+        ];
+    await Promise.all(
+      markets.map(async ({ key, label }) => {
+        try {
+          const r = await fetch(
+            `${baseUrl}/api/players?sport=${sportKey}&market=${key}`,
+            { signal: AbortSignal.timeout(8000) },
+          );
+          if (!r.ok) return;
+          const data = await r.json();
+          for (const prop of data.props ?? []) {
+            if (!prop.playerName || !prop.line) continue;
+            const gameDay = prop.gameTime ? etDateOf(prop.gameTime) : today;
+            if (gameDay !== targetDay) continue;
+            const overProb = prop.fairOverProb ?? 50;
+            const underProb = prop.fairUnderProb ?? 50;
+            const favourOver = overProb >= underProb;
+            const best = favourOver ? prop.bestOver : prop.bestUnder;
+            if (!best?.price) continue;
+            const topProb = Math.max(overProb, underProb);
+            if (topProb < 55) continue;
+            propCandidates.push({
+              id: `prop-${key}-${prop.playerName}`,
+              game: prop.playerName,
+              pick: `${prop.playerName} ${favourOver ? "Over" : "Under"} ${prop.line} ${label}`,
+              market: "player_prop",
+              odds: best.price,
+              bookmaker: best.bookmaker,
+              evPercentage: Math.round((topProb - 50) * 2 * 10) / 10,
+              fairProb: topProb,
+              confidence:
+                topProb >= 65 ? "HIGH" : topProb >= 58 ? "MEDIUM" : "LOW",
+              commenceTime: prop.gameTime,
+              day: gameDay,
+            });
+          }
+        } catch {}
+      }),
+    );
     propCandidates.sort((a, b) => scorePick(b) - scorePick(a));
 
     // Mixed-type builder: one per market when possible
@@ -184,11 +219,18 @@ export async function GET(req: NextRequest) {
     for (const mkt of wantMarkets) {
       if (legs.length >= 3) break;
       const src = mkt === "player_prop" ? propCandidates : pool;
-      const best = src.find(p => p.market === mkt && !usedMarkets.has(p.market) && !usedGames.has(p.game));
+      const best = src.find(
+        (p) =>
+          p.market === mkt &&
+          !usedMarkets.has(p.market) &&
+          !usedGames.has(p.game),
+      );
       if (best) tryAdd(best);
     }
 
-    const allCandidates = [...pool, ...propCandidates].sort((a, b) => scorePick(b) - scorePick(a));
+    const allCandidates = [...pool, ...propCandidates].sort(
+      (a, b) => scorePick(b) - scorePick(a),
+    );
     for (const c of allCandidates) {
       if (legs.length >= 3) break;
       tryAdd(c);
@@ -197,7 +239,11 @@ export async function GET(req: NextRequest) {
     if (legs.length < 2) {
       // 200 with empty legs so the UI renders the "checking back later" empty
       // state instead of an error toast — happens nightly when slates are thin.
-      return NextResponse.json({ ok: true, legs: [], message: "Not enough qualifying picks yet" });
+      return NextResponse.json({
+        ok: true,
+        legs: [],
+        message: "Not enough qualifying picks yet",
+      });
     }
 
     const result: PinnedParlay = {
@@ -214,6 +260,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: true, ...result, cached: false });
   } catch (error: any) {
     console.error("parlay-today error:", error);
-    return NextResponse.json({ ok: true, legs: [], message: "Parlay temporarily unavailable" });
+    return NextResponse.json({
+      ok: true,
+      legs: [],
+      message: "Parlay temporarily unavailable",
+    });
   }
 }

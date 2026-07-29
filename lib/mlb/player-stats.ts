@@ -5,6 +5,26 @@
 
 const MLB_API = "https://statsapi.mlb.com/api/v1";
 
+// MLB innings-pitched notation: "123.1" = 123⅓ innings, "123.2" = 123⅔.
+// parseFloat reads those as decimal tenths, which skews every per-inning
+// rate (K/9, BB/9) and the pitcher-outs market by up to ~7%.
+export function ipToInnings(raw: unknown): number {
+  const str = String(raw ?? "0");
+  const [wholeStr, fracStr] = str.split(".");
+  const whole = parseInt(wholeStr, 10) || 0;
+  const frac = parseInt(fracStr ?? "0", 10) || 0;
+  return whole + Math.min(frac, 2) / 3;
+}
+
+// Outs recorded from MLB IP notation: "5.2" → 17 outs.
+export function ipToOuts(raw: unknown): number {
+  const str = String(raw ?? "0");
+  const [wholeStr, fracStr] = str.split(".");
+  const whole = parseInt(wholeStr, 10) || 0;
+  const frac = parseInt(fracStr ?? "0", 10) || 0;
+  return whole * 3 + Math.min(frac, 2);
+}
+
 export interface PlayerSeasonStats {
   name: string;
   team: string;
@@ -67,7 +87,14 @@ export interface PlayerAnalysis {
 }
 
 // Search for a player by name — uses the correct MLB search endpoint
-export async function searchPlayer(name: string): Promise<{ id: number; fullName: string; team: string; position: string; number: string; photo: string } | null> {
+export async function searchPlayer(name: string): Promise<{
+  id: number;
+  fullName: string;
+  team: string;
+  position: string;
+  number: string;
+  photo: string;
+} | null> {
   try {
     // Use the people/search endpoint — actually filters by name
     const url = `${MLB_API}/people/search?names=${encodeURIComponent(name)}&sportIds=1&active=true`;
@@ -84,7 +111,9 @@ export async function searchPlayer(name: string): Promise<{ id: number; fullName
     let teamName = "Unknown";
     if (teamId) {
       try {
-        const teamRes = await fetch(`${MLB_API}/teams/${teamId}`, { next: { revalidate: 86400 } });
+        const teamRes = await fetch(`${MLB_API}/teams/${teamId}`, {
+          next: { revalidate: 86400 },
+        });
         if (teamRes.ok) {
           const teamData = await teamRes.json();
           teamName = teamData.teams?.[0]?.name ?? "Unknown";
@@ -106,7 +135,10 @@ export async function searchPlayer(name: string): Promise<{ id: number; fullName
 }
 
 // Fetch pitcher season stats
-export async function fetchPitcherSeasonStats(playerId: number, season?: number): Promise<any> {
+export async function fetchPitcherSeasonStats(
+  playerId: number,
+  season?: number,
+): Promise<any> {
   const year = season ?? new Date().getFullYear();
   const url = `${MLB_API}/people/${playerId}/stats?stats=season&season=${year}&group=pitching`;
   const res = await fetch(url, { next: { revalidate: 300 } });
@@ -116,7 +148,10 @@ export async function fetchPitcherSeasonStats(playerId: number, season?: number)
 }
 
 // Fetch batter season stats
-export async function fetchBatterSeasonStats(playerId: number, season?: number): Promise<any> {
+export async function fetchBatterSeasonStats(
+  playerId: number,
+  season?: number,
+): Promise<any> {
   const year = season ?? new Date().getFullYear();
   const url = `${MLB_API}/people/${playerId}/stats?stats=season&season=${year}&group=hitting`;
   const res = await fetch(url, { next: { revalidate: 300 } });
@@ -126,7 +161,10 @@ export async function fetchBatterSeasonStats(playerId: number, season?: number):
 }
 
 // Fetch career stats
-export async function fetchCareerStats(playerId: number, isPitcher: boolean): Promise<any> {
+export async function fetchCareerStats(
+  playerId: number,
+  isPitcher: boolean,
+): Promise<any> {
   const group = isPitcher ? "pitching" : "hitting";
   const url = `${MLB_API}/people/${playerId}/stats?stats=career&group=${group}`;
   const res = await fetch(url, { next: { revalidate: 3600 } });
@@ -136,7 +174,10 @@ export async function fetchCareerStats(playerId: number, isPitcher: boolean): Pr
 }
 
 // Fetch game log (last N games)
-export async function fetchGameLog(playerId: number, isPitcher: boolean): Promise<GameLogEntry[]> {
+export async function fetchGameLog(
+  playerId: number,
+  isPitcher: boolean,
+): Promise<GameLogEntry[]> {
   const year = new Date().getFullYear();
   const group = isPitcher ? "pitching" : "hitting";
   const url = `${MLB_API}/people/${playerId}/stats?stats=gameLog&season=${year}&group=${group}`;
@@ -155,7 +196,7 @@ export async function fetchGameLog(playerId: number, isPitcher: boolean): Promis
         date,
         opponent,
         strikeouts: parseInt(stat.strikeOuts) || 0,
-        inningsPitched: parseFloat(stat.inningsPitched) || 0,
+        inningsPitched: ipToInnings(stat.inningsPitched),
         earnedRuns: parseInt(stat.earnedRuns) || 0,
         hits: parseInt(stat.hits) || 0,
         walks: parseInt(stat.baseOnBalls) || 0,
@@ -184,7 +225,7 @@ export async function analyzePlayer(
   playerName: string,
   market: string,
   line: number,
-  opponentTeam?: string
+  opponentTeam?: string,
 ): Promise<PlayerAnalysis | null> {
   const player = await searchPlayer(playerName);
   if (!player) return null;
@@ -194,8 +235,12 @@ export async function analyzePlayer(
 
   // Fetch current season, last year, career, and game log in parallel
   const [seasonRaw, lastYearRaw, careerRaw, gameLog] = await Promise.all([
-    isPitcher ? fetchPitcherSeasonStats(player.id) : fetchBatterSeasonStats(player.id),
-    isPitcher ? fetchPitcherSeasonStats(player.id, lastYear) : fetchBatterSeasonStats(player.id, lastYear),
+    isPitcher
+      ? fetchPitcherSeasonStats(player.id)
+      : fetchBatterSeasonStats(player.id),
+    isPitcher
+      ? fetchPitcherSeasonStats(player.id, lastYear)
+      : fetchBatterSeasonStats(player.id, lastYear),
     fetchCareerStats(player.id, isPitcher),
     fetchGameLog(player.id, isPitcher),
   ]);
@@ -211,7 +256,8 @@ export async function analyzePlayer(
   const seasonStats: PlayerSeasonStats = {
     name: player.fullName,
     team: player.team,
-    teamAbbrev: player.team.split(" ").pop()?.slice(0, 3).toUpperCase() ?? "???",
+    teamAbbrev:
+      player.team.split(" ").pop()?.slice(0, 3).toUpperCase() ?? "???",
     position: player.position,
     gamesPlayed,
     number: player.number,
@@ -220,7 +266,7 @@ export async function analyzePlayer(
 
   if (isPitcher) {
     const totalK = parseInt(raw.strikeOuts) || 0;
-    const ip = parseFloat(raw.inningsPitched) || 0;
+    const ip = ipToInnings(raw.inningsPitched);
     seasonStats.era = parseFloat(raw.era) || 0;
     seasonStats.whip = parseFloat(raw.whip) || 0;
     seasonStats.strikeouts = totalK;
@@ -229,7 +275,8 @@ export async function analyzePlayer(
     seasonStats.inningsPitched = ip;
     seasonStats.wins = parseInt(raw.wins) || 0;
     seasonStats.losses = parseInt(raw.losses) || 0;
-    seasonStats.avgStrikeoutsPerGame = gamesPlayed > 0 ? totalK / gamesPlayed : 0;
+    seasonStats.avgStrikeoutsPerGame =
+      gamesPlayed > 0 ? totalK / gamesPlayed : 0;
   } else {
     const hits = parseInt(raw.hits) || 0;
     const doubles = parseInt(raw.doubles) || 0;
@@ -252,21 +299,34 @@ export async function analyzePlayer(
 
   // Get stat values for the specific market
   const statValues = last10.map((g) => getStatForMarket(g, market, isPitcher));
-  const avgLast10 = statValues.length > 0 ? statValues.reduce((a, b) => a + b, 0) / statValues.length : 0;
+  const avgLast10 =
+    statValues.length > 0
+      ? statValues.reduce((a, b) => a + b, 0) / statValues.length
+      : 0;
 
   // Vs opponent analysis
   const vsOpp = opponentTeam
-    ? gameLog.filter((g) => g.opponent.toLowerCase().includes(opponentTeam.toLowerCase().split(" ").pop() ?? ""))
+    ? gameLog.filter((g) =>
+        g.opponent
+          .toLowerCase()
+          .includes(opponentTeam.toLowerCase().split(" ").pop() ?? ""),
+      )
     : [];
   const vsOppStats = vsOpp.map((g) => getStatForMarket(g, market, isPitcher));
-  const avgVsOpp = vsOppStats.length > 0 ? vsOppStats.reduce((a, b) => a + b, 0) / vsOppStats.length : avgLast10;
+  const avgVsOpp =
+    vsOppStats.length > 0
+      ? vsOppStats.reduce((a, b) => a + b, 0) / vsOppStats.length
+      : avgLast10;
 
   // Trend analysis
   const last5 = statValues.slice(-5);
   const first5 = statValues.slice(0, 5);
-  const avgLast5 = last5.length > 0 ? last5.reduce((a, b) => a + b, 0) / last5.length : 0;
-  const avgFirst5 = first5.length > 0 ? first5.reduce((a, b) => a + b, 0) / first5.length : 0;
-  const trending = avgLast5 > avgFirst5 ? "up" : avgLast5 < avgFirst5 ? "down" : "flat";
+  const avgLast5 =
+    last5.length > 0 ? last5.reduce((a, b) => a + b, 0) / last5.length : 0;
+  const avgFirst5 =
+    first5.length > 0 ? first5.reduce((a, b) => a + b, 0) / first5.length : 0;
+  const trending =
+    avgLast5 > avgFirst5 ? "up" : avgLast5 < avgFirst5 ? "down" : "flat";
 
   // Hit rate (how often they go over)
   const overCount = statValues.filter((v) => v > line).length;
@@ -274,13 +334,29 @@ export async function analyzePlayer(
 
   // Build recommendation
   const recommendation = buildRecommendation(
-    market, line, avgLast10, avgVsOpp, hitRate, trending, seasonStats, last10.length, vsOpp.length
+    market,
+    line,
+    avgLast10,
+    avgVsOpp,
+    hitRate,
+    trending,
+    seasonStats,
+    last10.length,
+    vsOpp.length,
   );
 
   // Build last year's stats
-  const lastYearStats = lastYearRaw ? buildStatSummary(lastYearRaw, isPitcher) : undefined;
-  const careerStatsObj = careerRaw ? buildStatSummary(careerRaw, isPitcher) : undefined;
-  const dataSource = seasonRaw ? "current" as const : lastYearRaw ? "lastYear" as const : "career" as const;
+  const lastYearStats = lastYearRaw
+    ? buildStatSummary(lastYearRaw, isPitcher)
+    : undefined;
+  const careerStatsObj = careerRaw
+    ? buildStatSummary(careerRaw, isPitcher)
+    : undefined;
+  const dataSource = seasonRaw
+    ? ("current" as const)
+    : lastYearRaw
+      ? ("lastYear" as const)
+      : ("career" as const);
 
   return {
     player: seasonStats,
@@ -298,11 +374,14 @@ export async function analyzePlayer(
 }
 
 // Build a stat summary from raw API data
-function buildStatSummary(raw: any, isPitcher: boolean): Partial<PlayerSeasonStats> {
+function buildStatSummary(
+  raw: any,
+  isPitcher: boolean,
+): Partial<PlayerSeasonStats> {
   const gp = parseInt(raw.gamesPlayed || raw.gamesPitched || "0");
   if (isPitcher) {
     const totalK = parseInt(raw.strikeOuts) || 0;
-    const ip = parseFloat(raw.inningsPitched) || 0;
+    const ip = ipToInnings(raw.inningsPitched);
     return {
       gamesPlayed: gp,
       era: parseFloat(raw.era) || 0,
@@ -323,7 +402,8 @@ function buildStatSummary(raw: any, isPitcher: boolean): Partial<PlayerSeasonSta
       gamesPlayed: gp,
       avg: parseFloat(raw.avg) || 0,
       ops: parseFloat(raw.ops) || 0,
-      hits, homeRuns: hr,
+      hits,
+      homeRuns: hr,
       rbi: parseInt(raw.rbi) || 0,
       stolenBases: parseInt(raw.stolenBases) || 0,
       totalBases: tb,
@@ -333,10 +413,15 @@ function buildStatSummary(raw: any, isPitcher: boolean): Partial<PlayerSeasonSta
   }
 }
 
-function getStatForMarket(game: GameLogEntry, market: string, isPitcher: boolean): number {
+function getStatForMarket(
+  game: GameLogEntry,
+  market: string,
+  isPitcher: boolean,
+): number {
   if (isPitcher) {
     if (market.includes("strikeout")) return game.strikeouts ?? 0;
-    if (market.includes("outs") || market.includes("recorded")) return (game.inningsPitched ?? 0) * 3;
+    if (market.includes("outs") || market.includes("recorded"))
+      return (game.inningsPitched ?? 0) * 3;
     return game.strikeouts ?? 0;
   } else {
     if (market.includes("hits")) return game.hitsB ?? 0;
@@ -356,7 +441,7 @@ function buildRecommendation(
   trending: string,
   stats: PlayerSeasonStats,
   sampleSize: number,
-  oppSampleSize: number
+  oppSampleSize: number,
 ): PlayerAnalysis["recommendation"] {
   const reasons: string[] = [];
   let score = 0; // positive = over, negative = under
@@ -365,21 +450,31 @@ function buildRecommendation(
   const avgDiff = avgLast10 - line;
   if (avgDiff > 0.5) {
     score += 20;
-    reasons.push(`Averaging ${avgLast10.toFixed(1)} over last ${sampleSize} games (line: ${line})`);
+    reasons.push(
+      `Averaging ${avgLast10.toFixed(1)} over last ${sampleSize} games (line: ${line})`,
+    );
   } else if (avgDiff < -0.5) {
     score -= 20;
-    reasons.push(`Averaging ${avgLast10.toFixed(1)} over last ${sampleSize} games (under the ${line} line)`);
+    reasons.push(
+      `Averaging ${avgLast10.toFixed(1)} over last ${sampleSize} games (under the ${line} line)`,
+    );
   } else {
-    reasons.push(`Averaging ${avgLast10.toFixed(1)} — right at the line of ${line}`);
+    reasons.push(
+      `Averaging ${avgLast10.toFixed(1)} — right at the line of ${line}`,
+    );
   }
 
   // Hit rate
   if (hitRate > 0.65) {
     score += 15;
-    reasons.push(`Hit the over in ${(hitRate * 100).toFixed(0)}% of recent games`);
+    reasons.push(
+      `Hit the over in ${(hitRate * 100).toFixed(0)}% of recent games`,
+    );
   } else if (hitRate < 0.35) {
     score -= 15;
-    reasons.push(`Only hit the over in ${(hitRate * 100).toFixed(0)}% of recent games`);
+    reasons.push(
+      `Only hit the over in ${(hitRate * 100).toFixed(0)}% of recent games`,
+    );
   }
 
   // Trend
@@ -395,10 +490,14 @@ function buildRecommendation(
   if (oppSampleSize >= 2) {
     if (avgVsOpp > line + 0.3) {
       score += 12;
-      reasons.push(`Averages ${avgVsOpp.toFixed(1)} vs this opponent (${oppSampleSize} games)`);
+      reasons.push(
+        `Averages ${avgVsOpp.toFixed(1)} vs this opponent (${oppSampleSize} games)`,
+      );
     } else if (avgVsOpp < line - 0.3) {
       score -= 12;
-      reasons.push(`Only averages ${avgVsOpp.toFixed(1)} vs this opponent (${oppSampleSize} games)`);
+      reasons.push(
+        `Only averages ${avgVsOpp.toFixed(1)} vs this opponent (${oppSampleSize} games)`,
+      );
     }
   }
 
@@ -415,17 +514,21 @@ function buildRecommendation(
 
   // Batter-specific
   if (market.includes("hits") && stats.avg) {
-    if (stats.avg > 0.290) {
+    if (stats.avg > 0.29) {
       score += 8;
-      reasons.push(`Hitting ${stats.avg.toFixed(3)} this season — well above average`);
-    } else if (stats.avg < 0.230) {
+      reasons.push(
+        `Hitting ${stats.avg.toFixed(3)} this season — well above average`,
+      );
+    } else if (stats.avg < 0.23) {
       score -= 8;
-      reasons.push(`Batting just ${stats.avg.toFixed(3)} this season — below average`);
+      reasons.push(
+        `Batting just ${stats.avg.toFixed(3)} this season — below average`,
+      );
     }
   }
 
   if (market.includes("total_bases") && stats.ops) {
-    if (stats.ops > 0.850) {
+    if (stats.ops > 0.85) {
       score += 8;
       reasons.push(`Strong ${stats.ops.toFixed(3)} OPS — extra-base power`);
     }

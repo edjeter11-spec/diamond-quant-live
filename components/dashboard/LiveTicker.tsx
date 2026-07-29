@@ -7,7 +7,11 @@ export default function LiveTicker() {
   const { oddsData, scores } = useStore();
 
   // Collect all alerts: arbs, big EV, live scores
-  const alerts: Array<{ type: "arb" | "ev" | "live"; text: string; priority: number }> = [];
+  const alerts: Array<{
+    type: "arb" | "ev" | "live";
+    text: string;
+    priority: number;
+  }> = [];
 
   for (const game of oddsData) {
     if (game.arbitrage?.length > 0) {
@@ -34,10 +38,12 @@ export default function LiveTicker() {
   for (const score of scores) {
     if (score.status !== "live") continue;
     // Skip ghost-live games (status flipped but no actual play yet) — avoids "0 0 ▲1" noise
-    const hasAction = (score.awayScore ?? 0) > 0 || (score.homeScore ?? 0) > 0
-      || (score.inning ?? 0) > 1
-      || (score.period ?? 0) > 1
-      || (score.outs ?? 0) > 0;
+    const hasAction =
+      (score.awayScore ?? 0) > 0 ||
+      (score.homeScore ?? 0) > 0 ||
+      (score.inning ?? 0) > 1 ||
+      (score.period ?? 0) > 1 ||
+      (score.outs ?? 0) > 0;
     if (!hasAction) continue;
     const isMLB = score.inningHalf != null;
     const periodTxt = isMLB
@@ -55,7 +61,11 @@ export default function LiveTicker() {
 
   // If no alerts, show default
   if (alerts.length === 0) {
-    alerts.push({ type: "ev", text: "Diamond-Quant Live — Scanning markets for edges...", priority: 0 });
+    alerts.push({
+      type: "ev",
+      text: "Diamond-Quant Live — Scanning markets for edges...",
+      priority: 0,
+    });
   }
 
   // Double the content for seamless loop
@@ -66,7 +76,10 @@ export default function LiveTicker() {
       <div className="ticker-wrap">
         <div className="ticker-content py-2 gap-12">
           {tickerItems.map((alert, i) => (
-            <span key={i} className="inline-flex items-center gap-2 px-6 text-sm font-mono whitespace-nowrap">
+            <span
+              key={i}
+              className="inline-flex items-center gap-2 px-6 text-sm font-mono whitespace-nowrap"
+            >
               {alert.type === "arb" && (
                 <>
                   <Zap className="w-3.5 h-3.5 text-gold flex-shrink-0" />

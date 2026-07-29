@@ -5,7 +5,11 @@
 // Feeds results into brain learning loop
 // ──────────────────────────────────────────────────────────
 
-import { learnFromPropResult, type NbaPropBrainState, type AuditResult } from "./nba-prop-brain";
+import {
+  learnFromPropResult,
+  type NbaPropBrainState,
+  type AuditResult,
+} from "./nba-prop-brain";
 import { supabase } from "@/lib/supabase/client";
 
 const PROP_TO_BOX: Record<string, string> = {
@@ -24,28 +28,48 @@ const PROP_TO_BOX_ALT: Record<string, string> = {
 };
 
 function normalizeName(name: string): string {
-  return name.toLowerCase().replace(/\./g, "").replace(/'/g, "").replace(/\s+(jr|sr|ii|iii|iv)$/i, "").replace(/\s+/g, " ").trim();
+  return name
+    .toLowerCase()
+    .replace(/\./g, "")
+    .replace(/'/g, "")
+    .replace(/\s+(jr|sr|ii|iii|iv)$/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
-function playerMatch(predicted: string, boxFirst: string, boxLast: string): boolean {
+function playerMatch(
+  predicted: string,
+  boxFirst: string,
+  boxLast: string,
+): boolean {
   const a = normalizeName(predicted);
   const b = normalizeName(`${boxFirst} ${boxLast}`);
   if (a === b) return true;
   const aParts = a.split(" ");
   const bParts = b.split(" ");
   if (aParts.length >= 2 && bParts.length >= 2) {
-    return aParts[aParts.length - 1] === bParts[bParts.length - 1] && aParts[0].slice(0, 3) === bParts[0].slice(0, 3);
+    return (
+      aParts[aParts.length - 1] === bParts[bParts.length - 1] &&
+      aParts[0].slice(0, 3) === bParts[0].slice(0, 3)
+    );
   }
   return false;
 }
 
 // Fetch box score from NBA CDN (free, no auth)
 async function fetchCDNBoxScore(gameId: string): Promise<Array<{
-  firstName: string; lastName: string; personId: number;
-  points: number; reboundsTotal: number; assists: number; threePointersMade: number;
+  firstName: string;
+  lastName: string;
+  personId: number;
+  points: number;
+  reboundsTotal: number;
+  assists: number;
+  threePointersMade: number;
 }> | null> {
   try {
-    const res = await fetch(`https://cdn.nba.com/static/json/liveData/boxscore/boxscore_${gameId}.json`);
+    const res = await fetch(
+      `https://cdn.nba.com/static/json/liveData/boxscore/boxscore_${gameId}.json`,
+    );
     if (!res.ok) return null;
     const data = await res.json();
     const game = data.game;
@@ -76,20 +100,27 @@ async function fetchCDNBoxScore(gameId: string): Promise<Array<{
 // Get today's finished game IDs from NBA CDN scoreboard
 async function getTodayFinishedGameIds(): Promise<string[]> {
   try {
-    const res = await fetch("https://cdn.nba.com/static/json/liveData/scoreboard/todaysScoreboard_00.json");
+    const res = await fetch(
+      "https://cdn.nba.com/static/json/liveData/scoreboard/todaysScoreboard_00.json",
+    );
     if (!res.ok) return [];
     const data = await res.json();
     const games = data.scoreboard?.games ?? [];
-    return games.filter((g: any) => g.gameStatus === 3).map((g: any) => g.gameId);
+    return games
+      .filter((g: any) => g.gameStatus === 3)
+      .map((g: any) => g.gameId);
   } catch {
     return [];
   }
 }
 
 // ── Main Audit Function ──
-export async function auditCompletedGames(
-  brain: NbaPropBrainState
-): Promise<{ updatedBrain: NbaPropBrainState; graded: number; hits: number; misses: number }> {
+export async function auditCompletedGames(brain: NbaPropBrainState): Promise<{
+  updatedBrain: NbaPropBrainState;
+  graded: number;
+  hits: number;
+  misses: number;
+}> {
   if (!supabase) return { updatedBrain: brain, graded: 0, hits: 0, misses: 0 };
 
   // 1. Find pending predictions
@@ -113,7 +144,9 @@ export async function auditCompletedGames(
   }
 
   let updatedBrain = { ...brain };
-  let totalGraded = 0, totalHits = 0, totalMisses = 0;
+  let totalGraded = 0,
+    totalHits = 0,
+    totalMisses = 0;
 
   // 3. For each finished game, fetch box score and grade predictions
   for (const gameId of finishedGameIds.slice(0, 5)) {
@@ -132,21 +165,30 @@ export async function auditCompletedGames(
       if (!statKey) continue;
 
       // Find matching player in box score
-      const boxPlayer = boxScore.find(p => playerMatch(pred.player_name, p.firstName, p.lastName));
+      const boxPlayer = boxScore.find((p) =>
+        playerMatch(pred.player_name, p.firstName, p.lastName),
+      );
       if (!boxPlayer) continue; // player not in this game's box score
 
-      const actualValue = (boxPlayer as any)[statKey] ?? (boxPlayer as any)[statKeyAlt] ?? 0;
-      const hit = pred.predicted_side === "over" ? actualValue > pred.line : actualValue < pred.line;
+      const actualValue =
+        (boxPlayer as any)[statKey] ?? (boxPlayer as any)[statKeyAlt] ?? 0;
+      const hit =
+        pred.predicted_side === "over"
+          ? actualValue > pred.line
+          : actualValue < pred.line;
       const brierScore = Math.pow(pred.predicted_prob - (hit ? 1 : 0), 2);
 
       // Update prediction row
-      await supabase.from("prop_predictions").update({
-        actual_value: actualValue,
-        hit,
-        brier_score: Math.round(brierScore * 10000) / 10000,
-        status: "graded",
-        graded_at: new Date().toISOString(),
-      }).eq("id", pred.id);
+      await supabase
+        .from("prop_predictions")
+        .update({
+          actual_value: actualValue,
+          hit,
+          brier_score: Math.round(brierScore * 10000) / 10000,
+          status: "graded",
+          graded_at: new Date().toISOString(),
+        })
+        .eq("id", pred.id);
 
       // Feed into brain learning
       updatedBrain = learnFromPropResult(updatedBrain, {
@@ -163,26 +205,35 @@ export async function auditCompletedGames(
       });
 
       totalGraded++;
-      if (hit) totalHits++; else totalMisses++;
+      if (hit) totalHits++;
+      else totalMisses++;
     }
 
     // Small delay between games
-    await new Promise(r => setTimeout(r, 200));
+    await new Promise((r) => setTimeout(r, 200));
   }
 
   // Record audit result
   if (totalGraded > 0) {
-    updatedBrain.recentAudits = [...updatedBrain.recentAudits, {
-      gameId: finishedGameIds.join(","),
-      gameDate: today,
-      graded: totalGraded,
-      hits: totalHits,
-      misses: totalMisses,
-      avgBrier: Math.round((totalMisses / totalGraded) * 100) / 100,
-      timestamp: new Date().toISOString(),
-    }].slice(-20);
+    updatedBrain.recentAudits = [
+      ...updatedBrain.recentAudits,
+      {
+        gameId: finishedGameIds.join(","),
+        gameDate: today,
+        graded: totalGraded,
+        hits: totalHits,
+        misses: totalMisses,
+        avgBrier: Math.round((totalMisses / totalGraded) * 100) / 100,
+        timestamp: new Date().toISOString(),
+      },
+    ].slice(-20);
     updatedBrain.lastAuditAt = new Date().toISOString();
   }
 
-  return { updatedBrain, graded: totalGraded, hits: totalHits, misses: totalMisses };
+  return {
+    updatedBrain,
+    graded: totalGraded,
+    hits: totalHits,
+    misses: totalMisses,
+  };
 }

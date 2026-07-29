@@ -13,8 +13,18 @@ export const metadata: Metadata = {
     default: "Diamond-Quant Live — Sports Betting Intelligence",
     template: "%s | Diamond-Quant Live",
   },
-  description: "AI-powered MLB & NBA betting analytics — 3-model consensus, live +EV picks, player prop projections, arbitrage scanner, and a self-learning brain.",
-  keywords: ["sports betting", "MLB", "NBA", "expected value", "arbitrage", "player props", "parlay", "quant"],
+  description:
+    "AI-powered MLB & NBA betting analytics — 3-model consensus, live +EV picks, player prop projections, arbitrage scanner, and a self-learning brain.",
+  keywords: [
+    "sports betting",
+    "MLB",
+    "NBA",
+    "expected value",
+    "arbitrage",
+    "player props",
+    "parlay",
+    "quant",
+  ],
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
@@ -26,7 +36,8 @@ export const metadata: Metadata = {
     url: SITE_URL,
     siteName: "Diamond-Quant Live",
     title: "Diamond-Quant Live — Sports Betting Intelligence",
-    description: "Quant-driven +EV sports picks across 10+ sportsbooks. Live arbs, player props, and a self-learning brain.",
+    description:
+      "Quant-driven +EV sports picks across 10+ sportsbooks. Live arbs, player props, and a self-learning brain.",
   },
   twitter: {
     card: "summary_large_image",
@@ -44,10 +55,15 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  themeColor: "#00ff88",
+  viewportFit: "cover", // required for env(safe-area-inset-*) on notched iPhones
+  themeColor: "#05070d",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html lang="en" className="dark">
       <body className="min-h-screen bg-void text-silver antialiased">

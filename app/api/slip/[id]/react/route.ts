@@ -15,12 +15,18 @@ function rateOk(key: string): boolean {
   return true;
 }
 
-export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
   if (!isAllowedOrigin(req)) {
     return NextResponse.json({ error: "Forbidden origin" }, { status: 403 });
   }
   if (!supabaseAdmin) {
-    return NextResponse.json({ error: "Server not configured" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Server not configured" },
+      { status: 500 },
+    );
   }
 
   const { id } = await params;
@@ -29,7 +35,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   // Per-IP+slip rate limit
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  const ip =
+    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
   if (!rateOk(`${ip}:${id}`)) {
     return NextResponse.json({ error: "Too many reactions" }, { status: 429 });
   }
@@ -46,7 +53,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       .eq("id", id)
       .single();
 
-    if (!data) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    if (!data)
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
 
     const reactions = (data.reactions as Record<string, number>) ?? {};
     reactions[emoji] = Math.min((reactions[emoji] ?? 0) + 1, 999_999);

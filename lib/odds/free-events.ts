@@ -12,7 +12,8 @@ export interface FreeEvent {
   commence_time: string;
 }
 
-const ESPN_NBA = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard";
+const ESPN_NBA =
+  "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard";
 const MLB_API = "https://statsapi.mlb.com/api/v1/schedule";
 
 function yyyymmdd(d: Date): string {
@@ -72,7 +73,8 @@ async function getMlbEvents(): Promise<FreeEvent[]> {
       const data = await res.json();
       for (const dateEntry of data.dates ?? []) {
         for (const game of dateEntry.games ?? []) {
-          if (!game.teams?.home?.team?.name || !game.teams?.away?.team?.name) continue;
+          if (!game.teams?.home?.team?.name || !game.teams?.away?.team?.name)
+            continue;
           out.push({
             id: String(game.gamePk),
             home_team: game.teams.home.team.name,
@@ -94,6 +96,10 @@ function filterWindow(events: FreeEvent[]): FreeEvent[] {
       // Last 4h up through next 28h — same window as the Odds API path
       return t >= now - 4 * 60 * 60 * 1000 && t <= now + 28 * 60 * 60 * 1000;
     })
-    .sort((a, b) => new Date(a.commence_time).getTime() - new Date(b.commence_time).getTime())
+    .sort(
+      (a, b) =>
+        new Date(a.commence_time).getTime() -
+        new Date(b.commence_time).getTime(),
+    )
     .slice(0, 8);
 }

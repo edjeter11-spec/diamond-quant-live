@@ -34,12 +34,12 @@ export interface CalibrationCurve {
 }
 
 const DEFAULT_BINS: Array<[number, number]> = [
-  [0.50, 0.55],
-  [0.55, 0.60],
-  [0.60, 0.65],
-  [0.65, 0.70],
-  [0.70, 0.80],
-  [0.80, 1.01],
+  [0.5, 0.55],
+  [0.55, 0.6],
+  [0.6, 0.65],
+  [0.65, 0.7],
+  [0.7, 0.8],
+  [0.8, 1.01],
 ];
 
 /**
@@ -61,14 +61,16 @@ export async function computeCalibration(): Promise<CalibrationCurve | null> {
   if (rows.length < 20) return null; // not enough sample to calibrate
 
   const bins: CalibrationBin[] = DEFAULT_BINS.map(([lower, upper]) => {
-    const inBin = rows.filter(r => {
+    const inBin = rows.filter((r) => {
       // fair_prob stored as percentage (0-100) in some paths, 0-1 in others — normalize
       const raw = Number(r.fair_prob ?? 0);
       const p = raw > 1 ? raw / 100 : raw;
       return p >= lower && p < upper;
     });
-    const wins = inBin.filter(r => r.result === "win").length;
-    const decided = inBin.filter(r => r.result === "win" || r.result === "loss").length;
+    const wins = inBin.filter((r) => r.result === "win").length;
+    const decided = inBin.filter(
+      (r) => r.result === "win" || r.result === "loss",
+    ).length;
     const actualRate = decided > 0 ? wins / decided : 0;
     return {
       lower,
@@ -103,14 +105,19 @@ export async function computeCalibration(): Promise<CalibrationCurve | null> {
  * If we've seen picks in that bin with a different actual hit rate, return the
  * actual rate. If the bin has <5 samples, return the original.
  */
-export function calibrate(predicted: number, curve: CalibrationCurve | null): number {
-  if (!curve) return predicted;
+export function calibrate(
+  predicted: number,
+  curve: CalibrationCurve | null,
+): number {
+  if (!curve || !Number.isFinite(predicted)) return predicted;
   const p = predicted > 1 ? predicted / 100 : predicted;
-  const bin = curve.bins.find(b => p >= b.lower && p < b.upper);
+  const bin = curve.bins.find((b) => p >= b.lower && p < b.upper);
   if (!bin || bin.count < 5) return predicted;
+  // Clamp: a 5-for-5 bin would otherwise display 100% — never show certainty
+  const midpoint = Math.min(0.99, Math.max(0.01, bin.displayMidpoint));
   // Preserve input scale (percentage vs fraction)
   const scale = predicted > 1 ? 100 : 1;
-  return Math.round(bin.displayMidpoint * scale * 100) / 100;
+  return Math.round(midpoint * scale * 100) / 100;
 }
 
 /**

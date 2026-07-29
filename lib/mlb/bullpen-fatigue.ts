@@ -12,11 +12,36 @@ const MLB_API = "https://statsapi.mlb.com/api/v1";
 
 // MLB Stats API team IDs (duplicated from logos.ts to avoid importing client code)
 const MLB_TEAM_ID: Record<string, number> = {
-  ARI: 109, ATL: 144, BAL: 110, BOS: 111, CHC: 112, CWS: 145, CIN: 113,
-  CLE: 114, COL: 115, DET: 116, HOU: 117, KC: 118, LAA: 108, LAD: 119,
-  MIA: 146, MIL: 158, MIN: 142, NYM: 121, NYY: 147, OAK: 133, PHI: 143,
-  PIT: 134, SD: 135, SF: 137, SEA: 136, STL: 138, TB: 139, TEX: 140,
-  TOR: 141, WSH: 120,
+  ARI: 109,
+  ATL: 144,
+  BAL: 110,
+  BOS: 111,
+  CHC: 112,
+  CWS: 145,
+  CIN: 113,
+  CLE: 114,
+  COL: 115,
+  DET: 116,
+  HOU: 117,
+  KC: 118,
+  LAA: 108,
+  LAD: 119,
+  MIA: 146,
+  MIL: 158,
+  MIN: 142,
+  NYM: 121,
+  NYY: 147,
+  OAK: 133,
+  PHI: 143,
+  PIT: 134,
+  SD: 135,
+  SF: 137,
+  SEA: 136,
+  STL: 138,
+  TB: 139,
+  TEX: 140,
+  TOR: 141,
+  WSH: 120,
 };
 
 export function getTeamIdByAbbrev(abbrev: string): number | null {
@@ -34,7 +59,10 @@ export interface BullpenFatigue {
 const CACHE_TTL = 6 * 60 * 60 * 1000; // 6 hours — recompute a few times per day
 
 // Fetch last N days of games for a team id
-async function fetchRecentGames(teamId: number, days: number = 3): Promise<number[]> {
+async function fetchRecentGames(
+  teamId: number,
+  days: number = 3,
+): Promise<number[]> {
   const end = new Date();
   const start = new Date();
   start.setUTCDate(start.getUTCDate() - days);
@@ -43,7 +71,7 @@ async function fetchRecentGames(teamId: number, days: number = 3): Promise<numbe
   try {
     const res = await fetch(
       `${MLB_API}/schedule?sportId=1&teamId=${teamId}&startDate=${isoStart}&endDate=${isoEnd}`,
-      { next: { revalidate: 3600 } }
+      { next: { revalidate: 3600 } },
     );
     if (!res.ok) return [];
     const data = await res.json();
@@ -63,9 +91,14 @@ async function fetchRecentGames(teamId: number, days: number = 3): Promise<numbe
 
 // For each game, pull the boxscore and identify relievers (non-starters)
 // that pitched, with pitch counts.
-async function fetchReliefUsage(gamePk: number, teamId: number): Promise<Array<{ name: string; pitches: number }>> {
+async function fetchReliefUsage(
+  gamePk: number,
+  teamId: number,
+): Promise<Array<{ name: string; pitches: number }>> {
   try {
-    const res = await fetch(`${MLB_API}/game/${gamePk}/boxscore`, { next: { revalidate: 3600 } });
+    const res = await fetch(`${MLB_API}/game/${gamePk}/boxscore`, {
+      next: { revalidate: 3600 },
+    });
     if (!res.ok) return [];
     const data = await res.json();
     const isHome = data.teams?.home?.team?.id === teamId;
@@ -97,7 +130,10 @@ async function fetchReliefUsage(gamePk: number, teamId: number): Promise<Array<{
  * Compute bullpen fatigue for a team given their MLB team id.
  * "Tired" = any reliever with 2+ appearances OR 25+ pitches thrown in last 3 days.
  */
-export async function getBullpenFatigue(teamId: number, teamAbbrev: string): Promise<BullpenFatigue> {
+export async function getBullpenFatigue(
+  teamId: number,
+  teamAbbrev: string,
+): Promise<BullpenFatigue> {
   const cacheKey = `bullpen_${teamId}`;
   const cached = getCached(cacheKey, CACHE_TTL) as BullpenFatigue | null;
   if (cached) return cached;
@@ -105,7 +141,10 @@ export async function getBullpenFatigue(teamId: number, teamAbbrev: string): Pro
   const gamePks = await fetchRecentGames(teamId, 3);
   if (gamePks.length === 0) {
     const fresh: BullpenFatigue = {
-      teamAbbrev, tired: false, tiredRelievers: [], score: 0,
+      teamAbbrev,
+      tired: false,
+      tiredRelievers: [],
+      score: 0,
       summary: `${teamAbbrev} bullpen: insufficient recent-game data`,
     };
     setCache(cacheKey, fresh);
@@ -134,13 +173,19 @@ export async function getBullpenFatigue(teamId: number, teamAbbrev: string): Pro
 
   // Score: rough 0-10 proxy for market-vs-our-read edge magnitude
   // 1 tired reliever ≈ 2 points; 3+ tired ≈ 6+ points
-  const score = Math.min(10, tiredRelievers.length * 2 + Math.floor(
-    tiredRelievers.reduce((s, r) => s + Math.max(0, r.pitches - 25), 0) / 15
-  ));
+  const score = Math.min(
+    10,
+    tiredRelievers.length * 2 +
+      Math.floor(
+        tiredRelievers.reduce((s, r) => s + Math.max(0, r.pitches - 25), 0) /
+          15,
+      ),
+  );
 
-  const summary = tiredRelievers.length === 0
-    ? `${teamAbbrev} bullpen is fresh — no relievers over threshold`
-    : `${teamAbbrev} bullpen tired: ${tiredRelievers.length} reliever${tiredRelievers.length !== 1 ? "s" : ""} over threshold (${tiredRelievers.map(r => `${r.name.split(" ").pop()} ${r.pitches}p`).join(", ")})`;
+  const summary =
+    tiredRelievers.length === 0
+      ? `${teamAbbrev} bullpen is fresh — no relievers over threshold`
+      : `${teamAbbrev} bullpen tired: ${tiredRelievers.length} reliever${tiredRelievers.length !== 1 ? "s" : ""} over threshold (${tiredRelievers.map((r) => `${r.name.split(" ").pop()} ${r.pitches}p`).join(", ")})`;
 
   const result: BullpenFatigue = {
     teamAbbrev,

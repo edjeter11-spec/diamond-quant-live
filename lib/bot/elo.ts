@@ -6,7 +6,7 @@
 
 export interface TeamElo {
   team: string;
-  rating: number;        // starts at 1500
+  rating: number; // starts at 1500
   gamesPlayed: number;
   wins: number;
   losses: number;
@@ -28,9 +28,13 @@ const K_FACTOR = 20; // how much each game moves ratings
 const HOME_ADVANTAGE = 50; // ~50 Elo points for home (MLB: ~54%, NBA: ~58%)
 const INITIAL_RATING = 1500;
 
-// Calculate expected win probability from Elo ratings
+// Calculate expected win probability from Elo ratings.
+// Clamped to (0.01, 0.99) — no team is ever a 100% lock.
 export function expectedWinProb(ratingA: number, ratingB: number): number {
-  return 1 / (1 + Math.pow(10, (ratingB - ratingA) / 400));
+  const a = Number.isFinite(ratingA) ? ratingA : 1500;
+  const b = Number.isFinite(ratingB) ? ratingB : 1500;
+  const p = 1 / (1 + Math.pow(10, (b - a) / 400));
+  return Math.min(0.99, Math.max(0.01, p));
 }
 
 // Update Elo after a game result
@@ -39,7 +43,7 @@ export function updateElo(
   homeTeam: string,
   awayTeam: string,
   homeWon: boolean,
-  margin: number = 0 // point/run differential for margin-of-victory adjustment
+  margin: number = 0, // point/run differential for margin-of-victory adjustment
 ): EloState {
   const updated = { ...state };
 
@@ -51,7 +55,10 @@ export function updateElo(
   const away = updated.teams[awayTeam];
 
   // Expected probabilities (with home advantage)
-  const homeExpected = expectedWinProb(home.rating + HOME_ADVANTAGE, away.rating);
+  const homeExpected = expectedWinProb(
+    home.rating + HOME_ADVANTAGE,
+    away.rating,
+  );
   const awayExpected = 1 - homeExpected;
 
   // Actual outcome
@@ -59,7 +66,8 @@ export function updateElo(
   const awayActual = homeWon ? 0 : 1;
 
   // Margin of victory multiplier (bigger wins = bigger Elo change)
-  const movMultiplier = margin > 0 ? Math.log(Math.abs(margin) + 1) * 0.6 + 0.7 : 1;
+  const movMultiplier =
+    margin > 0 ? Math.log(Math.abs(margin) + 1) * 0.6 + 0.7 : 1;
 
   // Update ratings
   const homeChange = K_FACTOR * movMultiplier * (homeActual - homeExpected);
@@ -69,8 +77,13 @@ export function updateElo(
   away.rating = Math.round(away.rating + awayChange);
   home.gamesPlayed++;
   away.gamesPlayed++;
-  if (homeWon) { home.wins++; away.losses++; }
-  else { away.wins++; home.losses++; }
+  if (homeWon) {
+    home.wins++;
+    away.losses++;
+  } else {
+    away.wins++;
+    home.losses++;
+  }
   home.lastUpdated = new Date().toISOString();
   away.lastUpdated = new Date().toISOString();
 
@@ -93,7 +106,8 @@ function createTeam(name: string): TeamElo {
     team: name,
     rating: INITIAL_RATING,
     gamesPlayed: 0,
-    wins: 0, losses: 0,
+    wins: 0,
+    losses: 0,
     lastUpdated: new Date().toISOString(),
     ratingHistory: [INITIAL_RATING],
     peakRating: INITIAL_RATING,
@@ -106,8 +120,15 @@ export function eloPrediction(
   state: EloState,
   homeTeam: string,
   awayTeam: string,
-  isNBA: boolean = false
-): { homeWinProb: number; awayWinProb: number; homeRating: number; awayRating: number; ratingDiff: number; confidence: number } {
+  isNBA: boolean = false,
+): {
+  homeWinProb: number;
+  awayWinProb: number;
+  homeRating: number;
+  awayRating: number;
+  ratingDiff: number;
+  confidence: number;
+} {
   const home = state.teams[homeTeam];
   const away = state.teams[awayTeam];
 
@@ -135,13 +156,14 @@ export function eloPrediction(
 // Get power rankings (sorted by rating)
 export function getPowerRankings(state: EloState): TeamElo[] {
   return Object.values(state.teams)
-    .filter(t => t.gamesPlayed >= 5)
+    .filter((t) => t.gamesPlayed >= 5)
     .sort((a, b) => b.rating - a.rating);
 }
 
 // Load/Save Elo state
 export function loadEloState(sport: string = "mlb"): EloState {
-  if (typeof window === "undefined") return { teams: {}, sport, lastUpdated: "", totalGamesProcessed: 0 };
+  if (typeof window === "undefined")
+    return { teams: {}, sport, lastUpdated: "", totalGamesProcessed: 0 };
   try {
     const stored = localStorage.getItem(`dq_elo_${sport}`);
     if (stored) return JSON.parse(stored);
@@ -151,7 +173,9 @@ export function loadEloState(sport: string = "mlb"): EloState {
 
 export function saveEloState(state: EloState) {
   if (typeof window === "undefined") return;
-  try { localStorage.setItem(`dq_elo_${state.sport}`, JSON.stringify(state)); } catch {}
+  try {
+    localStorage.setItem(`dq_elo_${state.sport}`, JSON.stringify(state));
+  } catch {}
   // Cloud sync
   syncEloToCloud(state);
 }
@@ -166,12 +190,29 @@ async function syncEloToCloud(state: EloState) {
 // Initialize Elo from historical games (for Brain training)
 export function trainEloFromGames(
   sport: string,
-  games: Array<{ homeTeam: string; awayTeam: string; homeWon: boolean; homeScore: number; awayScore: number }>
+  games: Array<{
+    homeTeam: string;
+    awayTeam: string;
+    homeWon: boolean;
+    homeScore: number;
+    awayScore: number;
+  }>,
 ): EloState {
-  let state: EloState = { teams: {}, sport, lastUpdated: "", totalGamesProcessed: 0 };
+  let state: EloState = {
+    teams: {},
+    sport,
+    lastUpdated: "",
+    totalGamesProcessed: 0,
+  };
   for (const game of games) {
     const margin = Math.abs(game.homeScore - game.awayScore);
-    state = updateElo(state, game.homeTeam, game.awayTeam, game.homeWon, margin);
+    state = updateElo(
+      state,
+      game.homeTeam,
+      game.awayTeam,
+      game.homeWon,
+      margin,
+    );
   }
   return state;
 }

@@ -23,12 +23,15 @@ export function setCache(key: string, data: any) {
   cache.set(key, { data, timestamp: Date.now() });
 }
 
-// Cache TTLs
+// Cache TTLs — kept long because Odds API's free tier (500 req/month) is the
+// binding constraint for a single-user app. Odds/props don't need to be
+// fresher than this for betting decisions; scores/live state update via a
+// separate, free endpoint on their own faster cadence.
 export const CACHE_TTL = {
-  ODDS: 600_000,        // 10 minutes
-  PROPS: 1_800_000,     // 30 minutes — filterTodayOnly handles staleness, saves credits
-  EVENTS: 1_800_000,    // 30 minutes
-  ANALYSIS: 600_000,    // 10 minutes
+  ODDS: 1_800_000, // 30 minutes
+  PROPS: 3_600_000, // 60 minutes — filterTodayOnly handles staleness, saves credits
+  EVENTS: 3_600_000, // 60 minutes
+  ANALYSIS: 1_800_000, // 30 minutes
 };
 
 // ── Edge Timestamp Tracking ──

@@ -25,7 +25,9 @@ export interface LoggedPick {
 }
 
 export function etDateString(d = new Date()): string {
-  const et = new Date(d.toLocaleString("en-US", { timeZone: "America/New_York" }));
+  const et = new Date(
+    d.toLocaleString("en-US", { timeZone: "America/New_York" }),
+  );
   return `${et.getFullYear()}-${String(et.getMonth() + 1).padStart(2, "0")}-${String(et.getDate()).padStart(2, "0")}`;
 }
 
@@ -33,7 +35,9 @@ export function etDateString(d = new Date()): string {
  * Log a batch of today's picks. Deduplicated server-side by
  * (pick_date, sport, category, pick_text) via unique-ish fingerprint.
  */
-export async function logDailyPicks(picks: LoggedPick[]): Promise<{ inserted: number }> {
+export async function logDailyPicks(
+  picks: LoggedPick[],
+): Promise<{ inserted: number }> {
   if (!supabaseAdmin || picks.length === 0) return { inserted: 0 };
 
   // Fetch today's existing rows to avoid duplicate re-logging across cron runs
@@ -50,7 +54,8 @@ export async function logDailyPicks(picks: LoggedPick[]): Promise<{ inserted: nu
       .eq("pick_date", date)
       .eq("sport", sport);
     const existing = new Set<string>();
-    for (const row of data ?? []) existing.add(`${row.category}:${row.pick_text}`);
+    for (const row of data ?? [])
+      existing.add(`${row.category}:${row.pick_text}`);
     byDate.set(key, existing);
   }
 
@@ -87,11 +92,16 @@ export async function logDailyPicks(picks: LoggedPick[]): Promise<{ inserted: nu
  * Very simple matcher: compares pick_text against a list of completed-game outcomes.
  * Returns count of rows settled.
  */
-export async function settlePendingPicks(completedGames: Array<{
-  homeTeam: string; awayTeam: string;
-  homeAbbrev?: string; awayAbbrev?: string;
-  homeScore: number; awayScore: number;
-}>): Promise<{ settled: number }> {
+export async function settlePendingPicks(
+  completedGames: Array<{
+    homeTeam: string;
+    awayTeam: string;
+    homeAbbrev?: string;
+    awayAbbrev?: string;
+    homeScore: number;
+    awayScore: number;
+  }>,
+): Promise<{ settled: number }> {
   if (!supabaseAdmin || completedGames.length === 0) return { settled: 0 };
 
   const { data: pending } = await supabaseAdmin
@@ -104,10 +114,14 @@ export async function settlePendingPicks(completedGames: Array<{
 
   let settled = 0;
   for (const pick of pending) {
-    const match = completedGames.find(g =>
-      (pick.game ?? "").includes(g.homeTeam) || (pick.game ?? "").includes(g.awayTeam) ||
-      (pick.game ?? "").includes(g.homeAbbrev ?? "__") || (pick.game ?? "").includes(g.awayAbbrev ?? "__") ||
-      (pick.pick_text ?? "").includes(g.homeTeam) || (pick.pick_text ?? "").includes(g.awayTeam)
+    const match = completedGames.find(
+      (g) =>
+        (pick.game ?? "").includes(g.homeTeam) ||
+        (pick.game ?? "").includes(g.awayTeam) ||
+        (pick.game ?? "").includes(g.homeAbbrev ?? "__") ||
+        (pick.game ?? "").includes(g.awayAbbrev ?? "__") ||
+        (pick.pick_text ?? "").includes(g.homeTeam) ||
+        (pick.pick_text ?? "").includes(g.awayTeam),
     );
     if (!match) continue;
 
@@ -115,16 +129,21 @@ export async function settlePendingPicks(completedGames: Array<{
     if (!result) continue;
 
     const stake = 1; // 1-unit sizing for track-record clarity
-    const profit = result === "win"
-      ? stake * (americanToDecimal(pick.odds ?? -110) - 1)
-      : result === "push" ? 0
-      : -stake;
+    const profit =
+      result === "win"
+        ? stake * (americanToDecimal(pick.odds ?? -110) - 1)
+        : result === "push"
+          ? 0
+          : -stake;
 
-    await supabaseAdmin.from("daily_picks_log").update({
-      result,
-      settled_at: new Date().toISOString(),
-      profit_units: Math.round(profit * 100) / 100,
-    }).eq("id", pick.id);
+    await supabaseAdmin
+      .from("daily_picks_log")
+      .update({
+        result,
+        settled_at: new Date().toISOString(),
+        profit_units: Math.round(profit * 100) / 100,
+      })
+      .eq("id", pick.id);
     settled++;
   }
   return { settled };
@@ -134,7 +153,15 @@ export async function settlePendingPicks(completedGames: Array<{
  * Grade a single ML/total pick against a completed game.
  * Returns null if we can't confidently grade it (e.g., a prop with no score to check).
  */
-function gradeMLPick(pick: any, game: { homeTeam: string; awayTeam: string; homeScore: number; awayScore: number }): PickResult | null {
+function gradeMLPick(
+  pick: any,
+  game: {
+    homeTeam: string;
+    awayTeam: string;
+    homeScore: number;
+    awayScore: number;
+  },
+): PickResult | null {
   const text = (pick.pick_text ?? "").toLowerCase();
   const homeWin = game.homeScore > game.awayScore;
   const total = game.homeScore + game.awayScore;
@@ -171,10 +198,40 @@ function gradeMLPick(pick: any, game: { homeTeam: string; awayTeam: string; home
  * Roll-up stats for the /results page.
  */
 export async function getTrackRecordStats(days: number = 30): Promise<{
-  overall: { total: number; wins: number; losses: number; pushes: number; winRate: number; profitUnits: number };
-  byCategory: Record<PickCategory, { total: number; wins: number; losses: number; winRate: number; profitUnits: number }>;
-  bySport: Record<"mlb" | "nba", { total: number; wins: number; losses: number; winRate: number; profitUnits: number }>;
-  daily: Array<{ date: string; wins: number; losses: number; profitUnits: number }>;
+  overall: {
+    total: number;
+    wins: number;
+    losses: number;
+    pushes: number;
+    winRate: number;
+    profitUnits: number;
+  };
+  byCategory: Record<
+    PickCategory,
+    {
+      total: number;
+      wins: number;
+      losses: number;
+      winRate: number;
+      profitUnits: number;
+    }
+  >;
+  bySport: Record<
+    "mlb" | "nba",
+    {
+      total: number;
+      wins: number;
+      losses: number;
+      winRate: number;
+      profitUnits: number;
+    }
+  >;
+  daily: Array<{
+    date: string;
+    wins: number;
+    losses: number;
+    profitUnits: number;
+  }>;
 } | null> {
   if (!supabaseAdmin) return null;
 
@@ -191,11 +248,26 @@ export async function getTrackRecordStats(days: number = 30): Promise<{
 
   const rows = data ?? [];
 
-  const bucket = () => ({ total: 0, wins: 0, losses: 0, pushes: 0, winRate: 0, profitUnits: 0 });
+  const bucket = () => ({
+    total: 0,
+    wins: 0,
+    losses: 0,
+    pushes: 0,
+    winRate: 0,
+    profitUnits: 0,
+  });
   const overall = bucket();
-  const byCategory: Record<string, any> = { parlay: bucket(), lock: bucket(), longshot: bucket(), prop: bucket() };
+  const byCategory: Record<string, any> = {
+    parlay: bucket(),
+    lock: bucket(),
+    longshot: bucket(),
+    prop: bucket(),
+  };
   const bySport: Record<string, any> = { mlb: bucket(), nba: bucket() };
-  const dailyMap = new Map<string, { wins: number; losses: number; profitUnits: number }>();
+  const dailyMap = new Map<
+    string,
+    { wins: number; losses: number; profitUnits: number }
+  >();
 
   for (const r of rows) {
     overall.total++;
@@ -237,8 +309,17 @@ export async function getTrackRecordStats(days: number = 30): Promise<{
   for (const k of Object.keys(bySport)) finalize(bySport[k]);
 
   const daily = Array.from(dailyMap.entries())
-    .map(([date, v]) => ({ date, ...v, profitUnits: Math.round(v.profitUnits * 100) / 100 }))
+    .map(([date, v]) => ({
+      date,
+      ...v,
+      profitUnits: Math.round(v.profitUnits * 100) / 100,
+    }))
     .sort((a, b) => a.date.localeCompare(b.date));
 
-  return { overall: overall as any, byCategory: byCategory as any, bySport: bySport as any, daily };
+  return {
+    overall: overall as any,
+    byCategory: byCategory as any,
+    bySport: bySport as any,
+    daily,
+  };
 }

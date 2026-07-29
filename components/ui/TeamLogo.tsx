@@ -1,16 +1,25 @@
 "use client";
 
 import { useState } from "react";
-import { getTeamLogoByName, getTeamLogo, teamNameToAbbrev, getMlbLogoFallback } from "@/lib/logos";
+import {
+  getTeamLogoByName,
+  getTeamLogo,
+  teamNameToAbbrev,
+  getMlbLogoFallback,
+} from "@/lib/logos";
 import { useSport } from "@/lib/sport-context";
 
 interface TeamLogoProps {
-  team: string;        // full name or abbreviation
-  size?: number;       // px, default 20
+  team: string; // full name or abbreviation
+  size?: number; // px, default 20
   className?: string;
 }
 
-export default function TeamLogo({ team, size = 20, className = "" }: TeamLogoProps) {
+export default function TeamLogo({
+  team,
+  size = 20,
+  className = "",
+}: TeamLogoProps) {
   const { currentSport } = useSport();
   const [primaryError, setPrimaryError] = useState(false);
   const [fallbackError, setFallbackError] = useState(false);
@@ -20,10 +29,12 @@ export default function TeamLogo({ team, size = 20, className = "" }: TeamLogoPr
 
   // Primary URL — try abbrev; if that fails, try by name.
   let primary = getTeamLogo(abbrev || team, currentSport as "mlb" | "nba");
-  if (!primary) primary = getTeamLogoByName(team, currentSport as "mlb" | "nba");
+  if (!primary)
+    primary = getTeamLogoByName(team, currentSport as "mlb" | "nba");
 
   // MLB has a second URL (ESPN CDN) to fall back to before we give up on images
-  const fallback = currentSport === "mlb" && abbrev ? getMlbLogoFallback(abbrev) : "";
+  const fallback =
+    currentSport === "mlb" && abbrev ? getMlbLogoFallback(abbrev) : "";
 
   // Serve primary; on error swap to fallback; on both errors render text badge.
   if (primary && !primaryError) {
@@ -54,11 +65,18 @@ export default function TeamLogo({ team, size = 20, className = "" }: TeamLogoPr
   }
 
   // Final fallback — 3-letter text badge
-  const label = (abbrev && abbrev.length <= 4 ? abbrev : (team || "?").slice(0, 3)).toUpperCase();
+  const label = (
+    abbrev && abbrev.length <= 4 ? abbrev : (team || "?").slice(0, 3)
+  ).toUpperCase();
   return (
     <div
       className={`flex-shrink-0 rounded-full bg-gunmetal/50 border border-slate/30 flex items-center justify-center text-silver font-bold tracking-tight ${className}`}
-      style={{ width: size, height: size, fontSize: size * 0.32, lineHeight: 1 }}
+      style={{
+        width: size,
+        height: size,
+        fontSize: size * 0.32,
+        lineHeight: 1,
+      }}
       title={team}
     >
       {label}

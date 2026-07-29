@@ -1,13 +1,25 @@
 import { NextResponse } from "next/server";
-import { fetchTodayGames, getGameStatus, getTeamAbbrev } from "@/lib/mlb/stats-api";
-import { loadNbaPropBrainFromCloud, saveNbaPropBrainToCloud } from "@/lib/bot/nba-prop-brain";
+import {
+  fetchTodayGames,
+  getGameStatus,
+  getTeamAbbrev,
+} from "@/lib/mlb/stats-api";
+import {
+  loadNbaPropBrainFromCloud,
+  saveNbaPropBrainToCloud,
+} from "@/lib/bot/nba-prop-brain";
 import { auditCompletedGames } from "@/lib/bot/nba-prop-audit";
 import { commitPropProjections } from "@/lib/bot/nba-prop-ghost";
 import { buildAndSendRecap } from "@/lib/bot/daily-recap";
 import { sendDailyRecapToAll } from "@/lib/email/daily-recap";
 import { generateSmartPicks } from "@/lib/bot/smart-picks";
 import { cloudGet, cloudSet } from "@/lib/supabase/client";
-import { logDailyPicks, settlePendingPicks, etDateString, type LoggedPick } from "@/lib/bot/track-record";
+import {
+  logDailyPicks,
+  settlePendingPicks,
+  etDateString,
+  type LoggedPick,
+} from "@/lib/bot/track-record";
 
 // This endpoint is called by Vercel Cron every 30 min
 // It checks for finished games and logs results
@@ -54,7 +66,8 @@ export async function GET(req: Request) {
       const nbaBrain = await loadNbaPropBrainFromCloud();
 
       // 1. Audit completed games
-      const { updatedBrain, graded, hits, misses } = await auditCompletedGames(nbaBrain);
+      const { updatedBrain, graded, hits, misses } =
+        await auditCompletedGames(nbaBrain);
       if (graded > 0) {
         await saveNbaPropBrainToCloud(updatedBrain);
         nbaAudit = { graded, hits, misses };
@@ -64,12 +77,18 @@ export async function GET(req: Request) {
       try {
         const baseUrl = `https://diamond-quant-live.vercel.app`;
         const allProps: any[] = [];
-        for (const market of ["player_points", "player_rebounds", "player_assists"]) {
+        for (const market of [
+          "player_points",
+          "player_rebounds",
+          "player_assists",
+        ]) {
           try {
-            const oddsRes = await fetch(`${baseUrl}/api/players?sport=basketball_nba&market=${market}`);
+            const oddsRes = await fetch(
+              `${baseUrl}/api/players?sport=basketball_nba&market=${market}`,
+            );
             if (oddsRes.ok) {
               const oddsData = await oddsRes.json();
-              for (const p of (oddsData.props ?? [])) {
+              for (const p of oddsData.props ?? []) {
                 allProps.push({
                   playerName: p.playerName,
                   team: p.team,
@@ -86,7 +105,11 @@ export async function GET(req: Request) {
         }
         if (allProps.length > 0) {
           const brain = graded > 0 ? updatedBrain : nbaBrain;
-          const { committed } = await commitPropProjections(brain, allProps, {});
+          const { committed } = await commitPropProjections(
+            brain,
+            allProps,
+            {},
+          );
           nbaGhostCommitted = committed;
         }
       } catch {}
@@ -98,16 +121,23 @@ export async function GET(req: Request) {
       const baseUrl = `https://diamond-quant-live.vercel.app`;
       const today = new Date().toISOString().split("T")[0];
       const allMlbProps: any[] = [];
-      const { MLB_MARKETS, commitMLBPropProjections } = await import("@/lib/bot/mlb-prop-pipeline");
+      const { MLB_MARKETS, commitMLBPropProjections } =
+        await import("@/lib/bot/mlb-prop-pipeline");
       for (const market of MLB_MARKETS) {
         try {
-          const res = await fetch(`${baseUrl}/api/players?sport=baseball_mlb&market=${market}`, { signal: AbortSignal.timeout(10000) });
+          const res = await fetch(
+            `${baseUrl}/api/players?sport=baseball_mlb&market=${market}`,
+            { signal: AbortSignal.timeout(10000) },
+          );
           if (!res.ok) continue;
           const data = await res.json();
-          for (const p of (data.props ?? [])) {
+          for (const p of data.props ?? []) {
             allMlbProps.push({
-              playerName: p.playerName, team: p.team ?? "", gameId: p.gameTime ?? "",
-              market, line: p.line,
+              playerName: p.playerName,
+              team: p.team ?? "",
+              gameId: p.gameTime ?? "",
+              market,
+              line: p.line,
               bestOverOdds: p.bestOver?.price ?? -110,
               bestUnderOdds: p.bestUnder?.price ?? -110,
             });
@@ -115,10 +145,15 @@ export async function GET(req: Request) {
         } catch {}
       }
       if (allMlbProps.length > 0) {
-        const { committed } = await commitMLBPropProjections(allMlbProps, today);
+        const { committed } = await commitMLBPropProjections(
+          allMlbProps,
+          today,
+        );
         mlbGhostCommitted = committed;
       }
-    } catch (e) { console.error("mlb prop commit error:", e); }
+    } catch (e) {
+      console.error("mlb prop commit error:", e);
+    }
 
     // ── Commit NRFI/YRFI predictions (MLB) ──
     let nrfiCommitted = 0;
@@ -140,14 +175,17 @@ export async function GET(req: Request) {
       }));
       const result = await commitNRFIProjections(normalizedForNRFI, today);
       nrfiCommitted = result.committed;
-    } catch (e) { console.error("nrfi commit error:", e); }
+    } catch (e) {
+      console.error("nrfi commit error:", e);
+    }
 
     // ── NFL prop commit + grade ──
     let nflCommitted = 0;
     let nflGraded = 0;
     let nflCompletedGames: Array<{ id: string }> = [];
     try {
-      const { fetchTodayNFLGames, getNFLGameStatus } = await import("@/lib/nfl/stats-api");
+      const { fetchTodayNFLGames, getNFLGameStatus } =
+        await import("@/lib/nfl/stats-api");
       const events = await fetchTodayNFLGames();
       if (events.length > 0) {
         const today = new Date().toISOString().split("T")[0];
@@ -156,8 +194,12 @@ export async function GET(req: Request) {
           .filter((ev: any) => getNFLGameStatus(ev) === "pre")
           .map((ev: any) => {
             const comp = ev.competitions?.[0];
-            const home = comp?.competitors?.find((c: any) => c.homeAway === "home");
-            const away = comp?.competitors?.find((c: any) => c.homeAway === "away");
+            const home = comp?.competitors?.find(
+              (c: any) => c.homeAway === "home",
+            );
+            const away = comp?.competitors?.find(
+              (c: any) => c.homeAway === "away",
+            );
             return {
               gameId: String(ev.id),
               homeAbbrev: home?.team?.abbreviation ?? "",
@@ -168,7 +210,8 @@ export async function GET(req: Request) {
           .filter((g: any) => g.homeAbbrev && g.awayAbbrev);
 
         if (normalized.length > 0) {
-          const { commitNFLPropProjections } = await import("@/lib/bot/nfl-prop-pipeline");
+          const { commitNFLPropProjections } =
+            await import("@/lib/bot/nfl-prop-pipeline");
           const result = await commitNFLPropProjections(normalized, today);
           nflCommitted = result.committed;
         }
@@ -179,15 +222,19 @@ export async function GET(req: Request) {
           .map((ev: any) => ({ id: String(ev.id) }));
 
         if (nflCompletedGames.length > 0) {
-          const { gradeNFLPropPredictions } = await import("@/lib/bot/nfl-prop-pipeline");
+          const { gradeNFLPropPredictions } =
+            await import("@/lib/bot/nfl-prop-pipeline");
           const result = await gradeNFLPropPredictions(nflCompletedGames);
           nflGraded = result.graded;
           if (result.newlyGraded.length > 0) {
             const histKey = "prop_pick_history_nfl";
             const existing = (await cloudGet<any[]>(histKey, [])) ?? [];
-            const seenKey = (p: any) => `${(p.playerName ?? "").toLowerCase()}::${p.propType ?? p.market ?? ""}::${p.date ?? ""}`;
+            const seenKey = (p: any) =>
+              `${(p.playerName ?? "").toLowerCase()}::${p.propType ?? p.market ?? ""}::${p.date ?? ""}`;
             const seen = new Set(existing.map(seenKey));
-            const fresh = result.newlyGraded.filter((p: any) => !seen.has(seenKey(p)));
+            const fresh = result.newlyGraded.filter(
+              (p: any) => !seen.has(seenKey(p)),
+            );
             if (fresh.length > 0) {
               const merged = [...fresh, ...existing].slice(0, 500);
               await cloudSet(histKey, merged);
@@ -195,13 +242,16 @@ export async function GET(req: Request) {
           }
         }
       }
-    } catch (e) { console.error("nfl pipeline error:", e); }
+    } catch (e) {
+      console.error("nfl pipeline error:", e);
+    }
 
     // ── NHL prop commit + grade ──
     let nhlCommitted = 0;
     let nhlGraded = 0;
     try {
-      const { fetchTodayNHLGames, getNHLGameStatus } = await import("@/lib/nhl/stats-api");
+      const { fetchTodayNHLGames, getNHLGameStatus } =
+        await import("@/lib/nhl/stats-api");
       const events = await fetchTodayNHLGames();
       if (events.length > 0) {
         const today = new Date().toISOString().split("T")[0];
@@ -216,7 +266,8 @@ export async function GET(req: Request) {
           .filter((g: any) => g.homeAbbrev && g.awayAbbrev);
 
         if (normalized.length > 0) {
-          const { commitNHLPropProjections } = await import("@/lib/bot/nhl-prop-pipeline");
+          const { commitNHLPropProjections } =
+            await import("@/lib/bot/nhl-prop-pipeline");
           const result = await commitNHLPropProjections(normalized, today);
           nhlCommitted = result.committed;
         }
@@ -226,15 +277,19 @@ export async function GET(req: Request) {
           .map((g: any) => ({ id: String(g.id) }));
 
         if (completed.length > 0) {
-          const { gradeNHLPropPredictions } = await import("@/lib/bot/nhl-prop-pipeline");
+          const { gradeNHLPropPredictions } =
+            await import("@/lib/bot/nhl-prop-pipeline");
           const result = await gradeNHLPropPredictions(completed);
           nhlGraded = result.graded;
           if (result.newlyGraded.length > 0) {
             const histKey = "prop_pick_history_nhl";
             const existing = (await cloudGet<any[]>(histKey, [])) ?? [];
-            const seenKey = (p: any) => `${(p.playerName ?? "").toLowerCase()}::${p.propType ?? p.market ?? ""}::${p.date ?? ""}`;
+            const seenKey = (p: any) =>
+              `${(p.playerName ?? "").toLowerCase()}::${p.propType ?? p.market ?? ""}::${p.date ?? ""}`;
             const seen = new Set(existing.map(seenKey));
-            const fresh = result.newlyGraded.filter((p: any) => !seen.has(seenKey(p)));
+            const fresh = result.newlyGraded.filter(
+              (p: any) => !seen.has(seenKey(p)),
+            );
             if (fresh.length > 0) {
               const merged = [...fresh, ...existing].slice(0, 500);
               await cloudSet(histKey, merged);
@@ -242,24 +297,34 @@ export async function GET(req: Request) {
           }
         }
       }
-    } catch (e) { console.error("nhl pipeline error:", e); }
+    } catch (e) {
+      console.error("nhl pipeline error:", e);
+    }
 
     // ── Track Record: settle yesterday's logged picks ──
     let trackSettled = 0;
-    const settleGames = completedGames.map(g => ({
-      homeTeam: g.homeTeam ?? "", awayTeam: g.awayTeam ?? "",
-      homeAbbrev: g.homeAbbrev ?? "", awayAbbrev: g.awayAbbrev ?? "",
-      homeScore: g.homeScore ?? 0, awayScore: g.awayScore ?? 0,
+    const settleGames = completedGames.map((g) => ({
+      homeTeam: g.homeTeam ?? "",
+      awayTeam: g.awayTeam ?? "",
+      homeAbbrev: g.homeAbbrev ?? "",
+      awayAbbrev: g.awayAbbrev ?? "",
+      homeScore: g.homeScore ?? 0,
+      awayScore: g.awayScore ?? 0,
     }));
     try {
       const { settled } = await settlePendingPicks(settleGames);
       trackSettled = settled;
-    } catch (e) { console.error("track settle error:", e); }
+    } catch (e) {
+      console.error("track settle error:", e);
+    }
 
     // ── User Bets: auto-settle every user's pending bets ──
     // Runs whenever there are completed games + gated by env flag for safety
     let userBetsSettled = { users: 0, bets: 0 };
-    if (process.env.BET_AUTOSETTLE_ENABLED === "1" && completedGames.length > 0) {
+    if (
+      process.env.BET_AUTOSETTLE_ENABLED === "1" &&
+      completedGames.length > 0
+    ) {
       try {
         const { supabaseAdmin } = await import("@/lib/supabase/server-auth");
         const { gradeBet } = await import("@/lib/bot/bet-grader");
@@ -271,7 +336,7 @@ export async function GET(req: Request) {
 
           for (const row of userRows ?? []) {
             const bets: any[] = Array.isArray(row.value) ? row.value : [];
-            const pending = bets.filter(b => b.result === "pending");
+            const pending = bets.filter((b) => b.result === "pending");
             if (pending.length === 0) continue;
 
             let changed = 0;
@@ -294,13 +359,22 @@ export async function GET(req: Request) {
               .eq("user_id", row.user_id)
               .eq("key", "bankroll")
               .single();
-            const br: any = bankrollRow?.value ?? { bankroll: 5000, startingBankroll: 5000 };
+            const br: any = bankrollRow?.value ?? {
+              bankroll: 5000,
+              startingBankroll: 5000,
+            };
             const starting = Number(br.startingBankroll ?? br.bankroll ?? 5000);
-            const wins = bets.filter(b => b.result === "win").length;
-            const losses = bets.filter(b => b.result === "loss").length;
-            const pushes = bets.filter(b => b.result === "push").length;
-            const totalStaked = bets.reduce((s, b) => s + (Number(b.stake) || 0), 0);
-            const totalReturns = bets.reduce((s, b) => s + (Number(b.payout) || 0), 0);
+            const wins = bets.filter((b) => b.result === "win").length;
+            const losses = bets.filter((b) => b.result === "loss").length;
+            const pushes = bets.filter((b) => b.result === "push").length;
+            const totalStaked = bets.reduce(
+              (s, b) => s + (Number(b.stake) || 0),
+              0,
+            );
+            const totalReturns = bets.reduce(
+              (s, b) => s + (Number(b.payout) || 0),
+              0,
+            );
             const currentBankroll = starting + totalReturns - totalStaked;
             const newBankroll = {
               ...br,
@@ -309,22 +383,35 @@ export async function GET(req: Request) {
               totalBets: bets.length,
               totalStaked: Math.round(totalStaked * 100) / 100,
               totalReturns: Math.round(totalReturns * 100) / 100,
-              wins, losses, pushes,
-              roi: totalStaked > 0 ? Math.round(((currentBankroll - starting) / totalStaked) * 10000) / 100 : 0,
+              wins,
+              losses,
+              pushes,
+              roi:
+                totalStaked > 0
+                  ? Math.round(
+                      ((currentBankroll - starting) / totalStaked) * 10000,
+                    ) / 100
+                  : 0,
             };
 
             await supabaseAdmin.from("user_state").upsert({
-              user_id: row.user_id, key: "betHistory", value: bets,
+              user_id: row.user_id,
+              key: "betHistory",
+              value: bets,
             });
             await supabaseAdmin.from("user_state").upsert({
-              user_id: row.user_id, key: "bankroll", value: newBankroll,
+              user_id: row.user_id,
+              key: "bankroll",
+              value: newBankroll,
             });
 
             userBetsSettled.users++;
             userBetsSettled.bets += changed;
           }
         }
-      } catch (e) { console.error("user bet settle error:", e); }
+      } catch (e) {
+        console.error("user bet settle error:", e);
+      }
     }
 
     // ── Auto-generate today's smart picks for all users ──
@@ -344,29 +431,52 @@ export async function GET(req: Request) {
             const mlbData = await mlbRes.json();
             const mlbPicks = generateSmartPicks(mlbData.analyses ?? [], 5000);
             if (mlbPicks.length > 0) {
-              await cloudSet(mlbTodayKey, { picks: mlbPicks, generatedAt: new Date().toISOString() });
+              await cloudSet(mlbTodayKey, {
+                picks: mlbPicks,
+                generatedAt: new Date().toISOString(),
+              });
               // Also update the persistent smart bot state
-              const botState = await cloudGet("smart_bot", { bankroll: 5000, picks: [], dailyPnL: {} }) as any;
-              const existingToday = (botState.picks ?? []).filter((p: any) => p.date === today);
+              const botState = (await cloudGet("smart_bot", {
+                bankroll: 5000,
+                picks: [],
+                dailyPnL: {},
+              })) as any;
+              const existingToday = (botState.picks ?? []).filter(
+                (p: any) => p.date === today,
+              );
               if (existingToday.length === 0) {
-                await cloudSet("smart_bot", { ...botState, picks: [...(botState.picks ?? []), ...mlbPicks] });
+                await cloudSet("smart_bot", {
+                  ...botState,
+                  picks: [...(botState.picks ?? []), ...mlbPicks],
+                });
               }
 
               // ── Log to public track record ──
               const etDate = etDateString();
-              const logged: LoggedPick[] = mlbPicks.slice(0, 5).map((p: any, idx: number) => ({
-                sport: "mlb" as const, pickDate: etDate,
-                category: idx === 0 ? "lock" : p.odds > 150 ? "longshot" : "lock",
-                pickText: p.pick, game: p.game, market: p.market,
-                odds: p.odds, bookmaker: p.bookmaker,
-                evPercentage: p.evPercentage, fairProb: p.fairProb, confidence: p.confidence,
-              }));
+              const logged: LoggedPick[] = mlbPicks
+                .slice(0, 5)
+                .map((p: any, idx: number) => ({
+                  sport: "mlb" as const,
+                  pickDate: etDate,
+                  category:
+                    idx === 0 ? "lock" : p.odds > 150 ? "longshot" : "lock",
+                  pickText: p.pick,
+                  game: p.game,
+                  market: p.market,
+                  odds: p.odds,
+                  bookmaker: p.bookmaker,
+                  evPercentage: p.evPercentage,
+                  fairProb: p.fairProb,
+                  confidence: p.confidence,
+                }));
               await logDailyPicks(logged);
 
               // Fire a push to subscribed users for the sharpest pick
               try {
                 const top: any = mlbPicks[0];
-                const ev = Number(top?.evPercentage ?? logged[0]?.evPercentage ?? 0);
+                const ev = Number(
+                  top?.evPercentage ?? logged[0]?.evPercentage ?? 0,
+                );
                 if (top && ev >= 5) {
                   const { sendPushToAll } = await import("@/lib/push/send");
                   await sendPushToAll({
@@ -391,27 +501,50 @@ export async function GET(req: Request) {
             const nbaData = await nbaRes.json();
             const nbaPicks = generateSmartPicks(nbaData.analyses ?? [], 5000);
             if (nbaPicks.length > 0) {
-              await cloudSet(nbaTodayKey, { picks: nbaPicks, generatedAt: new Date().toISOString() });
-              const nbaBotState = await cloudGet("smart_bot_nba", { bankroll: 5000, picks: [], dailyPnL: {} }) as any;
-              const existingNbaToday = (nbaBotState.picks ?? []).filter((p: any) => p.date === today);
+              await cloudSet(nbaTodayKey, {
+                picks: nbaPicks,
+                generatedAt: new Date().toISOString(),
+              });
+              const nbaBotState = (await cloudGet("smart_bot_nba", {
+                bankroll: 5000,
+                picks: [],
+                dailyPnL: {},
+              })) as any;
+              const existingNbaToday = (nbaBotState.picks ?? []).filter(
+                (p: any) => p.date === today,
+              );
               if (existingNbaToday.length === 0) {
-                await cloudSet("smart_bot_nba", { ...nbaBotState, picks: [...(nbaBotState.picks ?? []), ...nbaPicks] });
+                await cloudSet("smart_bot_nba", {
+                  ...nbaBotState,
+                  picks: [...(nbaBotState.picks ?? []), ...nbaPicks],
+                });
               }
 
               // ── Log to public track record ──
               const etDate = etDateString();
-              const logged: LoggedPick[] = nbaPicks.slice(0, 5).map((p: any, idx: number) => ({
-                sport: "nba" as const, pickDate: etDate,
-                category: idx === 0 ? "lock" : p.odds > 150 ? "longshot" : "lock",
-                pickText: p.pick, game: p.game, market: p.market,
-                odds: p.odds, bookmaker: p.bookmaker,
-                evPercentage: p.evPercentage, fairProb: p.fairProb, confidence: p.confidence,
-              }));
+              const logged: LoggedPick[] = nbaPicks
+                .slice(0, 5)
+                .map((p: any, idx: number) => ({
+                  sport: "nba" as const,
+                  pickDate: etDate,
+                  category:
+                    idx === 0 ? "lock" : p.odds > 150 ? "longshot" : "lock",
+                  pickText: p.pick,
+                  game: p.game,
+                  market: p.market,
+                  odds: p.odds,
+                  bookmaker: p.bookmaker,
+                  evPercentage: p.evPercentage,
+                  fairProb: p.fairProb,
+                  confidence: p.confidence,
+                }));
               await logDailyPicks(logged);
 
               try {
                 const top: any = nbaPicks[0];
-                const ev = Number(top?.evPercentage ?? logged[0]?.evPercentage ?? 0);
+                const ev = Number(
+                  top?.evPercentage ?? logged[0]?.evPercentage ?? 0,
+                );
                 if (top && ev >= 5) {
                   const { sendPushToAll } = await import("@/lib/push/send");
                   await sendPushToAll({
@@ -431,16 +564,23 @@ export async function GET(req: Request) {
           const alreadySent = await cloudGet(pushSentKey, null);
           if (!alreadySent) {
             // Collect all picks generated this run from cache
-            const mlbCache = await cloudGet(mlbTodayKey, null) as any;
-            const nbaCache = await cloudGet(nbaTodayKey, null) as any;
+            const mlbCache = (await cloudGet(mlbTodayKey, null)) as any;
+            const nbaCache = (await cloudGet(nbaTodayKey, null)) as any;
             const allPicks: any[] = [
               ...(mlbCache?.picks ?? []),
               ...(nbaCache?.picks ?? []),
             ];
-            const highConf = allPicks.filter((p: any) => p.confidence === "HIGH");
+            const highConf = allPicks.filter(
+              (p: any) => p.confidence === "HIGH",
+            );
             if (highConf.length >= 3) {
-              const sports = [...new Set(highConf.map((p: any) => p.sport ?? "").filter(Boolean))];
-              const sportLabel = sports.length > 0 ? sports.join("/").toUpperCase() : "MLB/NBA";
+              const sports = [
+                ...new Set(
+                  highConf.map((p: any) => p.sport ?? "").filter(Boolean),
+                ),
+              ];
+              const sportLabel =
+                sports.length > 0 ? sports.join("/").toUpperCase() : "MLB/NBA";
               const { sendPushToAll } = await import("@/lib/push/send");
               await sendPushToAll({
                 title: `🔥 ${highConf.length} high-confidence picks today — ${sportLabel}`,
@@ -448,16 +588,22 @@ export async function GET(req: Request) {
                 url: "/",
                 tag: `high-conf-${today}`,
               });
-              await cloudSet(pushSentKey, { sentAt: new Date().toISOString(), count: highConf.length });
+              await cloudSet(pushSentKey, {
+                sentAt: new Date().toISOString(),
+                count: highConf.length,
+              });
             }
           }
         } catch {}
-      } catch (e) { console.error("pick gen/log error:", e); }
+      } catch (e) {
+        console.error("pick gen/log error:", e);
+      }
     }
 
     // ── Daily Discord Recap (send once when games are finishing) ──
     const hour = new Date().getUTCHours(); // UTC
-    if (final > 0 && (hour >= 3 && hour <= 7)) { // ~11PM-3AM ET = games finishing
+    if (final > 0 && hour >= 3 && hour <= 7) {
+      // ~11PM-3AM ET = games finishing
       try {
         // Check user preferences for Discord webhooks
         const { supabase: sb } = await import("@/lib/supabase/client");
@@ -472,15 +618,22 @@ export async function GET(req: Request) {
             (prefs ?? []).flatMap((pref: any) =>
               pref.discord_webhook
                 ? [
-                    buildAndSendRecap(pref.discord_webhook, "mlb").catch(() => {}),
-                    buildAndSendRecap(pref.discord_webhook, "nba").catch(() => {}),
+                    buildAndSendRecap(pref.discord_webhook, "mlb").catch(
+                      () => {},
+                    ),
+                    buildAndSendRecap(pref.discord_webhook, "nba").catch(
+                      () => {},
+                    ),
                   ]
                 : [],
             ),
           );
         }
       } catch (e) {
-        console.error("Discord recap error:", e instanceof Error ? e.message : e);
+        console.error(
+          "Discord recap error:",
+          e instanceof Error ? e.message : e,
+        );
       }
     }
 
@@ -491,7 +644,9 @@ export async function GET(req: Request) {
       try {
         const baseUrl = `https://${process.env.VERCEL_URL || "diamond-quant-live.vercel.app"}`;
         emailRecap = await sendDailyRecapToAll(baseUrl);
-      } catch (e) { console.error("email recap error:", e); }
+      } catch (e) {
+        console.error("email recap error:", e);
+      }
     }
 
     // ── NBA final games from ESPN scoreboard (MLB already in `completedGames`) ──
@@ -510,21 +665,30 @@ export async function GET(req: Request) {
       // by pending NBA picks so we can clean up the backlog.
       const dateSet = new Set<string>([yyyymmdd(0), yyyymmdd(-1)]);
       try {
-        const nbaState = await cloudGet("smart_bot_nba", { picks: [] }) as any;
-        for (const p of (nbaState.picks ?? [])) {
+        const nbaState = (await cloudGet("smart_bot_nba", {
+          picks: [],
+        })) as any;
+        for (const p of nbaState.picks ?? []) {
           if (p.result !== "pending" || !p.date) continue;
           dateSet.add(p.date.replace(/-/g, "")); // YYYY-MM-DD → YYYYMMDD
         }
       } catch {}
       for (const d of Array.from(dateSet)) {
-        const sbRes = await fetch(`https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=${d}`, { next: { revalidate: 60 } });
+        const sbRes = await fetch(
+          `https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=${d}`,
+          { next: { revalidate: 60 } },
+        );
         if (!sbRes.ok) continue;
         const sb = await sbRes.json();
         for (const ev of sb.events ?? []) {
           const comp = ev.competitions?.[0];
           if (comp?.status?.type?.name !== "STATUS_FINAL") continue;
-          const home = comp.competitors?.find((c: any) => c.homeAway === "home");
-          const away = comp.competitors?.find((c: any) => c.homeAway === "away");
+          const home = comp.competitors?.find(
+            (c: any) => c.homeAway === "home",
+          );
+          const away = comp.competitors?.find(
+            (c: any) => c.homeAway === "away",
+          );
           if (!home || !away) continue;
           nbaCompletedGames.push({
             id: String(ev.id),
@@ -538,10 +702,17 @@ export async function GET(req: Request) {
           });
         }
       }
-    } catch (e) { console.error("nba scoreboard error:", e); }
+    } catch (e) {
+      console.error("nba scoreboard error:", e);
+    }
 
     // ── MLB + NBA Bot Settlement ──
-    const botSettle = { mlb: 0, nba: 0, nbaFeed: nbaCompletedGames.length, mlbFeed: completedGames.length };
+    const botSettle = {
+      mlb: 0,
+      nba: 0,
+      nbaFeed: nbaCompletedGames.length,
+      mlbFeed: completedGames.length,
+    };
     try {
       const { settleAndLearn } = await import("@/lib/bot/smart-picks");
 
@@ -550,12 +721,19 @@ export async function GET(req: Request) {
         { key: "smart_bot_nba", sport: "nba", feed: nbaCompletedGames },
       ]) {
         if (feed.length === 0) continue;
-        const state = await cloudGet(key, { bankroll: 5000, picks: [], dailyPnL: {} }) as any;
-        const pending = (state.picks ?? []).filter((p: any) => p.result === "pending");
+        const state = (await cloudGet(key, {
+          bankroll: 5000,
+          picks: [],
+          dailyPnL: {},
+        })) as any;
+        const pending = (state.picks ?? []).filter(
+          (p: any) => p.result === "pending",
+        );
         if (pending.length === 0) continue;
         const { botState: settled } = settleAndLearn(state, feed, sport);
         const newlySettled = settled.picks.filter(
-          (p: any, i: number) => state.picks[i]?.result === "pending" && p.result !== "pending",
+          (p: any, i: number) =>
+            state.picks[i]?.result === "pending" && p.result !== "pending",
         ).length;
         if (newlySettled > 0) {
           await cloudSet(key, settled);
@@ -563,7 +741,9 @@ export async function GET(req: Request) {
           else botSettle.nba = newlySettled;
         }
       }
-    } catch (e) { console.error("bot settle error:", e); }
+    } catch (e) {
+      console.error("bot settle error:", e);
+    }
 
     // ── Grade today's NBA prop picks against box scores ──
     let propsGraded = 0;
@@ -586,7 +766,13 @@ export async function GET(req: Request) {
                 );
                 if (!boxRes.ok) continue;
                 const boxData = await boxRes.json();
-                const players: Array<{ playerName: string; pts: number; reb: number; ast: number; minutes: number }> = [];
+                const players: Array<{
+                  playerName: string;
+                  pts: number;
+                  reb: number;
+                  ast: number;
+                  minutes: number;
+                }> = [];
                 for (const team of boxData.boxscore?.players ?? []) {
                   for (const stat of team.statistics ?? []) {
                     const labels: string[] = stat.labels ?? [];
@@ -596,11 +782,21 @@ export async function GET(req: Request) {
                     const astIdx = labels.indexOf("AST");
                     for (const athlete of stat.athletes ?? []) {
                       const stats: string[] = athlete.stats ?? [];
-                      const mins = minIdx >= 0 ? parseInt(stats[minIdx] ?? "0") : 0;
-                      const pts = ptsIdx >= 0 ? parseInt(stats[ptsIdx] ?? "0") : 0;
-                      const reb = rebIdx >= 0 ? parseInt(stats[rebIdx] ?? "0") : 0;
-                      const ast = astIdx >= 0 ? parseInt(stats[astIdx] ?? "0") : 0;
-                      players.push({ playerName: athlete.athlete?.displayName ?? "", pts, reb, ast, minutes: mins });
+                      const mins =
+                        minIdx >= 0 ? parseInt(stats[minIdx] ?? "0") : 0;
+                      const pts =
+                        ptsIdx >= 0 ? parseInt(stats[ptsIdx] ?? "0") : 0;
+                      const reb =
+                        rebIdx >= 0 ? parseInt(stats[rebIdx] ?? "0") : 0;
+                      const ast =
+                        astIdx >= 0 ? parseInt(stats[astIdx] ?? "0") : 0;
+                      players.push({
+                        playerName: athlete.athlete?.displayName ?? "",
+                        pts,
+                        reb,
+                        ast,
+                        minutes: mins,
+                      });
                     }
                   }
                 }
@@ -618,14 +814,18 @@ export async function GET(req: Request) {
             }
           }
           if (changed) {
-            await cloudSet(propCacheKey, { ...propData, gradedAt: new Date().toISOString() });
+            await cloudSet(propCacheKey, {
+              ...propData,
+              gradedAt: new Date().toISOString(),
+            });
             // Append to cumulative history (cap at 500 most recent). Dedupe by
             // playerName::propType::date so re-grading the same cache (e.g.
             // when prop-picks-today is force-regenerated) doesn't duplicate.
             if (newlyGraded.length > 0) {
               const histKey = "prop_pick_history_nba";
               const existing = (await cloudGet<any[]>(histKey, [])) ?? [];
-              const seenKey = (p: any) => `${(p.playerName ?? "").toLowerCase()}::${p.propType ?? p.market ?? ""}::${p.date ?? ""}`;
+              const seenKey = (p: any) =>
+                `${(p.playerName ?? "").toLowerCase()}::${p.propType ?? p.market ?? ""}::${p.date ?? ""}`;
               const seen = new Set(existing.map(seenKey));
               const fresh = newlyGraded.filter((p) => !seen.has(seenKey(p)));
               if (fresh.length > 0) {
@@ -635,15 +835,22 @@ export async function GET(req: Request) {
             }
           }
         }
-      } catch (e) { console.error("prop grading error:", e); }
+      } catch (e) {
+        console.error("prop grading error:", e);
+      }
     }
 
     // ── Grade MLB prop predictions against box scores ──
     let mlbPropsGraded = 0;
     if (completedGames.length > 0) {
       try {
-        const { gradeMLBPropPick, parseMLBBoxScore } = await import("@/lib/bot/prop-grader");
-        const { loadMLBPropBrainFromCloud, saveMLBPropBrainToCloud, learnFromMLBResult } = await import("@/lib/bot/mlb-prop-brain");
+        const { gradeMLBPropPick, parseMLBBoxScore } =
+          await import("@/lib/bot/prop-grader");
+        const {
+          loadMLBPropBrainFromCloud,
+          saveMLBPropBrainToCloud,
+          learnFromMLBResult,
+        } = await import("@/lib/bot/mlb-prop-brain");
         let mlbBrain = await loadMLBPropBrainFromCloud();
         let brainUpdated = false;
         const { supabase: sb } = await import("@/lib/supabase/client");
@@ -661,28 +868,41 @@ export async function GET(req: Request) {
             const newlyGradedMlb: any[] = [];
             for (const game of completedGames) {
               try {
-                const bxRes = await fetch(`https://statsapi.mlb.com/api/v1/game/${game.id}/boxscore`, { next: { revalidate: 300 } });
+                const bxRes = await fetch(
+                  `https://statsapi.mlb.com/api/v1/game/${game.id}/boxscore`,
+                  { next: { revalidate: 300 } },
+                );
                 if (!bxRes.ok) continue;
                 const boxData = await bxRes.json();
                 const players = parseMLBBoxScore(boxData);
                 if (players.length === 0) continue;
                 for (const pred of pendingMlb) {
                   if (pred.status !== "pending") continue;
-                  const grade = gradeMLBPropPick({
-                    playerName: pred.player_name,
-                    market: pred.prop_type,
-                    line: pred.line,
-                    side: pred.predicted_side,
-                  }, players);
+                  const grade = gradeMLBPropPick(
+                    {
+                      playerName: pred.player_name,
+                      market: pred.prop_type,
+                      line: pred.line,
+                      side: pred.predicted_side,
+                    },
+                    players,
+                  );
                   if (!grade) continue;
-                  const brierScore = Math.pow((pred.predicted_prob ?? 0.5) - (grade.result === "win" ? 1 : 0), 2);
-                  await sb.from("prop_predictions").update({
-                    actual_value: grade.actualValue,
-                    hit: grade.result === "win",
-                    brier_score: Math.round(brierScore * 10000) / 10000,
-                    status: "graded",
-                    graded_at: new Date().toISOString(),
-                  }).eq("id", pred.id);
+                  const brierScore = Math.pow(
+                    (pred.predicted_prob ?? 0.5) -
+                      (grade.result === "win" ? 1 : 0),
+                    2,
+                  );
+                  await sb
+                    .from("prop_predictions")
+                    .update({
+                      actual_value: grade.actualValue,
+                      hit: grade.result === "win",
+                      brier_score: Math.round(brierScore * 10000) / 10000,
+                      status: "graded",
+                      graded_at: new Date().toISOString(),
+                    })
+                    .eq("id", pred.id);
                   pred.status = "graded"; // dedup within this run
                   newlyGradedMlb.push({
                     ...pred,
@@ -719,7 +939,8 @@ export async function GET(req: Request) {
             if (newlyGradedMlb.length > 0) {
               const histKey = "prop_pick_history_mlb";
               const existing = (await cloudGet<any[]>(histKey, [])) ?? [];
-              const seenKey = (p: any) => `${(p.playerName ?? p.player_name ?? "").toLowerCase()}::${p.propType ?? p.prop_type ?? ""}::${p.date ?? ""}`;
+              const seenKey = (p: any) =>
+                `${(p.playerName ?? p.player_name ?? "").toLowerCase()}::${p.propType ?? p.prop_type ?? ""}::${p.date ?? ""}`;
               const seen = new Set(existing.map(seenKey));
               const fresh = newlyGradedMlb.filter((p) => !seen.has(seenKey(p)));
               if (fresh.length > 0) {
@@ -733,21 +954,27 @@ export async function GET(req: Request) {
             }
           }
         }
-      } catch (e) { console.error("mlb prop grading error:", e); }
+      } catch (e) {
+        console.error("mlb prop grading error:", e);
+      }
     }
 
     // ── Grade NRFI/YRFI predictions against MLB linescores ──
     let nrfiGraded = 0;
     if (completedGames.length > 0) {
       try {
-        const { gradeNRFIPredictions } = await import("@/lib/bot/nrfi-pipeline");
-        const result = await gradeNRFIPredictions(completedGames.map(g => ({ id: g.id })));
+        const { gradeNRFIPredictions } =
+          await import("@/lib/bot/nrfi-pipeline");
+        const result = await gradeNRFIPredictions(
+          completedGames.map((g) => ({ id: g.id })),
+        );
         nrfiGraded = result.graded;
         // Push to history (same dedup pattern as other MLB grading)
         if (result.newlyGraded.length > 0) {
           const histKey = "prop_pick_history_mlb";
           const existing = (await cloudGet<any[]>(histKey, [])) ?? [];
-          const seenKey = (p: any) => `${(p.playerName ?? "").toLowerCase()}::${p.propType ?? p.market ?? ""}::${p.date ?? ""}`;
+          const seenKey = (p: any) =>
+            `${(p.playerName ?? "").toLowerCase()}::${p.propType ?? p.market ?? ""}::${p.date ?? ""}`;
           const seen = new Set(existing.map(seenKey));
           const fresh = result.newlyGraded.filter((p) => !seen.has(seenKey(p)));
           if (fresh.length > 0) {
@@ -755,7 +982,9 @@ export async function GET(req: Request) {
             await cloudSet(histKey, merged);
           }
         }
-      } catch (e) { console.error("nrfi grading error:", e); }
+      } catch (e) {
+        console.error("nrfi grading error:", e);
+      }
     }
 
     // ── Clean stale pending bot picks (>7 days old) ──
@@ -766,7 +995,11 @@ export async function GET(req: Request) {
         { key: "smart_bot", sport: "mlb" as const },
         { key: "smart_bot_nba", sport: "nba" as const },
       ]) {
-        const state = await cloudGet(key, { bankroll: 5000, picks: [], dailyPnL: {} }) as any;
+        const state = (await cloudGet(key, {
+          bankroll: 5000,
+          picks: [],
+          dailyPnL: {},
+        })) as any;
         const before = state.picks?.length ?? 0;
         if (before === 0) continue;
         // Drop picks that are pending AND older than 7 days
@@ -781,7 +1014,9 @@ export async function GET(req: Request) {
           stalePruned[sport] = removed;
         }
       }
-    } catch (e) { console.error("stale prune error:", e); }
+    } catch (e) {
+      console.error("stale prune error:", e);
+    }
     // Make these visible in the response
     (botSettle as any).propsGraded = propsGraded;
     (botSettle as any).mlbGhostCommitted = mlbGhostCommitted;
@@ -801,8 +1036,16 @@ export async function GET(req: Request) {
       try {
         const { supabase } = await import("@/lib/supabase/client");
         if (supabase) {
-          const cutoff = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString();
-          const prefixes = ["line_snap_", "props_snap_", "prop_picks_today_", "prop_results_", "parlay_today_"];
+          const cutoff = new Date(
+            Date.now() - 5 * 24 * 60 * 60 * 1000,
+          ).toISOString();
+          const prefixes = [
+            "line_snap_",
+            "props_snap_",
+            "prop_picks_today_",
+            "prop_results_",
+            "parlay_today_",
+          ];
           for (const prefix of prefixes) {
             const { data: stale } = await supabase
               .from("app_state")
@@ -817,7 +1060,9 @@ export async function GET(req: Request) {
             }
           }
         }
-      } catch (e) { console.error("snap prune error:", e); }
+      } catch (e) {
+        console.error("snap prune error:", e);
+      }
     }
     (botSettle as any).snapsPruned = snapsPruned;
 
@@ -830,34 +1075,57 @@ export async function GET(req: Request) {
         const { supabase: sb } = await import("@/lib/supabase/client");
         if (sb) {
           const MARKET_NBA: Record<string, string> = {
-            player_points: "Points", player_rebounds: "Rebounds", player_assists: "Assists",
+            player_points: "Points",
+            player_rebounds: "Rebounds",
+            player_assists: "Assists",
           };
           const MARKET_MLB: Record<string, string> = {
-            pitcher_strikeouts: "Strikeouts", pitcher_outs: "Outs",
-            batter_hits: "Hits", batter_home_runs: "Home Runs",
-            batter_total_bases: "Total Bases", batter_rbis: "RBIs", batter_runs_scored: "Runs",
-            nrfi: "NRFI", yrfi: "YRFI",
+            pitcher_strikeouts: "Strikeouts",
+            pitcher_outs: "Outs",
+            batter_hits: "Hits",
+            batter_home_runs: "Home Runs",
+            batter_total_bases: "Total Bases",
+            batter_rbis: "RBIs",
+            batter_runs_scored: "Runs",
+            nrfi: "NRFI",
+            yrfi: "YRFI",
           };
           const MARKET_NFL: Record<string, string> = {
-            player_pass_yds: "Pass Yds", player_pass_tds: "Pass TDs",
-            player_pass_attempts: "Pass Att", player_rush_yds: "Rush Yds",
-            player_rush_attempts: "Carries", player_receptions: "Receptions",
-            player_reception_yds: "Rec Yds", player_anytime_td: "Anytime TD",
+            player_pass_yds: "Pass Yds",
+            player_pass_tds: "Pass TDs",
+            player_pass_attempts: "Pass Att",
+            player_rush_yds: "Rush Yds",
+            player_rush_attempts: "Carries",
+            player_receptions: "Receptions",
+            player_reception_yds: "Rec Yds",
+            player_anytime_td: "Anytime TD",
           };
           const MARKET_NHL: Record<string, string> = {
-            player_points: "Points", player_goals: "Goals", player_assists: "Assists",
-            player_shots_on_goal: "Shots", player_total_saves: "Saves",
+            player_points: "Points",
+            player_goals: "Goals",
+            player_assists: "Assists",
+            player_shots_on_goal: "Shots",
+            player_total_saves: "Saves",
           };
           for (const sport of ["nba", "mlb", "nfl", "nhl"] as const) {
             const { data: rows } = await sb
               .from("prop_predictions")
-              .select("player_name, prop_type, line, predicted_side, hit, actual_value, game_date, odds_at_pick")
+              .select(
+                "player_name, prop_type, line, predicted_side, hit, actual_value, game_date, odds_at_pick",
+              )
               .eq("sport", sport)
               .eq("status", "graded")
               .order("game_date", { ascending: false })
               .limit(500);
             if (!rows || rows.length === 0) continue;
-            const LABELS = sport === "nba" ? MARKET_NBA : sport === "mlb" ? MARKET_MLB : sport === "nfl" ? MARKET_NFL : MARKET_NHL;
+            const LABELS =
+              sport === "nba"
+                ? MARKET_NBA
+                : sport === "mlb"
+                  ? MARKET_MLB
+                  : sport === "nfl"
+                    ? MARKET_NFL
+                    : MARKET_NHL;
             const history = rows.map((r: any) => ({
               playerName: r.player_name,
               propType: LABELS[r.prop_type] ?? r.prop_type,
@@ -874,7 +1142,9 @@ export async function GET(req: Request) {
             rehydrated[sport] = history.length;
           }
         }
-      } catch (e) { console.error("rehydrate error:", e); }
+      } catch (e) {
+        console.error("rehydrate error:", e);
+      }
     }
     (botSettle as any).rehydrated = rehydrated;
 
@@ -884,13 +1154,16 @@ export async function GET(req: Request) {
     const dayOfWeek = new Date().getUTCDay(); // 0 = Sunday
     if (dayOfWeek === 0 && utcHour >= 2 && utcHour <= 3) {
       try {
-        const { computeCalibration, saveCalibration } = await import("@/lib/bot/calibration");
+        const { computeCalibration, saveCalibration } =
+          await import("@/lib/bot/calibration");
         const curve = await computeCalibration();
         if (curve) {
           await saveCalibration(curve);
           calibrationSample = curve.sample;
         }
-      } catch (e) { console.error("calibration error:", e); }
+      } catch (e) {
+        console.error("calibration error:", e);
+      }
     }
 
     // ── Daily Brain Training (auto-trigger when stale) ──
@@ -901,17 +1174,22 @@ export async function GET(req: Request) {
         const lastTrainKey = "nba_brain_last_trained";
         const lastTrained = await cloudGet<string | null>(lastTrainKey, null);
         const brain = await loadNbaPropBrainFromCloud();
-        const neverTrained = !brain.isPreTrained || brain.totalGamesProcessed === 0;
+        const neverTrained =
+          !brain.isPreTrained || brain.totalGamesProcessed === 0;
         const daysSinceTrain = lastTrained
-          ? (Date.now() - new Date(lastTrained).getTime()) / (1000 * 60 * 60 * 24)
+          ? (Date.now() - new Date(lastTrained).getTime()) /
+            (1000 * 60 * 60 * 24)
           : 999;
 
         if (neverTrained || daysSinceTrain >= 7) {
           // Fire-and-forget — training takes ~5 min, cron has 120s
           const baseUrl = `https://${process.env.VERCEL_URL || "diamond-quant-live.vercel.app"}`;
-          fetch(`${baseUrl}/api/nba-prop-train?seasons=2022,2023,2024${neverTrained ? "&reset=true" : ""}`, {
-            headers: { "x-cron-secret": process.env.CRON_SECRET ?? "" },
-          }).catch(() => {});
+          fetch(
+            `${baseUrl}/api/nba-prop-train?seasons=2022,2023,2024${neverTrained ? "&reset=true" : ""}`,
+            {
+              headers: { "x-cron-secret": process.env.CRON_SECRET ?? "" },
+            },
+          ).catch(() => {});
           await cloudSet(lastTrainKey, new Date().toISOString());
         }
       } catch {}
@@ -924,7 +1202,8 @@ export async function GET(req: Request) {
         const lastEvolvedKey = "nba_brain_last_evolved";
         const lastEvolved = await cloudGet<string | null>(lastEvolvedKey, null);
         const daysSince = lastEvolved
-          ? (Date.now() - new Date(lastEvolved).getTime()) / (1000 * 60 * 60 * 24)
+          ? (Date.now() - new Date(lastEvolved).getTime()) /
+            (1000 * 60 * 60 * 24)
           : 999;
 
         if (daysSince >= 6) {
@@ -941,13 +1220,22 @@ export async function GET(req: Request) {
     return NextResponse.json({
       ok: true,
       timestamp: new Date().toISOString(),
-      mlb: { total: games.length, live, final, pre, completedToday: completedGames.length },
+      mlb: {
+        total: games.length,
+        live,
+        final,
+        pre,
+        completedToday: completedGames.length,
+      },
       nbaProps: { ...nbaAudit, ghostCommitted: nbaGhostCommitted },
       trackRecord: { settled: trackSettled },
       userBets: userBetsSettled,
       botSettle,
     });
   } catch (error: any) {
-    return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+    return NextResponse.json(
+      { ok: false, error: error.message },
+      { status: 500 },
+    );
   }
 }

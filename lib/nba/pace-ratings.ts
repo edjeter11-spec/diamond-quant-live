@@ -10,10 +10,10 @@
 // ──────────────────────────────────────────────────────────
 
 export interface TeamRating {
-  pace: number;         // possessions / 48
-  offRating: number;    // pts / 100 poss
-  defRating: number;    // pts allowed / 100 poss
-  netRating: number;    // off - def
+  pace: number; // possessions / 48
+  offRating: number; // pts / 100 poss
+  defRating: number; // pts allowed / 100 poss
+  netRating: number; // off - def
 }
 
 // 2024-25 season baselines (approximate, regularly updated in-season)
@@ -51,9 +51,14 @@ export const NBA_TEAM_RATINGS: Record<string, TeamRating> = {
 };
 
 export function getTeamRating(abbrev: string): TeamRating {
-  return NBA_TEAM_RATINGS[(abbrev || "").toUpperCase()] ?? {
-    pace: 99.0, offRating: 114.0, defRating: 114.0, netRating: 0,
-  };
+  return (
+    NBA_TEAM_RATINGS[(abbrev || "").toUpperCase()] ?? {
+      pace: 99.0,
+      offRating: 114.0,
+      defRating: 114.0,
+      netRating: 0,
+    }
+  );
 }
 
 // Defensive rank: 1 = best (lowest defRating), 30 = worst (highest defRating)
@@ -61,8 +66,9 @@ export function getTeamRating(abbrev: string): TeamRating {
 let _defRankCache: Record<string, number> | null = null;
 export function getDefensiveRank(abbrev: string): number {
   if (!_defRankCache) {
-    const sorted = Object.entries(NBA_TEAM_RATINGS)
-      .sort((a, b) => a[1].defRating - b[1].defRating);
+    const sorted = Object.entries(NBA_TEAM_RATINGS).sort(
+      (a, b) => a[1].defRating - b[1].defRating,
+    );
     _defRankCache = {};
     sorted.forEach(([team], idx) => {
       _defRankCache![team] = idx + 1;
@@ -79,7 +85,10 @@ export function getDefensiveRank(abbrev: string): number {
  *
  * Returns { projectedTotal, paceNote, factors }.
  */
-export function projectGameTotal(homeAbbrev: string, awayAbbrev: string): {
+export function projectGameTotal(
+  homeAbbrev: string,
+  awayAbbrev: string,
+): {
   projectedTotal: number;
   expectedPace: number;
   paceNote: string;
@@ -93,8 +102,10 @@ export function projectGameTotal(homeAbbrev: string, awayAbbrev: string): {
   const expectedPace = (home.pace + away.pace) / 2;
 
   // Each team's expected points = opponent's DefRating tilted by own OffRating
-  const homeExpPoints = ((home.offRating + away.defRating) / 2) * (expectedPace / 100);
-  const awayExpPoints = ((away.offRating + home.defRating) / 2) * (expectedPace / 100);
+  const homeExpPoints =
+    ((home.offRating + away.defRating) / 2) * (expectedPace / 100);
+  const awayExpPoints =
+    ((away.offRating + home.defRating) / 2) * (expectedPace / 100);
   const projectedTotal = homeExpPoints + awayExpPoints;
 
   // Pace mismatch note — noteworthy when ≥4 pace gap
@@ -107,8 +118,12 @@ export function projectGameTotal(homeAbbrev: string, awayAbbrev: string): {
   }
 
   // Call out elite defenses vs elite offenses
-  if (home.defRating <= 110 && away.offRating >= 118) factors.push(`${homeAbbrev} elite defense (${home.defRating}) vs ${awayAbbrev} elite offense — expect half-court slowdown`);
-  if (away.defRating <= 110 && home.offRating >= 118) factors.push(`${awayAbbrev} elite defense vs ${homeAbbrev} elite offense`);
+  if (home.defRating <= 110 && away.offRating >= 118)
+    factors.push(
+      `${homeAbbrev} elite defense (${home.defRating}) vs ${awayAbbrev} elite offense — expect half-court slowdown`,
+    );
+  if (away.defRating <= 110 && home.offRating >= 118)
+    factors.push(`${awayAbbrev} elite defense vs ${homeAbbrev} elite offense`);
 
   return {
     projectedTotal: Math.round(projectedTotal * 10) / 10,

@@ -26,8 +26,8 @@ export interface MarketAccuracy {
 }
 
 export interface LearningState {
-  version: string;         // "v1.4.2"
-  epoch: number;           // how many times the model has been optimized
+  version: string; // "v1.4.2"
+  epoch: number; // how many times the model has been optimized
   gamesLearned: number;
   lastOptimized: string;
   weights: ModelWeights;
@@ -42,7 +42,7 @@ const DEFAULT_WEIGHTS: ModelWeights = {
   defense: 0.08,
   weather: 0.08,
   umpire: 0.07,
-  momentum: 0.10,
+  momentum: 0.1,
   homeField: 0.05,
 };
 
@@ -53,10 +53,42 @@ const DEFAULT_STATE: LearningState = {
   lastOptimized: new Date().toISOString(),
   weights: { ...DEFAULT_WEIGHTS },
   marketAccuracy: {
-    moneyline: { market: "moneyline", totalBets: 0, wins: 0, losses: 0, brierScore: 0.25, avgEdge: 0, dynamicThreshold: 1.5 },
-    spread: { market: "spread", totalBets: 0, wins: 0, losses: 0, brierScore: 0.25, avgEdge: 0, dynamicThreshold: 2.0 },
-    total: { market: "total", totalBets: 0, wins: 0, losses: 0, brierScore: 0.25, avgEdge: 0, dynamicThreshold: 2.0 },
-    player_prop: { market: "player_prop", totalBets: 0, wins: 0, losses: 0, brierScore: 0.25, avgEdge: 0, dynamicThreshold: 1.5 },
+    moneyline: {
+      market: "moneyline",
+      totalBets: 0,
+      wins: 0,
+      losses: 0,
+      brierScore: 0.25,
+      avgEdge: 0,
+      dynamicThreshold: 1.5,
+    },
+    spread: {
+      market: "spread",
+      totalBets: 0,
+      wins: 0,
+      losses: 0,
+      brierScore: 0.25,
+      avgEdge: 0,
+      dynamicThreshold: 2.0,
+    },
+    total: {
+      market: "total",
+      totalBets: 0,
+      wins: 0,
+      losses: 0,
+      brierScore: 0.25,
+      avgEdge: 0,
+      dynamicThreshold: 2.0,
+    },
+    player_prop: {
+      market: "player_prop",
+      totalBets: 0,
+      wins: 0,
+      losses: 0,
+      brierScore: 0.25,
+      avgEdge: 0,
+      dynamicThreshold: 1.5,
+    },
   },
   learningRate: 0.03,
 };
@@ -72,7 +104,9 @@ export function loadLearningState(): LearningState {
 
 export function saveLearningState(state: LearningState) {
   if (typeof window === "undefined") return;
-  try { localStorage.setItem("dq_learning_state", JSON.stringify(state)); } catch {}
+  try {
+    localStorage.setItem("dq_learning_state", JSON.stringify(state));
+  } catch {}
 }
 
 // ──────────────────────────────────────────────────────────
@@ -82,10 +116,10 @@ export function learnFromBet(
   state: LearningState,
   bet: {
     market: string;
-    fairProb: number;  // 0-1, what the model predicted
+    fairProb: number; // 0-1, what the model predicted
     result: "win" | "loss" | "push";
     evAtPlacement: number;
-  }
+  },
 ): LearningState {
   if (bet.result === "push") return state;
 
@@ -98,8 +132,13 @@ export function learnFromBet(
   // Get or create market accuracy
   const marketKey = bet.market || "moneyline";
   const accuracy = state.marketAccuracy[marketKey] ?? {
-    market: marketKey, totalBets: 0, wins: 0, losses: 0,
-    brierScore: 0.25, avgEdge: 0, dynamicThreshold: 1.5,
+    market: marketKey,
+    totalBets: 0,
+    wins: 0,
+    losses: 0,
+    brierScore: 0.25,
+    avgEdge: 0,
+    dynamicThreshold: 1.5,
   };
 
   // Update market stats
@@ -117,14 +156,21 @@ export function learnFromBet(
   // DYNAMIC THRESHOLD ADJUSTMENT
   // If accuracy is bad (high Brier), raise the threshold (need bigger edge to bet)
   // If accuracy is good (low Brier), lower the threshold (trust the model more)
-  const winRate = accuracy.totalBets > 0 ? accuracy.wins / accuracy.totalBets : 0.5;
+  const winRate =
+    accuracy.totalBets > 0 ? accuracy.wins / accuracy.totalBets : 0.5;
   if (accuracy.totalBets >= 5) {
     if (winRate > 0.55 && accuracy.brierScore < 0.22) {
       // Model is sharp here — lower threshold
-      accuracy.dynamicThreshold = Math.max(0.5, accuracy.dynamicThreshold - state.learningRate);
-    } else if (winRate < 0.45 || accuracy.brierScore > 0.30) {
+      accuracy.dynamicThreshold = Math.max(
+        0.5,
+        accuracy.dynamicThreshold - state.learningRate,
+      );
+    } else if (winRate < 0.45 || accuracy.brierScore > 0.3) {
       // Model is struggling — raise threshold
-      accuracy.dynamicThreshold = Math.min(8.0, accuracy.dynamicThreshold + state.learningRate * 2);
+      accuracy.dynamicThreshold = Math.min(
+        8.0,
+        accuracy.dynamicThreshold + state.learningRate * 2,
+      );
     }
   }
 
@@ -139,7 +185,7 @@ export function learnFromBet(
       // We were confident but wrong — model was overfit on something
       weights.pitching = Math.max(0.05, weights.pitching - lr * 0.5);
       weights.momentum = Math.max(0.02, weights.momentum - lr * 0.3);
-      weights.bullpen = Math.min(0.40, weights.bullpen + lr * 0.3);
+      weights.bullpen = Math.min(0.4, weights.bullpen + lr * 0.3);
     }
   } else {
     // Won: reinforce current weights slightly
@@ -183,10 +229,11 @@ export function getMinEdge(state: LearningState, market: string): number {
 // ──────────────────────────────────────────────────────────
 export function calculateCLV(
   openingOdds: number,
-  closingOdds: number
+  closingOdds: number,
 ): { clvPercent: number; beatClosing: boolean } {
   // Convert to implied probabilities
-  const toProb = (odds: number) => odds > 0 ? 100 / (odds + 100) : Math.abs(odds) / (Math.abs(odds) + 100);
+  const toProb = (odds: number) =>
+    odds > 0 ? 100 / (odds + 100) : Math.abs(odds) / (Math.abs(odds) + 100);
   const openProb = toProb(openingOdds);
   const closeProb = toProb(closingOdds);
 

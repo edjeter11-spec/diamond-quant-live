@@ -3,7 +3,13 @@
 // ──────────────────────────────────────────────────────────
 
 import { create } from "zustand";
-import type { ParlayLeg, ParlaySlip, BetRecord, BankrollState, OddsLine } from "./model/types";
+import type {
+  ParlayLeg,
+  ParlaySlip,
+  BetRecord,
+  BankrollState,
+  OddsLine,
+} from "./model/types";
 import { buildParlay } from "./model/parlay";
 import { americanToImpliedProb } from "./model/kelly";
 
@@ -22,7 +28,11 @@ function loadFromStorage<T>(key: string, fallback: T): T {
 const lastSyncTimes: Record<string, number> = {};
 
 // Critical keys sync immediately for cross-device consistency
-const IMMEDIATE_SYNC = new Set(["dq_bankroll", "dq_betHistory", "dq_savedParlays"]);
+const IMMEDIATE_SYNC = new Set([
+  "dq_bankroll",
+  "dq_betHistory",
+  "dq_savedParlays",
+]);
 
 function saveToStorage(key: string, value: any) {
   if (typeof window === "undefined") return;
@@ -74,7 +84,16 @@ interface OddsSnapshot {
 interface AppState {
   // UI State
   selectedGameId: string | null;
-  activeTab: "dashboard" | "nrfi" | "bot" | "props" | "arbs" | "news" | "live" | "bankroll" | "profile";
+  activeTab:
+    | "dashboard"
+    | "nrfi"
+    | "bot"
+    | "props"
+    | "arbs"
+    | "news"
+    | "live"
+    | "bankroll"
+    | "profile";
   sidebarOpen: boolean;
   parlayBuilderOpen: boolean;
 
@@ -120,11 +139,22 @@ interface AppState {
   // Bankroll Actions
   setBankroll: (amount: number) => void;
   addBet: (bet: Omit<BetRecord, "id" | "timestamp">) => void;
-  settleBet: (betId: string, result: BetRecord["result"], payout: number) => void;
+  settleBet: (
+    betId: string,
+    result: BetRecord["result"],
+    payout: number,
+  ) => void;
 
   // Line Movement
   snapshotOdds: (oddsData: any[]) => void;
-  getLineMovements: (gameId: string) => Array<{ bookmaker: string; market: string; oldOdds: number; newOdds: number; movement: number; time: string }>;
+  getLineMovements: (gameId: string) => Array<{
+    bookmaker: string;
+    market: string;
+    oldOdds: number;
+    newOdds: number;
+    movement: number;
+    time: string;
+  }>;
 
   // Room Actions
   setRoomId: (id: string | null) => void;
@@ -145,31 +175,55 @@ async function hydrateFromCloud(set: any, currentBetHistory: any[] = []) {
       if (userData.betHistory) updates.betHistory = userData.betHistory;
       if (userData.savedParlays) updates.savedParlays = userData.savedParlays;
       // Detect auto-settled bets vs local snapshot — fire a toast summarizing
-      if (userData.betHistory && currentBetHistory.length > 0 && typeof window !== "undefined") {
+      if (
+        userData.betHistory &&
+        currentBetHistory.length > 0 &&
+        typeof window !== "undefined"
+      ) {
         const oldById = new Map(currentBetHistory.map((b: any) => [b.id, b]));
-        let wins = 0, losses = 0, pushes = 0, netCents = 0;
+        let wins = 0,
+          losses = 0,
+          pushes = 0,
+          netCents = 0;
         for (const bet of userData.betHistory as any[]) {
           const prev = oldById.get(bet.id);
-          if (prev && prev.result === "pending" && bet.result !== "pending" && bet.settledAt) {
-            if (bet.result === "win") { wins++; netCents += Math.round(((bet.payout ?? 0) - (bet.stake ?? 0)) * 100); }
-            else if (bet.result === "loss") { losses++; netCents -= Math.round((bet.stake ?? 0) * 100); }
-            else if (bet.result === "push") pushes++;
+          if (
+            prev &&
+            prev.result === "pending" &&
+            bet.result !== "pending" &&
+            bet.settledAt
+          ) {
+            if (bet.result === "win") {
+              wins++;
+              netCents += Math.round(
+                ((bet.payout ?? 0) - (bet.stake ?? 0)) * 100,
+              );
+            } else if (bet.result === "loss") {
+              losses++;
+              netCents -= Math.round((bet.stake ?? 0) * 100);
+            } else if (bet.result === "push") pushes++;
           }
         }
         const total = wins + losses + pushes;
         if (total > 0) {
           const net = netCents / 100;
-          const netStr = net >= 0 ? `+$${net.toFixed(2)}` : `-$${Math.abs(net).toFixed(2)}`;
-          window.dispatchEvent(new CustomEvent("dq-toast", {
-            detail: {
-              tone: net >= 0 ? "good" : "warn",
-              message: `${total} bet${total > 1 ? "s" : ""} settled`,
-              sub: `${wins}W ${losses}L${pushes ? ` ${pushes}P` : ""} · ${netStr}`,
-            },
-          }));
+          const netStr =
+            net >= 0 ? `+$${net.toFixed(2)}` : `-$${Math.abs(net).toFixed(2)}`;
+          window.dispatchEvent(
+            new CustomEvent("dq-toast", {
+              detail: {
+                tone: net >= 0 ? "good" : "warn",
+                message: `${total} bet${total > 1 ? "s" : ""} settled`,
+                sub: `${wins}W ${losses}L${pushes ? ` ${pushes}P` : ""} · ${netStr}`,
+              },
+            }),
+          );
         }
       }
-      if (Object.keys(updates).length > 0) { set(updates); return; }
+      if (Object.keys(updates).length > 0) {
+        set(updates);
+        return;
+      }
     }
     const { cloudGet } = await import("@/lib/supabase/client");
     const [bankroll, betHistory, savedParlays] = await Promise.all([
@@ -219,10 +273,23 @@ export const useStore = create<AppState>((set, get) => ({
     const bankroll = loadFromStorage("dq_bankroll", DEFAULT_BANKROLL);
     const betHistory = loadFromStorage<BetRecord[]>("dq_betHistory", []);
     const savedParlays = loadFromStorage<ParlaySlip[]>("dq_savedParlays", []);
-    const oddsSnapshots = loadFromStorage<OddsSnapshot[]>("dq_oddsSnapshots", []);
+    const oddsSnapshots = loadFromStorage<OddsSnapshot[]>(
+      "dq_oddsSnapshots",
+      [],
+    );
     const parlayLegs = loadFromStorage<ParlayLeg[]>("dq_parlay_picks", []);
-    const currentParlay = parlayLegs.length >= 2 ? buildParlay(parlayLegs, bankroll.currentBankroll) : null;
-    set({ bankroll, betHistory, savedParlays, oddsSnapshots, parlayLegs, currentParlay });
+    const currentParlay =
+      parlayLegs.length >= 2
+        ? buildParlay(parlayLegs, bankroll.currentBankroll)
+        : null;
+    set({
+      bankroll,
+      betHistory,
+      savedParlays,
+      oddsSnapshots,
+      parlayLegs,
+      currentParlay,
+    });
 
     // Then try cloud (async, may override with newer data). Pass current
     // betHistory so the hydration helper can detect newly-settled bets
@@ -254,20 +321,30 @@ export const useStore = create<AppState>((set, get) => ({
     // Dedupe: same pick + bookmaker + odds = duplicate
     const currentLegs = get().parlayLegs;
     const isDup = currentLegs.some(
-      (l) => l.pick === newLeg.pick && l.bookmaker === newLeg.bookmaker && l.odds === newLeg.odds
+      (l) =>
+        l.pick === newLeg.pick &&
+        l.bookmaker === newLeg.bookmaker &&
+        l.odds === newLeg.odds,
     );
     if (isDup) {
       if (typeof window !== "undefined") {
-        window.dispatchEvent(new CustomEvent("dq-toast", {
-          detail: { tone: "info", message: "Already in your slip", sub: `${currentLegs.length} leg${currentLegs.length !== 1 ? "s" : ""}` },
-        }));
+        window.dispatchEvent(
+          new CustomEvent("dq-toast", {
+            detail: {
+              tone: "info",
+              message: "Already in your slip",
+              sub: `${currentLegs.length} leg${currentLegs.length !== 1 ? "s" : ""}`,
+            },
+          }),
+        );
       }
       return;
     }
 
     set((s) => {
       const legs = [...s.parlayLegs, newLeg];
-      const currentParlay = legs.length >= 2 ? buildParlay(legs, s.bankroll.currentBankroll) : null;
+      const currentParlay =
+        legs.length >= 2 ? buildParlay(legs, s.bankroll.currentBankroll) : null;
       saveToStorage("dq_parlay_picks", legs);
       return { parlayLegs: legs, currentParlay };
     });
@@ -276,20 +353,23 @@ export const useStore = create<AppState>((set, get) => ({
     if (typeof window !== "undefined") {
       const after = get();
       const total = after.currentParlay?.combinedOdds;
-      window.dispatchEvent(new CustomEvent("dq-toast", {
-        detail: {
-          tone: "good",
-          message: "Added to slip",
-          sub: `${after.parlayLegs.length} leg${after.parlayLegs.length !== 1 ? "s" : ""}${total != null ? ` · ${total > 0 ? "+" : ""}${total}` : ""}`,
-        },
-      }));
+      window.dispatchEvent(
+        new CustomEvent("dq-toast", {
+          detail: {
+            tone: "good",
+            message: "Added to slip",
+            sub: `${after.parlayLegs.length} leg${after.parlayLegs.length !== 1 ? "s" : ""}${total != null ? ` · ${total > 0 ? "+" : ""}${total}` : ""}`,
+          },
+        }),
+      );
     }
   },
 
   removeParlayLeg: (legId) => {
     set((s) => {
       const legs = s.parlayLegs.filter((l) => l.id !== legId);
-      const currentParlay = legs.length >= 2 ? buildParlay(legs, s.bankroll.currentBankroll) : null;
+      const currentParlay =
+        legs.length >= 2 ? buildParlay(legs, s.bankroll.currentBankroll) : null;
       saveToStorage("dq_parlay_picks", legs);
       return { parlayLegs: legs, currentParlay };
     });
@@ -313,7 +393,11 @@ export const useStore = create<AppState>((set, get) => ({
   // Bankroll Actions — all persist to localStorage
   setBankroll: (amount) => {
     set((s) => {
-      const bankroll = { ...s.bankroll, startingBankroll: amount, currentBankroll: amount };
+      const bankroll = {
+        ...s.bankroll,
+        startingBankroll: amount,
+        currentBankroll: amount,
+      };
       saveToStorage("dq_bankroll", bankroll);
       return { bankroll };
     });
@@ -341,7 +425,7 @@ export const useStore = create<AppState>((set, get) => ({
   settleBet: (betId, result, payout) => {
     set((s) => {
       const betHistory = s.betHistory.map((b) =>
-        b.id === betId ? { ...b, result, payout } : b
+        b.id === betId ? { ...b, result, payout } : b,
       );
 
       const wins = betHistory.filter((b) => b.result === "win").length;
@@ -349,12 +433,21 @@ export const useStore = create<AppState>((set, get) => ({
       const pushes = betHistory.filter((b) => b.result === "push").length;
       const totalReturns = betHistory.reduce((sum, b) => sum + b.payout, 0);
       const totalStaked = betHistory.reduce((sum, b) => sum + b.stake, 0);
-      const currentBankroll = s.bankroll.startingBankroll + totalReturns - totalStaked;
-      const roi = totalStaked > 0 ? ((totalReturns - totalStaked) / totalStaked) * 100 : 0;
+      const currentBankroll =
+        s.bankroll.startingBankroll + totalReturns - totalStaked;
+      const roi =
+        totalStaked > 0
+          ? ((totalReturns - totalStaked) / totalStaked) * 100
+          : 0;
 
       const bankroll = {
         ...s.bankroll,
-        wins, losses, pushes, totalReturns, currentBankroll, roi,
+        wins,
+        losses,
+        pushes,
+        totalReturns,
+        currentBankroll,
+        roi,
       };
       saveToStorage("dq_bankroll", bankroll);
       saveToStorage("dq_betHistory", betHistory);
@@ -373,7 +466,10 @@ export const useStore = create<AppState>((set, get) => ({
 
     set((s) => {
       // Keep last 20 snapshots (~ 10 minutes at 30s intervals)
-      const snapshots = [...s.oddsSnapshots, { timestamp: new Date().toISOString(), lines }].slice(-20);
+      const snapshots = [
+        ...s.oddsSnapshots,
+        { timestamp: new Date().toISOString(), lines },
+      ].slice(-20);
       saveToStorage("dq_oddsSnapshots", snapshots);
       return { oddsSnapshots: snapshots };
     });
@@ -392,14 +488,27 @@ export const useStore = create<AppState>((set, get) => ({
     const prevLines = previous.lines[gameId];
     if (!currentLines || !prevLines) return [];
 
-    const movements: Array<{ bookmaker: string; market: string; oldOdds: number; newOdds: number; movement: number; time: string }> = [];
+    const movements: Array<{
+      bookmaker: string;
+      market: string;
+      oldOdds: number;
+      newOdds: number;
+      movement: number;
+      time: string;
+    }> = [];
 
     for (const current of currentLines) {
-      const prev = prevLines.find((p: OddsLine) => p.bookmaker === current.bookmaker);
+      const prev = prevLines.find(
+        (p: OddsLine) => p.bookmaker === current.bookmaker,
+      );
       if (!prev) continue;
 
       // Check ML movement
-      if (current.homeML !== prev.homeML && current.homeML !== 0 && prev.homeML !== 0) {
+      if (
+        current.homeML !== prev.homeML &&
+        current.homeML !== 0 &&
+        prev.homeML !== 0
+      ) {
         movements.push({
           bookmaker: current.bookmaker,
           market: "Home ML",
@@ -409,7 +518,11 @@ export const useStore = create<AppState>((set, get) => ({
           time: new Date(latest.timestamp).toLocaleTimeString(),
         });
       }
-      if (current.awayML !== prev.awayML && current.awayML !== 0 && prev.awayML !== 0) {
+      if (
+        current.awayML !== prev.awayML &&
+        current.awayML !== 0 &&
+        prev.awayML !== 0
+      ) {
         movements.push({
           bookmaker: current.bookmaker,
           market: "Away ML",

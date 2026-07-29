@@ -29,10 +29,14 @@ async function loadPlayerIndex(): Promise<NBAPlayerRaw[]> {
   // Try Supabase first (saved from previous day)
   try {
     const { cloudGet } = await import("@/lib/supabase/client");
-    const cloud = await cloudGet<{ players: NBAPlayerRaw[]; date: string }>("nba_player_index", null as any);
+    const cloud = await cloudGet<{ players: NBAPlayerRaw[]; date: string }>(
+      "nba_player_index",
+      null as any,
+    );
     if (cloud?.players?.length > 0) {
       const age = (Date.now() - new Date(cloud.date).getTime()) / 3600000;
-      if (age < 24) { // less than 24 hours old
+      if (age < 24) {
+        // less than 24 hours old
         setCache("nba_player_index", cloud.players);
         return cloud.players;
       }
@@ -78,7 +82,10 @@ async function loadPlayerIndex(): Promise<NBAPlayerRaw[]> {
     // Save to Supabase so next load is instant
     try {
       const { cloudSet } = await import("@/lib/supabase/client");
-      await cloudSet("nba_player_index", { players, date: new Date().toISOString() });
+      await cloudSet("nba_player_index", {
+        players,
+        date: new Date().toISOString(),
+      });
     } catch {}
 
     return players;
@@ -88,7 +95,9 @@ async function loadPlayerIndex(): Promise<NBAPlayerRaw[]> {
 }
 
 // Search for a player by name
-export async function searchNBAPlayer(name: string): Promise<NBAPlayerRaw | null> {
+export async function searchNBAPlayer(
+  name: string,
+): Promise<NBAPlayerRaw | null> {
   const players = await loadPlayerIndex();
   if (players.length === 0) return null;
 
@@ -96,23 +105,25 @@ export async function searchNBAPlayer(name: string): Promise<NBAPlayerRaw | null
   const words = nameLower.split(" ");
 
   // Exact match
-  let match = players.find(p =>
-    `${p.firstName} ${p.lastName}`.toLowerCase() === nameLower
+  let match = players.find(
+    (p) => `${p.firstName} ${p.lastName}`.toLowerCase() === nameLower,
   );
 
   // Last name match
   if (!match) {
-    match = players.find(p =>
-      p.lastName.toLowerCase() === (words[words.length - 1] ?? "") &&
-      (words.length === 1 || p.firstName.toLowerCase().startsWith(words[0]?.slice(0, 3) ?? ""))
+    match = players.find(
+      (p) =>
+        p.lastName.toLowerCase() === (words[words.length - 1] ?? "") &&
+        (words.length === 1 ||
+          p.firstName.toLowerCase().startsWith(words[0]?.slice(0, 3) ?? "")),
     );
   }
 
   // Contains match
   if (!match) {
-    match = players.find(p => {
+    match = players.find((p) => {
       const full = `${p.firstName} ${p.lastName}`.toLowerCase();
-      return words.every(w => full.includes(w));
+      return words.every((w) => full.includes(w));
     });
   }
 
@@ -141,13 +152,16 @@ export interface NBAPlayerProfile {
   bpg: number;
   gameLog: any[];
   statAvg: Record<string, number>;
-  hitRates: Record<string, { line: number; overCount: number; total: number; rate: number }>;
+  hitRates: Record<
+    string,
+    { line: number; overCount: number; total: number; rate: number }
+  >;
 }
 
 export async function buildNBAPlayerProfile(
   playerName: string,
   market: string,
-  line: number
+  line: number,
 ): Promise<NBAPlayerProfile | null> {
   const player = await searchNBAPlayer(playerName);
   if (!player) return null;
@@ -166,7 +180,12 @@ export async function buildNBAPlayerProfile(
     rpg: player.rpg,
     apg: player.apg,
     gamesPlayed: 0,
-    fgPct: 0, threePct: 0, ftPct: 0, mpg: 0, spg: 0, bpg: 0,
+    fgPct: 0,
+    threePct: 0,
+    ftPct: 0,
+    mpg: 0,
+    spg: 0,
+    bpg: 0,
     gameLog: [],
     statAvg: {
       player_points: player.ppg,

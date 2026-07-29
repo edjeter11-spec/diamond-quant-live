@@ -75,13 +75,18 @@ function getAffiliateCode(book: string): string | undefined {
   return process.env[`NEXT_PUBLIC_AFFILIATE_${upper}`];
 }
 
-function appendAffiliate(url: string, book: string, extra?: { ev?: number }): string {
+function appendAffiliate(
+  url: string,
+  book: string,
+  extra?: { ev?: number },
+): string {
   if (!url) return url;
   const code = getAffiliateCode(book);
   if (!code) return url; // not configured; return plain link
   const param = AFFILIATE_PARAM[book] ?? "btag";
   const joiner = url.includes("?") ? "&" : "?";
-  const evTag = extra?.ev != null ? `&dq_ev=${Math.round(extra.ev * 10) / 10}` : "";
+  const evTag =
+    extra?.ev != null ? `&dq_ev=${Math.round(extra.ev * 10) / 10}` : "";
   return `${url}${joiner}${param}=${encodeURIComponent(code)}${evTag}`;
 }
 
@@ -92,10 +97,17 @@ function resolveBookKey(bookmakerKey: string): string {
     if (key.includes(k) || k.includes(key)) return k;
   }
   const nameMap: Record<string, string> = {
-    "draftkings": "draftkings", "fanduel": "fanduel", "betmgm": "betmgm",
-    "fanatics": "fanatics", "hardrock": "hardrockbet", "betrivers": "betrivers",
-    "espnbet": "espnbet", "pointsbet": "pointsbetus", "bovada": "bovada",
-    "caesars": "williamhill_us", "williamhill": "williamhill_us",
+    draftkings: "draftkings",
+    fanduel: "fanduel",
+    betmgm: "betmgm",
+    fanatics: "fanatics",
+    hardrock: "hardrockbet",
+    betrivers: "betrivers",
+    espnbet: "espnbet",
+    pointsbet: "pointsbetus",
+    bovada: "bovada",
+    caesars: "williamhill_us",
+    williamhill: "williamhill_us",
   };
   for (const [name, k] of Object.entries(nameMap)) {
     if (key.includes(name)) return k;
@@ -111,7 +123,7 @@ function resolveBookKey(bookmakerKey: string): string {
  */
 export function getDeepLink(
   bookmakerKey: string,
-  opts?: { sport?: "mlb" | "nba"; ev?: number }
+  opts?: { sport?: "mlb" | "nba"; ev?: number },
 ): string {
   const bookKey = resolveBookKey(bookmakerKey);
   if (!bookKey) return "";
@@ -136,7 +148,7 @@ export function validateEdge(
   evPercentage: number,
   odds: number,
   bookmaker: string,
-  allOddsForMarket: number[] // odds from all books for same side
+  allOddsForMarket: number[], // odds from all books for same side
 ): EdgeValidation {
   // Rule 1: Any edge over 12% is almost certainly a dead line
   if (evPercentage > 12) {
@@ -159,9 +171,11 @@ export function validateEdge(
 
   // Rule 3: Odds are wildly different from other books (>50% off market)
   if (allOddsForMarket.length >= 2) {
-    const avgOdds = allOddsForMarket.reduce((a, b) => a + b, 0) / allOddsForMarket.length;
+    const avgOdds =
+      allOddsForMarket.reduce((a, b) => a + b, 0) / allOddsForMarket.length;
     const deviation = Math.abs(odds - avgOdds);
-    if (deviation > 100) { // More than 100 points off market average
+    if (deviation > 100) {
+      // More than 100 points off market average
       return {
         isValid: true,
         isSuspicious: true,
@@ -188,34 +202,40 @@ export function filterRealArbs(arbs: any[]): any[] {
     // Reject arbs with >5% profit (almost always dead/stale lines)
     if (arb.profit > 5) return false;
     // Reject arbs with extreme odds on either side
-    if (Math.abs(arb.side1.odds) > 3000 || Math.abs(arb.side2.odds) > 3000) return false;
+    if (Math.abs(arb.side1.odds) > 3000 || Math.abs(arb.side2.odds) > 3000)
+      return false;
     return true;
   });
 }
 
 // Filter EV bets for realistic ones
 export function filterRealEV(evBets: any[]): any[] {
-  return evBets.filter((bet) => {
-    if (bet.evPercentage > 15) return false;
-    if (Math.abs(bet.odds) > 5000) return false;
-    return true;
-  }).map((bet) => ({
-    ...bet,
-    isSuspicious: bet.evPercentage > 10,
-    warning: bet.evPercentage > 10 ? "Verify line is still live" : undefined,
-  }));
+  return evBets
+    .filter((bet) => {
+      if (bet.evPercentage > 15) return false;
+      if (Math.abs(bet.odds) > 5000) return false;
+      return true;
+    })
+    .map((bet) => ({
+      ...bet,
+      isSuspicious: bet.evPercentage > 10,
+      warning: bet.evPercentage > 10 ? "Verify line is still live" : undefined,
+    }));
 }
 
 // ──────────────────────────────────────────────────────────
 // Discord Webhook
 // ──────────────────────────────────────────────────────────
 
-export async function sendDiscordAlert(webhookUrl: string, message: {
-  title: string;
-  description: string;
-  color: number; // decimal color
-  fields?: Array<{ name: string; value: string; inline?: boolean }>;
-}) {
+export async function sendDiscordAlert(
+  webhookUrl: string,
+  message: {
+    title: string;
+    description: string;
+    color: number; // decimal color
+    fields?: Array<{ name: string; value: string; inline?: boolean }>;
+  },
+) {
   if (!webhookUrl) return;
 
   try {
@@ -223,14 +243,16 @@ export async function sendDiscordAlert(webhookUrl: string, message: {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        embeds: [{
-          title: message.title,
-          description: message.description,
-          color: message.color,
-          fields: message.fields,
-          footer: { text: "Diamond-Quant Live" },
-          timestamp: new Date().toISOString(),
-        }],
+        embeds: [
+          {
+            title: message.title,
+            description: message.description,
+            color: message.color,
+            fields: message.fields,
+            footer: { text: "Diamond-Quant Live" },
+            timestamp: new Date().toISOString(),
+          },
+        ],
       }),
     });
   } catch (err) {

@@ -15,21 +15,24 @@ export interface InjuredHitter {
   name: string;
   position: string;
   statusCode: string;
-  status: string;  // "Injured List 10-Day" etc.
-  ops?: number;    // Season OPS (from stats hydrate)
+  status: string; // "Injured List 10-Day" etc.
+  ops?: number; // Season OPS (from stats hydrate)
   impactful: boolean; // OPS >= 0.750 AND plays regularly
 }
 
 export interface TeamInjuryReport {
   teamAbbrev: string;
   totalOnIL: number;
-  impactfulOut: number;  // number of key hitters on the IL
+  impactfulOut: number; // number of key hitters on the IL
   keyPlayers: InjuredHitter[];
   summary: string;
 }
 
 /** Fetch the team's full roster (includes IL) + hydrate season hitting stats. */
-async function fetchFullRoster(teamId: number, season?: number): Promise<any[]> {
+async function fetchFullRoster(
+  teamId: number,
+  season?: number,
+): Promise<any[]> {
   const year = season ?? new Date().getFullYear();
   const url = `${MLB_API}/teams/${teamId}/roster?rosterType=fullRoster&hydrate=person(stats(type=season,season=${year},group=hitting))`;
   try {
@@ -57,7 +60,10 @@ function parseGamesPlayed(rosterRow: any): number {
   return typeof g === "number" ? g : parseInt(g ?? "0", 10) || 0;
 }
 
-export async function getTeamInjuries(teamId: number, teamAbbrev: string): Promise<TeamInjuryReport> {
+export async function getTeamInjuries(
+  teamId: number,
+  teamAbbrev: string,
+): Promise<TeamInjuryReport> {
   const cacheKey = `mlb_injuries_${teamId}`;
   const cached = getCached(cacheKey, CACHE_TTL) as TeamInjuryReport | null;
   if (cached) return cached;
@@ -82,7 +88,7 @@ export async function getTeamInjuries(teamId: number, teamAbbrev: string): Promi
 
     const ops = parseOps(row);
     const games = parseGamesPlayed(row);
-    const impactful = (ops ?? 0) >= 0.750 && games >= 30;
+    const impactful = (ops ?? 0) >= 0.75 && games >= 30;
 
     keyPlayers.push({
       name: row.person?.fullName ?? "",
@@ -98,9 +104,17 @@ export async function getTeamInjuries(teamId: number, teamAbbrev: string): Promi
   // Rank key players OPS-desc so summary shows the most important first
   keyPlayers.sort((a, b) => (b.ops ?? 0) - (a.ops ?? 0));
 
-  const summary = impactfulOut === 0
-    ? `${teamAbbrev} lineup mostly healthy`
-    : `${teamAbbrev} missing ${impactfulOut} impact hitter${impactfulOut !== 1 ? "s" : ""}: ${keyPlayers.filter(k => k.impactful).slice(0, 3).map(k => `${k.name.split(" ").pop()} (${(k.ops ?? 0).toFixed(3)} OPS)`).join(", ")}`;
+  const summary =
+    impactfulOut === 0
+      ? `${teamAbbrev} lineup mostly healthy`
+      : `${teamAbbrev} missing ${impactfulOut} impact hitter${impactfulOut !== 1 ? "s" : ""}: ${keyPlayers
+          .filter((k) => k.impactful)
+          .slice(0, 3)
+          .map(
+            (k) =>
+              `${k.name.split(" ").pop()} (${(k.ops ?? 0).toFixed(3)} OPS)`,
+          )
+          .join(", ")}`;
 
   const result: TeamInjuryReport = {
     teamAbbrev,

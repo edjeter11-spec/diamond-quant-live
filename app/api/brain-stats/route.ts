@@ -7,7 +7,9 @@ export const dynamic = "force-dynamic";
 
 // CDN cache: 60s fresh, 5 min stale-while-revalidate. Brain only updates daily
 // during cron training, so fresh-after-60s is plenty.
-const CACHE_HEADERS = { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300" };
+const CACHE_HEADERS = {
+  "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300",
+};
 
 export async function GET() {
   try {
@@ -31,31 +33,39 @@ export async function GET() {
         byPropType: p.byPropType,
       }));
 
-    return NextResponse.json({
-      ok: true,
-      brain: {
-        version: brain.version,
-        epoch: brain.epoch,
-        lastTrainedAt: brain.lastTrainedAt,
-        lastAuditAt: brain.lastAuditAt,
-        weights: brain.weights,
-        learningRate: brain.learningRate,
-        totalPredictions: brain.totalPredictions,
-        totalHits: brain.totalHits,
-        totalGamesProcessed: brain.totalGamesProcessed,
-        markets: brain.markets,
-        recentAudits: (brain.recentAudits ?? []).slice(-15),
-        playerCount: Object.keys(brain.playerMemory ?? {}).length,
+    return NextResponse.json(
+      {
+        ok: true,
+        brain: {
+          version: brain.version,
+          epoch: brain.epoch,
+          lastTrainedAt: brain.lastTrainedAt,
+          lastAuditAt: brain.lastAuditAt,
+          weights: brain.weights,
+          learningRate: brain.learningRate,
+          totalPredictions: brain.totalPredictions,
+          totalHits: brain.totalHits,
+          totalGamesProcessed: brain.totalGamesProcessed,
+          markets: brain.markets,
+          recentAudits: (brain.recentAudits ?? []).slice(-15),
+          playerCount: Object.keys(brain.playerMemory ?? {}).length,
+        },
+        topPlayers: players,
+        evolution: evolution
+          ? {
+              currentGeneration: evolution.currentGeneration,
+              liveBrainId: evolution.liveBrainId,
+              bestEverWinRate: evolution.bestEverWinRate,
+              history: evolution.history,
+            }
+          : null,
       },
-      topPlayers: players,
-      evolution: evolution ? {
-        currentGeneration: evolution.currentGeneration,
-        liveBrainId: evolution.liveBrainId,
-        bestEverWinRate: evolution.bestEverWinRate,
-        history: evolution.history,
-      } : null,
-    }, { headers: CACHE_HEADERS });
+      { headers: CACHE_HEADERS },
+    );
   } catch (error: any) {
-    return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+    return NextResponse.json(
+      { ok: false, error: error.message },
+      { status: 500 },
+    );
   }
 }

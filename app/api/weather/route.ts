@@ -22,6 +22,9 @@ export async function GET(req: NextRequest) {
     if (report) setCache(cacheKey, result);
     return NextResponse.json(result);
   } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e.message ?? "weather lookup failed" });
+    return NextResponse.json({
+      ok: false,
+      error: e.message ?? "weather lookup failed",
+    });
   }
 }

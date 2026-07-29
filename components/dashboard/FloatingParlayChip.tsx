@@ -1,7 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Layers, X, Trash2, Send, Share2, Check, DollarSign } from "lucide-react";
+import {
+  Layers,
+  X,
+  Trash2,
+  Send,
+  Share2,
+  Check,
+  DollarSign,
+} from "lucide-react";
 import { useStore } from "@/lib/store";
 import ParlayBuilder from "@/components/dashboard/ParlayBuilder";
 import { useSport } from "@/lib/sport-context";
@@ -16,8 +24,18 @@ interface Props {
   onOpenBuilder?: () => void;
 }
 
-export default function FloatingParlayChip({ activeTab: _activeTab, onOpenBuilder }: Props) {
-  const { parlayLegs, currentParlay, removeParlayLeg, clearParlay, addBet, setParlayBuilderOpen } = useStore();
+export default function FloatingParlayChip({
+  activeTab: _activeTab,
+  onOpenBuilder,
+}: Props) {
+  const {
+    parlayLegs,
+    currentParlay,
+    removeParlayLeg,
+    clearParlay,
+    addBet,
+    setParlayBuilderOpen,
+  } = useStore();
   const { currentSport } = useSport();
   const [open, setOpen] = useState(false);
   const [pulse, setPulse] = useState(false);
@@ -47,27 +65,35 @@ export default function FloatingParlayChip({ activeTab: _activeTab, onOpenBuilde
   const effectiveOdds = isSingle ? parlayLegs[0].odds : (totalOdds ?? 0);
   const stakeNum = parseFloat(stake) || 0;
   const decimal = americanToDecimal(effectiveOdds);
-  const toWin = stakeNum > 0 ? Math.round(stakeNum * (decimal - 1) * 100) / 100 : 0;
+  const toWin =
+    stakeNum > 0 ? Math.round(stakeNum * (decimal - 1) * 100) / 100 : 0;
 
   const placeBet = () => {
     if (stakeNum <= 0) return;
     const firstLeg = parlayLegs[0];
     addBet({
-      game: isSingle ? firstLeg.game : parlayLegs.map(l => l.game).join(" + "),
+      game: isSingle
+        ? firstLeg.game
+        : parlayLegs.map((l) => l.game).join(" + "),
       market: isSingle ? firstLeg.market : "parlay",
-      pick: isSingle ? firstLeg.pick : parlayLegs.map(l => l.pick).join(" / "),
+      pick: isSingle
+        ? firstLeg.pick
+        : parlayLegs.map((l) => l.pick).join(" / "),
       bookmaker: isSingle ? firstLeg.bookmaker : "Parlay",
       odds: effectiveOdds,
       stake: stakeNum,
       result: "pending",
       payout: 0,
       isParlay: !isSingle,
-      parlayLegs: isSingle ? undefined : parlayLegs.map(l => l.pick),
+      parlayLegs: isSingle ? undefined : parlayLegs.map((l) => l.pick),
       evAtPlacement: currentParlay?.evPercentage ?? 0,
     });
     clearParlay();
     setPlaced(true);
-    setTimeout(() => { setPlaced(false); setOpen(false); }, 1500);
+    setTimeout(() => {
+      setPlaced(false);
+      setOpen(false);
+    }, 1500);
   };
 
   const shareParlay = async () => {
@@ -77,8 +103,12 @@ export default function FloatingParlayChip({ activeTab: _activeTab, onOpenBuilde
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          picks: parlayLegs.map(l => ({
-            pick: l.pick, game: l.game, odds: l.odds, bookmaker: l.bookmaker, market: l.market,
+          picks: parlayLegs.map((l) => ({
+            pick: l.pick,
+            game: l.game,
+            odds: l.odds,
+            bookmaker: l.bookmaker,
+            market: l.market,
           })),
           totalOdds: effectiveOdds,
           stake: stakeNum > 0 ? stakeNum : undefined,
@@ -87,7 +117,10 @@ export default function FloatingParlayChip({ activeTab: _activeTab, onOpenBuilde
       const data = await res.json();
       const url = `${window.location.origin}${data.url}`;
       if (navigator.share) {
-        await navigator.share({ title: `Diamond Quant: ${legCount}-leg ${isSingle ? "pick" : "parlay"}`, url });
+        await navigator.share({
+          title: `Diamond Quant: ${legCount}-leg ${isSingle ? "pick" : "parlay"}`,
+          url,
+        });
       } else {
         await navigator.clipboard.writeText(url);
       }
@@ -115,7 +148,8 @@ export default function FloatingParlayChip({ activeTab: _activeTab, onOpenBuilde
         </span>
         {totalOdds != null && (
           <span className="text-[11px] font-mono font-bold bg-neon/15 px-1.5 py-0.5 rounded">
-            {totalOdds > 0 ? "+" : ""}{totalOdds}
+            {totalOdds > 0 ? "+" : ""}
+            {totalOdds}
           </span>
         )}
       </button>
@@ -135,7 +169,9 @@ export default function FloatingParlayChip({ activeTab: _activeTab, onOpenBuilde
                 <p className="text-sm font-bold text-silver">Your Parlay</p>
                 <p className="text-[10px] text-mercury/60">
                   {legCount} leg{legCount !== 1 ? "s" : ""}
-                  {totalOdds != null ? ` · ${totalOdds > 0 ? "+" : ""}${totalOdds} total` : ""}
+                  {totalOdds != null
+                    ? ` · ${totalOdds > 0 ? "+" : ""}${totalOdds} total`
+                    : ""}
                 </p>
               </div>
               <button
@@ -157,17 +193,22 @@ export default function FloatingParlayChip({ activeTab: _activeTab, onOpenBuilde
             {/* Legs */}
             <div className="divide-y divide-slate/15">
               {parlayLegs.map((leg) => (
-                <div key={leg.id} className="px-4 py-2.5 flex items-center gap-2">
+                <div
+                  key={leg.id}
+                  className="px-4 py-2.5 flex items-center gap-2"
+                >
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-semibold text-silver truncate">
                       {formatPickLabel(leg.pick, currentSport as any)}
                     </p>
                     <p className="text-[10px] text-mercury/60 truncate">
-                      {leg.bookmaker} · {(leg as any).market?.replace(/_/g, " ") ?? ""}
+                      {leg.bookmaker} ·{" "}
+                      {(leg as any).market?.replace(/_/g, " ") ?? ""}
                     </p>
                   </div>
                   <span className="text-xs font-mono font-bold text-silver flex-shrink-0">
-                    {leg.odds > 0 ? "+" : ""}{leg.odds}
+                    {leg.odds > 0 ? "+" : ""}
+                    {leg.odds}
                   </span>
                   <button
                     onClick={() => removeParlayLeg(leg.id)}
@@ -185,21 +226,28 @@ export default function FloatingParlayChip({ activeTab: _activeTab, onOpenBuilde
               {currentParlay && !isSingle && (
                 <div className="grid grid-cols-3 gap-2 text-center">
                   <div>
-                    <p className="text-[9px] text-mercury/60 uppercase">Fair %</p>
+                    <p className="text-[9px] text-mercury/60 uppercase">
+                      Fair %
+                    </p>
                     <p className="text-sm font-bold font-mono text-silver">
                       {currentParlay.fairProb.toFixed(1)}%
                     </p>
                   </div>
                   <div>
-                    <p className="text-[9px] text-mercury/60 uppercase">Book %</p>
+                    <p className="text-[9px] text-mercury/60 uppercase">
+                      Book %
+                    </p>
                     <p className="text-sm font-bold font-mono text-silver">
                       {currentParlay.impliedProb.toFixed(1)}%
                     </p>
                   </div>
                   <div>
                     <p className="text-[9px] text-mercury/60 uppercase">EV</p>
-                    <p className={`text-sm font-bold font-mono ${currentParlay.evPercentage >= 0 ? "text-neon" : "text-danger"}`}>
-                      {currentParlay.evPercentage > 0 ? "+" : ""}{currentParlay.evPercentage.toFixed(1)}%
+                    <p
+                      className={`text-sm font-bold font-mono ${currentParlay.evPercentage >= 0 ? "text-neon" : "text-danger"}`}
+                    >
+                      {currentParlay.evPercentage > 0 ? "+" : ""}
+                      {currentParlay.evPercentage.toFixed(1)}%
                     </p>
                   </div>
                 </div>
@@ -207,15 +255,19 @@ export default function FloatingParlayChip({ activeTab: _activeTab, onOpenBuilde
 
               {isSingle && (
                 <div className="rounded-lg border border-electric/25 bg-electric/5 px-3 py-2">
-                  <p className="text-[11px] text-electric font-semibold">Straight bet — add another leg to parlay</p>
+                  <p className="text-[11px] text-electric font-semibold">
+                    Straight bet — add another leg to parlay
+                  </p>
                 </div>
               )}
 
               {/* Stake input with quick amounts */}
               <div>
                 <div className="flex items-center gap-2 mb-1.5">
-                  <span className="text-[10px] text-mercury/60 uppercase tracking-wider flex-1">Stake</span>
-                  {[10, 25, 50, 100].map(amt => (
+                  <span className="text-[10px] text-mercury/60 uppercase tracking-wider flex-1">
+                    Stake
+                  </span>
+                  {[10, 25, 50, 100].map((amt) => (
                     <button
                       key={amt}
                       onClick={() => setStake(String(amt))}
@@ -245,7 +297,9 @@ export default function FloatingParlayChip({ activeTab: _activeTab, onOpenBuilde
                 {stakeNum > 0 && (
                   <div className="flex items-center justify-between mt-1.5 px-0.5">
                     <span className="text-[10px] text-mercury/60">To win</span>
-                    <span className="text-xs font-bold font-mono text-neon">${toWin.toFixed(2)}</span>
+                    <span className="text-xs font-bold font-mono text-neon">
+                      ${toWin.toFixed(2)}
+                    </span>
                   </div>
                 )}
               </div>
@@ -258,9 +312,14 @@ export default function FloatingParlayChip({ activeTab: _activeTab, onOpenBuilde
                   className="flex-1 py-2.5 rounded-xl bg-neon/15 border border-neon/30 text-neon text-xs font-bold hover:bg-neon/25 active:scale-[0.99] disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-1.5"
                 >
                   {placed ? (
-                    <><Check className="w-3.5 h-3.5" /> Logged</>
+                    <>
+                      <Check className="w-3.5 h-3.5" /> Logged
+                    </>
                   ) : (
-                    <>Place {isSingle ? "Straight Bet" : "Parlay"} · ${stakeNum.toFixed(0)}</>
+                    <>
+                      Place {isSingle ? "Straight Bet" : "Parlay"} · $
+                      {stakeNum.toFixed(0)}
+                    </>
                   )}
                 </button>
                 <button
@@ -268,11 +327,18 @@ export default function FloatingParlayChip({ activeTab: _activeTab, onOpenBuilde
                   className="py-2.5 px-3 rounded-xl bg-purple/10 border border-purple/25 text-purple hover:bg-purple/20 transition-colors flex-shrink-0 flex items-center gap-1"
                   title="Share slip"
                 >
-                  {shared ? <Check className="w-3.5 h-3.5 text-neon" /> : <Share2 className="w-3.5 h-3.5" />}
+                  {shared ? (
+                    <Check className="w-3.5 h-3.5 text-neon" />
+                  ) : (
+                    <Share2 className="w-3.5 h-3.5" />
+                  )}
                 </button>
                 {!isSingle && (
                   <button
-                    onClick={() => { setOpen(false); onOpenBuilder?.(); }}
+                    onClick={() => {
+                      setOpen(false);
+                      onOpenBuilder?.();
+                    }}
                     className="py-2.5 px-3 rounded-xl bg-gunmetal/40 border border-slate/30 text-mercury hover:text-silver transition-colors flex-shrink-0 flex items-center gap-1"
                     title="Open full builder"
                   >

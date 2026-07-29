@@ -45,7 +45,7 @@ export default function LiveBoard() {
 
       // Merge by team-pair (closest available match)
       const oddsMap = new Map<string, any>();
-      for (const g of (oddsData.games ?? [])) {
+      for (const g of oddsData.games ?? []) {
         const key = `${g.awayTeam}::${g.homeTeam}`;
         oddsMap.set(key, g);
       }
@@ -101,8 +101,12 @@ export default function LiveBoard() {
             <span className="relative rounded-full h-2.5 w-2.5 bg-danger" />
           </span>
           <div className="flex-1">
-            <h2 className="text-sm font-bold text-silver">Live Games — {isNBA ? "NBA" : "MLB"}</h2>
-            <p className="text-[10px] text-mercury/60">Odds + scores update every 30s</p>
+            <h2 className="text-sm font-bold text-silver">
+              Live Games — {isNBA ? "NBA" : "MLB"}
+            </h2>
+            <p className="text-[10px] text-mercury/60">
+              Odds + scores update every 30s
+            </p>
           </div>
           <button
             onClick={load}
@@ -110,7 +114,9 @@ export default function LiveBoard() {
             className="flex items-center justify-center min-w-[36px] min-h-[36px] rounded-lg hover:bg-gunmetal/40 text-mercury hover:text-silver transition-colors"
             aria-label="Refresh"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
+            <RefreshCw
+              className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`}
+            />
           </button>
         </div>
       </div>
@@ -123,9 +129,12 @@ export default function LiveBoard() {
       ) : games.length === 0 ? (
         <div className="glass rounded-xl p-8 text-center">
           <Radio className="w-10 h-10 text-mercury/30 mx-auto mb-3" />
-          <p className="text-sm text-silver font-semibold">No live games right now</p>
+          <p className="text-sm text-silver font-semibold">
+            No live games right now
+          </p>
           <p className="text-[11px] text-mercury/60 mt-1.5 max-w-sm mx-auto">
-            Live odds + scores appear here the second a game tips off. Tonight's slate refreshes automatically.
+            Live odds + scores appear here the second a game tips off. Tonight's
+            slate refreshes automatically.
           </p>
         </div>
       ) : (
@@ -137,40 +146,64 @@ export default function LiveBoard() {
               : `${g.periodLabel || `Q${g.period ?? 1}`}${g.timeRemaining ? ` · ${g.timeRemaining}` : ""}`;
             const homeLead = g.homeScore > g.awayScore;
             return (
-              <div key={g.id} className="glass rounded-xl border border-slate/20 overflow-hidden hover:border-danger/30 transition-all">
+              <div
+                key={g.id}
+                className="glass rounded-xl border border-slate/20 overflow-hidden hover:border-danger/30 transition-all"
+              >
                 <div className="px-3 py-2 bg-gradient-to-r from-danger/5 to-transparent flex items-center gap-2 border-b border-slate/15">
                   <span className="text-[9px] font-bold uppercase tracking-wider text-danger flex items-center gap-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-danger animate-pulse" />
                     LIVE
                   </span>
-                  <span className="text-[10px] text-mercury/70 font-mono">{periodTxt}</span>
+                  <span className="text-[10px] text-mercury/70 font-mono">
+                    {periodTxt}
+                  </span>
                 </div>
                 <div className="p-3 space-y-2">
                   {/* Away team */}
                   <div className="flex items-center gap-2">
                     <TeamLogo team={g.awayTeam} size={20} />
-                    <span className={`flex-1 text-sm font-semibold ${!homeLead ? "text-silver" : "text-mercury/70"}`}>{g.awayTeam}</span>
-                    <span className={`text-lg font-mono font-bold tabular-nums ${!homeLead ? "text-silver" : "text-mercury"}`}>{g.awayScore}</span>
+                    <span
+                      className={`flex-1 text-sm font-semibold ${!homeLead ? "text-silver" : "text-mercury/70"}`}
+                    >
+                      {g.awayTeam}
+                    </span>
+                    <span
+                      className={`text-lg font-mono font-bold tabular-nums ${!homeLead ? "text-silver" : "text-mercury"}`}
+                    >
+                      {g.awayScore}
+                    </span>
                     {g.bestAwayML !== undefined && g.bestAwayML !== 0 && (
                       <span className="text-[10px] font-mono text-electric border border-electric/25 bg-electric/10 px-1.5 py-0.5 rounded">
-                        {g.bestAwayML > 0 ? "+" : ""}{g.bestAwayML}
+                        {g.bestAwayML > 0 ? "+" : ""}
+                        {g.bestAwayML}
                       </span>
                     )}
                   </div>
                   {/* Home team */}
                   <div className="flex items-center gap-2">
                     <TeamLogo team={g.homeTeam} size={20} />
-                    <span className={`flex-1 text-sm font-semibold ${homeLead ? "text-silver" : "text-mercury/70"}`}>{g.homeTeam}</span>
-                    <span className={`text-lg font-mono font-bold tabular-nums ${homeLead ? "text-silver" : "text-mercury"}`}>{g.homeScore}</span>
+                    <span
+                      className={`flex-1 text-sm font-semibold ${homeLead ? "text-silver" : "text-mercury/70"}`}
+                    >
+                      {g.homeTeam}
+                    </span>
+                    <span
+                      className={`text-lg font-mono font-bold tabular-nums ${homeLead ? "text-silver" : "text-mercury"}`}
+                    >
+                      {g.homeScore}
+                    </span>
                     {g.bestHomeML !== undefined && g.bestHomeML !== 0 && (
                       <span className="text-[10px] font-mono text-electric border border-electric/25 bg-electric/10 px-1.5 py-0.5 rounded">
-                        {g.bestHomeML > 0 ? "+" : ""}{g.bestHomeML}
+                        {g.bestHomeML > 0 ? "+" : ""}
+                        {g.bestHomeML}
                       </span>
                     )}
                   </div>
                   {(g.bestHomeBook || g.bestAwayBook) && (
                     <p className="text-[9px] text-mercury/40 pt-1 border-t border-slate/15">
-                      Best live ML: {g.bestHomeBook ?? "—"} (home) · {g.bestAwayBook ?? "—"} (away)
+                      Best live ML: {g.bestHomeBook ?? "—"} (home) ·{" "}
+                      {g.bestAwayBook ?? "—"} (away)
                     </p>
                   )}
                 </div>

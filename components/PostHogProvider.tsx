@@ -4,7 +4,11 @@ import { useEffect } from "react";
 import posthog from "posthog-js";
 import { PostHogProvider as Provider } from "posthog-js/react";
 
-export default function PostHogProvider({ children }: { children: React.ReactNode }) {
+export default function PostHogProvider({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const key = process.env.NEXT_PUBLIC_POSTHOG_KEY;
 
   useEffect(() => {
@@ -14,7 +18,8 @@ export default function PostHogProvider({ children }: { children: React.ReactNod
     (window as any).__phInit = true;
 
     posthog.init(key, {
-      api_host: process.env.NEXT_PUBLIC_POSTHOG_HOST ?? "https://us.i.posthog.com",
+      api_host:
+        process.env.NEXT_PUBLIC_POSTHOG_HOST ?? "https://us.i.posthog.com",
       person_profiles: "identified_only",
       capture_pageview: true,
       capture_pageleave: true,

@@ -133,7 +133,10 @@ export const PLAYER_POSITION: Record<string, Position> = {
 const LEAGUE_AVG = 50;
 
 // Returns position-specific defensive number (0-100). Lower = better defense.
-export function getTeamDefenseVsPosition(teamAbbrev: string, position: Position): number {
+export function getTeamDefenseVsPosition(
+  teamAbbrev: string,
+  position: Position,
+): number {
   const team = TEAM_POS_DEFENSE[teamAbbrev.toUpperCase()];
   return team?.[position] ?? LEAGUE_AVG;
 }
@@ -153,7 +156,10 @@ export function defenseToRank(defNum: number): number {
 }
 
 // Convenience: resolve player+opponent → position-specific def rank (1-30).
-export function getPositionalDefRank(playerName: string, opponentAbbrev: string): number {
+export function getPositionalDefRank(
+  playerName: string,
+  opponentAbbrev: string,
+): number {
   const pos = getPlayerPosition(playerName);
   const defNum = getTeamDefenseVsPosition(opponentAbbrev, pos);
   return defenseToRank(defNum);

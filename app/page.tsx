@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef, lazy, Suspense } from "react";
+import {
+  useEffect,
+  useState,
+  useCallback,
+  useRef,
+  lazy,
+  Suspense,
+} from "react";
 import { useStore } from "@/lib/store";
 import { useSport } from "@/lib/sport-context";
 import LiveTicker from "@/components/dashboard/LiveTicker";
@@ -26,7 +33,10 @@ import ROIChart from "@/components/dashboard/ROIChart";
 import { matchGames } from "@/lib/mlb/match-games";
 import TonightsPlays from "@/components/dashboard/TonightsPlays";
 import StreakBanner from "@/components/dashboard/StreakBanner";
-import { useWarmNbaPlayerIndex, useWarmMlbPlayerIndex } from "@/lib/hooks/useNbaPlayerIndex";
+import {
+  useWarmNbaPlayerIndex,
+  useWarmMlbPlayerIndex,
+} from "@/lib/hooks/useNbaPlayerIndex";
 import FloatingParlayChip from "@/components/dashboard/FloatingParlayChip";
 import Toaster from "@/components/ui/Toaster";
 import OnboardingTour from "@/components/onboarding/OnboardingTour";
@@ -35,12 +45,16 @@ import { sendDiscordAlert } from "@/lib/odds/sportsbooks";
 import { getDiscordWebhook, setDiscordWebhook } from "@/lib/store";
 
 // Lazy-load heavy tabs — not needed on first paint
-const BankrollTracker = lazy(() => import("@/components/dashboard/BankrollTracker"));
+const BankrollTracker = lazy(
+  () => import("@/components/dashboard/BankrollTracker"),
+);
 const BotChallenge = lazy(() => import("@/components/dashboard/BotChallenge"));
 const ArbBoard = lazy(() => import("@/components/dashboard/ArbBoard"));
 const NewsBoard = lazy(() => import("@/components/dashboard/NewsBoard"));
 const LiveBoard = lazy(() => import("@/components/dashboard/LiveBoard"));
-const ThreeModelBot = lazy(() => import("@/components/dashboard/ThreeModelBot"));
+const ThreeModelBot = lazy(
+  () => import("@/components/dashboard/ThreeModelBot"),
+);
 const BrainViz = lazy(() => import("@/components/dashboard/BrainViz"));
 const ModelLogs = lazy(() => import("@/components/dashboard/ModelLogs"));
 const GhostBots = lazy(() => import("@/components/dashboard/GhostBots"));
@@ -56,8 +70,23 @@ function TabSkeleton() {
   );
 }
 import {
-  Diamond, BarChart3, User, UserCircle, Wallet, RefreshCw, Shield,
-  Radio, ChevronLeft, ChevronRight, X, HelpCircle, Volume2, VolumeX, AlertTriangle, Zap, Newspaper,
+  Diamond,
+  BarChart3,
+  User,
+  UserCircle,
+  Wallet,
+  RefreshCw,
+  Shield,
+  Radio,
+  ChevronLeft,
+  ChevronRight,
+  X,
+  HelpCircle,
+  Volume2,
+  VolumeX,
+  AlertTriangle,
+  Zap,
+  Newspaper,
 } from "lucide-react";
 
 // Arb alert sound (short beep)
@@ -103,10 +132,24 @@ function registerServiceWorker() {
 
 export default function WarRoom() {
   const {
-    selectedGameId, activeTab, setActiveTab, sidebarOpen, toggleSidebar,
-    games, oddsData, scores, isLoading,
-    setGames, setOddsData, setScores, setLoading, lastUpdate,
-    selectGame, snapshotOdds, getLineMovements, hydrate,
+    selectedGameId,
+    activeTab,
+    setActiveTab,
+    sidebarOpen,
+    toggleSidebar,
+    games,
+    oddsData,
+    scores,
+    isLoading,
+    setGames,
+    setOddsData,
+    setScores,
+    setLoading,
+    lastUpdate,
+    selectGame,
+    snapshotOdds,
+    getLineMovements,
+    hydrate,
   } = useStore();
   const { currentSport, config, setSport } = useSport();
   const { isAdmin, user: authUser } = useAuth();
@@ -115,28 +158,37 @@ export default function WarRoom() {
   useWarmNbaPlayerIndex();
   useWarmMlbPlayerIndex();
 
-  // Pre-warm the OTHER sport's data in the background so the very first
-  // sport-tab switch is also instant (not just subsequent switches).
+  // Pre-warm the OTHER sport's scores/analysis in the background so the first
+  // sport-tab switch feels instant. Odds are deliberately NOT pre-warmed here —
+  // that call costs Odds API quota on every session even when the user never
+  // switches sports, and free-tier quota is the binding constraint.
   useEffect(() => {
     const otherSport = currentSport === "nba" ? "mlb" : "nba";
     const isOtherNBA = otherSport === "nba";
-    const oddsKey = isOtherNBA ? "basketball_nba" : "baseball_mlb";
     const t = setTimeout(() => {
       Promise.all([
-        fetch(isOtherNBA ? "/api/nba-scores" : "/api/scores").then(r => r.json()).catch(() => ({ games: [] })),
-        fetch(`/api/odds?sport=${oddsKey}`).then(r => r.json()).catch(() => ({ games: [] })),
-        fetch(isOtherNBA ? "/api/nba-analysis" : "/api/analysis").then(r => r.json()).catch(() => ({ analyses: [] })),
-      ]).then(([scoresRes, oddsRes, analysisRes]) => {
-        try {
-          localStorage.setItem(`dq_sport_cache_${otherSport}`, JSON.stringify({
-            ts: Date.now(),
-            scores: scoresRes.games ?? [],
-            odds: oddsRes.games ?? [],
-            analyses: analysisRes.analyses ?? [],
-            merged: scoresRes.games ?? [],
-          }));
-        } catch {}
-      }).catch(() => {});
+        fetch(isOtherNBA ? "/api/nba-scores" : "/api/scores")
+          .then((r) => r.json())
+          .catch(() => ({ games: [] })),
+        fetch(isOtherNBA ? "/api/nba-analysis" : "/api/analysis")
+          .then((r) => r.json())
+          .catch(() => ({ analyses: [] })),
+      ])
+        .then(([scoresRes, analysisRes]) => {
+          try {
+            localStorage.setItem(
+              `dq_sport_cache_${otherSport}`,
+              JSON.stringify({
+                ts: Date.now(),
+                scores: scoresRes.games ?? [],
+                odds: [],
+                analyses: analysisRes.analyses ?? [],
+                merged: scoresRes.games ?? [],
+              }),
+            );
+          } catch {}
+        })
+        .catch(() => {});
     }, 4000); // wait for primary sport to settle first
     return () => clearTimeout(t);
   }, [currentSport]);
@@ -168,12 +220,22 @@ export default function WarRoom() {
     try {
       // Scores load first — unblocks the UI immediately
       const scoresP = isNBA
-        ? fetch("/api/nba-scores").then((r) => r.json()).catch(() => ({ games: [] }))
-        : fetch("/api/scores").then((r) => r.json()).catch(() => ({ games: [] }));
-      const oddsP = fetch(`/api/odds?sport=${sportKey}`).then((r) => r.json()).catch(() => ({ games: [] }));
+        ? fetch("/api/nba-scores")
+            .then((r) => r.json())
+            .catch(() => ({ games: [] }))
+        : fetch("/api/scores")
+            .then((r) => r.json())
+            .catch(() => ({ games: [] }));
+      const oddsP = fetch(`/api/odds?sport=${sportKey}`)
+        .then((r) => r.json())
+        .catch(() => ({ games: [] }));
       const analysisP = isNBA
-        ? fetch("/api/nba-analysis").then((r) => r.json()).catch(() => ({ analyses: [] }))
-        : fetch("/api/analysis").then((r) => r.json()).catch(() => ({ analyses: [] }));
+        ? fetch("/api/nba-analysis")
+            .then((r) => r.json())
+            .catch(() => ({ analyses: [] }))
+        : fetch("/api/analysis")
+            .then((r) => r.json())
+            .catch(() => ({ analyses: [] }));
 
       const scoresRes = await scoresP;
       const scoreGames = scoresRes.games ?? [];
@@ -197,7 +259,9 @@ export default function WarRoom() {
       if (!isNBA) {
         if (oddsGames.length === 0) {
           const backup = getOddsBackup();
-          if (backup && backup.age < 30) { oddsGames = backup.data; }
+          if (backup && backup.age < 30) {
+            oddsGames = backup.data;
+          }
         } else {
           backupOddsToStorage(oddsGames);
         }
@@ -219,14 +283,22 @@ export default function WarRoom() {
       // INSTANTLY from cache (no empty screen) while a fresh fetch runs in
       // the background. Keeps the UI populated even on slow Vercel cold starts.
       try {
-        if (typeof window !== "undefined" && (scoreGames.length || oddsGames.length || analysisRes.analyses?.length)) {
-          localStorage.setItem(cacheKey, JSON.stringify({
-            ts: Date.now(),
-            scores: scoreGames,
-            odds: oddsGames,
-            analyses: analysisRes.analyses ?? [],
-            merged,
-          }));
+        if (
+          typeof window !== "undefined" &&
+          (scoreGames.length ||
+            oddsGames.length ||
+            analysisRes.analyses?.length)
+        ) {
+          localStorage.setItem(
+            cacheKey,
+            JSON.stringify({
+              ts: Date.now(),
+              scores: scoreGames,
+              odds: oddsGames,
+              analyses: analysisRes.analyses ?? [],
+              merged,
+            }),
+          );
         }
       } catch {}
     } catch (e) {
@@ -234,21 +306,35 @@ export default function WarRoom() {
       setLoading(false);
     }
     setRefreshing(false);
-  }, [setScores, setOddsData, setGames, setLoading, snapshotOdds, selectedGameId, selectGame, currentSport, config]);
+  }, [
+    setScores,
+    setOddsData,
+    setGames,
+    setLoading,
+    snapshotOdds,
+    selectedGameId,
+    selectGame,
+    currentSport,
+    config,
+  ]);
 
   useEffect(() => {
     // Smart polling: dead overnight, fast during games, slow otherwise
     function shouldPoll(): boolean {
       const now = new Date();
-      const etHour = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" })).getHours();
+      const etHour = new Date(
+        now.toLocaleString("en-US", { timeZone: "America/New_York" }),
+      ).getHours();
       return etHour >= 9 || etHour < 2; // Active 9 AM - 2 AM ET
     }
 
     fetchData();
-    // 60s polling — live game scores update every minute, NBA games run ~2.5h
+    // 3min polling — scores/odds are cached server-side for 10-30min anyway,
+    // so polling faster than that just burns Odds API free-tier quota (500
+    // req/month) without getting fresher data back.
     const interval = setInterval(() => {
       if (shouldPoll()) fetchData();
-    }, 60000);
+    }, 180000);
     return () => clearInterval(interval);
   }, [fetchData]);
 
@@ -296,12 +382,18 @@ export default function WarRoom() {
   }, [fetchData]);
 
   // Arb alert: flash + sound when new arbs appear
-  const currentArbCount = oddsData.reduce((sum: number, g: any) => sum + (g.arbitrage?.length ?? 0), 0);
+  const currentArbCount = oddsData.reduce(
+    (sum: number, g: any) => sum + (g.arbitrage?.length ?? 0),
+    0,
+  );
   useEffect(() => {
     if (currentArbCount > prevArbCount && prevArbCount > 0) {
       setArbFlash(true);
       if (soundEnabled) playAlertSound();
-      sendNotification("Arbitrage Alert", `${currentArbCount - prevArbCount} new arbitrage opportunity found!`);
+      sendNotification(
+        "Arbitrage Alert",
+        `${currentArbCount - prevArbCount} new arbitrage opportunity found!`,
+      );
 
       // Discord alert
       const webhook = getDiscordWebhook();
@@ -314,8 +406,16 @@ export default function WarRoom() {
             description: `${newest.game}\n${newest.side1.pick} @ ${newest.side1.bookmaker} vs ${newest.side2.pick} @ ${newest.side2.bookmaker}`,
             color: 0xffd700,
             fields: [
-              { name: "Profit", value: `+${newest.profit.toFixed(2)}%`, inline: true },
-              { name: "Stakes", value: `$${newest.stake1.toFixed(0)} / $${newest.stake2.toFixed(0)}`, inline: true },
+              {
+                name: "Profit",
+                value: `+${newest.profit.toFixed(2)}%`,
+                inline: true,
+              },
+              {
+                name: "Stakes",
+                value: `$${newest.stake1.toFixed(0)} / $${newest.stake2.toFixed(0)}`,
+                inline: true,
+              },
             ],
           });
         }
@@ -326,13 +426,18 @@ export default function WarRoom() {
     // High EV alert — fire ONCE per unique pick. Without dedupe, the every-3-min
     // poll re-fired the same alert (the prevArbCount===0 gate was a no-op once
     // arb count stabilized at 0, so it triggered on every refresh).
-    const bigEV = oddsData.flatMap((g: any) => g.evBets ?? []).filter((b: any) => b.evPercentage > 6 && !b.isSuspicious);
+    const bigEV = oddsData
+      .flatMap((g: any) => g.evBets ?? [])
+      .filter((b: any) => b.evPercentage > 6 && !b.isSuspicious);
     if (bigEV.length > 0 && !isLoading) {
       const top = bigEV[0];
       const evKey = `${top.pick}|${top.bookmaker}|${top.odds}`;
       if (!alertedEvIds.current.has(evKey)) {
         alertedEvIds.current.add(evKey);
-        sendNotification("High EV Alert", `${top.pick} at ${top.bookmaker} — +${top.evPercentage.toFixed(1)}% edge`);
+        sendNotification(
+          "High EV Alert",
+          `${top.pick} at ${top.bookmaker} — +${top.evPercentage.toFixed(1)}% edge`,
+        );
         const webhook = getDiscordWebhook();
         if (webhook) {
           sendDiscordAlert(webhook, {
@@ -340,8 +445,16 @@ export default function WarRoom() {
             description: `${top.pick}\n${top.game} @ ${top.bookmaker}`,
             color: 0x00ff88,
             fields: [
-              { name: "Odds", value: `${top.odds > 0 ? "+" : ""}${top.odds}`, inline: true },
-              { name: "EV Edge", value: `+${top.evPercentage.toFixed(1)}%`, inline: true },
+              {
+                name: "Odds",
+                value: `${top.odds > 0 ? "+" : ""}${top.odds}`,
+                inline: true,
+              },
+              {
+                name: "EV Edge",
+                value: `+${top.evPercentage.toFixed(1)}%`,
+                inline: true,
+              },
             ],
           });
         }
@@ -352,40 +465,66 @@ export default function WarRoom() {
 
   const selectedOdds = oddsData.find((g: any) => g.id === selectedGameId);
   const selectedScore = scores.find((s: any) => s.id === selectedGameId);
-  const selectedAnalysis = analyses.find((a: any) =>
-    selectedScore && (a.homeTeam === selectedScore.homeTeam || a.homeAbbrev === selectedScore.homeAbbrev)
+  const selectedAnalysis = analyses.find(
+    (a: any) =>
+      selectedScore &&
+      (a.homeTeam === selectedScore.homeTeam ||
+        a.homeAbbrev === selectedScore.homeAbbrev),
   );
 
   // Build quant verdict using real analysis data when available
   const buildVerdict = () => {
-    if (!selectedOdds?.evBets?.length) return null;
-    const best = selectedOdds.evBets[0];
+    const best = selectedOdds?.evBets?.[0];
 
-    // Use engine analysis if available
+    // Prefer the odds-board EV bet when the live feed has one; otherwise fall
+    // back to the brain's own analysis-driven pick/odds/EV (populated even
+    // when the odds API quota is exhausted, since analysis carries its own
+    // best-price lookup).
+    if (!best && !selectedAnalysis?.pick) return null;
+
     const engineProb = selectedAnalysis?.homeWinProb
-      ? (best.pick.includes(selectedOdds.homeTeam) ? selectedAnalysis.homeWinProb / 100 : selectedAnalysis.awayWinProb / 100)
-      : best.fairProb / 100;
+      ? best?.pick.includes(selectedOdds?.homeTeam ?? "")
+        ? selectedAnalysis.homeWinProb / 100
+        : selectedAnalysis.awayWinProb / 100
+      : (best?.fairProb ?? selectedAnalysis?.modelProb ?? 50) / 100;
 
-    const engineReasoning = selectedAnalysis?.reasoning?.length > 0
-      ? selectedAnalysis.reasoning
-      : [];
+    const engineReasoning =
+      selectedAnalysis?.reasoning?.length > 0 ? selectedAnalysis.reasoning : [];
+
+    const pick = best?.pick ?? selectedAnalysis?.pick;
+    const bookmaker =
+      best?.bookmaker ??
+      selectedAnalysis?.bestBook ??
+      selectedAnalysis?.bookmaker;
+    const evPercentage = best?.evPercentage ?? selectedAnalysis?.evPct ?? 0;
+    const fairOdds = best?.fairOdds ?? selectedAnalysis?.fairOdds ?? 0;
+    const marketOdds =
+      best?.odds ??
+      selectedAnalysis?.marketOdds ??
+      selectedAnalysis?.bestOdds ??
+      0;
+    const kellyStake = best?.kellyStake ?? 0;
+    const confidence =
+      best?.confidence ?? (evPercentage > 3 ? "MEDIUM" : "LOW");
 
     const defaultReasoning = [
       "Market odds are mispriced relative to model fair value",
-      `Best available line at ${best.bookmaker}`,
-      `${best.evPercentage.toFixed(1)}% edge — quarter-Kelly sizing applied`,
+      bookmaker
+        ? `Best available line at ${bookmaker}`
+        : "Model-only edge — no live odds feed",
+      `${evPercentage.toFixed(1)}% edge — quarter-Kelly sizing applied`,
     ];
 
     return {
       winProb: engineProb,
-      evPercentage: best.evPercentage,
-      kellyStake: best.kellyStake,
-      confidence: best.confidence,
-      pick: best.pick,
-      fairOdds: best.fairOdds,
-      marketOdds: best.odds,
+      evPercentage,
+      kellyStake,
+      confidence,
+      pick,
+      fairOdds,
+      marketOdds,
       reasoning: [...engineReasoning, ...defaultReasoning].slice(0, 5),
-      bookmaker: best.bookmaker,
+      bookmaker: bookmaker ?? "—",
     };
   };
 
@@ -409,32 +548,46 @@ export default function WarRoom() {
 
   // Only show live + upcoming games — never finals
   // For NBA: if scores are empty, build game list from odds data
-  const activeGames = scores.length > 0
-    ? scores.filter((g: any) => g.status !== "final")
-    : oddsData.map((g: any) => ({
-        id: g.id,
-        homeTeam: g.homeTeam,
-        awayTeam: g.awayTeam,
-        homeAbbrev: teamNameToAbbrev(g.homeTeam ?? "", currentSport as "mlb" | "nba") || (g.homeTeam?.split(" ").pop()?.slice(0, 3).toUpperCase() ?? ""),
-        awayAbbrev: teamNameToAbbrev(g.awayTeam ?? "", currentSport as "mlb" | "nba") || (g.awayTeam?.split(" ").pop()?.slice(0, 3).toUpperCase() ?? ""),
-        homeScore: 0, awayScore: 0,
-        status: "pre",
-        startTime: g.commenceTime,
-        venue: "", homePitcher: "", awayPitcher: "",
-        detailedStatus: "Scheduled",
-      }));
+  const activeGames =
+    scores.length > 0
+      ? scores.filter((g: any) => g.status !== "final")
+      : oddsData.map((g: any) => ({
+          id: g.id,
+          homeTeam: g.homeTeam,
+          awayTeam: g.awayTeam,
+          homeAbbrev:
+            teamNameToAbbrev(g.homeTeam ?? "", currentSport as "mlb" | "nba") ||
+            (g.homeTeam?.split(" ").pop()?.slice(0, 3).toUpperCase() ?? ""),
+          awayAbbrev:
+            teamNameToAbbrev(g.awayTeam ?? "", currentSport as "mlb" | "nba") ||
+            (g.awayTeam?.split(" ").pop()?.slice(0, 3).toUpperCase() ?? ""),
+          homeScore: 0,
+          awayScore: 0,
+          status: "pre",
+          startTime: g.commenceTime,
+          venue: "",
+          homePitcher: "",
+          awayPitcher: "",
+          detailedStatus: "Scheduled",
+        }));
 
   const renderGameCards = () => (
     <div className="space-y-2">
       {activeGames.length === 0 ? (
         <div className="glass rounded-xl p-6 text-center">
-          <p className="text-sm text-mercury">No {currentSport.toUpperCase()} games in the next few days</p>
-          <p className="text-[11px] text-mercury/50 mt-1">Check back when the next slate is posted</p>
+          <p className="text-sm text-mercury">
+            No {currentSport.toUpperCase()} games in the next few days
+          </p>
+          <p className="text-[11px] text-mercury/50 mt-1">
+            Check back when the next slate is posted
+          </p>
         </div>
       ) : (
         activeGames.map((game: any) => {
           const odds = oddsData.find(
-            (o: any) => o.homeTeam?.includes(game.homeAbbrev) || o.homeTeam === game.homeTeam
+            (o: any) =>
+              o.homeTeam?.includes(game.homeAbbrev) ||
+              o.homeTeam === game.homeTeam,
           );
           return (
             <div key={game.id} className="relative group">
@@ -449,8 +602,11 @@ export default function WarRoom() {
               />
               {/* Detail button — appears on hover (desktop) or always (mobile) */}
               <button
-                onClick={(e) => { e.stopPropagation(); setModalGameId(game.id); }}
-                className="absolute top-2 right-8 sm:right-10 z-10 px-1.5 py-0.5 rounded text-[9px] font-bold text-electric/70 border border-electric/20 bg-bunker/80 opacity-0 group-hover:opacity-100 transition-opacity hover:text-electric hover:border-electric/40"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setModalGameId(game.id);
+                }}
+                className="absolute top-2 right-8 sm:right-10 z-10 px-2 py-1 rounded-md text-[9px] font-bold text-electric/80 border border-electric/20 bg-bunker/90 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity hover:text-electric hover:border-electric/40"
                 title="View game details"
               >
                 DETAIL
@@ -463,52 +619,74 @@ export default function WarRoom() {
   );
 
   return (
-    <div className="min-h-screen bg-void bg-grid">
+    <div className="min-h-screen">
       <LiveTicker />
 
       {/* Header */}
-      <header className="border-b border-slate/30 bg-bunker/80 backdrop-blur-lg sticky top-0 z-40">
-        <div className="max-w-[1800px] mx-auto px-3 sm:px-4 py-2.5 sm:py-3 flex items-center justify-between">
-          <div className="flex items-center gap-2 sm:gap-3">
-            <div className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center border flex-shrink-0 ${
-              currentSport === "nba" ? "bg-gradient-to-br from-orange-500/20 to-amber-500/20 border-orange-500/20" : "bg-gradient-to-br from-neon/20 to-electric/20 border-neon/20"
-            }`}>
-              <Diamond className={`w-4 h-4 sm:w-5 sm:h-5 ${currentSport === "nba" ? "text-orange-500" : "text-neon"}`} />
+      <header className="safe-top border-b border-slate/25 bg-void/70 backdrop-blur-xl sticky top-0 z-40">
+        <div className="max-w-[1800px] mx-auto px-3 sm:px-4 py-2 sm:py-3 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <div
+              className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center border flex-shrink-0 shadow-lg ${
+                currentSport === "nba"
+                  ? "bg-gradient-to-br from-orange-500/25 to-amber-500/10 border-orange-500/25"
+                  : "bg-gradient-to-br from-neon/25 to-electric/10 border-neon/25"
+              }`}
+            >
+              <Diamond
+                className={`w-4 h-4 sm:w-5 sm:h-5 ${currentSport === "nba" ? "text-orange-400" : "text-neon"}`}
+              />
             </div>
-            <div>
-              <h1 className="text-base sm:text-lg font-bold text-silver tracking-tight leading-tight whitespace-nowrap">
-                DQ<span className={`ml-1 hidden sm:inline ${currentSport === "nba" ? "text-orange-500" : "text-neon"}`}>Live</span>
+            <div className="hidden sm:block">
+              <h1 className="text-base sm:text-lg font-extrabold text-silver tracking-tight leading-tight whitespace-nowrap">
+                DQ
+                <span
+                  className={`ml-1 ${currentSport === "nba" ? "text-orange-400" : "text-neon"}`}
+                >
+                  Live
+                </span>
               </h1>
-              <p className="text-[9px] sm:text-[10px] text-mercury/60 -mt-0.5 font-mono hidden sm:block">
-                {currentSport === "nba" ? "NBA" : "MLB"} BETTING INTELLIGENCE
+              <p className="text-[10px] text-mercury/60 -mt-0.5 font-mono tracking-wider">
+                {currentSport.toUpperCase()} INTELLIGENCE
               </p>
             </div>
-            {/* Sport Switcher — compact on mobile, full on desktop */}
-            <div className="flex items-center bg-gunmetal/50 rounded-lg p-0.5 ml-1">
-              <button
-                onClick={() => { setSport("mlb"); selectGame(null); }}
-                className={`min-h-[32px] sm:min-h-[36px] min-w-[36px] sm:min-w-[44px] px-1.5 sm:px-3 rounded text-[10px] sm:text-[11px] font-bold transition-all ${
-                  currentSport === "mlb" ? "bg-neon/20 text-neon" : "text-mercury/50 hover:text-mercury"
-                }`}
-              >MLB</button>
-              <button
-                onClick={() => { setSport("nba"); selectGame(null); }}
-                className={`min-h-[32px] sm:min-h-[36px] min-w-[36px] sm:min-w-[44px] px-1.5 sm:px-3 rounded text-[10px] sm:text-[11px] font-bold transition-all ${
-                  currentSport === "nba" ? "bg-orange-500/20 text-orange-500" : "text-mercury/50 hover:text-mercury"
-                }`}
-              >NBA</button>
-              <button
-                onClick={() => { setSport("nfl"); selectGame(null); }}
-                className={`min-h-[32px] sm:min-h-[36px] min-w-[36px] sm:min-w-[44px] px-1.5 sm:px-3 rounded text-[10px] sm:text-[11px] font-bold transition-all ${
-                  currentSport === "nfl" ? "bg-electric/20 text-electric" : "text-mercury/50 hover:text-mercury"
-                }`}
-              >NFL</button>
-              <button
-                onClick={() => { setSport("nhl"); selectGame(null); }}
-                className={`min-h-[32px] sm:min-h-[36px] min-w-[36px] sm:min-w-[44px] px-1.5 sm:px-3 rounded text-[10px] sm:text-[11px] font-bold transition-all ${
-                  currentSport === "nhl" ? "bg-sky-300/20 text-sky-300" : "text-mercury/50 hover:text-mercury"
-                }`}
-              >NHL</button>
+            {/* Sport Switcher — segmented pill, thumb-sized targets */}
+            <div className="flex items-center bg-gunmetal/60 border border-slate/30 rounded-full p-0.5 sm:p-1 sm:ml-1">
+              {(
+                [
+                  { key: "mlb", label: "MLB", active: "bg-neon/15 text-neon" },
+                  {
+                    key: "nba",
+                    label: "NBA",
+                    active: "bg-orange-500/15 text-orange-400",
+                  },
+                  {
+                    key: "nfl",
+                    label: "NFL",
+                    active: "bg-electric/15 text-electric",
+                  },
+                  {
+                    key: "nhl",
+                    label: "NHL",
+                    active: "bg-sky-300/15 text-sky-300",
+                  },
+                ] as const
+              ).map((s) => (
+                <button
+                  key={s.key}
+                  onClick={() => {
+                    setSport(s.key);
+                    selectGame(null);
+                  }}
+                  className={`min-h-[36px] min-w-[42px] sm:min-w-[48px] px-2 sm:px-3 rounded-full text-[11px] font-bold transition-all active:scale-95 ${
+                    currentSport === s.key
+                      ? `${s.active} shadow-sm`
+                      : "text-mercury/50 hover:text-mercury"
+                  }`}
+                >
+                  {s.label}
+                </button>
+              ))}
             </div>
           </div>
 
@@ -543,11 +721,12 @@ export default function WarRoom() {
               title="Refresh data"
               aria-label="Refresh"
             >
-              <RefreshCw className={`w-4 h-4 text-mercury ${refreshing ? "animate-spin" : ""}`} />
+              <RefreshCw
+                className={`w-4 h-4 text-mercury ${refreshing ? "animate-spin" : ""}`}
+              />
             </button>
           </div>
         </div>
-
       </header>
 
       <MigrationBanner />
@@ -559,26 +738,48 @@ export default function WarRoom() {
           <div className="glass rounded-xl p-4 sm:p-5 animate-slide-up">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-semibold text-silver">Quick Guide</h3>
-              <button onClick={() => setShowHelp(false)} className="p-1 hover:bg-gunmetal/50 rounded">
+              <button
+                onClick={() => setShowHelp(false)}
+                className="p-1 hover:bg-gunmetal/50 rounded"
+              >
                 <X className="w-4 h-4 text-mercury" />
               </button>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
               <div className="p-3 rounded-lg bg-gunmetal/30">
-                <p className="font-semibold text-neon mb-1">+EV (Positive Expected Value)</p>
-                <p className="text-mercury">A bet where the true probability of winning is higher than what the odds imply. Over time, +EV bets make money.</p>
+                <p className="font-semibold text-neon mb-1">
+                  +EV (Positive Expected Value)
+                </p>
+                <p className="text-mercury">
+                  A bet where the true probability of winning is higher than
+                  what the odds imply. Over time, +EV bets make money.
+                </p>
               </div>
               <div className="p-3 rounded-lg bg-gunmetal/30">
                 <p className="font-semibold text-gold mb-1">Kelly Stake</p>
-                <p className="text-mercury">The mathematically optimal bet size based on your edge and bankroll. We use quarter-Kelly (safer) by default.</p>
+                <p className="text-mercury">
+                  The mathematically optimal bet size based on your edge and
+                  bankroll. We use quarter-Kelly (safer) by default.
+                </p>
               </div>
               <div className="p-3 rounded-lg bg-gunmetal/30">
-                <p className="font-semibold text-electric mb-1">Arbitrage (Arb)</p>
-                <p className="text-mercury">When odds across different books guarantee profit regardless of outcome. Rare but free money when found.</p>
+                <p className="font-semibold text-electric mb-1">
+                  Arbitrage (Arb)
+                </p>
+                <p className="text-mercury">
+                  When odds across different books guarantee profit regardless
+                  of outcome. Rare but free money when found.
+                </p>
               </div>
               <div className="p-3 rounded-lg bg-gunmetal/30">
-                <p className="font-semibold text-purple mb-1">Fair Odds / Vig</p>
-                <p className="text-mercury">Fair odds = what the line should be without the book's cut. The vig (juice) is the book's profit margin built into the odds.</p>
+                <p className="font-semibold text-purple mb-1">
+                  Fair Odds / Vig
+                </p>
+                <p className="text-mercury">
+                  Fair odds = what the line should be without the book's cut.
+                  The vig (juice) is the book's profit margin built into the
+                  odds.
+                </p>
               </div>
             </div>
           </div>
@@ -588,13 +789,19 @@ export default function WarRoom() {
       {/* Mobile Games Sheet */}
       {mobileGamesOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
-          <div className="absolute inset-0 bg-black/60" onClick={() => setMobileGamesOpen(false)} />
+          <div
+            className="absolute inset-0 bg-black/60"
+            onClick={() => setMobileGamesOpen(false)}
+          />
           <div className="absolute inset-y-0 left-0 w-[85vw] max-w-sm bg-bunker border-r border-slate/30 overflow-y-auto animate-slide-up">
             <div className="sticky top-0 bg-bunker/95 backdrop-blur-lg px-4 py-3 border-b border-slate/30 flex items-center justify-between z-10">
               <h2 className="text-sm font-semibold text-silver uppercase tracking-wider">
                 Games ({activeGames.length})
               </h2>
-              <button onClick={() => setMobileGamesOpen(false)} className="p-1.5 hover:bg-gunmetal/50 rounded-lg">
+              <button
+                onClick={() => setMobileGamesOpen(false)}
+                className="p-1.5 hover:bg-gunmetal/50 rounded-lg"
+              >
                 <X className="w-5 h-5 text-mercury" />
               </button>
             </div>
@@ -611,15 +818,25 @@ export default function WarRoom() {
       />
 
       {/* Main Content */}
-      <main id="main" className="max-w-[1800px] mx-auto px-2 sm:px-4 py-3 sm:py-4 pb-20 md:pb-4">
+      <main
+        id="main"
+        className="max-w-[1800px] mx-auto px-2 sm:px-4 py-3 sm:py-4 pb-28 md:pb-4"
+      >
         {isLoading ? (
-          <div className="flex gap-4" aria-label="Loading dashboard" role="status">
+          <div
+            className="flex gap-4"
+            aria-label="Loading dashboard"
+            role="status"
+          >
             {/* Left sidebar skeleton (desktop) */}
             <div className="hidden lg:block w-72 flex-shrink-0">
               <div className="h-3 w-24 bg-slate/20 rounded animate-pulse mb-3" />
               <div className="space-y-2">
                 {[0, 1, 2, 3, 4].map((i) => (
-                  <div key={i} className="rounded-xl border border-slate/20 bg-gunmetal/20 p-3 animate-pulse">
+                  <div
+                    key={i}
+                    className="rounded-xl border border-slate/20 bg-gunmetal/20 p-3 animate-pulse"
+                  >
                     <div className="h-3 w-1/2 bg-slate/20 rounded mb-2" />
                     <div className="h-4 w-3/4 bg-slate/20 rounded" />
                   </div>
@@ -647,7 +864,10 @@ export default function WarRoom() {
                 </div>
                 <div className="p-2 sm:p-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
                   {[0, 1, 2].map((i) => (
-                    <div key={i} className="rounded-lg border border-slate/20 bg-gunmetal/20 p-3 space-y-2 animate-pulse">
+                    <div
+                      key={i}
+                      className="rounded-lg border border-slate/20 bg-gunmetal/20 p-3 space-y-2 animate-pulse"
+                    >
                       <div className="h-3 w-1/3 bg-slate/20 rounded" />
                       <div className="h-4 w-2/3 bg-slate/20 rounded" />
                       <div className="h-2.5 w-1/2 bg-slate/15 rounded" />
@@ -665,7 +885,10 @@ export default function WarRoom() {
                   </div>
                   <div className="divide-y divide-slate/10">
                     {[0, 1, 2].map((i) => (
-                      <div key={i} className="px-3 sm:px-4 py-3 flex items-center gap-2 animate-pulse">
+                      <div
+                        key={i}
+                        className="px-3 sm:px-4 py-3 flex items-center gap-2 animate-pulse"
+                      >
                         <div className="w-7 h-7 rounded-full bg-slate/20 flex-shrink-0" />
                         <div className="flex-1 min-w-0 space-y-1.5">
                           <div className="h-3 w-2/3 bg-slate/20 rounded" />
@@ -695,14 +918,18 @@ export default function WarRoom() {
 
                 {/* Arb Alert */}
                 {allArbs.length > 0 && (
-                  <div className={`mb-3 ${arbFlash ? "animate-flash-gold rounded-xl" : ""}`}>
+                  <div
+                    className={`mb-3 ${arbFlash ? "animate-flash-gold rounded-xl" : ""}`}
+                  >
                     <ArbitrageAlert arbitrage={allArbs} />
                   </div>
                 )}
 
                 <div className="flex gap-4">
                   {/* Left Sidebar — Desktop */}
-                  <div className={`hidden lg:block transition-all duration-300 ${sidebarOpen ? "w-72" : "w-12"} flex-shrink-0`}>
+                  <div
+                    className={`hidden lg:block transition-all duration-300 ${sidebarOpen ? "w-72" : "w-12"} flex-shrink-0`}
+                  >
                     <div className="sticky top-24">
                       <div className="flex items-center justify-between mb-3">
                         {sidebarOpen && (
@@ -710,8 +937,15 @@ export default function WarRoom() {
                             Games ({scores.length})
                           </h2>
                         )}
-                        <button onClick={toggleSidebar} className="p-1 hover:bg-gunmetal/50 rounded">
-                          {sidebarOpen ? <ChevronLeft className="w-4 h-4 text-mercury" /> : <ChevronRight className="w-4 h-4 text-mercury" />}
+                        <button
+                          onClick={toggleSidebar}
+                          className="p-1 hover:bg-gunmetal/50 rounded"
+                        >
+                          {sidebarOpen ? (
+                            <ChevronLeft className="w-4 h-4 text-mercury" />
+                          ) : (
+                            <ChevronRight className="w-4 h-4 text-mercury" />
+                          )}
                         </button>
                       </div>
                       {sidebarOpen && (
@@ -725,10 +959,14 @@ export default function WarRoom() {
                   {/* Center — Main Picks Board */}
                   <div className="flex-1 min-w-0 space-y-3 sm:space-y-4">
                     {/* Streak banner — social proof / retention hook */}
-                    <SafeBoundary><StreakBanner /></SafeBoundary>
+                    <SafeBoundary>
+                      <StreakBanner />
+                    </SafeBoundary>
 
                     {/* Push opt-in card (auto-hides if granted/dismissed) */}
-                    <SafeBoundary><PushOptIn /></SafeBoundary>
+                    <SafeBoundary>
+                      <PushOptIn />
+                    </SafeBoundary>
 
                     {/* Tonight's Plays — 30-second answer (only renders for MLB/NBA) */}
                     {(currentSport === "mlb" || currentSport === "nba") && (
@@ -744,12 +982,21 @@ export default function WarRoom() {
                       </Suspense>
                     </SafeBoundary>
 
-                    <SafeBoundary fallback={
-                      <div className="glass rounded-xl p-6 text-center">
-                        <p className="text-sm text-mercury">Picks board temporarily unavailable.</p>
-                        <button onClick={() => location.reload()} className="mt-3 text-xs text-neon underline">Reload</button>
-                      </div>
-                    }>
+                    <SafeBoundary
+                      fallback={
+                        <div className="glass rounded-xl p-6 text-center">
+                          <p className="text-sm text-mercury">
+                            Picks board temporarily unavailable.
+                          </p>
+                          <button
+                            onClick={() => location.reload()}
+                            className="mt-3 text-xs text-neon underline"
+                          >
+                            Reload
+                          </button>
+                        </div>
+                      }
+                    >
                       <PicksBoard />
                     </SafeBoundary>
 
@@ -758,7 +1005,9 @@ export default function WarRoom() {
                       <summary className="px-4 py-2.5 flex items-center gap-2 cursor-pointer hover:bg-gunmetal/20 text-xs font-bold text-silver uppercase tracking-wider list-none">
                         <Zap className="w-3.5 h-3.5 text-gold" />
                         Arbitrage Scanner
-                        <span className="ml-auto text-[10px] text-mercury/50 font-mono normal-case">{allArbs.length} opps</span>
+                        <span className="ml-auto text-[10px] text-mercury/50 font-mono normal-case">
+                          {allArbs.length} opps
+                        </span>
                       </summary>
                       <div className="border-t border-slate/15 p-3">
                         <Suspense fallback={<TabSkeleton />}>
@@ -785,38 +1034,55 @@ export default function WarRoom() {
                     {/* Game deep-dive (when a game is selected) */}
                     {selectedGameId && selectedScore && (
                       <SafeBoundary>
-                        <SelectedGameBanner game={selectedScore} onDeselect={() => selectGame(null)} />
-                        {currentSport === "nba" && selectedOdds && (() => {
-                          const homeAbbrev = teamNameToAbbrev(selectedOdds.homeTeam, "nba");
-                          const awayAbbrev = teamNameToAbbrev(selectedOdds.awayTeam, "nba");
-                          return homeAbbrev && awayAbbrev ? (
-                            <GameMatchupBrief homeAbbrev={homeAbbrev} awayAbbrev={awayAbbrev} />
-                          ) : null;
-                        })()}
+                        <SelectedGameBanner
+                          game={selectedScore}
+                          onDeselect={() => selectGame(null)}
+                        />
+                        {currentSport === "nba" &&
+                          selectedOdds &&
+                          (() => {
+                            const homeAbbrev = teamNameToAbbrev(
+                              selectedOdds.homeTeam,
+                              "nba",
+                            );
+                            const awayAbbrev = teamNameToAbbrev(
+                              selectedOdds.awayTeam,
+                              "nba",
+                            );
+                            return homeAbbrev && awayAbbrev ? (
+                              <GameMatchupBrief
+                                homeAbbrev={homeAbbrev}
+                                awayAbbrev={awayAbbrev}
+                              />
+                            ) : null;
+                          })()}
                         <QuantVerdict
                           game={{
                             homeTeam: selectedOdds?.homeTeam ?? "Select a game",
                             awayTeam: selectedOdds?.awayTeam ?? "",
                           }}
                           analysis={buildVerdict()}
-                          onPlaceBet={selectedOdds ? () => {
-                            const verdict = buildVerdict();
-                            if (verdict) {
-                              openBetSlip({
-                                game: `${selectedOdds.awayTeam} @ ${selectedOdds.homeTeam}`,
-                                pick: verdict.pick,
-                                odds: verdict.marketOdds,
-                                bookmaker: verdict.bookmaker,
-                                market: "moneyline",
-                                evAtPlacement: verdict.evPercentage,
-                              });
-                            }
-                          } : undefined}
+                          onPlaceBet={
+                            selectedOdds
+                              ? () => {
+                                  const verdict = buildVerdict();
+                                  if (verdict) {
+                                    openBetSlip({
+                                      game: `${selectedOdds.awayTeam} @ ${selectedOdds.homeTeam}`,
+                                      pick: verdict.pick,
+                                      odds: verdict.marketOdds,
+                                      bookmaker: verdict.bookmaker,
+                                      market: "moneyline",
+                                      evAtPlacement: verdict.evPercentage,
+                                    });
+                                  }
+                                }
+                              : undefined
+                          }
                         />
                         <OddsGrid gameId={selectedGameId} />
                       </SafeBoundary>
                     )}
-
                   </div>
 
                   {/* Right Sidebar — XL */}
@@ -830,7 +1096,6 @@ export default function WarRoom() {
                 </div>
               </>
             )}
-
 
             {activeTab === "bot" && (
               <div className="max-w-3xl mx-auto space-y-4">
@@ -864,7 +1129,6 @@ export default function WarRoom() {
               </div>
             )}
 
-
             {activeTab === "profile" && (
               <div className="max-w-lg mx-auto space-y-4">
                 <Suspense fallback={<TabSkeleton />}>
@@ -890,50 +1154,70 @@ export default function WarRoom() {
       {/* Global UI: ephemeral toasts + floating parlay slip */}
       <Toaster />
       <SafeBoundary>
-        <FloatingParlayChip activeTab={activeTab} onOpenBuilder={() => openBetSlip()} />
+        <FloatingParlayChip
+          activeTab={activeTab}
+          onOpenBuilder={() => openBetSlip()}
+        />
       </SafeBoundary>
 
       {/* First-visit onboarding tour — topmost overlay, self-dismissing */}
       <OnboardingTour />
 
-      {/* Mobile bottom nav bar */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 z-50 bg-bunker/95 backdrop-blur-lg border-t border-slate/30 flex items-stretch pb-[env(safe-area-inset-bottom)]">
+      {/* Mobile bottom nav — floating pill, native-app feel */}
+      <nav
+        className="md:hidden fixed inset-x-3 z-50 rounded-2xl bg-bunker/90 backdrop-blur-xl border border-slate/40 shadow-[0_8px_32px_rgba(0,0,0,0.5)] flex items-stretch overflow-hidden"
+        style={{ bottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
+      >
         {tabs.map((tab) => {
           const isActive = activeTab === tab.key;
           return (
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
-              className={`relative flex-1 flex flex-col items-center justify-center gap-0.5 py-2 transition-all active:scale-95 ${
-                isActive ? "text-neon" : "text-mercury/50 hover:text-mercury"
+              className={`relative flex-1 flex flex-col items-center justify-center gap-1 min-h-[56px] transition-all active:scale-95 ${
+                isActive ? "text-neon" : "text-mercury/60"
               }`}
             >
-              {/* Active indicator bar at top */}
               {isActive && (
-                <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 rounded-b-full bg-neon" />
+                <span className="absolute inset-x-3 top-0 h-0.5 rounded-b-full bg-neon" />
               )}
-              <tab.icon className={`w-4 h-4 transition-transform ${isActive ? "scale-110" : ""}`} />
-              <span className={`text-[9px] font-medium ${isActive ? "font-bold" : ""}`}>{tab.label}</span>
+              <tab.icon
+                className={`w-5 h-5 transition-transform ${isActive ? "scale-110" : ""}`}
+              />
+              <span
+                className={`text-[10px] ${isActive ? "font-bold" : "font-medium"}`}
+              >
+                {tab.label}
+              </span>
             </button>
           );
         })}
       </nav>
 
-      <footer className="border-t border-slate/20 mt-6 sm:mt-8 py-3 sm:py-4 mb-14 md:mb-0 text-center px-4">
+      <footer className="border-t border-slate/15 mt-6 sm:mt-8 py-4 mb-24 md:mb-0 text-center px-4">
         <p className="text-[10px] sm:text-xs text-mercury/40 font-mono">
-          Diamond-Quant Live v1.0 — Odds via The Odds API. Stats via {currentSport === "nba" ? "NBA Stats API" : "MLB Stats API"}.
+          Diamond-Quant Live v1.0 — Odds via The Odds API. Stats via{" "}
+          {currentSport === "nba" ? "NBA Stats API" : "MLB Stats API"}.
         </p>
         <p className="text-[9px] sm:text-[10px] text-mercury/30 mt-1">
           Analytics platform — for informational & educational purposes only.
         </p>
         <div className="flex flex-wrap items-center justify-center gap-3 mt-3 text-[10px] text-mercury/50">
-          <a href="/results" className="hover:text-mercury transition-colors">Track Record</a>
+          <a href="/results" className="hover:text-mercury transition-colors">
+            Track Record
+          </a>
           <span className="text-mercury/20">·</span>
-          <a href="/pricing" className="hover:text-mercury transition-colors">Pricing</a>
+          <a href="/pricing" className="hover:text-mercury transition-colors">
+            Pricing
+          </a>
           <span className="text-mercury/20">·</span>
-          <a href="/terms" className="hover:text-mercury transition-colors">Terms</a>
+          <a href="/terms" className="hover:text-mercury transition-colors">
+            Terms
+          </a>
           <span className="text-mercury/20">·</span>
-          <a href="/privacy" className="hover:text-mercury transition-colors">Privacy</a>
+          <a href="/privacy" className="hover:text-mercury transition-colors">
+            Privacy
+          </a>
         </div>
       </footer>
     </div>
@@ -967,11 +1251,18 @@ function DiscordSettings() {
   return (
     <div className="glass rounded-xl p-5">
       <div className="flex items-center gap-2 mb-3">
-        <svg className="w-5 h-5 text-[#5865F2]" viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z"/></svg>
+        <svg
+          className="w-5 h-5 text-[#5865F2]"
+          viewBox="0 0 24 24"
+          fill="currentColor"
+        >
+          <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z" />
+        </svg>
         <h3 className="text-sm font-semibold text-silver">Discord Alerts</h3>
       </div>
       <p className="text-xs text-mercury mb-3">
-        Get arb and +EV alerts sent directly to your Discord server. Create a webhook in your channel settings and paste the URL below.
+        Get arb and +EV alerts sent directly to your Discord server. Create a
+        webhook in your channel settings and paste the URL below.
       </p>
       <div className="flex gap-2">
         <input
@@ -981,11 +1272,18 @@ function DiscordSettings() {
           placeholder="https://discord.com/api/webhooks/..."
           className="flex-1 px-3 py-2 bg-gunmetal/50 border border-slate/30 rounded-lg text-sm text-silver placeholder:text-mercury/30 focus:outline-none focus:border-electric/30 font-mono text-xs"
         />
-        <button onClick={handleSave} className={`px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${saved ? "bg-neon/20 text-neon" : "bg-electric/15 text-electric hover:bg-electric/25"}`}>
+        <button
+          onClick={handleSave}
+          className={`px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${saved ? "bg-neon/20 text-neon" : "bg-electric/15 text-electric hover:bg-electric/25"}`}
+        >
           {saved ? "Saved!" : "Save"}
         </button>
         {webhook && (
-          <button onClick={handleTest} disabled={testing} className="px-3 py-2 bg-gunmetal/50 text-mercury text-xs rounded-lg hover:bg-gunmetal/70 transition-colors">
+          <button
+            onClick={handleTest}
+            disabled={testing}
+            className="px-3 py-2 bg-gunmetal/50 text-mercury text-xs rounded-lg hover:bg-gunmetal/70 transition-colors"
+          >
             {testing ? "..." : "Test"}
           </button>
         )}

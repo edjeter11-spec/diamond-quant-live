@@ -56,7 +56,17 @@ export async function GET(req: Request) {
       total: r.total ?? "",
     }));
 
-    const headers = ["captured_at", "sport", "game", "bookmaker", "market", "home_price", "away_price", "spread", "total"];
+    const headers = [
+      "captured_at",
+      "sport",
+      "game",
+      "bookmaker",
+      "market",
+      "home_price",
+      "away_price",
+      "spread",
+      "total",
+    ];
     csv = toCSV(rows, headers);
     filename = `sharp_movements_${sport}_${new Date().toISOString().slice(0, 10)}.csv`;
   } else {
@@ -85,7 +95,18 @@ export async function GET(req: Request) {
       bookmaker: b.bookmaker ?? "",
     }));
 
-    const headers = ["timestamp", "game", "pick", "market", "odds", "stake", "result", "payout", "ev_at_placement", "bookmaker"];
+    const headers = [
+      "timestamp",
+      "game",
+      "pick",
+      "market",
+      "odds",
+      "stake",
+      "result",
+      "payout",
+      "ev_at_placement",
+      "bookmaker",
+    ];
     csv = toCSV(rows, headers);
     filename = `bet_history_${new Date().toISOString().slice(0, 10)}.csv`;
   }

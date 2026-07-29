@@ -15,7 +15,9 @@ function urlBase64ToUint8Array(base64: string): Uint8Array {
 
 export default function PushOptIn() {
   const { user, session } = useAuth();
-  const [state, setState] = useState<"idle" | "subscribing" | "on" | "off" | "unsupported">("idle");
+  const [state, setState] = useState<
+    "idle" | "subscribing" | "on" | "off" | "unsupported"
+  >("idle");
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -36,7 +38,10 @@ export default function PushOptIn() {
     setState("subscribing");
     try {
       const perm = await Notification.requestPermission();
-      if (perm !== "granted") { setState("off"); return; }
+      if (perm !== "granted") {
+        setState("off");
+        return;
+      }
       const reg = await navigator.serviceWorker.register("/sw.js");
       const sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
@@ -61,10 +66,13 @@ export default function PushOptIn() {
     const reg = await navigator.serviceWorker.ready;
     const sub = await reg.pushManager.getSubscription();
     if (sub) {
-      await fetch(`/api/push/subscribe?endpoint=${encodeURIComponent(sub.endpoint)}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      });
+      await fetch(
+        `/api/push/subscribe?endpoint=${encodeURIComponent(sub.endpoint)}`,
+        {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        },
+      );
       await sub.unsubscribe();
     }
     setState("off");
@@ -79,10 +87,16 @@ export default function PushOptIn() {
       onClick={isOn ? unsubscribe : subscribe}
       disabled={state === "subscribing"}
       className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-purple/25 bg-purple/10 hover:bg-purple/20 text-purple text-[11px] font-semibold transition-colors disabled:opacity-50"
-      title={isOn ? "Disable +EV alerts" : "Get pinged when a new +EV pick lands"}
+      title={
+        isOn ? "Disable +EV alerts" : "Get pinged when a new +EV pick lands"
+      }
     >
       {isOn ? <Bell className="w-3 h-3" /> : <BellOff className="w-3 h-3" />}
-      {state === "subscribing" ? "Enabling…" : isOn ? "Alerts on" : "Enable alerts"}
+      {state === "subscribing"
+        ? "Enabling…"
+        : isOn
+          ? "Alerts on"
+          : "Enable alerts"}
     </button>
   );
 }

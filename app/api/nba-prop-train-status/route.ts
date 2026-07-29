@@ -13,6 +13,11 @@ export async function GET() {
     });
     return NextResponse.json(progress);
   } catch {
-    return NextResponse.json({ status: "idle", gamesProcessed: 0, totalGames: 0, accuracy: {} });
+    return NextResponse.json({
+      status: "idle",
+      gamesProcessed: 0,
+      totalGames: 0,
+      accuracy: {},
+    });
   }
 }

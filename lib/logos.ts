@@ -5,38 +5,87 @@
 
 // MLB Team IDs for logo URLs
 const MLB_TEAM_IDS: Record<string, number> = {
-  "ARI": 109, "ATL": 144, "BAL": 110, "BOS": 111, "CHC": 112,
-  "CWS": 145, "CIN": 113, "CLE": 114, "COL": 115, "DET": 116,
-  "HOU": 117, "KC": 118, "LAA": 108, "LAD": 119, "MIA": 146,
-  "MIL": 158, "MIN": 142, "NYM": 121, "NYY": 147, "OAK": 133,
-  "PHI": 143, "PIT": 134, "SD": 135, "SF": 137, "SEA": 136,
-  "STL": 138, "TB": 139, "TEX": 140, "TOR": 141, "WSH": 120,
+  ARI: 109,
+  ATL: 144,
+  BAL: 110,
+  BOS: 111,
+  CHC: 112,
+  CWS: 145,
+  CIN: 113,
+  CLE: 114,
+  COL: 115,
+  DET: 116,
+  HOU: 117,
+  KC: 118,
+  LAA: 108,
+  LAD: 119,
+  MIA: 146,
+  MIL: 158,
+  MIN: 142,
+  NYM: 121,
+  NYY: 147,
+  OAK: 133,
+  PHI: 143,
+  PIT: 134,
+  SD: 135,
+  SF: 137,
+  SEA: 136,
+  STL: 138,
+  TB: 139,
+  TEX: 140,
+  TOR: 141,
+  WSH: 120,
 };
 
 // NBA Team IDs for logo URLs
 const NBA_TEAM_IDS: Record<string, number> = {
-  "ATL": 1610612737, "BOS": 1610612738, "BKN": 1610612751, "CHA": 1610612766,
-  "CHI": 1610612741, "CLE": 1610612739, "DAL": 1610612742, "DEN": 1610612743,
-  "DET": 1610612765, "GSW": 1610612744, "HOU": 1610612745, "IND": 1610612754,
-  "LAC": 1610612746, "LAL": 1610612747, "MEM": 1610612763, "MIA": 1610612748,
-  "MIL": 1610612749, "MIN": 1610612750, "NOP": 1610612740, "NYK": 1610612752,
-  "OKC": 1610612760, "ORL": 1610612753, "PHI": 1610612755, "PHX": 1610612756,
-  "POR": 1610612757, "SAC": 1610612758, "SAS": 1610612759, "TOR": 1610612761,
-  "UTA": 1610612762, "WAS": 1610612764,
+  ATL: 1610612737,
+  BOS: 1610612738,
+  BKN: 1610612751,
+  CHA: 1610612766,
+  CHI: 1610612741,
+  CLE: 1610612739,
+  DAL: 1610612742,
+  DEN: 1610612743,
+  DET: 1610612765,
+  GSW: 1610612744,
+  HOU: 1610612745,
+  IND: 1610612754,
+  LAC: 1610612746,
+  LAL: 1610612747,
+  MEM: 1610612763,
+  MIA: 1610612748,
+  MIL: 1610612749,
+  MIN: 1610612750,
+  NOP: 1610612740,
+  NYK: 1610612752,
+  OKC: 1610612760,
+  ORL: 1610612753,
+  PHI: 1610612755,
+  PHX: 1610612756,
+  POR: 1610612757,
+  SAC: 1610612758,
+  SAS: 1610612759,
+  TOR: 1610612761,
+  UTA: 1610612762,
+  WAS: 1610612764,
   // ESPN / Odds API aliases — must resolve to the same franchise IDs
-  "GS":  1610612744, // Warriors (ESPN)
-  "NO":  1610612740, // Pelicans (ESPN)
-  "SA":  1610612759, // Spurs (ESPN)
-  "NY":  1610612752, // Knicks (ESPN)
-  "BK":  1610612751, // Nets (ESPN)
-  "UTAH":1610612762, // Jazz (occasionally)
-  "PHO": 1610612756, // Suns (occasionally)
-  "CHAR":1610612766, // Hornets (occasionally)
-  "WSH": 1610612764, // Wizards (occasionally)
+  GS: 1610612744, // Warriors (ESPN)
+  NO: 1610612740, // Pelicans (ESPN)
+  SA: 1610612759, // Spurs (ESPN)
+  NY: 1610612752, // Knicks (ESPN)
+  BK: 1610612751, // Nets (ESPN)
+  UTAH: 1610612762, // Jazz (occasionally)
+  PHO: 1610612756, // Suns (occasionally)
+  CHAR: 1610612766, // Hornets (occasionally)
+  WSH: 1610612764, // Wizards (occasionally)
 };
 
 // Get team logo URL
-export function getTeamLogo(abbrev: string, sport: "mlb" | "nba" = "mlb"): string {
+export function getTeamLogo(
+  abbrev: string,
+  sport: "mlb" | "nba" = "mlb",
+): string {
   const upper = (abbrev || "").toUpperCase();
   if (sport === "nba") {
     const id = NBA_TEAM_IDS[upper];
@@ -51,7 +100,12 @@ export function getTeamLogo(abbrev: string, sport: "mlb" | "nba" = "mlb"): strin
 // Fallback MLB logo on ESPN CDN (lowercase abbrev).
 // ESPN uses slightly different abbrevs for some teams — map here.
 const MLB_ESPN_ABBREV: Record<string, string> = {
-  CWS: "chw", WSH: "wsh", SD: "sd", SF: "sf", TB: "tb", KC: "kc",
+  CWS: "chw",
+  WSH: "wsh",
+  SD: "sd",
+  SF: "sf",
+  TB: "tb",
+  KC: "kc",
 };
 export function getMlbLogoFallback(abbrev: string): string {
   const upper = (abbrev || "").toUpperCase();
@@ -60,7 +114,10 @@ export function getMlbLogoFallback(abbrev: string): string {
 }
 
 // Get team logo from full name
-export function getTeamLogoByName(teamName: string, sport: "mlb" | "nba" = "mlb"): string {
+export function getTeamLogoByName(
+  teamName: string,
+  sport: "mlb" | "nba" = "mlb",
+): string {
   const abbrev = teamNameToAbbrev(teamName, sport);
   return getTeamLogo(abbrev, sport);
 }
@@ -75,7 +132,9 @@ export function teamNameToAbbrev(name: string, sport: "mlb" | "nba"): string {
   const lower = name.toLowerCase().trim();
   const lookup = sport === "nba" ? NBA_NAME_TO_ABBREV : MLB_NAME_TO_ABBREV;
   // Sort by key length descending so "los angeles clippers" matches before "los angeles"
-  const entries = Object.entries(lookup).sort((a, b) => b[0].length - a[0].length);
+  const entries = Object.entries(lookup).sort(
+    (a, b) => b[0].length - a[0].length,
+  );
   for (const [key, abbrev] of entries) {
     if (lower.includes(key)) return abbrev;
   }
@@ -85,50 +144,140 @@ export function teamNameToAbbrev(name: string, sport: "mlb" | "nba"): string {
 
 const MLB_NAME_TO_ABBREV: Record<string, string> = {
   // Nicknames
-  "diamondbacks": "ARI", "d-backs": "ARI", "braves": "ATL", "orioles": "BAL",
-  "red sox": "BOS", "cubs": "CHC", "white sox": "CWS", "reds": "CIN",
-  "guardians": "CLE", "rockies": "COL", "tigers": "DET", "astros": "HOU",
-  "royals": "KC", "angels": "LAA", "dodgers": "LAD", "marlins": "MIA",
-  "brewers": "MIL", "twins": "MIN", "mets": "NYM", "yankees": "NYY",
-  "athletics": "OAK", "phillies": "PHI", "pirates": "PIT", "padres": "SD",
-  "giants": "SF", "mariners": "SEA", "cardinals": "STL", "rays": "TB",
-  "rangers": "TEX", "blue jays": "TOR", "nationals": "WSH",
+  diamondbacks: "ARI",
+  "d-backs": "ARI",
+  braves: "ATL",
+  orioles: "BAL",
+  "red sox": "BOS",
+  cubs: "CHC",
+  "white sox": "CWS",
+  reds: "CIN",
+  guardians: "CLE",
+  rockies: "COL",
+  tigers: "DET",
+  astros: "HOU",
+  royals: "KC",
+  angels: "LAA",
+  dodgers: "LAD",
+  marlins: "MIA",
+  brewers: "MIL",
+  twins: "MIN",
+  mets: "NYM",
+  yankees: "NYY",
+  athletics: "OAK",
+  phillies: "PHI",
+  pirates: "PIT",
+  padres: "SD",
+  giants: "SF",
+  mariners: "SEA",
+  cardinals: "STL",
+  rays: "TB",
+  rangers: "TEX",
+  "blue jays": "TOR",
+  nationals: "WSH",
   // City names (longer keys first for disambiguation)
-  "los angeles a": "LAA", "los angeles d": "LAD",
-  "new york m": "NYM", "new york y": "NYY",
-  "san francisco": "SF", "san diego": "SD",
-  "st. louis": "STL", "st louis": "STL",
-  "kansas city": "KC", "tampa bay": "TB",
-  "arizona": "ARI", "atlanta": "ATL", "baltimore": "BAL", "boston": "BOS",
-  "chicago c": "CHC", "chicago w": "CWS",
-  "cincinnati": "CIN", "cleveland": "CLE", "colorado": "COL", "detroit": "DET",
-  "houston": "HOU", "miami": "MIA", "milwaukee": "MIL", "minnesota": "MIN",
-  "oakland": "OAK", "philadelphia": "PHI", "pittsburgh": "PIT",
-  "seattle": "SEA", "texas": "TEX", "toronto": "TOR", "washington": "WSH",
+  "los angeles a": "LAA",
+  "los angeles d": "LAD",
+  "new york m": "NYM",
+  "new york y": "NYY",
+  "san francisco": "SF",
+  "san diego": "SD",
+  "st. louis": "STL",
+  "st louis": "STL",
+  "kansas city": "KC",
+  "tampa bay": "TB",
+  arizona: "ARI",
+  atlanta: "ATL",
+  baltimore: "BAL",
+  boston: "BOS",
+  "chicago c": "CHC",
+  "chicago w": "CWS",
+  cincinnati: "CIN",
+  cleveland: "CLE",
+  colorado: "COL",
+  detroit: "DET",
+  houston: "HOU",
+  miami: "MIA",
+  milwaukee: "MIL",
+  minnesota: "MIN",
+  oakland: "OAK",
+  philadelphia: "PHI",
+  pittsburgh: "PIT",
+  seattle: "SEA",
+  texas: "TEX",
+  toronto: "TOR",
+  washington: "WSH",
 };
 
 const NBA_NAME_TO_ABBREV: Record<string, string> = {
   // Nicknames
-  "hawks": "ATL", "celtics": "BOS", "nets": "BKN", "hornets": "CHA",
-  "bulls": "CHI", "cavaliers": "CLE", "cavs": "CLE", "mavericks": "DAL", "mavs": "DAL",
-  "nuggets": "DEN", "pistons": "DET", "warriors": "GSW", "rockets": "HOU",
-  "pacers": "IND", "clippers": "LAC", "lakers": "LAL", "grizzlies": "MEM",
-  "heat": "MIA", "bucks": "MIL", "timberwolves": "MIN", "wolves": "MIN",
-  "pelicans": "NOP", "knicks": "NYK", "thunder": "OKC", "magic": "ORL",
-  "76ers": "PHI", "sixers": "PHI", "suns": "PHX",
-  "trail blazers": "POR", "blazers": "POR", "kings": "SAC", "spurs": "SAS",
-  "raptors": "TOR", "jazz": "UTA", "wizards": "WAS",
+  hawks: "ATL",
+  celtics: "BOS",
+  nets: "BKN",
+  hornets: "CHA",
+  bulls: "CHI",
+  cavaliers: "CLE",
+  cavs: "CLE",
+  mavericks: "DAL",
+  mavs: "DAL",
+  nuggets: "DEN",
+  pistons: "DET",
+  warriors: "GSW",
+  rockets: "HOU",
+  pacers: "IND",
+  clippers: "LAC",
+  lakers: "LAL",
+  grizzlies: "MEM",
+  heat: "MIA",
+  bucks: "MIL",
+  timberwolves: "MIN",
+  wolves: "MIN",
+  pelicans: "NOP",
+  knicks: "NYK",
+  thunder: "OKC",
+  magic: "ORL",
+  "76ers": "PHI",
+  sixers: "PHI",
+  suns: "PHX",
+  "trail blazers": "POR",
+  blazers: "POR",
+  kings: "SAC",
+  spurs: "SAS",
+  raptors: "TOR",
+  jazz: "UTA",
+  wizards: "WAS",
   // City names (longer keys first for disambiguation)
-  "los angeles c": "LAC", "los angeles l": "LAL",
-  "golden state": "GSW", "oklahoma city": "OKC",
-  "new york": "NYK", "new orleans": "NOP", "san antonio": "SAS",
-  "atlanta": "ATL", "boston": "BOS", "brooklyn": "BKN", "charlotte": "CHA",
-  "chicago": "CHI", "cleveland": "CLE", "dallas": "DAL", "denver": "DEN",
-  "detroit": "DET", "houston": "HOU", "indiana": "IND",
-  "memphis": "MEM", "miami": "MIA", "milwaukee": "MIL", "minnesota": "MIN",
-  "oklahoma": "OKC", "orlando": "ORL", "philadelphia": "PHI", "phoenix": "PHX",
-  "portland": "POR", "sacramento": "SAC", "toronto": "TOR", "utah": "UTA",
-  "washington": "WAS",
+  "los angeles c": "LAC",
+  "los angeles l": "LAL",
+  "golden state": "GSW",
+  "oklahoma city": "OKC",
+  "new york": "NYK",
+  "new orleans": "NOP",
+  "san antonio": "SAS",
+  atlanta: "ATL",
+  boston: "BOS",
+  brooklyn: "BKN",
+  charlotte: "CHA",
+  chicago: "CHI",
+  cleveland: "CLE",
+  dallas: "DAL",
+  denver: "DEN",
+  detroit: "DET",
+  houston: "HOU",
+  indiana: "IND",
+  memphis: "MEM",
+  miami: "MIA",
+  milwaukee: "MIL",
+  minnesota: "MIN",
+  oklahoma: "OKC",
+  orlando: "ORL",
+  philadelphia: "PHI",
+  phoenix: "PHX",
+  portland: "POR",
+  sacramento: "SAC",
+  toronto: "TOR",
+  utah: "UTA",
+  washington: "WAS",
 };
 
 // Player headshot URLs
@@ -142,42 +291,94 @@ export function getNBAPlayerPhoto(playerId: number): string {
 
 // Abbreviation → Full team name
 const MLB_ABBREV_TO_FULL: Record<string, string> = {
-  "ARI": "Arizona Diamondbacks", "ATL": "Atlanta Braves", "BAL": "Baltimore Orioles",
-  "BOS": "Boston Red Sox", "CHC": "Chicago Cubs", "CWS": "Chicago White Sox",
-  "CIN": "Cincinnati Reds", "CLE": "Cleveland Guardians", "COL": "Colorado Rockies",
-  "DET": "Detroit Tigers", "HOU": "Houston Astros", "KC": "Kansas City Royals",
-  "LAA": "Los Angeles Angels", "LAD": "Los Angeles Dodgers", "MIA": "Miami Marlins",
-  "MIL": "Milwaukee Brewers", "MIN": "Minnesota Twins", "NYM": "New York Mets",
-  "NYY": "New York Yankees", "OAK": "Oakland Athletics", "PHI": "Philadelphia Phillies",
-  "PIT": "Pittsburgh Pirates", "SD": "San Diego Padres", "SF": "San Francisco Giants",
-  "SEA": "Seattle Mariners", "STL": "St. Louis Cardinals", "TB": "Tampa Bay Rays",
-  "TEX": "Texas Rangers", "TOR": "Toronto Blue Jays", "WSH": "Washington Nationals",
+  ARI: "Arizona Diamondbacks",
+  ATL: "Atlanta Braves",
+  BAL: "Baltimore Orioles",
+  BOS: "Boston Red Sox",
+  CHC: "Chicago Cubs",
+  CWS: "Chicago White Sox",
+  CIN: "Cincinnati Reds",
+  CLE: "Cleveland Guardians",
+  COL: "Colorado Rockies",
+  DET: "Detroit Tigers",
+  HOU: "Houston Astros",
+  KC: "Kansas City Royals",
+  LAA: "Los Angeles Angels",
+  LAD: "Los Angeles Dodgers",
+  MIA: "Miami Marlins",
+  MIL: "Milwaukee Brewers",
+  MIN: "Minnesota Twins",
+  NYM: "New York Mets",
+  NYY: "New York Yankees",
+  OAK: "Oakland Athletics",
+  PHI: "Philadelphia Phillies",
+  PIT: "Pittsburgh Pirates",
+  SD: "San Diego Padres",
+  SF: "San Francisco Giants",
+  SEA: "Seattle Mariners",
+  STL: "St. Louis Cardinals",
+  TB: "Tampa Bay Rays",
+  TEX: "Texas Rangers",
+  TOR: "Toronto Blue Jays",
+  WSH: "Washington Nationals",
 };
 
 const NBA_ABBREV_TO_FULL: Record<string, string> = {
-  "ATL": "Atlanta Hawks", "BOS": "Boston Celtics", "BKN": "Brooklyn Nets",
-  "CHA": "Charlotte Hornets", "CHI": "Chicago Bulls", "CLE": "Cleveland Cavaliers",
-  "DAL": "Dallas Mavericks", "DEN": "Denver Nuggets", "DET": "Detroit Pistons",
-  "GSW": "Golden State Warriors", "HOU": "Houston Rockets", "IND": "Indiana Pacers",
-  "LAC": "Los Angeles Clippers", "LAL": "Los Angeles Lakers", "MEM": "Memphis Grizzlies",
-  "MIA": "Miami Heat", "MIL": "Milwaukee Bucks", "MIN": "Minnesota Timberwolves",
-  "NOP": "New Orleans Pelicans", "NYK": "New York Knicks", "OKC": "Oklahoma City Thunder",
-  "ORL": "Orlando Magic", "PHI": "Philadelphia 76ers", "PHX": "Phoenix Suns",
-  "POR": "Portland Trail Blazers", "SAC": "Sacramento Kings", "SAS": "San Antonio Spurs",
-  "TOR": "Toronto Raptors", "UTA": "Utah Jazz", "WAS": "Washington Wizards",
+  ATL: "Atlanta Hawks",
+  BOS: "Boston Celtics",
+  BKN: "Brooklyn Nets",
+  CHA: "Charlotte Hornets",
+  CHI: "Chicago Bulls",
+  CLE: "Cleveland Cavaliers",
+  DAL: "Dallas Mavericks",
+  DEN: "Denver Nuggets",
+  DET: "Detroit Pistons",
+  GSW: "Golden State Warriors",
+  HOU: "Houston Rockets",
+  IND: "Indiana Pacers",
+  LAC: "Los Angeles Clippers",
+  LAL: "Los Angeles Lakers",
+  MEM: "Memphis Grizzlies",
+  MIA: "Miami Heat",
+  MIL: "Milwaukee Bucks",
+  MIN: "Minnesota Timberwolves",
+  NOP: "New Orleans Pelicans",
+  NYK: "New York Knicks",
+  OKC: "Oklahoma City Thunder",
+  ORL: "Orlando Magic",
+  PHI: "Philadelphia 76ers",
+  PHX: "Phoenix Suns",
+  POR: "Portland Trail Blazers",
+  SAC: "Sacramento Kings",
+  SAS: "San Antonio Spurs",
+  TOR: "Toronto Raptors",
+  UTA: "Utah Jazz",
+  WAS: "Washington Wizards",
   // Aliases from ESPN / Odds API feeds
-  "GS": "Golden State Warriors", "NO": "New Orleans Pelicans", "SA": "San Antonio Spurs",
-  "NY": "New York Knicks", "BK": "Brooklyn Nets", "UTAH": "Utah Jazz",
-  "PHO": "Phoenix Suns", "CHAR": "Charlotte Hornets", "WSH": "Washington Wizards",
+  GS: "Golden State Warriors",
+  NO: "New Orleans Pelicans",
+  SA: "San Antonio Spurs",
+  NY: "New York Knicks",
+  BK: "Brooklyn Nets",
+  UTAH: "Utah Jazz",
+  PHO: "Phoenix Suns",
+  CHAR: "Charlotte Hornets",
+  WSH: "Washington Wizards",
 };
 
-export function getFullTeamName(abbrev: string, sport: "mlb" | "nba" = "mlb"): string {
+export function getFullTeamName(
+  abbrev: string,
+  sport: "mlb" | "nba" = "mlb",
+): string {
   if (sport === "nba") return NBA_ABBREV_TO_FULL[abbrev] ?? abbrev;
   return MLB_ABBREV_TO_FULL[abbrev] ?? abbrev;
 }
 
 // Get just the mascot/nickname from abbreviation (e.g. "NYY" → "Yankees")
-export function getTeamNickname(abbrev: string, sport: "mlb" | "nba" = "mlb"): string {
+export function getTeamNickname(
+  abbrev: string,
+  sport: "mlb" | "nba" = "mlb",
+): string {
   const full = getFullTeamName(abbrev, sport);
   if (full === abbrev) return abbrev;
   // Last word, or last two for "Red Sox", "White Sox", "Blue Jays", "Trail Blazers"

@@ -13,7 +13,9 @@ export function formatPickLabel(pick: string, sport: Sport): string {
   // Normalize trailing " ML" → " Moneyline" (both sports — less cryptic)
   let out = pick.replace(/\s+ML\s*$/i, " Moneyline");
   // Normalize any "GM: ML" / "G: ML" game-prefixed formats that might leak from older pipelines
-  out = out.replace(/^GM[:\s-]+ML\b/i, "Moneyline").replace(/^G[:\s-]+ML\b/i, "Moneyline");
+  out = out
+    .replace(/^GM[:\s-]+ML\b/i, "Moneyline")
+    .replace(/^G[:\s-]+ML\b/i, "Moneyline");
   // NBA-specific: "RL" (run-line leftover) → "Spread"
   if (sport === "nba") out = out.replace(/\s+RL\s*(?=[-+]?\d|$)/i, " Spread ");
   return out;

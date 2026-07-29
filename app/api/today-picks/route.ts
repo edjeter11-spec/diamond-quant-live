@@ -12,30 +12,63 @@ export async function GET(req: NextRequest) {
   const isNBA = sport === "nba";
   const today = new Date().toISOString().split("T")[0];
   // v3: today-only filter active
-  const cacheKey = isNBA ? `smart_bot_today_nba_v3_${today}` : `smart_bot_today_mlb_v3_${today}`;
+  const cacheKey = isNBA
+    ? `smart_bot_today_nba_v3_${today}`
+    : `smart_bot_today_mlb_v3_${today}`;
 
   if (!force) {
-    const cached = await cloudGet<{ picks: any[]; generatedAt: string } | null>(cacheKey, null);
+    const cached = await cloudGet<{ picks: any[]; generatedAt: string } | null>(
+      cacheKey,
+      null,
+    );
     if (cached?.picks?.length) {
-      return NextResponse.json({ ok: true, picks: cached.picks, cached: true, generatedAt: cached.generatedAt });
+      return NextResponse.json({
+        ok: true,
+        picks: cached.picks,
+        cached: true,
+        generatedAt: cached.generatedAt,
+      });
     }
   }
 
   try {
-    // Always hit the public alias — VERCEL_URL points at the per-deploy URL
-    // which can sit behind Vercel's auth wall on preview branches.
-    const baseUrl = "https://diamond-quant-live.vercel.app";
+    // In local dev, call localhost — not production over the real internet
+    // (that pattern caused multi-minute hangs elsewhere whenever prod was
+    // slow/cold/rate-limited). Production still hits the public alias since
+    // VERCEL_URL's per-deploy URL can sit behind Vercel's preview auth wall.
+    const baseUrl =
+      process.env.NODE_ENV === "development"
+        ? req.nextUrl.origin
+        : "https://diamond-quant-live.vercel.app";
     // bot-analysis (MLB three-models) returns the {consensus, pitcherModel, marketModel}
     // shape that smart-picks expects. The plain /api/analysis is a simpler
     // flat-shape route used elsewhere — would crash generateSmartPicks.
-    const analysisUrl = isNBA ? `${baseUrl}/api/nba-analysis` : `${baseUrl}/api/bot-analysis`;
-    const res = await fetch(analysisUrl, { signal: AbortSignal.timeout(45000) });
+    const analysisUrl = isNBA
+      ? `${baseUrl}/api/nba-analysis`
+      : `${baseUrl}/api/bot-analysis`;
+    const res = await fetch(analysisUrl, {
+      signal: AbortSignal.timeout(45000),
+    });
     if (!res.ok) {
       // Serve last-known cache instead of failing to a blank state
-      const stale = await cloudGet<{ picks: any[]; generatedAt: string } | null>(cacheKey, null);
-      if (stale?.picks?.length) return NextResponse.json({ ok: true, picks: stale.picks, cached: true, stale: true, generatedAt: stale.generatedAt });
+      const stale = await cloudGet<{
+        picks: any[];
+        generatedAt: string;
+      } | null>(cacheKey, null);
+      if (stale?.picks?.length)
+        return NextResponse.json({
+          ok: true,
+          picks: stale.picks,
+          cached: true,
+          stale: true,
+          generatedAt: stale.generatedAt,
+        });
       // 200 with empty picks so the UI shows the "no picks yet" empty state cleanly
-      return NextResponse.json({ ok: true, picks: [], message: "Picks temporarily unavailable" });
+      return NextResponse.json({
+        ok: true,
+        picks: [],
+        message: "Picks temporarily unavailable",
+      });
     }
 
     const data = await res.json();
@@ -44,11 +77,30 @@ export async function GET(req: NextRequest) {
 
     const result = { picks, generatedAt: new Date().toISOString() };
     await cloudSet(cacheKey, result);
-    return NextResponse.json({ ok: true, picks, cached: false, generatedAt: result.generatedAt });
+    return NextResponse.json({
+      ok: true,
+      picks,
+      cached: false,
+      generatedAt: result.generatedAt,
+    });
   } catch (error: any) {
     // Final safety net: serve stale cache if present
-    const stale = await cloudGet<{ picks: any[]; generatedAt: string } | null>(cacheKey, null);
-    if (stale?.picks?.length) return NextResponse.json({ ok: true, picks: stale.picks, cached: true, stale: true, generatedAt: stale.generatedAt });
-    return NextResponse.json({ ok: true, picks: [], message: "Picks temporarily unavailable" });
+    const stale = await cloudGet<{ picks: any[]; generatedAt: string } | null>(
+      cacheKey,
+      null,
+    );
+    if (stale?.picks?.length)
+      return NextResponse.json({
+        ok: true,
+        picks: stale.picks,
+        cached: true,
+        stale: true,
+        generatedAt: stale.generatedAt,
+      });
+    return NextResponse.json({
+      ok: true,
+      picks: [],
+      message: "Picks temporarily unavailable",
+    });
   }
 }

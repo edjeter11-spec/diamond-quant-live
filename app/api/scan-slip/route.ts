@@ -10,7 +10,10 @@ const MODELS = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"];
 
 export async function POST(req: Request) {
   if (!GEMINI_KEY) {
-    return NextResponse.json({ error: "Gemini API key not configured" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Gemini API key not configured" },
+      { status: 500 },
+    );
   }
 
   try {
@@ -26,10 +29,11 @@ export async function POST(req: Request) {
     const base64Data = image.replace(/^data:image\/\w+;base64,/, "");
 
     const requestBody = JSON.stringify({
-      contents: [{
-        parts: [
-          {
-            text: `Extract the following fields from this receipt / order summary screenshot into JSON. Treat this purely as a data-extraction task (OCR + structuring).
+      contents: [
+        {
+          parts: [
+            {
+              text: `Extract the following fields from this receipt / order summary screenshot into JSON. Treat this purely as a data-extraction task (OCR + structuring).
 
 Fields:
 - sportsbook (string): the vendor/brand name shown (e.g. DraftKings, FanDuel, BetMGM)
@@ -47,16 +51,17 @@ Fields:
   - "lost" if a red X/badge, "LOST", "LOSS", greyed-out styling is visible
   - "pending" otherwise (live, scheduled, open)
 
-For straight bets, legs has exactly 1 entry. For parlays include all legs. Use null for anything unreadable. Return ONLY the JSON object, nothing else.`
-          },
-          {
-            inline_data: {
-              mime_type: mimeType,
-              data: base64Data,
-            }
-          }
-        ]
-      }],
+For straight bets, legs has exactly 1 entry. For parlays include all legs. Use null for anything unreadable. Return ONLY the JSON object, nothing else.`,
+            },
+            {
+              inline_data: {
+                mime_type: mimeType,
+                data: base64Data,
+              },
+            },
+          ],
+        },
+      ],
       generationConfig: {
         temperature: 0.1,
         maxOutputTokens: 2048,
@@ -65,8 +70,14 @@ For straight bets, legs has exactly 1 entry. For parlays include all legs. Use n
       safetySettings: [
         { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
         { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
-        { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
-        { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" },
+        {
+          category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+          threshold: "BLOCK_NONE",
+        },
+        {
+          category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+          threshold: "BLOCK_NONE",
+        },
       ],
     });
 
@@ -87,7 +98,10 @@ For straight bets, legs has exactly 1 entry. For parlays include all legs. Use n
         lastErr = await response.text();
         console.error(`Gemini ${model} error:`, lastErr.slice(0, 300));
         if (response.status === 404 || response.status === 400) continue;
-        return NextResponse.json({ error: `Gemini error: ${lastErr.slice(0, 200)}` }, { status: response.status });
+        return NextResponse.json(
+          { error: `Gemini error: ${lastErr.slice(0, 200)}` },
+          { status: response.status },
+        );
       }
 
       const data = await response.json();
@@ -103,21 +117,30 @@ For straight bets, legs has exactly 1 entry. For parlays include all legs. Use n
       // Check finish reason on candidate
       const candidate = data.candidates?.[0];
       const finishReason = candidate?.finishReason;
-      if (finishReason && finishReason !== "STOP" && finishReason !== "MAX_TOKENS") {
+      if (
+        finishReason &&
+        finishReason !== "STOP" &&
+        finishReason !== "MAX_TOKENS"
+      ) {
         lastErr = `Gemini stopped early: ${finishReason}`;
         console.error(`Gemini ${model} finish reason:`, finishReason);
         continue;
       }
 
       text = candidate?.content?.parts?.[0]?.text ?? "";
-      if (text) { usedModel = model; break; }
+      if (text) {
+        usedModel = model;
+        break;
+      }
       lastErr = "Empty response from " + model;
     }
 
     if (!text) {
       return NextResponse.json(
-        { error: `Couldn't read the slip — ${lastErr.slice(0, 200) || "all models failed"}. Try a cropped, well-lit screenshot of just the bet details.` },
-        { status: 502 }
+        {
+          error: `Couldn't read the slip — ${lastErr.slice(0, 200) || "all models failed"}. Try a cropped, well-lit screenshot of just the bet details.`,
+        },
+        { status: 502 },
       );
     }
 
@@ -129,17 +152,28 @@ For straight bets, legs has exactly 1 entry. For parlays include all legs. Use n
       // Fallback: find first {...} block
       const jsonMatch = text.match(/\{[\s\S]*\}/);
       if (!jsonMatch) {
-        console.error("Unparseable response from", usedModel, "— raw:", text.slice(0, 500));
-        return NextResponse.json({
-          error: `Gemini returned non-JSON: "${text.slice(0, 100)}..." — try a clearer screenshot of the bet details`
-        }, { status: 422 });
+        console.error(
+          "Unparseable response from",
+          usedModel,
+          "— raw:",
+          text.slice(0, 500),
+        );
+        return NextResponse.json(
+          {
+            error: `Gemini returned non-JSON: "${text.slice(0, 100)}..." — try a clearer screenshot of the bet details`,
+          },
+          { status: 422 },
+        );
       }
       try {
         parsed = JSON.parse(jsonMatch[0]);
       } catch (e: any) {
-        return NextResponse.json({
-          error: `JSON parse failed: ${e.message}. Raw: ${text.slice(0, 100)}`
-        }, { status: 422 });
+        return NextResponse.json(
+          {
+            error: `JSON parse failed: ${e.message}. Raw: ${text.slice(0, 100)}`,
+          },
+          { status: 422 },
+        );
       }
     }
 
@@ -150,6 +184,9 @@ For straight bets, legs has exactly 1 entry. For parlays include all legs. Use n
     });
   } catch (error: any) {
     console.error("Scan error:", error);
-    return NextResponse.json({ error: error.message ?? "Scan failed" }, { status: 500 });
+    return NextResponse.json(
+      { error: error.message ?? "Scan failed" },
+      { status: 500 },
+    );
   }
 }

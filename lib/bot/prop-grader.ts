@@ -6,8 +6,19 @@ export interface PropGradeResult {
 }
 
 export function gradePropPick(
-  pick: { playerName: string; market: string; line: number; side: "over" | "under" },
-  boxScores: Array<{ playerName: string; pts: number; reb: number; ast: number; minutes: number }>,
+  pick: {
+    playerName: string;
+    market: string;
+    line: number;
+    side: "over" | "under";
+  },
+  boxScores: Array<{
+    playerName: string;
+    pts: number;
+    reb: number;
+    ast: number;
+    minutes: number;
+  }>,
 ): PropGradeResult | null {
   const lastName = (name: string) => name.toLowerCase().split(" ").slice(-1)[0];
   const player = boxScores.find(
@@ -24,9 +35,20 @@ export function gradePropPick(
         ? player.reb
         : player.ast;
 
-  if (actual === pick.line) return { result: "push", actualValue: actual, line: pick.line, side: pick.side };
+  if (actual === pick.line)
+    return {
+      result: "push",
+      actualValue: actual,
+      line: pick.line,
+      side: pick.side,
+    };
   const hit = pick.side === "over" ? actual > pick.line : actual < pick.line;
-  return { result: hit ? "win" : "loss", actualValue: actual, line: pick.line, side: pick.side };
+  return {
+    result: hit ? "win" : "loss",
+    actualValue: actual,
+    line: pick.line,
+    side: pick.side,
+  };
 }
 
 // ── MLB prop grader ──
@@ -45,8 +67,8 @@ export interface MLBPlayerStats {
   runsScored: number;
   stolenBases: number;
   strikeouts: number; // pitcher strikeouts
-  outs: number;       // pitcher outs (innings * 3 + remainder)
-  appeared: boolean;  // false if DNP
+  outs: number; // pitcher outs (innings * 3 + remainder)
+  appeared: boolean; // false if DNP
 }
 
 const MLB_MARKET_TO_STAT: Record<string, keyof MLBPlayerStats> = {
@@ -61,7 +83,12 @@ const MLB_MARKET_TO_STAT: Record<string, keyof MLBPlayerStats> = {
 };
 
 export function gradeMLBPropPick(
-  pick: { playerName: string; market: string; line: number; side: "over" | "under" },
+  pick: {
+    playerName: string;
+    market: string;
+    line: number;
+    side: "over" | "under";
+  },
   players: MLBPlayerStats[],
 ): PropGradeResult | null {
   const statKey = MLB_MARKET_TO_STAT[pick.market];
@@ -74,9 +101,20 @@ export function gradeMLBPropPick(
   );
   if (!player || !player.appeared) return null;
   const actual = Number(player[statKey] ?? 0);
-  if (actual === pick.line) return { result: "push", actualValue: actual, line: pick.line, side: pick.side };
+  if (actual === pick.line)
+    return {
+      result: "push",
+      actualValue: actual,
+      line: pick.line,
+      side: pick.side,
+    };
   const hit = pick.side === "over" ? actual > pick.line : actual < pick.line;
-  return { result: hit ? "win" : "loss", actualValue: actual, line: pick.line, side: pick.side };
+  return {
+    result: hit ? "win" : "loss",
+    actualValue: actual,
+    line: pick.line,
+    side: pick.side,
+  };
 }
 
 // Parse MLB box score response from statsapi.mlb.com into MLBPlayerStats[]

@@ -4,7 +4,8 @@
 // ──────────────────────────────────────────────────────────
 
 export async function registerServiceWorker(): Promise<ServiceWorkerRegistration | null> {
-  if (typeof window === "undefined" || !("serviceWorker" in navigator)) return null;
+  if (typeof window === "undefined" || !("serviceWorker" in navigator))
+    return null;
   try {
     const reg = await navigator.serviceWorker.register("/sw.js");
     return reg;
@@ -14,7 +15,8 @@ export async function registerServiceWorker(): Promise<ServiceWorkerRegistration
 }
 
 export async function requestNotificationPermission(): Promise<boolean> {
-  if (typeof window === "undefined" || !("Notification" in window)) return false;
+  if (typeof window === "undefined" || !("Notification" in window))
+    return false;
   if (Notification.permission === "granted") return true;
   if (Notification.permission === "denied") return false;
   const result = await Notification.requestPermission();
@@ -22,9 +24,14 @@ export async function requestNotificationPermission(): Promise<boolean> {
 }
 
 // Send a local push notification (doesn't need a push server)
-export async function sendLocalNotification(title: string, body: string, url?: string) {
+export async function sendLocalNotification(
+  title: string,
+  body: string,
+  url?: string,
+) {
   if (typeof window === "undefined") return;
-  if (!("Notification" in window) || Notification.permission !== "granted") return;
+  if (!("Notification" in window) || Notification.permission !== "granted")
+    return;
 
   const reg = await navigator.serviceWorker?.ready;
   if (reg) {
@@ -43,21 +50,32 @@ export async function sendLocalNotification(title: string, body: string, url?: s
 }
 
 // Notify on high-confidence picks
-export function notifyHighConfidencePick(pick: { pick: string; odds: number; confidence: string; game: string }) {
+export function notifyHighConfidencePick(pick: {
+  pick: string;
+  odds: number;
+  confidence: string;
+  game: string;
+}) {
   if (pick.confidence !== "HIGH") return;
   const oddsStr = pick.odds > 0 ? `+${pick.odds}` : `${pick.odds}`;
   sendLocalNotification(
     `🔥 HIGH Confidence: ${pick.pick}`,
     `${pick.game} — ${oddsStr}`,
-    "/"
+    "/",
   );
 }
 
 // Notify on prop bot auto-bet
-export function notifyPropBotPick(playerName: string, propType: string, side: string, line: number, accuracy: number) {
+export function notifyPropBotPick(
+  playerName: string,
+  propType: string,
+  side: string,
+  line: number,
+  accuracy: number,
+) {
   sendLocalNotification(
     `🏀 Prop Bot: ${playerName}`,
     `${side.toUpperCase()} ${line} ${propType.replace("player_", "")} — Brain: ${accuracy}% accurate`,
-    "/"
+    "/",
   );
 }

@@ -16,22 +16,24 @@ export interface NBALearnedPatterns {
   homeWinRate: number;
   avgPointsPerGame: number;
   avgTotalPoints: number;
-  closeGameHomeRate: number;    // games decided by <5 pts
-  blowoutHomeRate: number;      // games decided by 15+
+  closeGameHomeRate: number; // games decided by <5 pts
+  blowoutHomeRate: number; // games decided by 15+
   overtimeHomeRate: number;
 }
 
 export async function trainNBA(
   brain: BrainState,
   seasons: number[],
-  onProgress?: (msg: string) => void
+  onProgress?: (msg: string) => void,
 ): Promise<NBATrainingResult> {
   let state = { ...brain };
   let totalGames = 0;
   let homeWins = 0;
   let totalPointsSum = 0;
-  let closeHome = 0, closeTotal = 0;
-  let blowoutHome = 0, blowoutTotal = 0;
+  let closeHome = 0,
+    closeTotal = 0;
+  let blowoutHome = 0,
+    blowoutTotal = 0;
 
   if (!state.pitcherMemory) state.pitcherMemory = {};
   if (!state.parkMemory) state.parkMemory = {};
@@ -111,7 +113,7 @@ export async function trainNBA(
               // Learn: totals
               state = learnFromResult(state, {
                 market: "total",
-                predictedProb: 0.50,
+                predictedProb: 0.5,
                 won: totalPoints > 224, // league avg ~224
                 ev: 1.5,
               });
@@ -131,7 +133,8 @@ export async function trainNBA(
               const awayTeam = game.visitor_team?.full_name ?? "";
               if (homeTeam && awayTeam) {
                 const mKey = `${awayTeam.toLowerCase()}::${homeTeam.toLowerCase()}`;
-                if (!state.matchupMemory[mKey]) state.matchupMemory[mKey] = { games: 0, homeWins: 0 };
+                if (!state.matchupMemory[mKey])
+                  state.matchupMemory[mKey] = { games: 0, homeWins: 0 };
                 state.matchupMemory[mKey].games++;
                 if (homeWon) state.matchupMemory[mKey].homeWins++;
               }
@@ -155,12 +158,15 @@ export async function trainNBA(
   state.isPreTrained = true;
   state.lastTrainedAt = new Date().toISOString();
 
-  const pct = (n: number, d: number) => d > 0 ? Math.round((n / d) * 1000) / 10 : 50;
+  const pct = (n: number, d: number) =>
+    d > 0 ? Math.round((n / d) * 1000) / 10 : 50;
 
   const patterns: NBALearnedPatterns = {
     homeWinRate: pct(homeWins, totalGames),
-    avgPointsPerGame: totalGames > 0 ? Math.round(totalPointsSum / totalGames / 2) : 112,
-    avgTotalPoints: totalGames > 0 ? Math.round(totalPointsSum / totalGames) : 224,
+    avgPointsPerGame:
+      totalGames > 0 ? Math.round(totalPointsSum / totalGames / 2) : 112,
+    avgTotalPoints:
+      totalGames > 0 ? Math.round(totalPointsSum / totalGames) : 224,
     closeGameHomeRate: pct(closeHome, closeTotal),
     blowoutHomeRate: pct(blowoutHome, blowoutTotal),
     overtimeHomeRate: 50, // would need OT data

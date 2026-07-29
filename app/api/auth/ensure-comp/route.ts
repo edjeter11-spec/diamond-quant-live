@@ -21,8 +21,16 @@ function compEmails(): string[] {
 
 export async function POST(req: Request) {
   const user = await getUserFromRequest(req);
-  if (!user) return NextResponse.json({ ok: false, error: "Not signed in" }, { status: 401 });
-  if (!supabaseAdmin) return NextResponse.json({ ok: false, error: "Server misconfigured" }, { status: 500 });
+  if (!user)
+    return NextResponse.json(
+      { ok: false, error: "Not signed in" },
+      { status: 401 },
+    );
+  if (!supabaseAdmin)
+    return NextResponse.json(
+      { ok: false, error: "Server misconfigured" },
+      { status: 500 },
+    );
 
   const allow = compEmails();
   const email = (user.email ?? "").toLowerCase();
@@ -52,7 +60,10 @@ export async function POST(req: Request) {
 
   if (error) {
     console.error("comp grant error:", error);
-    return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+    return NextResponse.json(
+      { ok: false, error: error.message },
+      { status: 500 },
+    );
   }
   return NextResponse.json({ ok: true, compGranted: true });
 }

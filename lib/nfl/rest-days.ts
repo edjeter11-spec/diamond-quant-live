@@ -4,20 +4,31 @@
 // ──────────────────────────────────────────────────────────
 
 export interface NFLRestState {
-  daysOfRest: number;        // since last game
-  isShortWeek: boolean;      // Thu/Fri after Sun = <6 days
-  isPostBye: boolean;        // 13+ days
-  isWell: boolean;           // 7+ days
+  daysOfRest: number; // since last game
+  isShortWeek: boolean; // Thu/Fri after Sun = <6 days
+  isPostBye: boolean; // 13+ days
+  isWell: boolean; // 7+ days
   /** Rest edge in EPA units (positive = well-rested) */
   edge: number;
   factors: string[];
 }
 
-export function computeNFLRest(lastGameDate: string | null, gameDate: string): NFLRestState {
+export function computeNFLRest(
+  lastGameDate: string | null,
+  gameDate: string,
+): NFLRestState {
   if (!lastGameDate) {
-    return { daysOfRest: 7, isShortWeek: false, isPostBye: false, isWell: true, edge: 0, factors: ["No prior game data"] };
+    return {
+      daysOfRest: 7,
+      isShortWeek: false,
+      isPostBye: false,
+      isWell: true,
+      edge: 0,
+      factors: ["No prior game data"],
+    };
   }
-  const diffMs = new Date(gameDate).getTime() - new Date(lastGameDate).getTime();
+  const diffMs =
+    new Date(gameDate).getTime() - new Date(lastGameDate).getTime();
   const days = Math.round(diffMs / (1000 * 60 * 60 * 24));
   const isShortWeek = days <= 5;
   const isPostBye = days >= 13;

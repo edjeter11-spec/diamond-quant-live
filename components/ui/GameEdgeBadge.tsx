@@ -39,11 +39,12 @@ export default function GameEdgeBadge({ homeAbbrev, awayAbbrev }: Props) {
 
   const abs = Math.abs(edge.netGap);
   const tier = abs >= 8 ? "strong" : abs >= 4 ? "moderate" : "slight";
-  const color = tier === "strong"
-    ? "text-gold border-gold/40 bg-gold/10"
-    : tier === "moderate"
-    ? "text-neon border-neon/30 bg-neon/10"
-    : "text-electric border-electric/25 bg-electric/5";
+  const color =
+    tier === "strong"
+      ? "text-gold border-gold/40 bg-gold/10"
+      : tier === "moderate"
+        ? "text-neon border-neon/30 bg-neon/10"
+        : "text-electric border-electric/25 bg-electric/5";
 
   const Arrow = edge.favorsHome ? TrendingUp : TrendingDown;
 
@@ -54,7 +55,8 @@ export default function GameEdgeBadge({ homeAbbrev, awayAbbrev }: Props) {
     >
       {tier === "strong" && <Zap className="w-2.5 h-2.5" />}
       <Arrow className="w-2.5 h-2.5" />
-      NET {edge.netGap > 0 ? "+" : ""}{edge.netGap}
+      NET {edge.netGap > 0 ? "+" : ""}
+      {edge.netGap}
     </span>
   );
 }

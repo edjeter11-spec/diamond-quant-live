@@ -24,7 +24,10 @@ interface SelectedGameBannerProps {
   onDeselect: () => void;
 }
 
-export default function SelectedGameBanner({ game, onDeselect }: SelectedGameBannerProps) {
+export default function SelectedGameBanner({
+  game,
+  onDeselect,
+}: SelectedGameBannerProps) {
   const isLive = game.status === "live";
   const showScore = game.status === "live" || game.status === "final";
 
@@ -44,7 +47,8 @@ export default function SelectedGameBanner({ game, onDeselect }: SelectedGameBan
             </span>
           ) : (
             <span className="text-xs font-semibold text-danger uppercase tracking-wider">
-              {game.inningHalf === "top" ? "▲" : "▼"}{game.inning}
+              {game.inningHalf === "top" ? "▲" : "▼"}
+              {game.inning}
             </span>
           )}
         </div>
@@ -59,7 +63,8 @@ export default function SelectedGameBanner({ game, onDeselect }: SelectedGameBan
       {/* Matchup */}
       <div className="flex items-center gap-2 min-w-0">
         <span className="text-base sm:text-lg font-bold font-mono text-silver whitespace-nowrap">
-          <TeamLogo team={game.awayAbbrev} size={20} /> {game.awayAbbrev} @ {game.homeAbbrev} <TeamLogo team={game.homeAbbrev} size={20} />
+          <TeamLogo team={game.awayAbbrev} size={20} /> {game.awayAbbrev} @{" "}
+          {game.homeAbbrev} <TeamLogo team={game.homeAbbrev} size={20} />
         </span>
         {showScore && (
           <span className="text-sm sm:text-base font-mono font-semibold text-neon flex-shrink-0">

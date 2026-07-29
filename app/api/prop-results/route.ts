@@ -40,36 +40,50 @@ export async function GET(req: Request) {
       const { cloudGet, cloudSet } = await import("@/lib/supabase/client");
       const cached = await cloudGet<any>(NBA_CACHE_KEY(date), null);
       if (cached && cached.ts && Date.now() - cached.ts < 5 * 60 * 1000) {
-        return NextResponse.json(cached.payload, { headers: { "Cache-Control": CDN } });
+        return NextResponse.json(cached.payload, {
+          headers: { "Cache-Control": CDN },
+        });
       }
       const results = await gradeNba();
       const payload = { results, date };
-      await cloudSet(NBA_CACHE_KEY(date), { ts: Date.now(), payload }).catch(() => {});
+      await cloudSet(NBA_CACHE_KEY(date), { ts: Date.now(), payload }).catch(
+        () => {},
+      );
       return NextResponse.json(payload, { headers: { "Cache-Control": CDN } });
     }
     if (sport === "baseball_mlb") {
       const { cloudGet, cloudSet } = await import("@/lib/supabase/client");
       const cached = await cloudGet<any>(MLB_CACHE_KEY(date), null);
       if (cached && cached.ts && Date.now() - cached.ts < 5 * 60 * 1000) {
-        return NextResponse.json(cached.payload, { headers: { "Cache-Control": CDN } });
+        return NextResponse.json(cached.payload, {
+          headers: { "Cache-Control": CDN },
+        });
       }
       const results = await gradeMlb();
       const payload = { results, date };
-      await cloudSet(MLB_CACHE_KEY(date), { ts: Date.now(), payload }).catch(() => {});
+      await cloudSet(MLB_CACHE_KEY(date), { ts: Date.now(), payload }).catch(
+        () => {},
+      );
       return NextResponse.json(payload, { headers: { "Cache-Control": CDN } });
     }
     return NextResponse.json({ results: {} });
   } catch (e: any) {
-    return NextResponse.json({ results: {}, error: e?.message ?? "failed" }, { status: 500 });
+    return NextResponse.json(
+      { results: {}, error: e?.message ?? "failed" },
+      { status: 500 },
+    );
   }
 }
 
 // ── NBA grading via cdn.nba.com box scores ───────────────────
 async function gradeNba(): Promise<Record<string, GradedProp[]>> {
   const today = todayKey().replace(/-/g, "");
-  const sb = await fetch(`https://cdn.nba.com/static/json/liveData/scoreboard/todaysScoreboard_00.json`, {
-    next: { revalidate: 60 },
-  }).catch(() => null);
+  const sb = await fetch(
+    `https://cdn.nba.com/static/json/liveData/scoreboard/todaysScoreboard_00.json`,
+    {
+      next: { revalidate: 60 },
+    },
+  ).catch(() => null);
   if (!sb || !sb.ok) return {};
   const data = await sb.json();
   const games: any[] = data.scoreboard?.games ?? [];
@@ -78,12 +92,16 @@ async function gradeNba(): Promise<Record<string, GradedProp[]>> {
   await Promise.all(
     games.map(async (g) => {
       const gameId = g.gameId;
-      const status = g.gameStatus === 3 ? "final" : g.gameStatus === 2 ? "live" : "pre";
+      const status =
+        g.gameStatus === 3 ? "final" : g.gameStatus === 2 ? "live" : "pre";
       if (status === "pre") return;
       try {
-        const bxRes = await fetch(`https://cdn.nba.com/static/json/liveData/boxscore/boxscore_${gameId}.json`, {
-          next: { revalidate: 60 },
-        });
+        const bxRes = await fetch(
+          `https://cdn.nba.com/static/json/liveData/boxscore/boxscore_${gameId}.json`,
+          {
+            next: { revalidate: 60 },
+          },
+        );
         if (!bxRes.ok) return;
         const bx = await bxRes.json();
         const allPlayers = [
@@ -91,7 +109,8 @@ async function gradeNba(): Promise<Record<string, GradedProp[]>> {
           ...(bx.game?.awayTeam?.players ?? []),
         ];
         for (const p of allPlayers) {
-          const name = p.name ?? `${p.firstName ?? ""} ${p.familyName ?? ""}`.trim();
+          const name =
+            p.name ?? `${p.firstName ?? ""} ${p.familyName ?? ""}`.trim();
           const stats = p.statistics ?? {};
           const key = name.toLowerCase();
           const arr = out[key] ?? (out[key] = []);
@@ -143,8 +162,12 @@ async function gradeMlb(): Promise<Record<string, GradedProp[]>> {
 
   await Promise.all(
     games.map(async (g) => {
-      const status = g.status?.abstractGameState === "Final" ? "final"
-        : g.status?.abstractGameState === "Live" ? "live" : "pre";
+      const status =
+        g.status?.abstractGameState === "Final"
+          ? "final"
+          : g.status?.abstractGameState === "Live"
+            ? "live"
+            : "pre";
       if (status === "pre") return;
       try {
         const bxRes = await fetch(
@@ -163,13 +186,62 @@ async function gradeMlb(): Promise<Record<string, GradedProp[]>> {
             const arr = out[key] ?? (out[key] = []);
             const bat = p.stats?.batting ?? {};
             const pit = p.stats?.pitching ?? {};
-            arr.push({ playerName: name, market: "batter_hits", line: 0, actual: Number(bat.hits ?? 0), result: "pending", gameStatus: status as any });
-            arr.push({ playerName: name, market: "batter_home_runs", line: 0, actual: Number(bat.homeRuns ?? 0), result: "pending", gameStatus: status as any });
-            arr.push({ playerName: name, market: "batter_total_bases", line: 0, actual: Number(bat.totalBases ?? 0), result: "pending", gameStatus: status as any });
-            arr.push({ playerName: name, market: "batter_rbis", line: 0, actual: Number(bat.rbi ?? 0), result: "pending", gameStatus: status as any });
-            arr.push({ playerName: name, market: "batter_runs_scored", line: 0, actual: Number(bat.runs ?? 0), result: "pending", gameStatus: status as any });
-            arr.push({ playerName: name, market: "pitcher_strikeouts", line: 0, actual: Number(pit.strikeOuts ?? 0), result: "pending", gameStatus: status as any });
-            arr.push({ playerName: name, market: "pitcher_outs", line: 0, actual: Math.round((Number(pit.inningsPitched ?? 0)) * 3), result: "pending", gameStatus: status as any });
+            arr.push({
+              playerName: name,
+              market: "batter_hits",
+              line: 0,
+              actual: Number(bat.hits ?? 0),
+              result: "pending",
+              gameStatus: status as any,
+            });
+            arr.push({
+              playerName: name,
+              market: "batter_home_runs",
+              line: 0,
+              actual: Number(bat.homeRuns ?? 0),
+              result: "pending",
+              gameStatus: status as any,
+            });
+            arr.push({
+              playerName: name,
+              market: "batter_total_bases",
+              line: 0,
+              actual: Number(bat.totalBases ?? 0),
+              result: "pending",
+              gameStatus: status as any,
+            });
+            arr.push({
+              playerName: name,
+              market: "batter_rbis",
+              line: 0,
+              actual: Number(bat.rbi ?? 0),
+              result: "pending",
+              gameStatus: status as any,
+            });
+            arr.push({
+              playerName: name,
+              market: "batter_runs_scored",
+              line: 0,
+              actual: Number(bat.runs ?? 0),
+              result: "pending",
+              gameStatus: status as any,
+            });
+            arr.push({
+              playerName: name,
+              market: "pitcher_strikeouts",
+              line: 0,
+              actual: Number(pit.strikeOuts ?? 0),
+              result: "pending",
+              gameStatus: status as any,
+            });
+            arr.push({
+              playerName: name,
+              market: "pitcher_outs",
+              line: 0,
+              actual: Math.round(Number(pit.inningsPitched ?? 0) * 3),
+              result: "pending",
+              gameStatus: status as any,
+            });
           }
         }
       } catch {}

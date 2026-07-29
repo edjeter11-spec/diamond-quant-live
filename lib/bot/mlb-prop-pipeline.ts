@@ -35,11 +35,14 @@ export interface MLBPropToCommit {
 // Falls back to skipping prop if signal is weak.
 interface MLBStatBundle {
   seasonAvg: number;
-  last10Avg: number | null;  // null if not enough data
+  last10Avg: number | null; // null if not enough data
   games: number;
 }
 
-async function fetchPlayerStats(playerName: string, market: string): Promise<{ id: number; bundle: MLBStatBundle } | null> {
+async function fetchPlayerStats(
+  playerName: string,
+  market: string,
+): Promise<{ id: number; bundle: MLBStatBundle } | null> {
   try {
     const search = await fetch(
       `https://statsapi.mlb.com/api/v1/people/search?names=${encodeURIComponent(playerName)}`,
@@ -55,8 +58,14 @@ async function fetchPlayerStats(playerName: string, market: string): Promise<{ i
 
     // Fetch season totals + last 10 game log in parallel
     const [seasonRes, logRes] = await Promise.all([
-      fetch(`https://statsapi.mlb.com/api/v1/people/${id}/stats?stats=season&group=${group}&season=${year}`, { next: { revalidate: 3600 } }),
-      fetch(`https://statsapi.mlb.com/api/v1/people/${id}/stats?stats=gameLog&group=${group}&season=${year}`, { next: { revalidate: 3600 } }),
+      fetch(
+        `https://statsapi.mlb.com/api/v1/people/${id}/stats?stats=season&group=${group}&season=${year}`,
+        { next: { revalidate: 3600 } },
+      ),
+      fetch(
+        `https://statsapi.mlb.com/api/v1/people/${id}/stats?stats=gameLog&group=${group}&season=${year}`,
+        { next: { revalidate: 3600 } },
+      ),
     ]);
     if (!seasonRes.ok) return null;
     const seasonData = await seasonRes.json();
@@ -77,7 +86,9 @@ async function fetchPlayerStats(playerName: string, market: string): Promise<{ i
         // Most recent 10 games
         const recent = splits.slice(-10);
         if (recent.length >= 5) {
-          const vals = recent.map((s: any) => extractGameValue(s.stat, market)).filter((v: number | null) => v !== null) as number[];
+          const vals = recent
+            .map((s: any) => extractGameValue(s.stat, market))
+            .filter((v: number | null) => v !== null) as number[];
           if (vals.length > 0) {
             last10Avg = vals.reduce((a, b) => a + b, 0) / vals.length;
           }
@@ -91,14 +102,24 @@ async function fetchPlayerStats(playerName: string, market: string): Promise<{ i
   }
 }
 
-function extractMarketAvg(stat: any, market: string, games: number): number | null {
+function extractMarketAvg(
+  stat: any,
+  market: string,
+  games: number,
+): number | null {
   switch (market) {
-    case "batter_hits": return Number(stat.hits ?? 0) / games;
-    case "batter_total_bases": return Number(stat.totalBases ?? 0) / games;
-    case "batter_home_runs": return Number(stat.homeRuns ?? 0) / games;
-    case "batter_rbis": return Number(stat.rbi ?? 0) / games;
-    case "batter_runs_scored": return Number(stat.runs ?? 0) / games;
-    case "pitcher_strikeouts": return Number(stat.strikeOuts ?? 0) / games;
+    case "batter_hits":
+      return Number(stat.hits ?? 0) / games;
+    case "batter_total_bases":
+      return Number(stat.totalBases ?? 0) / games;
+    case "batter_home_runs":
+      return Number(stat.homeRuns ?? 0) / games;
+    case "batter_rbis":
+      return Number(stat.rbi ?? 0) / games;
+    case "batter_runs_scored":
+      return Number(stat.runs ?? 0) / games;
+    case "pitcher_strikeouts":
+      return Number(stat.strikeOuts ?? 0) / games;
     case "pitcher_outs": {
       const ipStr = String(stat.inningsPitched ?? "0");
       const [whole, frac] = ipStr.split(".").map(Number);
@@ -112,12 +133,18 @@ function extractMarketAvg(stat: any, market: string, games: number): number | nu
 function extractGameValue(stat: any, market: string): number | null {
   // Per-game values (not avgs)
   switch (market) {
-    case "batter_hits": return Number(stat.hits ?? 0);
-    case "batter_total_bases": return Number(stat.totalBases ?? 0);
-    case "batter_home_runs": return Number(stat.homeRuns ?? 0);
-    case "batter_rbis": return Number(stat.rbi ?? 0);
-    case "batter_runs_scored": return Number(stat.runs ?? 0);
-    case "pitcher_strikeouts": return Number(stat.strikeOuts ?? 0);
+    case "batter_hits":
+      return Number(stat.hits ?? 0);
+    case "batter_total_bases":
+      return Number(stat.totalBases ?? 0);
+    case "batter_home_runs":
+      return Number(stat.homeRuns ?? 0);
+    case "batter_rbis":
+      return Number(stat.rbi ?? 0);
+    case "batter_runs_scored":
+      return Number(stat.runs ?? 0);
+    case "pitcher_strikeouts":
+      return Number(stat.strikeOuts ?? 0);
     case "pitcher_outs": {
       const ipStr = String(stat.inningsPitched ?? "0");
       const [whole, frac] = ipStr.split(".").map(Number);
@@ -143,9 +170,8 @@ export async function projectMLBProp(prop: MLBPropToCommit): Promise<{
 
   // Blend: 60% recent form (if available), 40% season — recent form is more
   // predictive for streaky stats like HRs and Ks
-  const blendedAvg = last10Avg !== null
-    ? last10Avg * 0.6 + seasonAvg * 0.4
-    : seasonAvg;
+  const blendedAvg =
+    last10Avg !== null ? last10Avg * 0.6 + seasonAvg * 0.4 : seasonAvg;
 
   // Edge calculation
   const delta = (blendedAvg - prop.line) / Math.max(prop.line, 0.5);
@@ -156,7 +182,8 @@ export async function projectMLBProp(prop: MLBPropToCommit): Promise<{
   // Confidence boost when recent form aligns with season trend
   const trendsAlign =
     last10Avg !== null &&
-    ((last10Avg > seasonAvg && delta > 0) || (last10Avg < seasonAvg && delta < 0));
+    ((last10Avg > seasonAvg && delta > 0) ||
+      (last10Avg < seasonAvg && delta < 0));
   const confidenceBoost = trendsAlign ? 0.05 : 0;
 
   const side: "over" | "under" = delta > 0 ? "over" : "under";
@@ -164,7 +191,8 @@ export async function projectMLBProp(prop: MLBPropToCommit): Promise<{
 
   // EV vs odds
   const odds = side === "over" ? prop.bestOverOdds : prop.bestUnderOdds;
-  const impliedProb = odds > 0 ? 100 / (odds + 100) : Math.abs(odds) / (Math.abs(odds) + 100);
+  const impliedProb =
+    odds > 0 ? 100 / (odds + 100) : Math.abs(odds) / (Math.abs(odds) + 100);
   const evEdge = ((prob - impliedProb) / Math.max(impliedProb, 0.01)) * 100;
 
   // Skip negative-EV picks (we'd be betting at worse than the implied probability)
@@ -195,19 +223,31 @@ export async function commitMLBPropProjections(
     .select("player_name, prop_type")
     .eq("game_date", gameDate)
     .eq("sport", "mlb");
-  const seen = new Set((existing ?? []).map((r: any) => `${r.player_name}::${r.prop_type}`));
+  const seen = new Set(
+    (existing ?? []).map((r: any) => `${r.player_name}::${r.prop_type}`),
+  );
 
   const rows: any[] = [];
   let skipped = 0;
   // Limit how many we project per run — MLB stats API calls are 1/player
   for (const prop of props.slice(0, 60)) {
     const key = `${prop.playerName}::${prop.market}`;
-    if (seen.has(key)) { skipped++; continue; }
+    if (seen.has(key)) {
+      skipped++;
+      continue;
+    }
     const proj = await projectMLBProp(prop);
-    if (!proj) { skipped++; continue; }
-    const factors: any[] = [{ name: "seasonAverage", value: proj.seasonAvg, line: prop.line }];
-    if (proj.last10Avg !== null) factors.push({ name: "last10Avg", value: proj.last10Avg });
-    if (proj.blendedAvg !== proj.seasonAvg) factors.push({ name: "blendedAvg", value: proj.blendedAvg });
+    if (!proj) {
+      skipped++;
+      continue;
+    }
+    const factors: any[] = [
+      { name: "seasonAverage", value: proj.seasonAvg, line: prop.line },
+    ];
+    if (proj.last10Avg !== null)
+      factors.push({ name: "last10Avg", value: proj.last10Avg });
+    if (proj.blendedAvg !== proj.seasonAvg)
+      factors.push({ name: "blendedAvg", value: proj.blendedAvg });
     rows.push({
       sport: "mlb",
       game_id: prop.gameId,
@@ -219,7 +259,8 @@ export async function commitMLBPropProjections(
       line: prop.line,
       predicted_side: proj.predicted_side,
       predicted_prob: proj.predicted_prob,
-      odds_at_pick: proj.predicted_side === "over" ? prop.bestOverOdds : prop.bestUnderOdds,
+      odds_at_pick:
+        proj.predicted_side === "over" ? prop.bestOverOdds : prop.bestUnderOdds,
       ev_edge: proj.ev_edge,
       status: "pending",
       brain_version: "mlb-blended-v2",

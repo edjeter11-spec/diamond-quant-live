@@ -10,7 +10,8 @@ export function Skeleton({
   rounded = "rounded",
 }: {
   className?: string;
-  rounded?: "rounded" | "rounded-md" | "rounded-lg" | "rounded-xl" | "rounded-full";
+  rounded?:
+    "rounded" | "rounded-md" | "rounded-lg" | "rounded-xl" | "rounded-full";
 }) {
   return (
     <div
@@ -40,7 +41,10 @@ export function SkeletonCard({ className = "" }: { className?: string }) {
 /** Single row skeleton (player prop / pick row). */
 export function SkeletonRow() {
   return (
-    <div className="px-3 sm:px-4 py-2.5 flex items-center gap-2 animate-pulse" aria-hidden="true">
+    <div
+      className="px-3 sm:px-4 py-2.5 flex items-center gap-2 animate-pulse"
+      aria-hidden="true"
+    >
       <div className="w-7 h-7 rounded-full bg-slate/20 flex-shrink-0" />
       <div className="flex-1 min-w-0 space-y-1.5">
         <div className="h-3 w-2/3 bg-slate/20 rounded" />

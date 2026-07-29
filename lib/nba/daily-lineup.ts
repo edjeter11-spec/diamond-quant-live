@@ -15,7 +15,8 @@ import { getCached, setCache } from "@/lib/odds/server-cache";
 import { cloudGet, cloudSet } from "@/lib/supabase/client";
 import { searchNBAPlayer } from "@/lib/nba/player-stats";
 
-const ESPN_SUMMARY = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary";
+const ESPN_SUMMARY =
+  "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary";
 const CACHE_TTL = 15 * 60 * 1000; // 15min — lineups don't change once posted
 
 export interface NBALineupStarter {
@@ -26,8 +27,8 @@ export interface NBALineupStarter {
 
 export interface NBAInactiveStar {
   name: string;
-  reason: string;     // "Out" / "DNP-CD" / "ankle" etc
-  impact: number;     // projected points contribution that vanishes (≈ ppg)
+  reason: string; // "Out" / "DNP-CD" / "ankle" etc
+  impact: number; // projected points contribution that vanishes (≈ ppg)
 }
 
 export interface NBALineupReport {
@@ -61,10 +62,14 @@ interface ESPNInjury {
 
 async function fetchSummary(gameId: string): Promise<any | null> {
   try {
-    const res = await fetch(`${ESPN_SUMMARY}?event=${gameId}`, { next: { revalidate: 900 } });
+    const res = await fetch(`${ESPN_SUMMARY}?event=${gameId}`, {
+      next: { revalidate: 900 },
+    });
     if (!res.ok) return null;
     return await res.json();
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
 function todayKey(): string {
@@ -77,7 +82,7 @@ function todayKey(): string {
  */
 export async function getNBALineup(
   gameId: string,
-  teamAbbrev: string
+  teamAbbrev: string,
 ): Promise<NBALineupReport> {
   const memKey = `nba_lineup_${gameId}_${teamAbbrev}`;
   const memCached = getCached(memKey, CACHE_TTL) as NBALineupReport | null;
@@ -86,7 +91,10 @@ export async function getNBALineup(
   // Supabase day-cache (survives serverless cold starts)
   const cloudKey = `nba_lineup_${gameId}_${todayKey()}_${teamAbbrev}`;
   try {
-    const cloud = await cloudGet<{ data: NBALineupReport; ts: number } | null>(cloudKey, null);
+    const cloud = await cloudGet<{ data: NBALineupReport; ts: number } | null>(
+      cloudKey,
+      null,
+    );
     if (cloud && Date.now() - cloud.ts < CACHE_TTL) {
       setCache(memKey, cloud.data);
       return cloud.data;
@@ -94,8 +102,10 @@ export async function getNBALineup(
   } catch {}
 
   const empty: NBALineupReport = {
-    gameId, teamAbbrev,
-    starters: [], inactiveStars: [],
+    gameId,
+    teamAbbrev,
+    starters: [],
+    inactiveStars: [],
     confirmed: false,
     summary: `${teamAbbrev} lineup not yet posted`,
   };
@@ -113,12 +123,13 @@ export async function getNBALineup(
 
   // ── Starters from boxscore ──
   const teamBox = (summary.boxscore?.players ?? []).find(
-    (t: any) => (t.team?.abbreviation ?? "").toUpperCase() === teamAbbrev.toUpperCase()
+    (t: any) =>
+      (t.team?.abbreviation ?? "").toUpperCase() === teamAbbrev.toUpperCase(),
   );
   const athletes: ESPNAthlete[] = teamBox?.statistics?.[0]?.athletes ?? [];
   const starters: NBALineupStarter[] = athletes
-    .filter(a => a.starter && a.athlete?.fullName)
-    .map(a => ({
+    .filter((a) => a.starter && a.athlete?.fullName)
+    .map((a) => ({
       name: a.athlete!.fullName ?? a.athlete!.displayName ?? "",
       playerId: String(a.athlete!.id ?? ""),
       position: a.athlete!.position?.abbreviation ?? "",
@@ -129,7 +140,8 @@ export async function getNBALineup(
 
   // ── Inactive stars: cross-reference ESPN injuries[] + DNPs against player ppg ──
   const teamInjuries = (summary.injuries ?? []).find(
-    (t: any) => (t.team?.abbreviation ?? "").toUpperCase() === teamAbbrev.toUpperCase()
+    (t: any) =>
+      (t.team?.abbreviation ?? "").toUpperCase() === teamAbbrev.toUpperCase(),
   );
   const injEntries: ESPNInjury[] = teamInjuries?.injuries ?? [];
 
@@ -159,25 +171,39 @@ export async function getNBALineup(
     if (!a.didNotPlay || a.starter) continue;
     const name = a.athlete?.fullName ?? a.athlete?.displayName ?? "";
     if (!name) continue;
-    if (inactiveStars.some(s => s.name === name)) continue;
+    if (inactiveStars.some((s) => s.name === name)) continue;
     let ppg = 0;
-    try { const p = await searchNBAPlayer(name); ppg = p?.ppg ?? 0; } catch {}
+    try {
+      const p = await searchNBAPlayer(name);
+      ppg = p?.ppg ?? 0;
+    } catch {}
     if (ppg < 20) continue;
-    inactiveStars.push({ name, reason: a.reason ?? "DNP", impact: Math.round(ppg * 10) / 10 });
+    inactiveStars.push({
+      name,
+      reason: a.reason ?? "DNP",
+      impact: Math.round(ppg * 10) / 10,
+    });
   }
 
   inactiveStars.sort((a, b) => b.impact - a.impact);
 
   const totalImpact = inactiveStars.reduce((s, p) => s + p.impact, 0);
-  const summaryLine = inactiveStars.length === 0
-    ? confirmed
-      ? `${teamAbbrev} confirmed — full strength`
-      : `${teamAbbrev} no star absences flagged`
-    : `${teamAbbrev} missing ${inactiveStars.length} star${inactiveStars.length !== 1 ? "s" : ""} (-${totalImpact.toFixed(1)} ppg): ${inactiveStars.slice(0, 3).map(s => `${s.name.split(" ").pop()} (${s.impact})`).join(", ")}`;
+  const summaryLine =
+    inactiveStars.length === 0
+      ? confirmed
+        ? `${teamAbbrev} confirmed — full strength`
+        : `${teamAbbrev} no star absences flagged`
+      : `${teamAbbrev} missing ${inactiveStars.length} star${inactiveStars.length !== 1 ? "s" : ""} (-${totalImpact.toFixed(1)} ppg): ${inactiveStars
+          .slice(0, 3)
+          .map((s) => `${s.name.split(" ").pop()} (${s.impact})`)
+          .join(", ")}`;
 
   const result: NBALineupReport = {
-    gameId, teamAbbrev,
-    starters, inactiveStars, confirmed,
+    gameId,
+    teamAbbrev,
+    starters,
+    inactiveStars,
+    confirmed,
     summary: summaryLine,
   };
 

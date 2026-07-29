@@ -1,7 +1,15 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { X, Layers, Trash2, Copy, AlertTriangle, Check, Crown } from "lucide-react";
+import {
+  X,
+  Layers,
+  Trash2,
+  Copy,
+  AlertTriangle,
+  Check,
+  Crown,
+} from "lucide-react";
 import { useStore } from "@/lib/store";
 import { useSport } from "@/lib/sport-context";
 import { formatPickLabel } from "@/lib/display";
@@ -11,7 +19,10 @@ import Link from "next/link";
 
 function computeCombinedOdds(legs: { odds: number }[]): number | null {
   if (legs.length === 0) return null;
-  const combined = legs.reduce((acc, leg) => acc * americanToDecimal(leg.odds), 1);
+  const combined = legs.reduce(
+    (acc, leg) => acc * americanToDecimal(leg.odds),
+    1,
+  );
   return decimalToAmerican(combined);
 }
 
@@ -49,7 +60,8 @@ export default function ParlayBuilder() {
     legCount > 0
       ? parlayLegs.reduce((acc, l) => acc * americanToDecimal(l.odds), 1)
       : 1;
-  const payout100 = combined != null ? Math.round((combinedDecimal - 1) * 100) : 0;
+  const payout100 =
+    combined != null ? Math.round((combinedDecimal - 1) * 100) : 0;
 
   // Detect same-game parlay
   const gameCounts: Record<string, number> = {};
@@ -101,10 +113,13 @@ export default function ParlayBuilder() {
         <div className="flex items-center gap-2 px-4 py-3 border-b border-slate/30 bg-bunker/95 backdrop-blur-md flex-shrink-0">
           <Layers className="w-4 h-4 text-neon flex-shrink-0" />
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold text-silver truncate">{labelLine}</p>
+            <p className="text-sm font-bold text-silver truncate">
+              {labelLine}
+            </p>
             {combined != null && legCount >= 2 && (
               <p className="text-[10px] text-mercury/60">
-                Pays ${payout100 + 100} on $100&nbsp;&middot;&nbsp;profit ${payout100}
+                Pays ${payout100 + 100} on $100&nbsp;&middot;&nbsp;profit $
+                {payout100}
               </p>
             )}
           </div>
@@ -128,8 +143,13 @@ export default function ParlayBuilder() {
         {!isPro && legCount >= 2 && (
           <div className="px-4 py-4 bg-gradient-to-br from-gold/10 to-electric/5 border-b border-gold/25 text-center space-y-2">
             <Crown className="w-6 h-6 mx-auto text-gold" />
-            <p className="text-xs text-silver font-semibold">Multi-leg parlays are a Pro feature</p>
-            <p className="text-[10px] text-mercury/70">Free tier: 1-leg slip view. Pro: full parlay builder + combined odds + same-game alerts.</p>
+            <p className="text-xs text-silver font-semibold">
+              Multi-leg parlays are a Pro feature
+            </p>
+            <p className="text-[10px] text-mercury/70">
+              Free tier: 1-leg slip view. Pro: full parlay builder + combined
+              odds + same-game alerts.
+            </p>
             <Link
               href="/pricing"
               onClick={() => setParlayBuilderOpen(false)}
@@ -161,7 +181,9 @@ export default function ParlayBuilder() {
                     <p className="text-xs font-semibold text-silver truncate">
                       {formatPickLabel(leg.pick, currentSport as "mlb" | "nba")}
                     </p>
-                    <p className="text-[10px] text-mercury/60 truncate mt-0.5">{leg.game}</p>
+                    <p className="text-[10px] text-mercury/60 truncate mt-0.5">
+                      {leg.game}
+                    </p>
                     <p className="text-[10px] text-mercury/50">
                       {leg.bookmaker}&nbsp;&middot;&nbsp;
                       {(leg.market ?? "").replace(/_/g, " ")}
@@ -202,7 +224,9 @@ export default function ParlayBuilder() {
             {/* Combined odds */}
             {combined != null && legCount >= 2 && (
               <div className="flex items-center justify-between rounded-lg bg-neon/5 border border-neon/20 px-3 py-2">
-                <span className="text-[11px] text-mercury/70">Combined odds</span>
+                <span className="text-[11px] text-mercury/70">
+                  Combined odds
+                </span>
                 <span className="text-sm font-bold font-mono text-neon">
                   {combined > 0 ? "+" : ""}
                   {combined}

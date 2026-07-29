@@ -7,7 +7,7 @@ import { Flame } from "lucide-react";
 interface StreakData {
   last7Record: { wins: number; losses: number; winRate: number };
   currentStreak: { type: "W" | "L" | null; length: number };
-  last7Profit: number;     // in units
+  last7Profit: number; // in units
 }
 
 // Fetches rolling 7-day stats from /api/results (real bot pick history) and
@@ -19,12 +19,15 @@ export default function StreakBanner() {
   useEffect(() => {
     let cancelled = false;
     fetch("/api/results?days=7")
-      .then(r => r.json())
-      .then(d => {
+      .then((r) => r.json())
+      .then((d) => {
         if (cancelled || !d.ok || d.overall?.total === 0) return;
         const daily = d.daily ?? [];
         // Compute current streak from most recent days
-        let currentStreak: { type: "W" | "L" | null; length: number } = { type: null, length: 0 };
+        let currentStreak: { type: "W" | "L" | null; length: number } = {
+          type: null,
+          length: 0,
+        };
         for (let i = daily.length - 1; i >= 0; i--) {
           const day = daily[i];
           const net = day.wins - day.losses;
@@ -49,12 +52,15 @@ export default function StreakBanner() {
         });
       })
       .catch(() => {});
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Hard gate: only render on a real heater (3+ winning days in a row)
   if (!data) return null;
-  if (data.currentStreak.type !== "W" || data.currentStreak.length < 3) return null;
+  if (data.currentStreak.type !== "W" || data.currentStreak.length < 3)
+    return null;
 
   const { last7Record, currentStreak, last7Profit } = data;
 
@@ -77,18 +83,28 @@ export default function StreakBanner() {
 
         <div className="flex-1 min-w-0">
           <p className="text-sm sm:text-base font-bold text-silver leading-tight">
-            <span className="text-gold">{currentStreak.length} picks in a row hit</span>
-            <span className="text-mercury/60 font-normal"> · the bot is heating up</span>
+            <span className="text-gold">
+              {currentStreak.length} picks in a row hit
+            </span>
+            <span className="text-mercury/60 font-normal">
+              {" "}
+              · the bot is heating up
+            </span>
           </p>
           <p className="text-[11px] sm:text-xs text-mercury mt-0.5 font-mono">
             7-day record:{" "}
-            <span className="text-silver font-bold">{last7Record.wins}W–{last7Record.losses}L</span>
-            <span className="text-mercury/40"> · </span>
-            <span className="text-neon font-bold">
-              {last7Profit >= 0 ? "+" : ""}{last7Profit.toFixed(1)}u
+            <span className="text-silver font-bold">
+              {last7Record.wins}W–{last7Record.losses}L
             </span>
             <span className="text-mercury/40"> · </span>
-            <span className="text-electric">{last7Record.winRate.toFixed(0)}% win rate</span>
+            <span className="text-neon font-bold">
+              {last7Profit >= 0 ? "+" : ""}
+              {last7Profit.toFixed(1)}u
+            </span>
+            <span className="text-mercury/40"> · </span>
+            <span className="text-electric">
+              {last7Record.winRate.toFixed(0)}% win rate
+            </span>
           </p>
         </div>
 

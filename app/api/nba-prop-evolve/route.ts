@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { evolve } from "@/lib/bot/nba-brain-evolution";
-import { loadNbaPropBrainFromCloud, saveNbaPropBrainToCloud } from "@/lib/bot/nba-prop-brain";
+import {
+  loadNbaPropBrainFromCloud,
+  saveNbaPropBrainToCloud,
+} from "@/lib/bot/nba-prop-brain";
 import { fetchAllTrainingData } from "@/lib/bot/nba-stats-fetcher";
 import { cloudGet, cloudSet } from "@/lib/supabase/client";
 import { getUserFromRequest } from "@/lib/supabase/server-auth";
@@ -13,13 +16,24 @@ export async function GET(req: NextRequest) {
   const cronSecret = req.headers.get("x-cron-secret");
   if (cronSecret !== process.env.CRON_SECRET) {
     const user = await getUserFromRequest(req);
-    if (!user) return NextResponse.json({ ok: false, error: "Auth required" }, { status: 401 });
-    if (!user.isAdmin) return NextResponse.json({ ok: false, error: "Admin only" }, { status: 403 });
+    if (!user)
+      return NextResponse.json(
+        { ok: false, error: "Auth required" },
+        { status: 401 },
+      );
+    if (!user.isAdmin)
+      return NextResponse.json(
+        { ok: false, error: "Admin only" },
+        { status: 403 },
+      );
   }
 
   const { searchParams } = new URL(req.url);
   const genRaw = parseInt(searchParams.get("generations") || "2");
-  const generations = Math.min(3, Math.max(1, Number.isFinite(genRaw) ? genRaw : 2));
+  const generations = Math.min(
+    3,
+    Math.max(1, Number.isFinite(genRaw) ? genRaw : 2),
+  );
 
   try {
     // Load current brain weights as starting point
@@ -36,29 +50,43 @@ export async function GET(req: NextRequest) {
     });
 
     // Fetch training data (cached)
-    const allData = await fetchAllTrainingData([2022, 2023, 2024], async (msg) => {
-      await cloudSet("nba_evolution_progress", {
-        status: "running", generation: 0, totalGenerations: generations, message: msg,
-        startedAt: new Date().toISOString(),
-      }).catch(() => {});
-    });
+    const allData = await fetchAllTrainingData(
+      [2022, 2023, 2024],
+      async (msg) => {
+        await cloudSet("nba_evolution_progress", {
+          status: "running",
+          generation: 0,
+          totalGenerations: generations,
+          message: msg,
+          startedAt: new Date().toISOString(),
+        }).catch(() => {});
+      },
+    );
 
     if (allData.length === 0) {
-      return NextResponse.json({ ok: false, error: "No training data available" }, { status: 500 });
+      return NextResponse.json(
+        { ok: false, error: "No training data available" },
+        { status: 500 },
+      );
     }
 
     // Run evolution
-    const evolutionState = await evolve(startingWeights, generations, allData, async (msg) => {
-      const genMatch = msg.match(/GENERATION (\d+)/);
-      const gen = genMatch ? parseInt(genMatch[1]) : 0;
-      await cloudSet("nba_evolution_progress", {
-        status: "running",
-        generation: gen,
-        totalGenerations: generations,
-        message: msg,
-        startedAt: new Date().toISOString(),
-      }).catch(() => {});
-    });
+    const evolutionState = await evolve(
+      startingWeights,
+      generations,
+      allData,
+      async (msg) => {
+        const genMatch = msg.match(/GENERATION (\d+)/);
+        const gen = genMatch ? parseInt(genMatch[1]) : 0;
+        await cloudSet("nba_evolution_progress", {
+          status: "running",
+          generation: gen,
+          totalGenerations: generations,
+          message: msg,
+          startedAt: new Date().toISOString(),
+        }).catch(() => {});
+      },
+    );
 
     // Promote winner: update the live brain with winning weights
     let savedToCloud = false;
@@ -112,13 +140,22 @@ export async function GET(req: NextRequest) {
       brainSaved: savedToCloud,
       saveError,
       history: evolutionState.history,
-      allVariants: evolutionState.variants.map(v => ({
-        id: v.id, name: v.name, generation: v.generation,
-        testWinRate: v.overallTestWinRate, strategy: v.strategy,
+      allVariants: evolutionState.variants.map((v) => ({
+        id: v.id,
+        name: v.name,
+        generation: v.generation,
+        testWinRate: v.overallTestWinRate,
+        strategy: v.strategy,
       })),
     });
   } catch (error: any) {
-    await cloudSet("nba_evolution_progress", { status: "error", error: error.message }).catch(() => {});
-    return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+    await cloudSet("nba_evolution_progress", {
+      status: "error",
+      error: error.message,
+    }).catch(() => {});
+    return NextResponse.json(
+      { ok: false, error: error.message },
+      { status: 500 },
+    );
   }
 }

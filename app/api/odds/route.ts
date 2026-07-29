@@ -1,10 +1,28 @@
 import { NextResponse } from "next/server";
-import { fetchOdds, parseOddsLines, findBestLine } from "@/lib/odds/the-odds-api";
+import {
+  fetchOdds,
+  parseOddsLines,
+  findBestLine,
+} from "@/lib/odds/the-odds-api";
 import { findArbitrage, findEVBets } from "@/lib/odds/arbitrage";
-import { getApiKey, markKeyExhausted, getActiveKeyCount } from "@/lib/odds/api-keys";
-import { getCached, setCache, CACHE_TTL, stampEdge, getEdgeAge, cleanEdges } from "@/lib/odds/server-cache";
+import {
+  getApiKey,
+  markKeyExhausted,
+  getActiveKeyCount,
+} from "@/lib/odds/api-keys";
+import {
+  getCached,
+  setCache,
+  CACHE_TTL,
+  stampEdge,
+  getEdgeAge,
+  cleanEdges,
+} from "@/lib/odds/server-cache";
 import { filterRealArbs, filterRealEV } from "@/lib/odds/sportsbooks";
-import { checkRateLimit, getUserIdFromRequest } from "@/lib/supabase/rate-limit";
+import {
+  checkRateLimit,
+  getUserIdFromRequest,
+} from "@/lib/supabase/rate-limit";
 import { snapshotGameMarkets } from "@/lib/odds/line-movement";
 
 export const revalidate = 60;
@@ -14,7 +32,10 @@ export async function GET(req: Request) {
   const userId = getUserIdFromRequest(req);
   const { allowed } = await checkRateLimit(userId);
   if (!allowed) {
-    return NextResponse.json({ error: "Rate limit exceeded", remaining: 0 }, { status: 429 });
+    return NextResponse.json(
+      { error: "Rate limit exceeded", remaining: 0 },
+      { status: 429 },
+    );
   }
 
   const { searchParams } = new URL(req.url);
@@ -24,7 +45,9 @@ export async function GET(req: Request) {
   const cached = getCached(CACHE_KEY, CACHE_TTL.ODDS);
   if (cached) {
     return NextResponse.json(cached, {
-      headers: { "Cache-Control": "public, s-maxage=30, stale-while-revalidate=300" },
+      headers: {
+        "Cache-Control": "public, s-maxage=30, stale-while-revalidate=300",
+      },
     });
   }
 
@@ -33,7 +56,10 @@ export async function GET(req: Request) {
     // Serve stale snapshot if any so the board never goes blank when keys are out
     const stale = getCached(CACHE_KEY, CACHE_TTL.ODDS * 20);
     if (stale) return NextResponse.json({ ...stale, stale: true });
-    return NextResponse.json({ games: [], message: "Odds feed temporarily unavailable" });
+    return NextResponse.json({
+      games: [],
+      message: "Odds feed temporarily unavailable",
+    });
   }
 
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -59,16 +85,30 @@ export async function GET(req: Request) {
       const games = freshGames.map((game) => {
         const oddsLines = parseOddsLines(game);
         // Fire-and-forget: persist a per-market snapshot for line-movement / steam detection
-        try { snapshotGameMarkets(game.id, oddsLines); } catch {}
+        try {
+          snapshotGameMarkets(game.id, oddsLines);
+        } catch {}
         // Arbitrage + EV computed here — no need for separate /api/arbitrage call
-        const rawArbitrage = findArbitrage(oddsLines, `${game.away_team} @ ${game.home_team}`);
-        const rawEvBets = findEVBets(oddsLines, `${game.away_team} @ ${game.home_team}`);
+        const rawArbitrage = findArbitrage(
+          oddsLines,
+          `${game.away_team} @ ${game.home_team}`,
+        );
+        const rawEvBets = findEVBets(
+          oddsLines,
+          `${game.away_team} @ ${game.home_team}`,
+        );
         // Filter out dead lines and suspicious edges
         const arbitrage = filterRealArbs(rawArbitrage);
         const evBets = filterRealEV(rawEvBets).map((bet: any) => {
           const edgeKey = `${game.id}-${bet.pick}-${bet.bookmaker}`;
           stampEdge(edgeKey);
-          return { ...bet, edgeAge: getEdgeAge(edgeKey), firstSpotted: new Date(Date.now() - getEdgeAge(edgeKey) * 1000).toISOString() };
+          return {
+            ...bet,
+            edgeAge: getEdgeAge(edgeKey),
+            firstSpotted: new Date(
+              Date.now() - getEdgeAge(edgeKey) * 1000,
+            ).toISOString(),
+          };
         });
         cleanEdges();
 
@@ -92,7 +132,9 @@ export async function GET(req: Request) {
       const response = { games, timestamp: new Date().toISOString() };
       setCache(CACHE_KEY, response);
       return NextResponse.json(response, {
-        headers: { "Cache-Control": "public, s-maxage=30, stale-while-revalidate=300" },
+        headers: {
+          "Cache-Control": "public, s-maxage=30, stale-while-revalidate=300",
+        },
       });
     } catch (error: any) {
       console.error(`Odds API error (attempt ${attempt + 1}):`, error.message);
@@ -105,5 +147,8 @@ export async function GET(req: Request) {
   if (stale) return NextResponse.json({ ...stale, stale: true });
 
   // Return 200 with empty array — UI renders empty state cleanly instead of error toast
-  return NextResponse.json({ games: [], message: "Odds feed temporarily unavailable" });
+  return NextResponse.json({
+    games: [],
+    message: "Odds feed temporarily unavailable",
+  });
 }

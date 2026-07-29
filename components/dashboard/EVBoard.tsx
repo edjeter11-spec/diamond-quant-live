@@ -1,11 +1,19 @@
 "use client";
 
 import { useStore } from "@/lib/store";
-import { TrendingUp, Star, DollarSign, Shield, ChevronDown } from "lucide-react";
+import {
+  TrendingUp,
+  Star,
+  DollarSign,
+  Shield,
+  ChevronDown,
+} from "lucide-react";
 import { useState } from "react";
 import type { EVBet } from "@/lib/model/types";
 
-export default function EVBoard({ onPlaceBet }: { onPlaceBet?: (bet: any) => void } = {}) {
+export default function EVBoard({
+  onPlaceBet,
+}: { onPlaceBet?: (bet: any) => void } = {}) {
   const { oddsData, addParlayLeg } = useStore();
   const [showAll, setShowAll] = useState(false);
 
@@ -27,10 +35,14 @@ export default function EVBoard({ onPlaceBet }: { onPlaceBet?: (bet: any) => voi
 
   const confidenceIcon = (conf: string) => {
     switch (conf) {
-      case "HIGH": return <Star className="w-3.5 h-3.5 text-gold fill-gold" />;
-      case "MEDIUM": return <Star className="w-3.5 h-3.5 text-electric" />;
-      case "LOW": return <Star className="w-3.5 h-3.5 text-mercury/50" />;
-      default: return null;
+      case "HIGH":
+        return <Star className="w-3.5 h-3.5 text-gold fill-gold" />;
+      case "MEDIUM":
+        return <Star className="w-3.5 h-3.5 text-electric" />;
+      case "LOW":
+        return <Star className="w-3.5 h-3.5 text-mercury/50" />;
+      default:
+        return null;
     }
   };
 
@@ -50,7 +62,9 @@ export default function EVBoard({ onPlaceBet }: { onPlaceBet?: (bet: any) => voi
       <div className="px-4 py-3 border-b border-slate/50 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <TrendingUp className="w-5 h-5 text-neon" />
-          <h3 className="text-sm font-semibold text-silver uppercase tracking-wide">+EV Board</h3>
+          <h3 className="text-sm font-semibold text-silver uppercase tracking-wide">
+            +EV Board
+          </h3>
           {allEV.length > 0 && (
             <span className="px-1.5 py-0.5 bg-neon/15 text-neon text-[10px] font-bold rounded">
               {allEV.length} edges
@@ -63,7 +77,9 @@ export default function EVBoard({ onPlaceBet }: { onPlaceBet?: (bet: any) => voi
         <div className="p-6 text-center">
           <TrendingUp className="w-6 h-6 text-mercury/30 mx-auto mb-2" />
           <p className="text-sm text-mercury">No +EV opportunities found</p>
-          <p className="text-xs text-mercury/60 mt-1">Model scanning all available lines</p>
+          <p className="text-xs text-mercury/60 mt-1">
+            Model scanning all available lines
+          </p>
         </div>
       ) : (
         <>
@@ -75,9 +91,11 @@ export default function EVBoard({ onPlaceBet }: { onPlaceBet?: (bet: any) => voi
                 className="w-full px-3 sm:px-4 py-2.5 sm:py-3 flex items-center gap-2 sm:gap-3 hover:bg-gunmetal/30 active:bg-gunmetal/40 transition-colors text-left"
               >
                 {/* Rank */}
-                <div className={`w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center text-[9px] sm:text-[10px] font-bold flex-shrink-0 ${
-                  i < 3 ? "bg-gold/15 text-gold" : "bg-gunmetal text-mercury"
-                }`}>
+                <div
+                  className={`w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center text-[9px] sm:text-[10px] font-bold flex-shrink-0 ${
+                    i < 3 ? "bg-gold/15 text-gold" : "bg-gunmetal text-mercury"
+                  }`}
+                >
                   {i + 1}
                 </div>
 
@@ -85,9 +103,13 @@ export default function EVBoard({ onPlaceBet }: { onPlaceBet?: (bet: any) => voi
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1">
                     {confidenceIcon(bet.confidence)}
-                    <p className="text-xs sm:text-sm font-medium text-silver truncate">{bet.pick}</p>
+                    <p className="text-xs sm:text-sm font-medium text-silver truncate">
+                      {bet.pick}
+                    </p>
                   </div>
-                  <p className="text-[10px] sm:text-xs text-mercury/60 truncate">{bet.game} • {bet.bookmaker}</p>
+                  <p className="text-[10px] sm:text-xs text-mercury/60 truncate">
+                    {bet.game} • {bet.bookmaker}
+                  </p>
                 </div>
 
                 {/* Odds & EV */}
@@ -103,7 +125,10 @@ export default function EVBoard({ onPlaceBet }: { onPlaceBet?: (bet: any) => voi
                 {/* Log bet button */}
                 {onPlaceBet && (
                   <button
-                    onClick={(e) => { e.stopPropagation(); onPlaceBet(bet); }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onPlaceBet(bet);
+                    }}
                     className="flex-shrink-0 px-2 py-1 rounded text-[10px] font-semibold bg-neon/10 text-neon border border-neon/20 hover:bg-neon/20 transition-colors hidden sm:block"
                   >
                     Log
@@ -119,7 +144,9 @@ export default function EVBoard({ onPlaceBet }: { onPlaceBet?: (bet: any) => voi
               className="w-full px-4 py-2.5 border-t border-slate/30 flex items-center justify-center gap-1 text-xs text-mercury hover:text-silver transition-colors"
             >
               {showAll ? "Show less" : `Show all ${allEV.length} edges`}
-              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showAll ? "rotate-180" : ""}`} />
+              <ChevronDown
+                className={`w-3.5 h-3.5 transition-transform ${showAll ? "rotate-180" : ""}`}
+              />
             </button>
           )}
         </>

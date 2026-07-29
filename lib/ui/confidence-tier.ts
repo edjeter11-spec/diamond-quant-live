@@ -19,12 +19,15 @@ export interface ConfidenceTier {
   label: "high" | "medium" | "low";
 }
 
-export function getConfidenceTier(value: number | null | undefined): ConfidenceTier {
+export function getConfidenceTier(
+  value: number | null | undefined,
+): ConfidenceTier {
   // Accept either 0-1 or 0-100 — normalize to 0-100.
   // Guard against undefined/null/NaN — without this, `undefined <= 1` is
   // false, leaving pct=undefined and silently returning the "low" tier for
   // legitimate picks that just lacked an explicit number.
-  const numeric = typeof value === "number" && Number.isFinite(value) ? value : null;
+  const numeric =
+    typeof value === "number" && Number.isFinite(value) ? value : null;
   if (numeric == null) {
     return {
       text: "text-mercury",

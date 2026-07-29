@@ -30,25 +30,25 @@ export const NFL_POS_DEFENSE: Record<string, PositionDefense> = {
   DAL: { QB: 50, RB: 52, WR: 50, TE: 50 },
   DEN: { QB: 38, RB: 42, WR: 40, TE: 45 },
   DET: { QB: 50, RB: 48, WR: 52, TE: 55 },
-  GB:  { QB: 42, RB: 45, WR: 45, TE: 50 },
+  GB: { QB: 42, RB: 45, WR: 45, TE: 50 },
   HOU: { QB: 45, RB: 45, WR: 45, TE: 48 },
   IND: { QB: 55, RB: 55, WR: 52, TE: 50 },
   JAX: { QB: 62, RB: 60, WR: 60, TE: 58 },
-  KC:  { QB: 35, RB: 38, WR: 40, TE: 42 },
-  LV:  { QB: 60, RB: 62, WR: 58, TE: 55 },
+  KC: { QB: 35, RB: 38, WR: 40, TE: 42 },
+  LV: { QB: 60, RB: 62, WR: 58, TE: 55 },
   LAC: { QB: 50, RB: 48, WR: 50, TE: 52 },
   LAR: { QB: 52, RB: 50, WR: 50, TE: 48 },
   MIA: { QB: 55, RB: 55, WR: 52, TE: 52 },
   MIN: { QB: 42, RB: 45, WR: 45, TE: 48 },
-  NE:  { QB: 55, RB: 58, WR: 55, TE: 55 },
-  NO:  { QB: 50, RB: 52, WR: 48, TE: 50 },
+  NE: { QB: 55, RB: 58, WR: 55, TE: 55 },
+  NO: { QB: 50, RB: 52, WR: 48, TE: 50 },
   NYG: { QB: 55, RB: 55, WR: 55, TE: 52 },
   NYJ: { QB: 38, RB: 42, WR: 38, TE: 45 },
   PHI: { QB: 38, RB: 40, WR: 42, TE: 45 },
   PIT: { QB: 40, RB: 42, WR: 42, TE: 45 },
-  SF:  { QB: 38, RB: 38, WR: 40, TE: 42 },
+  SF: { QB: 38, RB: 38, WR: 40, TE: 42 },
   SEA: { QB: 50, RB: 50, WR: 50, TE: 50 },
-  TB:  { QB: 48, RB: 45, WR: 50, TE: 50 },
+  TB: { QB: 48, RB: 45, WR: 50, TE: 50 },
   TEN: { QB: 60, RB: 62, WR: 58, TE: 55 },
   WAS: { QB: 58, RB: 58, WR: 60, TE: 58 },
 };
@@ -61,7 +61,10 @@ export function getPositionForMarket(market: string): NFLPosition {
   return "WR";
 }
 
-export function getNFLDefVsPosition(teamAbbrev: string, position: NFLPosition): number {
+export function getNFLDefVsPosition(
+  teamAbbrev: string,
+  position: NFLPosition,
+): number {
   const t = NFL_POS_DEFENSE[teamAbbrev.toUpperCase()];
   if (!t) return 50;
   if (position === "K" || position === "DEF") return 50;

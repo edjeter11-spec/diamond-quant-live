@@ -15,7 +15,8 @@ function initVapid(): boolean {
   if (vapidReady) return true;
   const pub = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
   const priv = process.env.VAPID_PRIVATE_KEY;
-  const subject = process.env.VAPID_SUBJECT ?? "mailto:noreply@diamond-quant.com";
+  const subject =
+    process.env.VAPID_SUBJECT ?? "mailto:noreply@diamond-quant.com";
   if (!pub || !priv) return false;
   webpush.setVapidDetails(subject, pub, priv);
   vapidReady = true;
@@ -30,14 +31,17 @@ export interface PushPayload {
 }
 
 /** Send a push payload to every subscribed device. Removes stale 404/410 subs. */
-export async function sendPushToAll(payload: PushPayload): Promise<{ sent: number; pruned: number; skipped: number }> {
+export async function sendPushToAll(
+  payload: PushPayload,
+): Promise<{ sent: number; pruned: number; skipped: number }> {
   if (!initVapid()) return { sent: 0, pruned: 0, skipped: 1 };
   if (!supabaseAdmin) return { sent: 0, pruned: 0, skipped: 1 };
 
   const { data: subs, error } = await supabaseAdmin
     .from("push_subscriptions")
     .select("id, endpoint, p256dh, auth");
-  if (error || !subs || subs.length === 0) return { sent: 0, pruned: 0, skipped: 0 };
+  if (error || !subs || subs.length === 0)
+    return { sent: 0, pruned: 0, skipped: 0 };
 
   const body = JSON.stringify(payload);
   let sent = 0;
@@ -60,7 +64,10 @@ export async function sendPushToAll(payload: PushPayload): Promise<{ sent: numbe
 
   let pruned = 0;
   if (staleIds.length > 0) {
-    const { error: delErr } = await supabaseAdmin.from("push_subscriptions").delete().in("id", staleIds);
+    const { error: delErr } = await supabaseAdmin
+      .from("push_subscriptions")
+      .delete()
+      .in("id", staleIds);
     if (!delErr) pruned = staleIds.length;
   }
 

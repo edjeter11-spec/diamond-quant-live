@@ -10,16 +10,27 @@ interface Props {
   probability?: number;
 }
 
-export default function BrainPickDetail({ reasoning, projectedValue, probability }: Props) {
-  const visibleFactors = reasoning.factors.filter(f => Math.abs(f.signal) > 0.05);
-  const maxSignal = Math.max(...visibleFactors.map(f => Math.abs(f.signal)), 0.01);
+export default function BrainPickDetail({
+  reasoning,
+  projectedValue,
+  probability,
+}: Props) {
+  const visibleFactors = reasoning.factors.filter(
+    (f) => Math.abs(f.signal) > 0.05,
+  );
+  const maxSignal = Math.max(
+    ...visibleFactors.map((f) => Math.abs(f.signal)),
+    0.01,
+  );
 
   return (
     <div className="rounded-lg bg-gunmetal/30 border border-purple/15 p-3 space-y-2.5">
       {/* Header */}
       <div className="flex items-center gap-2">
         <Brain className="w-3.5 h-3.5 text-purple flex-shrink-0" />
-        <p className={`text-xs font-semibold ${reasoning.side === "over" ? "text-neon" : "text-purple"}`}>
+        <p
+          className={`text-xs font-semibold ${reasoning.side === "over" ? "text-neon" : "text-purple"}`}
+        >
           {reasoning.summary}
         </p>
       </div>
@@ -27,23 +38,31 @@ export default function BrainPickDetail({ reasoning, projectedValue, probability
       {/* Key numbers */}
       <div className="grid grid-cols-3 gap-1.5">
         <div className="text-center p-1.5 rounded bg-bunker/50">
-          <p className="text-sm font-bold font-mono text-silver">{reasoning.seasonAvg.toFixed(1)}</p>
+          <p className="text-sm font-bold font-mono text-silver">
+            {reasoning.seasonAvg.toFixed(1)}
+          </p>
           <p className="text-[9px] text-mercury/60 uppercase">Season Avg</p>
         </div>
         <div className="text-center p-1.5 rounded bg-bunker/50">
-          <p className="text-sm font-bold font-mono text-silver">{reasoning.line}</p>
+          <p className="text-sm font-bold font-mono text-silver">
+            {reasoning.line}
+          </p>
           <p className="text-[9px] text-mercury/60 uppercase">Line</p>
         </div>
         {projectedValue !== undefined ? (
           <div className="text-center p-1.5 rounded bg-bunker/50">
-            <p className={`text-sm font-bold font-mono ${reasoning.side === "over" ? "text-neon" : "text-purple"}`}>
+            <p
+              className={`text-sm font-bold font-mono ${reasoning.side === "over" ? "text-neon" : "text-purple"}`}
+            >
               {projectedValue.toFixed(1)}
             </p>
             <p className="text-[9px] text-mercury/60 uppercase">Projected</p>
           </div>
         ) : probability !== undefined ? (
           <div className="text-center p-1.5 rounded bg-bunker/50">
-            <p className={`text-sm font-bold font-mono ${reasoning.side === "over" ? "text-neon" : "text-purple"}`}>
+            <p
+              className={`text-sm font-bold font-mono ${reasoning.side === "over" ? "text-neon" : "text-purple"}`}
+            >
               {Math.round(probability * 100)}%
             </p>
             <p className="text-[9px] text-mercury/60 uppercase">Prob</p>
@@ -54,8 +73,10 @@ export default function BrainPickDetail({ reasoning, projectedValue, probability
       {/* Factor bars */}
       {visibleFactors.length > 0 && (
         <div className="space-y-1.5">
-          <p className="text-[9px] text-mercury/50 uppercase tracking-wider font-semibold">Factor Breakdown</p>
-          {visibleFactors.map(f => {
+          <p className="text-[9px] text-mercury/50 uppercase tracking-wider font-semibold">
+            Factor Breakdown
+          </p>
+          {visibleFactors.map((f) => {
             const pct = Math.round((Math.abs(f.signal) / maxSignal) * 50);
             const isOver = f.direction === "over";
             const isUnder = f.direction === "under";
@@ -70,10 +91,15 @@ export default function BrainPickDetail({ reasoning, projectedValue, probability
                     ) : (
                       <Minus className="w-3 h-3 text-mercury/40 flex-shrink-0" />
                     )}
-                    <span className="text-[9px] text-mercury/70 truncate">{f.label}</span>
+                    <span className="text-[9px] text-mercury/70 truncate">
+                      {f.label}
+                    </span>
                   </div>
-                  <span className={`text-[9px] font-mono flex-shrink-0 ${isOver ? "text-neon" : isUnder ? "text-purple" : "text-mercury/40"}`}>
-                    {f.signal > 0 ? "+" : ""}{f.signal.toFixed(2)}
+                  <span
+                    className={`text-[9px] font-mono flex-shrink-0 ${isOver ? "text-neon" : isUnder ? "text-purple" : "text-mercury/40"}`}
+                  >
+                    {f.signal > 0 ? "+" : ""}
+                    {f.signal.toFixed(2)}
                   </span>
                 </div>
                 {/* Bar: centered, extends left (under) or right (over) */}
@@ -96,7 +122,9 @@ export default function BrainPickDetail({ reasoning, projectedValue, probability
                     )}
                   </div>
                 </div>
-                <p className="text-[8px] text-mercury/40 leading-tight">{f.explanation}</p>
+                <p className="text-[8px] text-mercury/40 leading-tight">
+                  {f.explanation}
+                </p>
               </div>
             );
           })}

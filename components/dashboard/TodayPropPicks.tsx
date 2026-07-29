@@ -2,7 +2,18 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Users, ArrowUpRight, ArrowDownRight, Flame, ChevronRight, ChevronDown, Brain, Clock, Plus, Check } from "lucide-react";
+import {
+  Users,
+  ArrowUpRight,
+  ArrowDownRight,
+  Flame,
+  ChevronRight,
+  ChevronDown,
+  Brain,
+  Clock,
+  Plus,
+  Check,
+} from "lucide-react";
 import { americanToDecimal } from "@/lib/model/kelly";
 import { useStore } from "@/lib/store";
 import { usePremium } from "@/lib/hooks/usePremium";
@@ -19,15 +30,16 @@ interface RawProp {
   gameTime?: string;
   bestOver?: { price: number; bookmaker: string };
   bestUnder?: { price: number; bookmaker: string };
-  fairOverProb: number;  // 0-100 — market devig
+  fairOverProb: number; // 0-100 — market devig
   fairUnderProb: number; // 0-100 — market devig
   // Brain projection — only set for NBA when the brain has opinion
-  brainOverProb?: number;       // 0-100 from projectProp
-  brainUnderProb?: number;      // 0-100
+  brainOverProb?: number; // 0-100 from projectProp
+  brainUnderProb?: number; // 0-100
   brainSide?: "over" | "under";
-  brainConfidence?: number;     // 0-100
+  brainConfidence?: number; // 0-100
   brainProjectedValue?: number;
-  injuryStatus?: "Out" | "Doubtful" | "Questionable" | "Probable" | "Day-To-Day";
+  injuryStatus?:
+    "Out" | "Doubtful" | "Questionable" | "Probable" | "Day-To-Day";
   // Best-EV alternate line from /api/players (null when main is optimal)
   bestAlt?: {
     line: number;
@@ -50,11 +62,11 @@ interface PropPick {
   market: string;
   odds: number;
   bookmaker: string;
-  fairProb: number;      // 0-100 — used for ranking (brain or market)
-  evPercentage: number;  // edge over implied (always vs market devig)
+  fairProb: number; // 0-100 — used for ranking (brain or market)
+  evPercentage: number; // edge over implied (always vs market devig)
   score: number;
-  label: string;         // "Points", "Hits", etc.
-  usesBrain?: boolean;   // true when probability came from the brain, not devig
+  label: string; // "Points", "Hits", etc.
+  usesBrain?: boolean; // true when probability came from the brain, not devig
   projectedValue?: number; // brain's projected stat (NBA only)
   bestAlt?: RawProp["bestAlt"];
   isSynthesized?: boolean;
@@ -83,7 +95,9 @@ const OVER_ONLY_MARKETS = new Set(["batter_home_runs"]);
 
 function americanImplied(odds: number): number {
   if (!odds) return 0.5;
-  return odds > 0 ? 100 / (odds + 100) : Math.abs(odds) / (Math.abs(odds) + 100);
+  return odds > 0
+    ? 100 / (odds + 100)
+    : Math.abs(odds) / (Math.abs(odds) + 100);
 }
 
 function scoreProp(side: "over" | "under", prop: RawProp): PropPick | null {
@@ -99,7 +113,9 @@ function scoreProp(side: "over" | "under", prop: RawProp): PropPick | null {
   const impliedFallback = americanImplied(best.price) * 100;
   const fair = usesBrain
     ? brainFair!
-    : (marketFair && marketFair > 0 ? marketFair : impliedFallback);
+    : marketFair && marketFair > 0
+      ? marketFair
+      : impliedFallback;
 
   const implied = americanImplied(best.price) * 100;
   // EV always measured against market implied (that's what you actually bet into)
@@ -108,7 +124,7 @@ function scoreProp(side: "over" | "under", prop: RawProp): PropPick | null {
   const boost = side === "over" ? OVER_DISPLAY_BOOST : 0;
   // Slight score bonus when brain is behind the pick — brain picks go higher
   const brainBonus = usesBrain ? 0.5 : 0;
-  const score = (fair - 50) + ev * 0.5 + boost + brainBonus;
+  const score = fair - 50 + ev * 0.5 + boost + brainBonus;
 
   return {
     key: `${prop.market}-${prop.playerName}-${side}`,
@@ -168,15 +184,24 @@ export default function TodayPropPicks({
   // projected prop picks so the board never goes dark.
   const [brainPicks, setBrainPicks] = useState<BrainPickFallback[]>([]);
   useEffect(() => {
-    if (sport !== "nba") { setBrainPicks([]); return; }
-    const hasLive = Object.values(propsData).some((arr) => (arr?.length ?? 0) > 0);
+    if (sport !== "nba") {
+      setBrainPicks([]);
+      return;
+    }
+    const hasLive = Object.values(propsData).some(
+      (arr) => (arr?.length ?? 0) > 0,
+    );
     if (hasLive) return;
     let cancelled = false;
     fetch("/api/prop-picks-today")
       .then((r) => r.json())
-      .then((d) => { if (!cancelled && Array.isArray(d?.picks)) setBrainPicks(d.picks); })
+      .then((d) => {
+        if (!cancelled && Array.isArray(d?.picks)) setBrainPicks(d.picks);
+      })
       .catch(() => {});
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [sport, propsData]);
 
   // Track when prop data was last refreshed — updates whenever a new
@@ -185,9 +210,13 @@ export default function TodayPropPicks({
   const [lastUpdated, setLastUpdated] = useState<number | null>(null);
   const [tick, setTick] = useState(0);
   const [mounted, setMounted] = useState(false);
-  useEffect(() => { setMounted(true); }, []);
   useEffect(() => {
-    const hasData = Object.values(propsData).some((arr) => (arr?.length ?? 0) > 0);
+    setMounted(true);
+  }, []);
+  useEffect(() => {
+    const hasData = Object.values(propsData).some(
+      (arr) => (arr?.length ?? 0) > 0,
+    );
     if (hasData) setLastUpdated(Date.now());
   }, [propsData]);
   useEffect(() => {
@@ -209,34 +238,60 @@ export default function TodayPropPicks({
   // Tip-off label — computed client-side only to avoid SSR/client locale mismatch.
   const [tipoffLabel, setTipoffLabel] = useState<string>("");
   useEffect(() => {
-    const times = Object.values(propsData).flat().map((p: any) => p.gameTime).filter(Boolean).sort() as string[];
-    if (!times[0]) { setTipoffLabel(""); return; }
-    setTipoffLabel(new Date(times[0]).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }));
+    const times = Object.values(propsData)
+      .flat()
+      .map((p: any) => p.gameTime)
+      .filter(Boolean)
+      .sort() as string[];
+    if (!times[0]) {
+      setTipoffLabel("");
+      return;
+    }
+    setTipoffLabel(
+      new Date(times[0]).toLocaleTimeString([], {
+        hour: "numeric",
+        minute: "2-digit",
+      }),
+    );
   }, [propsData]);
 
   // Live grading: fetch box-score actuals and paint picks green/red when
   // their games are live or final. Refreshes every 60s in-game.
-  const [resultsMap, setResultsMap] = useState<Record<string, Array<{ market: string; actual: number; gameStatus: string }>>>({});
+  const [resultsMap, setResultsMap] = useState<
+    Record<
+      string,
+      Array<{ market: string; actual: number; gameStatus: string }>
+    >
+  >({});
   useEffect(() => {
     let cancelled = false;
     const load = () => {
       const sportParam = sport === "nba" ? "basketball_nba" : "baseball_mlb";
       fetch(`/api/prop-results?sport=${sportParam}`)
         .then((r) => r.json())
-        .then((d) => { if (!cancelled && d?.results) setResultsMap(d.results); })
+        .then((d) => {
+          if (!cancelled && d?.results) setResultsMap(d.results);
+        })
         .catch(() => {});
     };
     load();
     const interval = setInterval(load, 60_000);
-    return () => { cancelled = true; clearInterval(interval); };
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
   }, [sport]);
 
   const picks = useMemo<PropPick[]>(() => {
     const build = (prop: RawProp, side: "over" | "under"): PropPick | null => {
       const best = side === "over" ? prop.bestOver : prop.bestUnder;
       if (!best?.price) return null;
-      const marketFair = side === "over" ? (prop.fairOverProb ?? 50) : (prop.fairUnderProb ?? 50);
-      const brainFair = side === "over" ? prop.brainOverProb : prop.brainUnderProb;
+      const marketFair =
+        side === "over"
+          ? (prop.fairOverProb ?? 50)
+          : (prop.fairUnderProb ?? 50);
+      const brainFair =
+        side === "over" ? prop.brainOverProb : prop.brainUnderProb;
       const usesBrain = typeof brainFair === "number" && brainFair > 0;
       const fair = usesBrain ? brainFair! : marketFair;
       const implied = americanImplied(best.price) * 100;
@@ -253,7 +308,7 @@ export default function TodayPropPicks({
         bookmaker: best.bookmaker,
         fairProb: Math.round(fair * 10) / 10,
         evPercentage: Math.round(ev * 10) / 10,
-        score: (fair - 50) + ev * 0.5 + (usesBrain ? 0.5 : 0),
+        score: fair - 50 + ev * 0.5 + (usesBrain ? 0.5 : 0),
         label: MARKET_LABEL[prop.market] ?? prop.market,
         usesBrain,
         projectedValue: prop.brainProjectedValue,
@@ -271,7 +326,8 @@ export default function TodayPropPicks({
     for (const market of Object.keys(propsData)) {
       for (const prop of propsData[market] ?? []) {
         if (!prop.playerName) continue;
-        if (prop.injuryStatus === "Out" || prop.injuryStatus === "Doubtful") continue;
+        if (prop.injuryStatus === "Out" || prop.injuryStatus === "Doubtful")
+          continue;
         if (seenPlayer.has(prop.playerName)) continue;
         seenPlayer.add(prop.playerName);
 
@@ -284,8 +340,12 @@ export default function TodayPropPicks({
         const pickSide = forceOver
           ? "over"
           : tryOver && tryUnder
-            ? tryOver.score >= tryUnder.score - 3 ? "over" : "under"
-            : tryOver ? "over" : "under";
+            ? tryOver.score >= tryUnder.score - 3
+              ? "over"
+              : "under"
+            : tryOver
+              ? "over"
+              : "under";
         const winner = pickSide === "over" ? tryOver : tryUnder;
         if (!winner) continue;
         if (pickSide === "over") overs.push(winner);
@@ -307,21 +367,34 @@ export default function TodayPropPicks({
     const undersTaken = Math.min(MAX_UNDERS, underSlots, unders.length);
     out.push(...unders.slice(0, undersTaken));
     // Backfill remaining from leftover Overs first (start past oversTaken), then Unders
-    if (out.length < TARGET) out.push(...overs.slice(oversTaken, oversTaken + (TARGET - out.length)));
-    if (out.length < TARGET) out.push(...unders.slice(undersTaken, undersTaken + (TARGET - out.length)));
+    if (out.length < TARGET)
+      out.push(...overs.slice(oversTaken, oversTaken + (TARGET - out.length)));
+    if (out.length < TARGET)
+      out.push(
+        ...unders.slice(undersTaken, undersTaken + (TARGET - out.length)),
+      );
     return out.slice(0, TARGET);
   }, [propsData]);
 
   if (loading) {
     return (
-      <div className="glass rounded-xl overflow-hidden" aria-label="Loading player props" role="status">
+      <div
+        className="glass rounded-xl overflow-hidden"
+        aria-label="Loading player props"
+        role="status"
+      >
         <div className="px-3 sm:px-4 py-2.5 border-b border-purple/15 bg-purple/5 flex items-center gap-2">
           <Users className="w-4 h-4 text-purple" />
-          <h2 className="text-xs sm:text-sm font-bold text-silver uppercase tracking-wider">Today&apos;s Player Props</h2>
+          <h2 className="text-xs sm:text-sm font-bold text-silver uppercase tracking-wider">
+            Today&apos;s Player Props
+          </h2>
         </div>
         <div className="divide-y divide-slate/10">
           {[0, 1, 2, 3, 4].map((i) => (
-            <div key={i} className="px-3 sm:px-4 py-3 sm:py-2.5 min-h-[64px] sm:min-h-0 flex items-center gap-3 sm:gap-2.5 animate-pulse">
+            <div
+              key={i}
+              className="px-3 sm:px-4 py-3 sm:py-2.5 min-h-[64px] sm:min-h-0 flex items-center gap-3 sm:gap-2.5 animate-pulse"
+            >
               {/* Match real row sizing: 40px avatar mobile, 28px desktop */}
               <div className="w-10 h-10 sm:w-7 sm:h-7 rounded-full bg-slate/20 flex-shrink-0" />
               <div className="flex-1 min-w-0 space-y-1.5">
@@ -348,8 +421,12 @@ export default function TodayPropPicks({
           <div className="px-3 sm:px-4 py-2.5 border-b border-purple/15 bg-gradient-to-r from-purple/10 to-transparent flex items-center gap-2">
             <Brain className="w-4 h-4 text-purple" />
             <div className="flex-1">
-              <h2 className="text-xs sm:text-sm font-bold text-silver uppercase tracking-wider">Brain&apos;s Player Props</h2>
-              <p className="text-[9px] text-mercury/60 mt-0.5">No live odds yet — showing brain projections for tonight</p>
+              <h2 className="text-xs sm:text-sm font-bold text-silver uppercase tracking-wider">
+                Brain&apos;s Player Props
+              </h2>
+              <p className="text-[9px] text-mercury/60 mt-0.5">
+                No live odds yet — showing brain projections for tonight
+              </p>
             </div>
             <span className="text-[9px] font-mono text-purple bg-purple/10 px-2 py-0.5 rounded border border-purple/25">
               BRAIN
@@ -357,26 +434,48 @@ export default function TodayPropPicks({
           </div>
           <div className="divide-y divide-slate/10">
             {brainPicks.slice(0, 6).map((p, i) => {
-              const tierColor = p.tier === "HIGH" ? "text-neon" : p.tier === "MEDIUM" ? "text-amber" : "text-electric";
+              const tierColor =
+                p.tier === "HIGH"
+                  ? "text-neon"
+                  : p.tier === "MEDIUM"
+                    ? "text-amber"
+                    : "text-electric";
               const sideColor = p.side === "over" ? "text-neon" : "text-danger";
               return (
-                <div key={`${p.playerName}-${p.market}-${i}`} className="px-3 sm:px-4 py-2.5 flex items-center gap-3 hover:bg-gunmetal/20 transition-colors">
-                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${
-                    i === 0 ? "bg-gold/20 text-gold" : "bg-purple/15 text-purple"
-                  }`}>{i + 1}</div>
+                <div
+                  key={`${p.playerName}-${p.market}-${i}`}
+                  className="px-3 sm:px-4 py-2.5 flex items-center gap-3 hover:bg-gunmetal/20 transition-colors"
+                >
+                  <div
+                    className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${
+                      i === 0
+                        ? "bg-gold/20 text-gold"
+                        : "bg-purple/15 text-purple"
+                    }`}
+                  >
+                    {i + 1}
+                  </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-silver truncate">{p.playerName}</p>
+                    <p className="text-sm font-semibold text-silver truncate">
+                      {p.playerName}
+                    </p>
                     <p className="text-[10px] text-mercury/60 truncate">
-                      <span className={sideColor + " font-bold"}>{p.side.toUpperCase()}</span> {p.line} {p.propType}
+                      <span className={sideColor + " font-bold"}>
+                        {p.side.toUpperCase()}
+                      </span>{" "}
+                      {p.line} {p.propType}
                       {p.seasonAvg ? ` · season avg ${p.seasonAvg}` : ""}
                     </p>
                   </div>
                   <div className="flex flex-col items-end flex-shrink-0">
-                    <span className={`text-[10px] font-mono font-bold ${tierColor}`}>
+                    <span
+                      className={`text-[10px] font-mono font-bold ${tierColor}`}
+                    >
                       {p.brainConfidence}% conf
                     </span>
                     <span className="text-[9px] font-mono text-mercury/60">
-                      {p.odds > 0 ? "+" : ""}{p.odds} @ {p.bookmaker || "brain"}
+                      {p.odds > 0 ? "+" : ""}
+                      {p.odds} @ {p.bookmaker || "brain"}
                     </span>
                   </div>
                 </div>
@@ -385,7 +484,8 @@ export default function TodayPropPicks({
           </div>
           <div className="px-3 py-2 text-center bg-gunmetal/20 border-t border-slate/10">
             <p className="text-[9px] text-mercury/50">
-              Books usually post props 4–6 hours before tip-off — live odds appear here when available
+              Books usually post props 4–6 hours before tip-off — live odds
+              appear here when available
             </p>
           </div>
         </div>
@@ -397,18 +497,32 @@ export default function TodayPropPicks({
         <div className="px-3 sm:px-4 py-2.5 border-b border-purple/15 bg-gradient-to-r from-purple/10 to-transparent flex items-center gap-2">
           <Users className="w-4 h-4 text-purple" />
           <div>
-            <h2 className="text-xs sm:text-sm font-bold text-silver uppercase tracking-wider">Today&apos;s Player Props</h2>
-            <p className="text-[9px] text-mercury/60 mt-0.5">Waiting for books to post lines</p>
+            <h2 className="text-xs sm:text-sm font-bold text-silver uppercase tracking-wider">
+              Today&apos;s Player Props
+            </h2>
+            <p className="text-[9px] text-mercury/60 mt-0.5">
+              Waiting for books to post lines
+            </p>
           </div>
         </div>
         <div className="px-4 py-6 text-center">
-          <p className="text-xs text-mercury/60">No {sport.toUpperCase()} player prop lines posted yet</p>
-          <p className="text-[10px] text-mercury/40 mt-1">Books usually post props 4–6 hours before tip-off.</p>
+          <p className="text-xs text-mercury/60">
+            No {sport.toUpperCase()} player prop lines posted yet
+          </p>
+          <p className="text-[10px] text-mercury/40 mt-1">
+            Books usually post props 4–6 hours before tip-off.
+          </p>
           <p className="text-[10px] text-mercury/40 mt-0.5">
-            {tipoffLabel ? `Next tip-off: ${tipoffLabel}` : "Check back closer to game time."}
+            {tipoffLabel
+              ? `Next tip-off: ${tipoffLabel}`
+              : "Check back closer to game time."}
           </p>
           <button
-            onClick={() => { try { window.location.reload(); } catch {} }}
+            onClick={() => {
+              try {
+                window.location.reload();
+              } catch {}
+            }}
             className="mt-3 inline-flex items-center justify-center gap-1 min-h-[36px] px-4 rounded-lg bg-purple/10 border border-purple/25 text-purple text-xs font-semibold hover:bg-purple/20 active:scale-95 transition-all"
           >
             Force refresh
@@ -420,7 +534,7 @@ export default function TodayPropPicks({
 
   const visible = isPremium ? picks : picks.slice(0, 5);
   const lockedCount = picks.length - visible.length;
-  const overCount = picks.filter(p => p.side === "over").length;
+  const overCount = picks.filter((p) => p.side === "over").length;
 
   // Running W/L tally across all visible picks — updates live as games grade.
   const tally = visible.reduce(
@@ -430,7 +544,9 @@ export default function TodayPropPicks({
       if (!row) return acc;
       const isFinal = row.gameStatus === "final";
       const actual = row.actual;
-      const hit = (p.side === "over" && actual > p.line) || (p.side === "under" && actual < p.line);
+      const hit =
+        (p.side === "over" && actual > p.line) ||
+        (p.side === "under" && actual < p.line);
       const push = actual === p.line;
       if (isFinal) {
         if (push) acc.pushes++;
@@ -447,10 +563,19 @@ export default function TodayPropPicks({
 
   return (
     <div className="glass rounded-xl overflow-hidden border border-purple/15">
-      {/* Header */}
-      <button
-        onClick={() => setExpanded(e => !e)}
-        className="w-full px-3 sm:px-4 py-2.5 border-b border-purple/15 bg-gradient-to-r from-purple/10 to-transparent flex items-center gap-2 hover:bg-purple/15 transition-colors text-left"
+      {/* Header — div with button semantics (a real <button> here would nest
+          the InfoTip/Link buttons inside it → invalid HTML + hydration error) */}
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => setExpanded((e) => !e)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            setExpanded((x) => !x);
+          }
+        }}
+        className="w-full px-3 sm:px-4 py-2.5 border-b border-purple/15 bg-gradient-to-r from-purple/10 to-transparent flex items-center gap-2 hover:bg-purple/15 transition-colors text-left cursor-pointer select-none"
       >
         <Users className="w-4 h-4 text-purple" />
         <div className="flex-1">
@@ -459,17 +584,25 @@ export default function TodayPropPicks({
             <InfoTip term="EV" />
           </h2>
           <p className="text-[9px] text-mercury/60 mt-0.5">
-            {picks.length} picks · {overCount} Over{overCount !== 1 ? "s" : ""} · ranked by edge
+            {picks.length} picks · {overCount} Over{overCount !== 1 ? "s" : ""}{" "}
+            · ranked by edge
           </p>
           {hasTally && (
             <div className="flex items-center gap-2 mt-1 text-[10px] font-semibold">
               <span className="text-neon">{tally.wins}W</span>
               <span className="text-danger">{tally.losses}L</span>
-              {tally.pushes > 0 && <span className="text-mercury/70">{tally.pushes}P</span>}
-              {tally.live > 0 && <span className="text-electric animate-pulse">{tally.live} live</span>}
+              {tally.pushes > 0 && (
+                <span className="text-mercury/70">{tally.pushes}P</span>
+              )}
+              {tally.live > 0 && (
+                <span className="text-electric animate-pulse">
+                  {tally.live} live
+                </span>
+              )}
               {tally.wins + tally.losses > 0 && (
                 <span className="text-silver">
-                  {Math.round((tally.wins / (tally.wins + tally.losses)) * 100)}%
+                  {Math.round((tally.wins / (tally.wins + tally.losses)) * 100)}
+                  %
                 </span>
               )}
             </div>
@@ -493,8 +626,10 @@ export default function TodayPropPicks({
             All props <ChevronRight className="w-3 h-3" />
           </Link>
         )}
-        <ChevronDown className={`w-4 h-4 text-mercury/50 transition-transform ${expanded ? "rotate-180" : ""}`} />
-      </button>
+        <ChevronDown
+          className={`w-4 h-4 text-mercury/50 transition-transform ${expanded ? "rotate-180" : ""}`}
+        />
+      </div>
 
       {/* Picks list */}
       {expanded && (
@@ -512,16 +647,23 @@ export default function TodayPropPicks({
               const over = actual > p.line;
               const push = actual === p.line;
               if (push) result = "push";
-              else if ((p.side === "over" && over) || (p.side === "under" && !over)) result = isFinal ? "win" : "live";
+              else if (
+                (p.side === "over" && over) ||
+                (p.side === "under" && !over)
+              )
+                result = isFinal ? "win" : "live";
               else result = isFinal ? "loss" : "live";
             }
 
             // Row tinting based on settled result
             const rowTint =
-              result === "win" ? "bg-neon/5 border-l-2 border-neon/60"
-              : result === "loss" ? "bg-danger/5 border-l-2 border-danger/60"
-              : result === "push" ? "bg-mercury/5 border-l-2 border-mercury/40"
-              : "";
+              result === "win"
+                ? "bg-neon/5 border-l-2 border-neon/60"
+                : result === "loss"
+                  ? "bg-danger/5 border-l-2 border-danger/60"
+                  : result === "push"
+                    ? "bg-mercury/5 border-l-2 border-mercury/40"
+                    : "";
 
             return (
               <div key={p.key}>
@@ -531,55 +673,112 @@ export default function TodayPropPicks({
                 >
                   {/* Player photo — left, 40px mobile, 28px desktop */}
                   <div className="flex-shrink-0">
-                    <span className="sm:hidden"><PlayerAvatar name={p.playerName} playerId={p.playerId} sport={sport} size={40} /></span>
-                    <span className="hidden sm:inline"><PlayerAvatar name={p.playerName} playerId={p.playerId} sport={sport} size={28} /></span>
+                    <span className="sm:hidden">
+                      <PlayerAvatar
+                        name={p.playerName}
+                        playerId={p.playerId}
+                        sport={sport}
+                        size={40}
+                      />
+                    </span>
+                    <span className="hidden sm:inline">
+                      <PlayerAvatar
+                        name={p.playerName}
+                        playerId={p.playerId}
+                        sport={sport}
+                        size={28}
+                      />
+                    </span>
                   </div>
                   {/* Side icon — smaller, secondary on mobile */}
-                  <div className={`hidden sm:flex w-7 h-7 rounded-lg items-center justify-center flex-shrink-0 ${
-                    p.side === "over" ? "bg-neon/10 text-neon" : "bg-amber/10 text-amber"
-                  }`}>
-                    {p.side === "over" ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}
+                  <div
+                    className={`hidden sm:flex w-7 h-7 rounded-lg items-center justify-center flex-shrink-0 ${
+                      p.side === "over"
+                        ? "bg-neon/10 text-neon"
+                        : "bg-amber/10 text-amber"
+                    }`}
+                  >
+                    {p.side === "over" ? (
+                      <ArrowUpRight className="w-4 h-4" />
+                    ) : (
+                      <ArrowDownRight className="w-4 h-4" />
+                    )}
                   </div>
                   <div className="flex-1 min-w-0">
                     {/* Player name — text-sm mobile (was xs), prominent */}
                     <p className="text-sm sm:text-sm font-semibold text-silver leading-tight break-words">
                       {p.playerName}
-                      {result === "win" && <span className="ml-1.5 text-[10px] font-bold text-neon">✓ WIN</span>}
-                      {result === "loss" && <span className="ml-1.5 text-[10px] font-bold text-danger">✗ LOSS</span>}
-                      {result === "push" && <span className="ml-1.5 text-[10px] font-bold text-mercury">= PUSH</span>}
-                      {result === "live" && actual != null && <span className="ml-1.5 text-[10px] font-bold text-electric">LIVE {actual}</span>}
+                      {result === "win" && (
+                        <span className="ml-1.5 text-[10px] font-bold text-neon">
+                          ✓ WIN
+                        </span>
+                      )}
+                      {result === "loss" && (
+                        <span className="ml-1.5 text-[10px] font-bold text-danger">
+                          ✗ LOSS
+                        </span>
+                      )}
+                      {result === "push" && (
+                        <span className="ml-1.5 text-[10px] font-bold text-mercury">
+                          = PUSH
+                        </span>
+                      )}
+                      {result === "live" && actual != null && (
+                        <span className="ml-1.5 text-[10px] font-bold text-electric">
+                          LIVE {actual}
+                        </span>
+                      )}
                     </p>
                     {/* Pick — bold, mobile gets inline side icon for hierarchy */}
-                    <p className={`text-sm sm:text-xs font-bold leading-tight mt-1 sm:mt-0.5 flex items-center gap-1 ${p.side === "over" ? "text-neon" : "text-amber"}`}>
-                      {p.side === "over"
-                        ? <ArrowUpRight className="w-3.5 h-3.5 sm:hidden" />
-                        : <ArrowDownRight className="w-3.5 h-3.5 sm:hidden" />}
+                    <p
+                      className={`text-sm sm:text-xs font-bold leading-tight mt-1 sm:mt-0.5 flex items-center gap-1 ${p.side === "over" ? "text-neon" : "text-amber"}`}
+                    >
+                      {p.side === "over" ? (
+                        <ArrowUpRight className="w-3.5 h-3.5 sm:hidden" />
+                      ) : (
+                        <ArrowDownRight className="w-3.5 h-3.5 sm:hidden" />
+                      )}
                       {p.side === "over" ? "OVER" : "UNDER"} {p.line} {p.label}
                       {actual != null && boxRow?.gameStatus === "final" && (
-                        <span className="ml-1 text-mercury/70 font-normal">(final: {actual})</span>
+                        <span className="ml-1 text-mercury/70 font-normal">
+                          (final: {actual})
+                        </span>
                       )}
                     </p>
                     {/* Mobile: stack book + edge vertically; Desktop: inline wrap */}
                     <div className="flex flex-col sm:flex-row sm:items-center sm:flex-wrap gap-1 sm:gap-1.5 mt-1.5 sm:mt-1">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="text-[11px] sm:text-[10px] text-mercury/70 sm:text-mercury/60">
-                          {p.bookmaker} · {p.fairProb}%{p.usesBrain ? " brain" : " fair"}
-                          {p.projectedValue != null && p.usesBrain && ` · proj ${p.projectedValue}`}
+                          {p.bookmaker} · {p.fairProb}%
+                          {p.usesBrain ? " brain" : " fair"}
+                          {p.projectedValue != null &&
+                            p.usesBrain &&
+                            ` · proj ${p.projectedValue}`}
                         </span>
-                        <span className={`text-[11px] sm:text-[10px] font-semibold ${p.evPercentage > 0 ? "text-neon" : "text-mercury/60"}`}>
+                        <span
+                          className={`text-[11px] sm:text-[10px] font-semibold ${p.evPercentage > 0 ? "text-neon" : "text-mercury/60"}`}
+                        >
                           +{p.evPercentage}% edge
                         </span>
                       </div>
                       <div className="flex items-center gap-1 flex-wrap">
-                        {p.gameTime && (() => {
-                          const gameDay = new Date(p.gameTime).toLocaleDateString("en-US", { timeZone: "America/New_York" });
-                          const today = new Date().toLocaleDateString("en-US", { timeZone: "America/New_York" });
-                          return gameDay !== today ? (
-                            <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-amber/15 border border-amber/30 text-amber text-[9px] font-bold">
-                              TOMORROW
-                            </span>
-                          ) : null;
-                        })()}
+                        {p.gameTime &&
+                          (() => {
+                            const gameDay = new Date(
+                              p.gameTime,
+                            ).toLocaleDateString("en-US", {
+                              timeZone: "America/New_York",
+                            });
+                            const today = new Date().toLocaleDateString(
+                              "en-US",
+                              { timeZone: "America/New_York" },
+                            );
+                            return gameDay !== today ? (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-amber/15 border border-amber/30 text-amber text-[9px] font-bold">
+                                TOMORROW
+                              </span>
+                            ) : null;
+                          })()}
                         {p.usesBrain && (
                           <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-purple/15 border border-purple/30 text-purple text-[9px] sm:text-[8px] font-bold">
                             <Brain className="w-2.5 h-2.5" />
@@ -594,13 +793,16 @@ export default function TodayPropPicks({
                             PROJECTED
                           </span>
                         )}
-                        {p.fairProb >= 60 && <Flame className="w-3 h-3 text-danger" />}
+                        {p.fairProb >= 60 && (
+                          <Flame className="w-3 h-3 text-danger" />
+                        )}
                         {p.bestAlt && p.bestAlt.edgePct >= 3 && (
                           <span
                             className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-amber/15 border border-amber/30 text-amber text-[9px] sm:text-[8px] font-bold"
                             title={`Alt ${p.bestAlt.side} ${p.bestAlt.line} @ ${p.bestAlt.price > 0 ? "+" : ""}${p.bestAlt.price} (${p.bestAlt.bookmaker})`}
                           >
-                            ALT {p.bestAlt.side === "over" ? "O" : "U"}{p.bestAlt.line} +{p.bestAlt.edgePct}%
+                            ALT {p.bestAlt.side === "over" ? "O" : "U"}
+                            {p.bestAlt.line} +{p.bestAlt.edgePct}%
                           </span>
                         )}
                       </div>
@@ -609,12 +811,16 @@ export default function TodayPropPicks({
                   {/* Right rail — odds stacked over Parlay on mobile for 44px+ targets */}
                   <div className="flex flex-col sm:flex-row items-end sm:items-center gap-1.5 sm:gap-2 flex-shrink-0">
                     <span className="text-base sm:text-sm font-mono font-bold text-silver leading-none">
-                      {p.odds > 0 ? "+" : ""}{p.odds}
+                      {p.odds > 0 ? "+" : ""}
+                      {p.odds}
                     </span>
                     {(() => {
                       const pickLabel = `${p.playerName} ${p.side === "over" ? "Over" : "Under"} ${p.line} ${p.label}`;
                       const inParlay = parlayLegs.some(
-                        (l) => l.pick === pickLabel && l.bookmaker === (p.bookmaker ?? "") && l.odds === p.odds,
+                        (l) =>
+                          l.pick === pickLabel &&
+                          l.bookmaker === (p.bookmaker ?? "") &&
+                          l.odds === p.odds,
                       );
                       const showCheck = !!justAdded[p.key];
                       const handleAdd = () => {
@@ -639,9 +845,14 @@ export default function TodayPropPicks({
                         <span
                           role="button"
                           tabIndex={0}
-                          aria-label={inParlay ? "Already in parlay" : "Add to parlay"}
+                          aria-label={
+                            inParlay ? "Already in parlay" : "Add to parlay"
+                          }
                           aria-pressed={inParlay || showCheck}
-                          onClick={(e) => { e.stopPropagation(); handleAdd(); }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleAdd();
+                          }}
                           onKeyDown={(e) => {
                             if (e.key === "Enter" || e.key === " ") {
                               e.preventDefault();
@@ -658,11 +869,17 @@ export default function TodayPropPicks({
                           }`}
                           title={inParlay ? "In parlay" : "Add to parlay"}
                         >
-                          {showCheck || inParlay ? <Check className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                          {showCheck || inParlay ? (
+                            <Check className="w-4 h-4" />
+                          ) : (
+                            <Plus className="w-4 h-4" />
+                          )}
                         </span>
                       );
                     })()}
-                    <ChevronDown className={`w-5 h-5 sm:w-3.5 sm:h-3.5 text-mercury/60 sm:text-mercury/50 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+                    <ChevronDown
+                      className={`w-5 h-5 sm:w-3.5 sm:h-3.5 text-mercury/60 sm:text-mercury/50 transition-transform ${isOpen ? "rotate-180" : ""}`}
+                    />
                   </div>
                 </button>
                 {isOpen && (
@@ -683,10 +900,14 @@ export default function TodayPropPicks({
               className="block px-4 py-3 text-center bg-gradient-to-br from-neon/10 to-electric/5 hover:from-neon/20 transition-colors group"
             >
               <p className="text-xs font-bold text-neon">
-                +{lockedCount} more prop pick{lockedCount !== 1 ? "s" : ""} locked
+                +{lockedCount} more prop pick{lockedCount !== 1 ? "s" : ""}{" "}
+                locked
               </p>
               <p className="text-[10px] text-mercury/70 mt-0.5">
-                Upgrade to Pro · $15/mo · <span className="text-electric group-hover:underline">Start 7-day free trial →</span>
+                Upgrade to Pro · $15/mo ·{" "}
+                <span className="text-electric group-hover:underline">
+                  Start 7-day free trial →
+                </span>
               </p>
             </Link>
           )}

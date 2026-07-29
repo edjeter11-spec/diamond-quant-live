@@ -53,6 +53,7 @@ npx web-push generate-vapid-keys
 ```
 
 Add to Vercel:
+
 ```
 NEXT_PUBLIC_VAPID_PUBLIC_KEY = <public>
 VAPID_PRIVATE_KEY            = <private — KEEP SECRET>
@@ -63,8 +64,8 @@ After that, the existing `/sw.js` service worker can receive pushes.
 Server-side trigger (e.g. in cron): use the `web-push` npm package to send
 to each user's subscription stored in `user_preferences.push_subscription`.
 
-*(Code wiring exists client-side but you'll add a `push_subscriptions`
-column + server push call when you're ready to activate.)*
+_(Code wiring exists client-side but you'll add a `push_subscriptions`
+column + server push call when you're ready to activate.)_
 
 ## 5. Admin user (for training + evolution)
 
@@ -81,6 +82,7 @@ WHERE email = 'you@example.com';
 ## 6. Cron verification
 
 `vercel.json` has a 30-min cron on `/api/cron`. It handles:
+
 - Completed-game logging
 - NBA prop brain settlement
 - Daily smart-picks generation (7-11 UTC window)

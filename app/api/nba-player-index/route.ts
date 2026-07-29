@@ -13,7 +13,7 @@ export async function GET() {
     // searchNBAPlayer internally calls loadPlayerIndex() which caches globally.
     // We need to access the full list. Use a separate loader.
     const raw: any[] = await loadAllNbaPlayers();
-    const slim = raw.map(p => ({
+    const slim = raw.map((p) => ({
       id: p.id,
       firstName: p.firstName,
       lastName: p.lastName,
@@ -30,7 +30,10 @@ async function loadAllNbaPlayers(): Promise<any[]> {
   const NBA_CDN = "https://cdn.nba.com/static/json/staticData/playerIndex.json";
   try {
     const { cloudGet, cloudSet } = await import("@/lib/supabase/client");
-    const cached = await cloudGet<{ players: any[]; date: string }>("nba_player_index_slim", null as any);
+    const cached = await cloudGet<{ players: any[]; date: string }>(
+      "nba_player_index_slim",
+      null as any,
+    );
     if (cached?.players?.length > 0 && cached.date) {
       const age = (Date.now() - new Date(cached.date).getTime()) / 3600000;
       if (age < 24) return cached.players;
@@ -56,7 +59,10 @@ async function loadAllNbaPlayers(): Promise<any[]> {
         teamAbbrev: r[teamAbbrIdx],
       }));
 
-    await cloudSet("nba_player_index_slim", { players, date: new Date().toISOString() });
+    await cloudSet("nba_player_index_slim", {
+      players,
+      date: new Date().toISOString(),
+    });
     return players;
   } catch {
     return [];

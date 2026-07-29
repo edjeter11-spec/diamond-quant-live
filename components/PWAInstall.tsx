@@ -12,7 +12,9 @@ interface BeforeInstallPromptEvent extends Event {
 }
 
 export default function PWAInstall() {
-  const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null);
+  const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(
+    null,
+  );
   const [show, setShow] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
   const [iosBanner, setIosBanner] = useState(false);
@@ -22,7 +24,8 @@ export default function PWAInstall() {
     if (typeof window === "undefined") return;
     if (!("serviceWorker" in navigator)) return;
     // Register after page load to not delay TTI
-    const reg = () => navigator.serviceWorker.register("/sw.js").catch(() => {});
+    const reg = () =>
+      navigator.serviceWorker.register("/sw.js").catch(() => {});
     if (document.readyState === "complete") reg();
     else window.addEventListener("load", reg, { once: true });
   }, []);
@@ -60,7 +63,9 @@ export default function PWAInstall() {
   }, []);
 
   const dismiss = () => {
-    try { localStorage.setItem(DISMISS_KEY, "true"); } catch {}
+    try {
+      localStorage.setItem(DISMISS_KEY, "true");
+    } catch {}
     setShow(false);
     setIosBanner(false);
   };
@@ -70,7 +75,9 @@ export default function PWAInstall() {
     await deferred.prompt();
     const result = await deferred.userChoice;
     if (result.outcome === "accepted") {
-      try { localStorage.setItem(DISMISS_KEY, "installed"); } catch {}
+      try {
+        localStorage.setItem(DISMISS_KEY, "installed");
+      } catch {}
     }
     setShow(false);
     setDeferred(null);
@@ -92,9 +99,15 @@ export default function PWAInstall() {
             <Smartphone className="w-5 h-5 text-neon" />
           </div>
           <div className="flex-1 min-w-0 pr-6">
-            <p className="text-sm font-bold text-silver">Install Diamond Quant</p>
+            <p className="text-sm font-bold text-silver">
+              Install Diamond Quant
+            </p>
             <p className="text-xs text-mercury/70 mt-1 leading-relaxed">
-              Tap <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-gunmetal/60 text-mercury text-[10px] font-mono">⬆ Share</span> then "Add to Home Screen" for instant access.
+              Tap{" "}
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-gunmetal/60 text-mercury text-[10px] font-mono">
+                ⬆ Share
+              </span>{" "}
+              then "Add to Home Screen" for instant access.
             </p>
           </div>
         </div>
@@ -118,8 +131,12 @@ export default function PWAInstall() {
             <Download className="w-5 h-5 text-neon" />
           </div>
           <div className="flex-1 min-w-0 pr-6">
-            <p className="text-sm font-bold text-silver">Install Diamond Quant</p>
-            <p className="text-xs text-mercury/70 mt-1">Faster loads, push alerts, no browser chrome.</p>
+            <p className="text-sm font-bold text-silver">
+              Install Diamond Quant
+            </p>
+            <p className="text-xs text-mercury/70 mt-1">
+              Faster loads, push alerts, no browser chrome.
+            </p>
           </div>
         </div>
         <button

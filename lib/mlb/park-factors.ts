@@ -9,8 +9,8 @@
 // ──────────────────────────────────────────────────────────
 
 export interface ParkFactor {
-  runs: number;    // 1.00 = neutral; 1.05 = 5% more runs than league avg
-  hr: number;      // same for home runs
+  runs: number; // 1.00 = neutral; 1.05 = 5% more runs than league avg
+  hr: number; // same for home runs
   roof: boolean;
   windSensitive: boolean; // parks where wind direction flips the total significantly
 }
@@ -18,44 +18,51 @@ export interface ParkFactor {
 // Source: 2024-25 aggregate park factors (Fangraphs, Statcast)
 export const PARK_FACTORS: Record<string, ParkFactor> = {
   // Elevation + dry air = massive hitter park
-  COL: { runs: 1.15, hr: 1.20, roof: false, windSensitive: false },
+  COL: { runs: 1.15, hr: 1.2, roof: false, windSensitive: false },
   // Pitcher parks
-  SD:  { runs: 0.93, hr: 0.88, roof: false, windSensitive: false },
-  SF:  { runs: 0.92, hr: 0.82, roof: false, windSensitive: true }, // marine air kills HRs
+  SD: { runs: 0.93, hr: 0.88, roof: false, windSensitive: false },
+  SF: { runs: 0.92, hr: 0.82, roof: false, windSensitive: true }, // marine air kills HRs
   OAK: { runs: 0.95, hr: 0.95, roof: false, windSensitive: false },
-  SEA: { runs: 0.95, hr: 0.95, roof: true,  windSensitive: false },
+  SEA: { runs: 0.95, hr: 0.95, roof: true, windSensitive: false },
   NYM: { runs: 0.97, hr: 0.92, roof: false, windSensitive: false },
   DET: { runs: 0.97, hr: 0.95, roof: false, windSensitive: false },
   CLE: { runs: 0.97, hr: 0.96, roof: false, windSensitive: false },
-  LAD: { runs: 0.96, hr: 1.00, roof: false, windSensitive: false },
+  LAD: { runs: 0.96, hr: 1.0, roof: false, windSensitive: false },
   PIT: { runs: 0.96, hr: 0.92, roof: false, windSensitive: false },
-  MIA: { runs: 0.95, hr: 0.93, roof: true,  windSensitive: false },
-  TB:  { runs: 0.97, hr: 0.97, roof: true,  windSensitive: false },
+  MIA: { runs: 0.95, hr: 0.93, roof: true, windSensitive: false },
+  TB: { runs: 0.97, hr: 0.97, roof: true, windSensitive: false },
   // Wind-sensitive parks
   CHC: { runs: 1.02, hr: 1.04, roof: false, windSensitive: true }, // Wrigley: wind swing is enormous
   BOS: { runs: 1.04, hr: 1.02, roof: false, windSensitive: true }, // Green Monster + wind tunnel
   // Hitter parks
   CIN: { runs: 1.06, hr: 1.12, roof: false, windSensitive: false }, // Great American
-  MIL: { runs: 1.02, hr: 1.06, roof: true,  windSensitive: false },
+  MIL: { runs: 1.02, hr: 1.06, roof: true, windSensitive: false },
   PHI: { runs: 1.03, hr: 1.06, roof: false, windSensitive: false },
-  TOR: { runs: 1.02, hr: 1.04, roof: true,  windSensitive: false },
+  TOR: { runs: 1.02, hr: 1.04, roof: true, windSensitive: false },
   BAL: { runs: 1.04, hr: 1.08, roof: false, windSensitive: false },
   NYY: { runs: 1.02, hr: 1.12, roof: false, windSensitive: false }, // short RF porch
   // Neutral-ish
-  HOU: { runs: 1.01, hr: 1.03, roof: true,  windSensitive: false },
-  STL: { runs: 1.00, hr: 0.98, roof: false, windSensitive: false },
-  MIN: { runs: 1.00, hr: 0.97, roof: false, windSensitive: false },
+  HOU: { runs: 1.01, hr: 1.03, roof: true, windSensitive: false },
+  STL: { runs: 1.0, hr: 0.98, roof: false, windSensitive: false },
+  MIN: { runs: 1.0, hr: 0.97, roof: false, windSensitive: false },
   WSH: { runs: 1.01, hr: 1.02, roof: false, windSensitive: false },
-  ARI: { runs: 1.02, hr: 1.04, roof: true,  windSensitive: false },
-  KC:  { runs: 0.98, hr: 0.94, roof: false, windSensitive: false },
-  TEX: { runs: 1.00, hr: 1.00, roof: true,  windSensitive: false },
+  ARI: { runs: 1.02, hr: 1.04, roof: true, windSensitive: false },
+  KC: { runs: 0.98, hr: 0.94, roof: false, windSensitive: false },
+  TEX: { runs: 1.0, hr: 1.0, roof: true, windSensitive: false },
   CWS: { runs: 1.02, hr: 1.04, roof: false, windSensitive: false },
-  LAA: { runs: 1.00, hr: 0.97, roof: false, windSensitive: false },
+  LAA: { runs: 1.0, hr: 0.97, roof: false, windSensitive: false },
   ATL: { runs: 1.01, hr: 1.02, roof: false, windSensitive: false },
 };
 
 export function getParkFactor(abbrev: string): ParkFactor {
-  return PARK_FACTORS[(abbrev || "").toUpperCase()] ?? { runs: 1.00, hr: 1.00, roof: false, windSensitive: false };
+  return (
+    PARK_FACTORS[(abbrev || "").toUpperCase()] ?? {
+      runs: 1.0,
+      hr: 1.0,
+      roof: false,
+      windSensitive: false,
+    }
+  );
 }
 
 /**
@@ -68,7 +75,7 @@ export function applyParkWeatherInteraction(
   pitchingImpact: number,
   windSpeed: number,
   windDirection: string,
-  temp: number
+  temp: number,
 ): { hittingImpact: number; pitchingImpact: number; notes: string[] } {
   const park = getParkFactor(abbrev);
   const notes: string[] = [];
@@ -86,23 +93,31 @@ export function applyParkWeatherInteraction(
   pitch -= runsSignal * 0.4;
 
   // Wind-sensitive × wind blowing out = compounding boost
-  const blowingOut = ["S", "SW", "SE"].includes(windDirection) && windSpeed >= 10;
-  const blowingIn = ["N", "NW", "NE"].includes(windDirection) && windSpeed >= 10;
+  const blowingOut =
+    ["S", "SW", "SE"].includes(windDirection) && windSpeed >= 10;
+  const blowingIn =
+    ["N", "NW", "NE"].includes(windDirection) && windSpeed >= 10;
 
   if (park.windSensitive && blowingOut && hit > 0) {
     // Multiplicative boost: Wrigley with 15mph wind out = totals soar
     hit *= 1.5;
-    notes.push(`Wind-sensitive park × blowing out — amplifying hitting edge +50%`);
+    notes.push(
+      `Wind-sensitive park × blowing out — amplifying hitting edge +50%`,
+    );
   }
   if (park.windSensitive && blowingIn && pitch > 0) {
     pitch *= 1.3;
-    notes.push(`Wind-sensitive park × blowing in — amplifying pitching edge +30%`);
+    notes.push(
+      `Wind-sensitive park × blowing in — amplifying pitching edge +30%`,
+    );
   }
 
   // Coors × hot weather = extreme
   if (abbrev.toUpperCase() === "COL" && temp >= 80) {
     hit *= 1.3;
-    notes.push("Coors Field + heat — ball flies, totals likely +1.5 runs over par");
+    notes.push(
+      "Coors Field + heat — ball flies, totals likely +1.5 runs over par",
+    );
   }
 
   // Petco × cold = extreme pitcher park

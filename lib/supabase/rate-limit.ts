@@ -12,7 +12,9 @@ const GUEST_LIMIT = 100; // guests get fewer calls
 // In-memory cache to avoid hitting Supabase on every request
 const cache: Record<string, { count: number; expires: number }> = {};
 
-export async function checkRateLimit(userId: string | null): Promise<{ allowed: boolean; remaining: number }> {
+export async function checkRateLimit(
+  userId: string | null,
+): Promise<{ allowed: boolean; remaining: number }> {
   const key = userId ?? "guest";
   const limit = userId ? DAILY_LIMIT : GUEST_LIMIT;
   const now = Date.now();
@@ -42,10 +44,14 @@ export async function checkRateLimit(userId: string | null): Promise<{ allowed: 
 
       if (data) {
         cache[key].count = data.api_calls + 1;
-        await supabase.from("rate_limits").update({
-          api_calls: cache[key].count,
-          updated_at: new Date().toISOString(),
-        }).eq("user_id", userId).eq("date", today);
+        await supabase
+          .from("rate_limits")
+          .update({
+            api_calls: cache[key].count,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("user_id", userId)
+          .eq("date", today);
       } else {
         await supabase.from("rate_limits").insert({
           user_id: userId,

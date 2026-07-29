@@ -1,7 +1,15 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Trophy, Crown, TrendingUp, Diamond, ArrowLeft, Flame, Medal } from "lucide-react";
+import {
+  Trophy,
+  Crown,
+  TrendingUp,
+  Diamond,
+  ArrowLeft,
+  Flame,
+  Medal,
+} from "lucide-react";
 import Link from "next/link";
 
 interface LeaderboardStats {
@@ -70,18 +78,22 @@ export default function LeaderboardPage() {
   useEffect(() => {
     setLoading(true);
     fetch(`/api/leaderboard?period=${period}`)
-      .then(r => r.ok ? r.json() : { entries: [] })
-      .then(data => setEntries(data.entries ?? []))
+      .then((r) => (r.ok ? r.json() : { entries: [] }))
+      .then((data) => setEntries(data.entries ?? []))
       .catch(() => setEntries([]))
       .finally(() => setLoading(false));
   }, [period]);
 
   return (
-    <div className="min-h-screen bg-void text-silver">
+    <div className="min-h-screen text-silver">
       <div className="max-w-3xl mx-auto px-4 pt-6 pb-8">
         {/* Header */}
         <div className="flex items-center gap-3 mb-6">
-          <Link href="/" className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg hover:bg-gunmetal/60 transition-colors" aria-label="Back to dashboard">
+          <Link
+            href="/"
+            className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg hover:bg-gunmetal/60 transition-colors"
+            aria-label="Back to dashboard"
+          >
             <ArrowLeft className="w-5 h-5 text-mercury" />
           </Link>
           <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-gold/20 to-danger/20 flex items-center justify-center border border-gold/20">
@@ -89,18 +101,22 @@ export default function LeaderboardPage() {
           </div>
           <div>
             <h1 className="text-xl font-bold text-white">Leaderboard</h1>
-            <p className="text-xs text-mercury font-mono">TOP BETTORS — RANKED BY WIN RATE</p>
+            <p className="text-xs text-mercury font-mono">
+              TOP BETTORS — RANKED BY WIN RATE
+            </p>
           </div>
         </div>
 
         {/* Period Tabs */}
         <div className="flex gap-1 mb-4 bg-bunker rounded-lg p-1 border border-slate/40">
-          {(["all", "month", "week"] as Period[]).map(p => (
+          {(["all", "month", "week"] as Period[]).map((p) => (
             <button
               key={p}
               onClick={() => setPeriod(p)}
               className={`flex-1 py-2 rounded-md text-[11px] font-semibold transition-all ${
-                period === p ? "bg-neon/10 text-neon" : "text-mercury hover:text-white"
+                period === p
+                  ? "bg-neon/10 text-neon"
+                  : "text-mercury hover:text-white"
               }`}
             >
               {PERIOD_LABELS[p]}
@@ -129,7 +145,9 @@ export default function LeaderboardPage() {
         ) : entries.length === 0 ? (
           <div className="text-center py-12 glass rounded-xl border border-slate/30 px-6">
             <Trophy className="w-8 h-8 text-mercury/20 mx-auto" />
-            <p className="text-sm text-silver mt-3 font-semibold">No ranked bettors yet</p>
+            <p className="text-sm text-silver mt-3 font-semibold">
+              No ranked bettors yet
+            </p>
             <p className="text-xs text-mercury/60 mt-1 max-w-xs mx-auto">
               Be the first on the leaderboard — track your picks in the app
             </p>
@@ -152,7 +170,11 @@ export default function LeaderboardPage() {
                 {/* Avatar + Name */}
                 <div className="flex items-center gap-2 min-w-0">
                   {entry.avatar_url ? (
-                    <img src={entry.avatar_url} alt="" className="w-7 h-7 rounded-full flex-shrink-0" />
+                    <img
+                      src={entry.avatar_url}
+                      alt=""
+                      className="w-7 h-7 rounded-full flex-shrink-0"
+                    />
                   ) : (
                     <div className="w-7 h-7 rounded-full bg-neon/10 flex items-center justify-center text-neon text-xs font-bold flex-shrink-0">
                       {(entry.display_name?.[0] || "?").toUpperCase()}
@@ -160,11 +182,19 @@ export default function LeaderboardPage() {
                   )}
                   <div className="min-w-0">
                     <div className="flex items-center gap-1">
-                      <p className="text-xs font-semibold text-white truncate">{entry.display_name}</p>
-                      {i === 0 && <Crown className="w-3 h-3 text-gold flex-shrink-0" />}
-                      {entry.stats.roi > 15 && <Flame className="w-3 h-3 text-danger flex-shrink-0" />}
+                      <p className="text-xs font-semibold text-white truncate">
+                        {entry.display_name}
+                      </p>
+                      {i === 0 && (
+                        <Crown className="w-3 h-3 text-gold flex-shrink-0" />
+                      )}
+                      {entry.stats.roi > 15 && (
+                        <Flame className="w-3 h-3 text-danger flex-shrink-0" />
+                      )}
                     </div>
-                    <p className="text-[9px] text-mercury/50">{entry.stats.totalBets} bets</p>
+                    <p className="text-[9px] text-mercury/50">
+                      {entry.stats.totalBets} bets
+                    </p>
                   </div>
                 </div>
 
@@ -174,19 +204,26 @@ export default function LeaderboardPage() {
                 </span>
 
                 {/* Win% */}
-                <span className={`text-[11px] font-bold font-mono text-right ${entry.stats.winRate >= 55 ? "text-neon" : "text-silver"}`}>
+                <span
+                  className={`text-[11px] font-bold font-mono text-right ${entry.stats.winRate >= 55 ? "text-neon" : "text-silver"}`}
+                >
                   {entry.stats.winRate.toFixed(1)}%
                 </span>
 
                 {/* ROI */}
-                <span className={`text-[11px] font-bold font-mono text-right ${entry.stats.roi >= 0 ? "text-neon" : "text-danger"}`}>
-                  {entry.stats.roi >= 0 ? "+" : ""}{entry.stats.roi.toFixed(1)}%
+                <span
+                  className={`text-[11px] font-bold font-mono text-right ${entry.stats.roi >= 0 ? "text-neon" : "text-danger"}`}
+                >
+                  {entry.stats.roi >= 0 ? "+" : ""}
+                  {entry.stats.roi.toFixed(1)}%
                 </span>
 
                 {/* Best Streak */}
                 <div className="flex items-center gap-0.5 justify-end">
                   <TrendingUp className="w-3 h-3 text-mercury/50" />
-                  <span className="text-[10px] text-mercury font-mono">{entry.stats.bestStreak}</span>
+                  <span className="text-[10px] text-mercury font-mono">
+                    {entry.stats.bestStreak}
+                  </span>
                 </div>
               </div>
             ))}
@@ -198,7 +235,10 @@ export default function LeaderboardPage() {
           <p className="text-[10px] text-mercury/50">
             Rankings update every 30 min • Min 5 settled bets to qualify
           </p>
-          <Link href="/" className="text-[10px] text-electric hover:text-neon transition-colors">
+          <Link
+            href="/"
+            className="text-[10px] text-electric hover:text-neon transition-colors"
+          >
             ← Back to Dashboard
           </Link>
         </div>

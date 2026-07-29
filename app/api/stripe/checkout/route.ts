@@ -4,8 +4,11 @@ import Stripe from "stripe";
 export const dynamic = "force-dynamic";
 
 function getStripe() {
-  if (!process.env.STRIPE_SECRET_KEY) throw new Error("STRIPE_SECRET_KEY not configured");
-  return new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: "2025-03-31.basil" as any });
+  if (!process.env.STRIPE_SECRET_KEY)
+    throw new Error("STRIPE_SECRET_KEY not configured");
+  return new Stripe(process.env.STRIPE_SECRET_KEY, {
+    apiVersion: "2025-03-31.basil" as any,
+  });
 }
 
 export async function POST(req: NextRequest) {

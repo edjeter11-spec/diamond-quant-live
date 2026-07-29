@@ -4,7 +4,12 @@
 // Auto-generates on page load, auto-settles from scores
 // ──────────────────────────────────────────────────────────
 
-import { americanToDecimal, americanToImpliedProb, kellyStake, devig } from "@/lib/model/kelly";
+import {
+  americanToDecimal,
+  americanToImpliedProb,
+  kellyStake,
+  devig,
+} from "@/lib/model/kelly";
 
 export interface BotPick {
   id: string;
@@ -36,18 +41,30 @@ const STARTING_BANKROLL = 5000;
 
 export function loadBotState(): BotState {
   if (typeof window === "undefined") {
-    return { startingBankroll: STARTING_BANKROLL, currentBankroll: STARTING_BANKROLL, picks: [], dailyPnL: {} };
+    return {
+      startingBankroll: STARTING_BANKROLL,
+      currentBankroll: STARTING_BANKROLL,
+      picks: [],
+      dailyPnL: {},
+    };
   }
   try {
     const stored = localStorage.getItem("dq_bot_state");
     if (stored) return JSON.parse(stored);
   } catch {}
-  return { startingBankroll: STARTING_BANKROLL, currentBankroll: STARTING_BANKROLL, picks: [], dailyPnL: {} };
+  return {
+    startingBankroll: STARTING_BANKROLL,
+    currentBankroll: STARTING_BANKROLL,
+    picks: [],
+    dailyPnL: {},
+  };
 }
 
 export function saveBotState(state: BotState) {
   if (typeof window === "undefined") return;
-  try { localStorage.setItem("dq_bot_state", JSON.stringify(state)); } catch {}
+  try {
+    localStorage.setItem("dq_bot_state", JSON.stringify(state));
+  } catch {}
 }
 
 function getToday(): string {
@@ -61,7 +78,10 @@ export function hasTodaysPicks(state: BotState): boolean {
 // ──────────────────────────────────────────────────────────
 // PICK GENERATION — always produces exactly 4 picks
 // ──────────────────────────────────────────────────────────
-export function generateDailyPicks(oddsData: any[], currentBankroll: number): BotPick[] {
+export function generateDailyPicks(
+  oddsData: any[],
+  currentBankroll: number,
+): BotPick[] {
   const today = getToday();
 
   interface Candidate {
@@ -82,10 +102,11 @@ export function generateDailyPicks(oddsData: any[], currentBankroll: number): Bo
     const gameName = `${game.awayTeam} @ ${game.homeTeam}`;
 
     // Find FanDuel line (try multiple name variations)
-    const fdLine = game.oddsLines.find((l: any) =>
-      l.bookmaker === "FanDuel" ||
-      l.bookmakerKey === "fanduel" ||
-      l.bookmaker?.toLowerCase().includes("fanduel")
+    const fdLine = game.oddsLines.find(
+      (l: any) =>
+        l.bookmaker === "FanDuel" ||
+        l.bookmakerKey === "fanduel" ||
+        l.bookmaker?.toLowerCase().includes("fanduel"),
     );
 
     // If no FanDuel, use the first available book as proxy
@@ -123,9 +144,23 @@ export function generateDailyPicks(oddsData: any[], currentBankroll: number): Bo
       const imp = americanToImpliedProb(line.homeML);
       const ev = ((fairHome - imp) / Math.max(imp, 0.01)) * 100;
       candidates.push({
-        game: gameName, pick: `${game.homeTeam} ML`, market: "moneyline",
-        fdOdds: line.homeML, fairProb: fairHome, evEdge: ev,
-        reasoning: buildReasoning(game.homeTeam, "ML", line.homeML, fairHome, imp, ev, bookName, multiBook, allHomeProbs.length),
+        game: gameName,
+        pick: `${game.homeTeam} ML`,
+        market: "moneyline",
+        fdOdds: line.homeML,
+        fairProb: fairHome,
+        evEdge: ev,
+        reasoning: buildReasoning(
+          game.homeTeam,
+          "ML",
+          line.homeML,
+          fairHome,
+          imp,
+          ev,
+          bookName,
+          multiBook,
+          allHomeProbs.length,
+        ),
       });
     }
 
@@ -134,9 +169,23 @@ export function generateDailyPicks(oddsData: any[], currentBankroll: number): Bo
       const imp = americanToImpliedProb(line.awayML);
       const ev = ((fairAway - imp) / Math.max(imp, 0.01)) * 100;
       candidates.push({
-        game: gameName, pick: `${game.awayTeam} ML`, market: "moneyline",
-        fdOdds: line.awayML, fairProb: fairAway, evEdge: ev,
-        reasoning: buildReasoning(game.awayTeam, "ML", line.awayML, fairAway, imp, ev, bookName, multiBook, allAwayProbs.length),
+        game: gameName,
+        pick: `${game.awayTeam} ML`,
+        market: "moneyline",
+        fdOdds: line.awayML,
+        fairProb: fairAway,
+        evEdge: ev,
+        reasoning: buildReasoning(
+          game.awayTeam,
+          "ML",
+          line.awayML,
+          fairAway,
+          imp,
+          ev,
+          bookName,
+          multiBook,
+          allAwayProbs.length,
+        ),
       });
     }
 
@@ -161,18 +210,46 @@ export function generateDailyPicks(oddsData: any[], currentBankroll: number): Bo
       const impOver = americanToImpliedProb(line.overPrice);
       const evOver = ((fairOver - impOver) / Math.max(impOver, 0.01)) * 100;
       candidates.push({
-        game: gameName, pick: `Over ${line.total}`, market: "total",
-        fdOdds: line.overPrice, fairProb: fairOver, evEdge: evOver,
-        reasoning: buildReasoning("Over", `${line.total}`, line.overPrice, fairOver, impOver, evOver, bookName, overProbs.length >= 2, overProbs.length),
+        game: gameName,
+        pick: `Over ${line.total}`,
+        market: "total",
+        fdOdds: line.overPrice,
+        fairProb: fairOver,
+        evEdge: evOver,
+        reasoning: buildReasoning(
+          "Over",
+          `${line.total}`,
+          line.overPrice,
+          fairOver,
+          impOver,
+          evOver,
+          bookName,
+          overProbs.length >= 2,
+          overProbs.length,
+        ),
       });
 
       // Under
       const impUnder = americanToImpliedProb(line.underPrice);
       const evUnder = ((fairUnder - impUnder) / Math.max(impUnder, 0.01)) * 100;
       candidates.push({
-        game: gameName, pick: `Under ${line.total}`, market: "total",
-        fdOdds: line.underPrice, fairProb: fairUnder, evEdge: evUnder,
-        reasoning: buildReasoning("Under", `${line.total}`, line.underPrice, fairUnder, impUnder, evUnder, bookName, overProbs.length >= 2, overProbs.length),
+        game: gameName,
+        pick: `Under ${line.total}`,
+        market: "total",
+        fdOdds: line.underPrice,
+        fairProb: fairUnder,
+        evEdge: evUnder,
+        reasoning: buildReasoning(
+          "Under",
+          `${line.total}`,
+          line.underPrice,
+          fairUnder,
+          impUnder,
+          evUnder,
+          bookName,
+          overProbs.length >= 2,
+          overProbs.length,
+        ),
       });
     }
   }
@@ -215,11 +292,16 @@ export function generateDailyPicks(oddsData: any[], currentBankroll: number): Bo
   return selected.slice(0, 4).map((c, i) => {
     const decimalOdds = americanToDecimal(c.fdOdds);
     const rawKelly = kellyStake(c.fairProb, decimalOdds, currentBankroll, 0.25);
-    const stake = c.evEdge > 0
-      ? Math.max(rawKelly, 25)
-      : 25; // minimum bet on negative EV (forced pick)
+    const stake = c.evEdge > 0 ? Math.max(rawKelly, 25) : 25; // minimum bet on negative EV (forced pick)
 
-    const confidence = c.evEdge > 8 ? "HIGH" : c.evEdge > 3 ? "MEDIUM" : c.evEdge > 0 ? "LOW" : "FADE";
+    const confidence =
+      c.evEdge > 8
+        ? "HIGH"
+        : c.evEdge > 3
+          ? "MEDIUM"
+          : c.evEdge > 0
+            ? "LOW"
+            : "FADE";
 
     return {
       id: `bot-${today}-${i}`,
@@ -248,34 +330,59 @@ function avg(arr: number[]): number {
 // REASONING — fully transparent step-by-step
 // ──────────────────────────────────────────────────────────
 function buildReasoning(
-  team: string, market: string, odds: number, fairProb: number,
-  impliedProb: number, ev: number, bookName: string, multiBook: boolean, bookCount: number
+  team: string,
+  market: string,
+  odds: number,
+  fairProb: number,
+  impliedProb: number,
+  ev: number,
+  bookName: string,
+  multiBook: boolean,
+  bookCount: number,
 ): string[] {
   const r: string[] = [];
   const fmtOdds = (o: number) => (o > 0 ? `+${o}` : `${o}`);
 
-  r.push(`SCAN: ${bookName} has ${team} ${market} at ${fmtOdds(odds)} → implies ${(impliedProb * 100).toFixed(1)}% win probability`);
+  r.push(
+    `SCAN: ${bookName} has ${team} ${market} at ${fmtOdds(odds)} → implies ${(impliedProb * 100).toFixed(1)}% win probability`,
+  );
 
   if (multiBook) {
-    r.push(`CONSENSUS: De-vigged fair probability across ${bookCount} books = ${(fairProb * 100).toFixed(1)}%`);
+    r.push(
+      `CONSENSUS: De-vigged fair probability across ${bookCount} books = ${(fairProb * 100).toFixed(1)}%`,
+    );
   } else {
-    r.push(`FAIR VALUE: De-vigged line gives ${(fairProb * 100).toFixed(1)}% fair probability (single-book estimate)`);
+    r.push(
+      `FAIR VALUE: De-vigged line gives ${(fairProb * 100).toFixed(1)}% fair probability (single-book estimate)`,
+    );
   }
 
   if (ev > 0) {
-    r.push(`EDGE: ${(fairProb * 100).toFixed(1)}% fair − ${(impliedProb * 100).toFixed(1)}% implied = +${ev.toFixed(1)}% EV ✓`);
+    r.push(
+      `EDGE: ${(fairProb * 100).toFixed(1)}% fair − ${(impliedProb * 100).toFixed(1)}% implied = +${ev.toFixed(1)}% EV ✓`,
+    );
   } else {
-    r.push(`EDGE: ${(fairProb * 100).toFixed(1)}% fair − ${(impliedProb * 100).toFixed(1)}% implied = ${ev.toFixed(1)}% EV (slim/no edge, forced pick)`);
+    r.push(
+      `EDGE: ${(fairProb * 100).toFixed(1)}% fair − ${(impliedProb * 100).toFixed(1)}% implied = ${ev.toFixed(1)}% EV (slim/no edge, forced pick)`,
+    );
   }
 
   if (ev > 8) {
-    r.push("VERDICT: Strong edge — oversized quarter-Kelly stake. This is the kind of line the sharp books would move on.");
+    r.push(
+      "VERDICT: Strong edge — oversized quarter-Kelly stake. This is the kind of line the sharp books would move on.",
+    );
   } else if (ev > 3) {
-    r.push("VERDICT: Solid value. Standard quarter-Kelly sizing. Consistent +EV over volume.");
+    r.push(
+      "VERDICT: Solid value. Standard quarter-Kelly sizing. Consistent +EV over volume.",
+    );
   } else if (ev > 0) {
-    r.push("VERDICT: Marginal edge. Minimum stake — grinding small edges adds up over time.");
+    r.push(
+      "VERDICT: Marginal edge. Minimum stake — grinding small edges adds up over time.",
+    );
   } else {
-    r.push("VERDICT: No clear edge but included to fill the 4-pick quota. Minimum $25 stake.");
+    r.push(
+      "VERDICT: No clear edge but included to fill the 4-pick quota. Minimum $25 stake.",
+    );
   }
 
   return r;
@@ -284,15 +391,22 @@ function buildReasoning(
 // ──────────────────────────────────────────────────────────
 // AUTO-SETTLEMENT from live scores
 // ──────────────────────────────────────────────────────────
-export function settlePicksFromScores(state: BotState, scores: any[]): BotState {
+export function settlePicksFromScores(
+  state: BotState,
+  scores: any[],
+): BotState {
   let changed = false;
   const updatedPicks = state.picks.map((pick) => {
     if (pick.result !== "pending") return pick;
 
     const score = scores.find((s: any) => {
       if (s.status !== "final") return false;
-      return pick.game.includes(s.homeTeam) || pick.game.includes(s.awayTeam) ||
-        pick.game.includes(s.homeAbbrev) || pick.game.includes(s.awayAbbrev);
+      return (
+        pick.game.includes(s.homeTeam) ||
+        pick.game.includes(s.awayTeam) ||
+        pick.game.includes(s.homeAbbrev) ||
+        pick.game.includes(s.awayAbbrev)
+      );
     });
 
     if (!score) return pick;
@@ -307,8 +421,12 @@ export function settlePicksFromScores(state: BotState, scores: any[]): BotState 
     let payout = 0;
 
     if (pick.market === "moneyline") {
-      const pickedHome = pick.pick.includes(score.homeTeam) || pick.pick.includes(score.homeAbbrev);
-      const pickedAway = pick.pick.includes(score.awayTeam) || pick.pick.includes(score.awayAbbrev);
+      const pickedHome =
+        pick.pick.includes(score.homeTeam) ||
+        pick.pick.includes(score.homeAbbrev);
+      const pickedAway =
+        pick.pick.includes(score.awayTeam) ||
+        pick.pick.includes(score.awayAbbrev);
       if ((pickedHome && homeWon) || (pickedAway && awayWon)) {
         result = "win";
         payout = pick.stake * americanToDecimal(pick.odds);
@@ -319,21 +437,39 @@ export function settlePicksFromScores(state: BotState, scores: any[]): BotState 
     } else if (pick.market === "total") {
       const line = parseFloat(pick.pick.replace(/[^0-9.]/g, ""));
       const isOver = pick.pick.toLowerCase().includes("over");
-      if (isOver && totalRuns > line) { result = "win"; payout = pick.stake * americanToDecimal(pick.odds); }
-      else if (!isOver && totalRuns < line) { result = "win"; payout = pick.stake * americanToDecimal(pick.odds); }
-      else if (totalRuns === line) { result = "push"; payout = pick.stake; }
+      if (isOver && totalRuns > line) {
+        result = "win";
+        payout = pick.stake * americanToDecimal(pick.odds);
+      } else if (!isOver && totalRuns < line) {
+        result = "win";
+        payout = pick.stake * americanToDecimal(pick.odds);
+      } else if (totalRuns === line) {
+        result = "push";
+        payout = pick.stake;
+      }
     }
 
-    return { ...pick, result, payout: Math.round(payout * 100) / 100, finalScore, settledAt: new Date().toISOString() };
+    return {
+      ...pick,
+      result,
+      payout: Math.round(payout * 100) / 100,
+      finalScore,
+      settledAt: new Date().toISOString(),
+    };
   });
 
   if (!changed) return state;
 
   // Recalculate bankroll
   const totalStaked = updatedPicks.reduce((s, p) => s + p.stake, 0);
-  const totalReturns = updatedPicks.filter((p) => p.result !== "pending").reduce((s, p) => s + p.payout, 0);
-  const pendingStake = updatedPicks.filter((p) => p.result === "pending").reduce((s, p) => s + p.stake, 0);
-  const currentBankroll = STARTING_BANKROLL + totalReturns - totalStaked + pendingStake;
+  const totalReturns = updatedPicks
+    .filter((p) => p.result !== "pending")
+    .reduce((s, p) => s + p.payout, 0);
+  const pendingStake = updatedPicks
+    .filter((p) => p.result === "pending")
+    .reduce((s, p) => s + p.stake, 0);
+  const currentBankroll =
+    STARTING_BANKROLL + totalReturns - totalStaked + pendingStake;
 
   // Daily P&L
   const dailyPnL: Record<string, number> = {};

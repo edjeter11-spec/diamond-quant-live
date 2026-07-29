@@ -6,17 +6,17 @@
 import { aggregateCrew, type RefereeData } from "@/lib/nba/referees";
 
 export interface NBAWeights {
-  netRating: number;     // 30% — Off Rating - Def Rating
-  homeCourt: number;     // 12% — ~60% home win rate in NBA
-  restB2B: number;       // 15% — back-to-backs are huge
-  recentForm: number;    // 15% — last 10 games
-  injuryImpact: number;  // 15% — one star = 20% of team
-  atsTrends: number;     // 8%  — against the spread history
-  paceMismatch: number;  // 5%  — fast vs slow creates variance
+  netRating: number; // 30% — Off Rating - Def Rating
+  homeCourt: number; // 12% — ~60% home win rate in NBA
+  restB2B: number; // 15% — back-to-backs are huge
+  recentForm: number; // 15% — last 10 games
+  injuryImpact: number; // 15% — one star = 20% of team
+  atsTrends: number; // 8%  — against the spread history
+  paceMismatch: number; // 5%  — fast vs slow creates variance
 }
 
 export const DEFAULT_NBA_WEIGHTS: NBAWeights = {
-  netRating: 0.30,
+  netRating: 0.3,
   homeCourt: 0.12,
   restB2B: 0.15,
   recentForm: 0.15,
@@ -40,7 +40,7 @@ export function runNetRatingModel(
   homeTeam: string,
   awayTeam: string,
   oddsLines: any[],
-  refs?: RefereeData[]
+  refs?: RefereeData[],
 ): NBAModelPrediction {
   const factors: string[] = [];
 
@@ -54,12 +54,14 @@ export function runNetRatingModel(
     if (line.homeSpread && line.homeSpread !== 0) {
       // Spread IS the market's net rating estimate
       const spread = line.homeSpread;
-      factors.push(`Market spread: ${spread > 0 ? "+" : ""}${spread} (${spread < 0 ? homeTeam : awayTeam} favored)`);
+      factors.push(
+        `Market spread: ${spread > 0 ? "+" : ""}${spread} (${spread < 0 ? homeTeam : awayTeam} favored)`,
+      );
     }
   }
 
   // Convert to probability (NBA: ~2.5 points per 10% win probability)
-  const prob = Math.min(0.85, Math.max(0.15, 0.50 + homeEdge / 50));
+  const prob = Math.min(0.85, Math.max(0.15, 0.5 + homeEdge / 50));
 
   // Total projection (NBA average is ~224, ref crew shifts it)
   let totalProjection = 224;
@@ -69,7 +71,9 @@ export function runNetRatingModel(
     const refShift = (crew.totalPointsBoost - 225) * 0.5;
     totalProjection += refShift;
     const dir = refShift > 0 ? "+" : "";
-    factors.push(`Officials: ${crew.names.join(", ")} (${dir}${refShift.toFixed(1)} total, ${crew.foulRatePerGame.toFixed(0)} fouls/G avg)`);
+    factors.push(
+      `Officials: ${crew.names.join(", ")} (${dir}${refShift.toFixed(1)} total, ${crew.foulRatePerGame.toFixed(0)} fouls/G avg)`,
+    );
   }
 
   return {
@@ -86,7 +90,7 @@ export function runNetRatingModel(
 
 export function runFormModel(
   homeTeam: string,
-  awayTeam: string
+  awayTeam: string,
 ): NBAModelPrediction {
   const factors: string[] = [];
 
@@ -111,7 +115,7 @@ export function buildNBAConsensus(
   netRating: NBAModelPrediction,
   market: NBAModelPrediction,
   form: NBAModelPrediction,
-  weights: NBAWeights = DEFAULT_NBA_WEIGHTS
+  weights: NBAWeights = DEFAULT_NBA_WEIGHTS,
 ): {
   homeWinProb: number;
   confidence: "HIGH" | "MEDIUM" | "LOW" | "NO_PLAY";
@@ -119,11 +123,17 @@ export function buildNBAConsensus(
   spreadProjection: number;
 } {
   // Weighted blend
-  const prob = netRating.homeWinProb * 0.40 + market.homeWinProb * 0.35 + form.homeWinProb * 0.25;
+  const prob =
+    netRating.homeWinProb * 0.4 +
+    market.homeWinProb * 0.35 +
+    form.homeWinProb * 0.25;
 
   const probs = [netRating.homeWinProb, market.homeWinProb, form.homeWinProb];
-  const allSameSide = probs.every(p => p > 0.5) || probs.every(p => p < 0.5);
-  const spread = Math.sqrt(probs.reduce((s, p) => s + Math.pow(p - prob, 2), 0) / 3);
+  const allSameSide =
+    probs.every((p) => p > 0.5) || probs.every((p) => p < 0.5);
+  const spread = Math.sqrt(
+    probs.reduce((s, p) => s + Math.pow(p - prob, 2), 0) / 3,
+  );
 
   let confidence: "HIGH" | "MEDIUM" | "LOW" | "NO_PLAY";
   if (allSameSide && spread < 0.06) confidence = "HIGH";
@@ -131,7 +141,16 @@ export function buildNBAConsensus(
   else if (!allSameSide) confidence = "NO_PLAY";
   else confidence = "LOW";
 
-  const avgSpread = (netRating.spreadProjection + market.spreadProjection + form.spreadProjection) / 3;
+  const avgSpread =
+    (netRating.spreadProjection +
+      market.spreadProjection +
+      form.spreadProjection) /
+    3;
 
-  return { homeWinProb: prob, confidence, modelsAgree: allSameSide, spreadProjection: avgSpread };
+  return {
+    homeWinProb: prob,
+    confidence,
+    modelsAgree: allSameSide,
+    spreadProjection: avgSpread,
+  };
 }

@@ -19,14 +19,21 @@ export async function GET() {
     );
     if (cached?.players?.length > 0 && cached.date) {
       const age = (Date.now() - new Date(cached.date).getTime()) / 3600000;
-      if (age < 24) return NextResponse.json({ players: cached.players, count: cached.players.length });
+      if (age < 24)
+        return NextResponse.json({
+          players: cached.players,
+          count: cached.players.length,
+        });
     }
 
     // Pull every team's 40-man roster in parallel
-    const teamsRes = await fetch(`${MLB_API}/teams?sportId=1`, { next: { revalidate: 86400 } });
+    const teamsRes = await fetch(`${MLB_API}/teams?sportId=1`, {
+      next: { revalidate: 86400 },
+    });
     if (!teamsRes.ok) throw new Error(`teams api ${teamsRes.status}`);
     const teamsData = await teamsRes.json();
-    const teams: Array<{ id: number; abbreviation: string }> = teamsData.teams ?? [];
+    const teams: Array<{ id: number; abbreviation: string }> =
+      teamsData.teams ?? [];
 
     const rosters = await Promise.all(
       teams.map(async (t) => {
@@ -59,7 +66,10 @@ export async function GET() {
 
     const players = rosters.flat().filter((p) => p.id && p.lastName);
     if (players.length > 0) {
-      await cloudSet("mlb_player_index_slim", { players, date: new Date().toISOString() });
+      await cloudSet("mlb_player_index_slim", {
+        players,
+        date: new Date().toISOString(),
+      });
     }
     return NextResponse.json({ players, count: players.length });
   } catch (e: any) {

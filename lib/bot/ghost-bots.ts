@@ -3,7 +3,12 @@
 // Each uses different logic. Best performer becomes the Live Bot.
 // ──────────────────────────────────────────────────────────
 
-import { americanToDecimal, americanToImpliedProb, kellyStake, devig } from "@/lib/model/kelly";
+import {
+  americanToDecimal,
+  americanToImpliedProb,
+  kellyStake,
+  devig,
+} from "@/lib/model/kelly";
 
 // ── Ghost Bot Strategies ──
 
@@ -11,14 +16,14 @@ export interface GhostStrategy {
   id: string;
   name: string;
   description: string;
-  minEdge: number;          // minimum EV % to bet
+  minEdge: number; // minimum EV % to bet
   maxBetsPerDay: number;
-  kellyFraction: number;    // how aggressive (0.1 = conservative, 0.5 = aggressive)
-  preferMarkets: string[];  // which markets it favors
+  kellyFraction: number; // how aggressive (0.1 = conservative, 0.5 = aggressive)
+  preferMarkets: string[]; // which markets it favors
   weightOverrides: {
-    recentForm: number;     // 0-1, how much to weight recent form vs season
-    homeField: number;      // 0-1, home field advantage weight
-    lineMovement: number;   // 0-1, weight sharp line moves
+    recentForm: number; // 0-1, how much to weight recent form vs season
+    homeField: number; // 0-1, home field advantage weight
+    lineMovement: number; // 0-1, weight sharp line moves
   };
 }
 
@@ -26,7 +31,8 @@ export const GHOST_STRATEGIES: GhostStrategy[] = [
   {
     id: "volume",
     name: "Volume Grinder",
-    description: "Bets any edge >0.5%. High volume, lower accuracy. Grinds small edges across many games.",
+    description:
+      "Bets any edge >0.5%. High volume, lower accuracy. Grinds small edges across many games.",
     minEdge: 0.5,
     maxBetsPerDay: 8,
     kellyFraction: 0.15, // smaller bets
@@ -36,7 +42,8 @@ export const GHOST_STRATEGIES: GhostStrategy[] = [
   {
     id: "balanced",
     name: "Balanced Edge",
-    description: "Standard 2% edge threshold. Balances volume with accuracy. The all-rounder.",
+    description:
+      "Standard 2% edge threshold. Balances volume with accuracy. The all-rounder.",
     minEdge: 2.0,
     maxBetsPerDay: 5,
     kellyFraction: 0.25,
@@ -46,7 +53,8 @@ export const GHOST_STRATEGIES: GhostStrategy[] = [
   {
     id: "sniper",
     name: "Sniper",
-    description: "Only bets 5%+ edges. Low volume but high conviction. Waits for the perfect shot.",
+    description:
+      "Only bets 5%+ edges. Low volume but high conviction. Waits for the perfect shot.",
     minEdge: 5.0,
     maxBetsPerDay: 3,
     kellyFraction: 0.35, // bigger bets when it does bet
@@ -90,7 +98,12 @@ export interface GhostSystemState {
   ghosts: GhostState[];
   liveGhostId: string;
   lastSwapCheck: string;
-  swapHistory: Array<{ date: string; from: string; to: string; reason: string }>;
+  swapHistory: Array<{
+    date: string;
+    from: string;
+    to: string;
+    reason: string;
+  }>;
 }
 
 const STARTING_BANKROLL = 5000;
@@ -106,7 +119,9 @@ export function loadGhostSystem(): GhostSystemState {
 
 export function saveGhostSystem(state: GhostSystemState) {
   if (typeof window === "undefined") return;
-  try { localStorage.setItem("dq_ghost_system", JSON.stringify(state)); } catch {}
+  try {
+    localStorage.setItem("dq_ghost_system", JSON.stringify(state));
+  } catch {}
 }
 
 function createDefaultSystem(): GhostSystemState {
@@ -133,7 +148,7 @@ function createDefaultSystem(): GhostSystemState {
 
 export function generateGhostPicks(
   oddsData: any[],
-  system: GhostSystemState
+  system: GhostSystemState,
 ): GhostSystemState {
   const today = new Date().toISOString().split("T")[0];
   const updatedGhosts = system.ghosts.map((ghost) => {
@@ -143,7 +158,12 @@ export function generateGhostPicks(
     const strategy = GHOST_STRATEGIES.find((s) => s.id === ghost.id);
     if (!strategy) return ghost;
 
-    const picks = generateForStrategy(strategy, oddsData, ghost.bankroll, today);
+    const picks = generateForStrategy(
+      strategy,
+      oddsData,
+      ghost.bankroll,
+      today,
+    );
 
     return {
       ...ghost,
@@ -160,11 +180,15 @@ function generateForStrategy(
   strategy: GhostStrategy,
   oddsData: any[],
   bankroll: number,
-  today: string
+  today: string,
 ): GhostPick[] {
   interface Candidate {
-    game: string; pick: string; market: string;
-    odds: number; fairProb: number; evEdge: number;
+    game: string;
+    pick: string;
+    market: string;
+    odds: number;
+    fairProb: number;
+    evEdge: number;
   }
 
   const candidates: Candidate[] = [];
@@ -189,8 +213,10 @@ function generateForStrategy(
     const fairAway = awayProbs.reduce((a, b) => a + b, 0) / awayProbs.length;
 
     // Apply strategy weight overrides
-    const adjustedHome = fairHome * (1 + strategy.weightOverrides.homeField * 0.02);
-    const adjustedAway = fairAway * (1 - strategy.weightOverrides.homeField * 0.02);
+    const adjustedHome =
+      fairHome * (1 + strategy.weightOverrides.homeField * 0.02);
+    const adjustedAway =
+      fairAway * (1 - strategy.weightOverrides.homeField * 0.02);
 
     // Check each book for edges
     for (const line of game.oddsLines) {
@@ -199,7 +225,14 @@ function generateForStrategy(
         const imp = americanToImpliedProb(line.homeML);
         const ev = ((adjustedHome - imp) / Math.max(imp, 0.01)) * 100;
         if (ev >= strategy.minEdge) {
-          candidates.push({ game: gameName, pick: `${game.homeTeam} ML`, market: "moneyline", odds: line.homeML, fairProb: adjustedHome, evEdge: ev });
+          candidates.push({
+            game: gameName,
+            pick: `${game.homeTeam} ML`,
+            market: "moneyline",
+            odds: line.homeML,
+            fairProb: adjustedHome,
+            evEdge: ev,
+          });
         }
       }
       // Away ML
@@ -207,21 +240,47 @@ function generateForStrategy(
         const imp = americanToImpliedProb(line.awayML);
         const ev = ((adjustedAway - imp) / Math.max(imp, 0.01)) * 100;
         if (ev >= strategy.minEdge) {
-          candidates.push({ game: gameName, pick: `${game.awayTeam} ML`, market: "moneyline", odds: line.awayML, fairProb: adjustedAway, evEdge: ev });
+          candidates.push({
+            game: gameName,
+            pick: `${game.awayTeam} ML`,
+            market: "moneyline",
+            odds: line.awayML,
+            fairProb: adjustedAway,
+            evEdge: ev,
+          });
         }
       }
       // Totals
-      if (line.total > 0 && line.overPrice !== 0 && strategy.preferMarkets.includes("total")) {
+      if (
+        line.total > 0 &&
+        line.overPrice !== 0 &&
+        strategy.preferMarkets.includes("total")
+      ) {
         const { prob1: overProb } = devig(line.overPrice, line.underPrice);
         const impOver = americanToImpliedProb(line.overPrice);
         const evOver = ((overProb - impOver) / Math.max(impOver, 0.01)) * 100;
         if (evOver >= strategy.minEdge) {
-          candidates.push({ game: gameName, pick: `Over ${line.total}`, market: "total", odds: line.overPrice, fairProb: overProb, evEdge: evOver });
+          candidates.push({
+            game: gameName,
+            pick: `Over ${line.total}`,
+            market: "total",
+            odds: line.overPrice,
+            fairProb: overProb,
+            evEdge: evOver,
+          });
         }
         const impUnder = americanToImpliedProb(line.underPrice);
-        const evUnder = (((1 - overProb) - impUnder) / Math.max(impUnder, 0.01)) * 100;
+        const evUnder =
+          ((1 - overProb - impUnder) / Math.max(impUnder, 0.01)) * 100;
         if (evUnder >= strategy.minEdge) {
-          candidates.push({ game: gameName, pick: `Under ${line.total}`, market: "total", odds: line.underPrice, fairProb: 1 - overProb, evEdge: evUnder });
+          candidates.push({
+            game: gameName,
+            pick: `Under ${line.total}`,
+            market: "total",
+            odds: line.underPrice,
+            fairProb: 1 - overProb,
+            evEdge: evUnder,
+          });
         }
       }
     }
@@ -251,25 +310,37 @@ function generateForStrategy(
 
   return selected.map((c, i) => {
     const dec = americanToDecimal(c.odds);
-    const rawStake = kellyStake(c.fairProb, dec, bankroll, strategy.kellyFraction);
+    const rawStake = kellyStake(
+      c.fairProb,
+      dec,
+      bankroll,
+      strategy.kellyFraction,
+    );
     // Cap: min $50, max 5% of bankroll (prevents going broke on a few losses)
     const stake = Math.max(Math.min(rawStake, bankroll * 0.05), 50);
     return {
       id: `ghost-${strategy.id}-${today}-${i}`,
       ghostId: strategy.id,
       date: today,
-      game: c.game, pick: c.pick, market: c.market,
-      odds: c.odds, stake: Math.round(Math.min(stake, bankroll * 0.1) * 100) / 100,
+      game: c.game,
+      pick: c.pick,
+      market: c.market,
+      odds: c.odds,
+      stake: Math.round(Math.min(stake, bankroll * 0.1) * 100) / 100,
       fairProb: Math.round(c.fairProb * 1000) / 10,
       evEdge: Math.round(c.evEdge * 100) / 100,
-      result: "pending" as const, payout: 0,
+      result: "pending" as const,
+      payout: 0,
     };
   });
 }
 
 // ── Auto-Settle Ghost Picks ──
 
-export function settleGhostPicks(system: GhostSystemState, scores: any[]): GhostSystemState {
+export function settleGhostPicks(
+  system: GhostSystemState,
+  scores: any[],
+): GhostSystemState {
   let changed = false;
 
   const updatedGhosts = system.ghosts.map((ghost) => {
@@ -278,8 +349,12 @@ export function settleGhostPicks(system: GhostSystemState, scores: any[]): Ghost
 
       const score = scores.find((s: any) => {
         if (s.status !== "final") return false;
-        return pick.game.includes(s.homeTeam) || pick.game.includes(s.awayTeam) ||
-          pick.game.includes(s.homeAbbrev) || pick.game.includes(s.awayAbbrev);
+        return (
+          pick.game.includes(s.homeTeam) ||
+          pick.game.includes(s.awayTeam) ||
+          pick.game.includes(s.homeAbbrev) ||
+          pick.game.includes(s.awayAbbrev)
+        );
       });
       if (!score) return pick;
 
@@ -292,22 +367,40 @@ export function settleGhostPicks(system: GhostSystemState, scores: any[]): Ghost
       let payout = 0;
 
       if (pick.market === "moneyline") {
-        const pickedHome = pick.pick.includes(score.homeTeam) || pick.pick.includes(score.homeAbbrev);
-        const pickedAway = pick.pick.includes(score.awayTeam) || pick.pick.includes(score.awayAbbrev);
+        const pickedHome =
+          pick.pick.includes(score.homeTeam) ||
+          pick.pick.includes(score.homeAbbrev);
+        const pickedAway =
+          pick.pick.includes(score.awayTeam) ||
+          pick.pick.includes(score.awayAbbrev);
         if ((pickedHome && homeWon) || (pickedAway && awayWon)) {
-          result = "win"; payout = pick.stake * americanToDecimal(pick.odds);
+          result = "win";
+          payout = pick.stake * americanToDecimal(pick.odds);
         } else if (score.homeScore === score.awayScore) {
-          result = "push"; payout = pick.stake;
+          result = "push";
+          payout = pick.stake;
         }
       } else if (pick.market === "total") {
         const line = parseFloat(pick.pick.replace(/[^0-9.]/g, ""));
         const isOver = pick.pick.toLowerCase().includes("over");
-        if (isOver && totalRuns > line) { result = "win"; payout = pick.stake * americanToDecimal(pick.odds); }
-        else if (!isOver && totalRuns < line) { result = "win"; payout = pick.stake * americanToDecimal(pick.odds); }
-        else if (totalRuns === line) { result = "push"; payout = pick.stake; }
+        if (isOver && totalRuns > line) {
+          result = "win";
+          payout = pick.stake * americanToDecimal(pick.odds);
+        } else if (!isOver && totalRuns < line) {
+          result = "win";
+          payout = pick.stake * americanToDecimal(pick.odds);
+        } else if (totalRuns === line) {
+          result = "push";
+          payout = pick.stake;
+        }
       }
 
-      return { ...pick, result, payout: Math.round(payout * 100) / 100, finalScore: `${score.awayAbbrev} ${score.awayScore} - ${score.homeAbbrev} ${score.homeScore}` };
+      return {
+        ...pick,
+        result,
+        payout: Math.round(payout * 100) / 100,
+        finalScore: `${score.awayAbbrev} ${score.awayScore} - ${score.homeAbbrev} ${score.homeScore}`,
+      };
     });
 
     const settled = updatedPicks.filter((p) => p.result !== "pending");
@@ -316,12 +409,15 @@ export function settleGhostPicks(system: GhostSystemState, scores: any[]): Ghost
     const totalStaked = settled.reduce((s, p) => s + p.stake, 0);
     const totalReturns = settled.reduce((s, p) => s + p.payout, 0);
     const profit = totalReturns - totalStaked;
-    const pendingStake = updatedPicks.filter((p) => p.result === "pending").reduce((s, p) => s + p.stake, 0);
+    const pendingStake = updatedPicks
+      .filter((p) => p.result === "pending")
+      .reduce((s, p) => s + p.stake, 0);
 
     return {
       ...ghost,
       picks: updatedPicks,
-      wins, losses,
+      wins,
+      losses,
       profit,
       roi: totalStaked > 0 ? (profit / totalStaked) * 100 : 0,
       bankroll: STARTING_BANKROLL + totalReturns - totalStaked + pendingStake,
@@ -341,10 +437,10 @@ export function checkForSwap(system: GhostSystemState): GhostSystemState {
   if (totalSettled < 10) return system;
 
   // Find the best performing ghost by ROI (minimum 5 bets)
-  const eligible = system.ghosts.filter((g) => (g.wins + g.losses) >= 5);
+  const eligible = system.ghosts.filter((g) => g.wins + g.losses >= 5);
   if (eligible.length === 0) return system;
 
-  const best = eligible.reduce((a, b) => a.roi > b.roi ? a : b);
+  const best = eligible.reduce((a, b) => (a.roi > b.roi ? a : b));
 
   if (best.id !== system.liveGhostId && best.roi > 0) {
     const currentLive = system.ghosts.find((g) => g.id === system.liveGhostId);

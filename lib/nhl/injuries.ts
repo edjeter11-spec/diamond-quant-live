@@ -47,24 +47,37 @@ export async function fetchNHLInjuries(): Promise<NHLInjuryReport[]> {
   }
 }
 
-export async function getNHLTeamInjuries(teamAbbrev: string): Promise<NHLInjuredPlayer[]> {
+export async function getNHLTeamInjuries(
+  teamAbbrev: string,
+): Promise<NHLInjuredPlayer[]> {
   const reports = await fetchNHLInjuries();
-  return reports.find((r) => r.team.toUpperCase() === teamAbbrev.toUpperCase())?.players ?? [];
+  return (
+    reports.find((r) => r.team.toUpperCase() === teamAbbrev.toUpperCase())
+      ?.players ?? []
+  );
 }
 
-export async function isNHLPlayerInjured(playerName: string): Promise<NHLInjuredPlayer | null> {
+export async function isNHLPlayerInjured(
+  playerName: string,
+): Promise<NHLInjuredPlayer | null> {
   const reports = await fetchNHLInjuries();
   const lower = playerName.toLowerCase();
-  for (const t of reports) for (const p of t.players) {
-    if (p.name.toLowerCase() === lower) return p;
-  }
+  for (const t of reports)
+    for (const p of t.players) {
+      if (p.name.toLowerCase() === lower) return p;
+    }
   return null;
 }
 
-export function nhlInjuryImpact(status: string): { skipProjection: boolean; multiplier: number } {
+export function nhlInjuryImpact(status: string): {
+  skipProjection: boolean;
+  multiplier: number;
+} {
   const s = status.toLowerCase();
-  if (s.includes("out") || s.includes("ltir") || s.includes("ir")) return { skipProjection: true, multiplier: 0 };
+  if (s.includes("out") || s.includes("ltir") || s.includes("ir"))
+    return { skipProjection: true, multiplier: 0 };
   if (s.includes("doubtful")) return { skipProjection: true, multiplier: 0.4 };
-  if (s.includes("day-to-day") || s.includes("questionable")) return { skipProjection: false, multiplier: 0.85 };
+  if (s.includes("day-to-day") || s.includes("questionable"))
+    return { skipProjection: false, multiplier: 0.85 };
   return { skipProjection: false, multiplier: 1 };
 }

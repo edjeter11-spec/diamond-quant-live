@@ -11,7 +11,7 @@ const MLB_API = "https://statsapi.mlb.com/api/v1";
 // Fetch and build TeamStats for a game's teams
 export async function buildTeamStats(
   teamName: string,
-  teamId?: number
+  teamId?: number,
 ): Promise<TeamStats> {
   // Default stats if API fails
   const defaults: TeamStats = {
@@ -38,15 +38,21 @@ export async function buildTeamStats(
     const stats = data.stats ?? [];
 
     // Parse hitting stats
-    const hittingGroup = stats.find((s: any) => s.group?.displayName === "hitting");
+    const hittingGroup = stats.find(
+      (s: any) => s.group?.displayName === "hitting",
+    );
     const hittingSplit = hittingGroup?.splits?.[0]?.stat;
 
     // Parse pitching stats
-    const pitchingGroup = stats.find((s: any) => s.group?.displayName === "pitching");
+    const pitchingGroup = stats.find(
+      (s: any) => s.group?.displayName === "pitching",
+    );
     const pitchingSplit = pitchingGroup?.splits?.[0]?.stat;
 
     // Parse fielding stats
-    const fieldingGroup = stats.find((s: any) => s.group?.displayName === "fielding");
+    const fieldingGroup = stats.find(
+      (s: any) => s.group?.displayName === "fielding",
+    );
     const fieldingSplit = fieldingGroup?.splits?.[0]?.stat;
 
     if (!hittingSplit && !pitchingSplit) return defaults;
@@ -76,25 +82,25 @@ export async function buildTeamStats(
 
 // Rate hitting on 0-100 scale
 function rateHitting(stat: any): number {
-  const ops = parseFloat(stat.ops) || 0.700;
+  const ops = parseFloat(stat.ops) || 0.7;
   // League avg OPS ~.720, range typically .600-.850
-  const normalized = Math.min(Math.max((ops - 0.600) / 0.250, 0), 1);
+  const normalized = Math.min(Math.max((ops - 0.6) / 0.25, 0), 1);
   return Math.round(normalized * 100);
 }
 
 // Rate pitching on 0-100 scale (lower ERA = higher rating)
 function ratePitching(stat: any): number {
-  const era = parseFloat(stat.era) || 4.00;
+  const era = parseFloat(stat.era) || 4.0;
   // League avg ERA ~4.00, range typically 2.50-5.50
-  const normalized = Math.min(Math.max(1 - (era - 2.50) / 3.00, 0), 1);
+  const normalized = Math.min(Math.max(1 - (era - 2.5) / 3.0, 0), 1);
   return Math.round(normalized * 100);
 }
 
 // Rate bullpen (use WHIP as proxy)
 function rateBullpen(stat: any): number {
-  const whip = parseFloat(stat.whip) || 1.30;
+  const whip = parseFloat(stat.whip) || 1.3;
   // League avg WHIP ~1.25, range 1.00-1.60
-  const normalized = Math.min(Math.max(1 - (whip - 1.00) / 0.60, 0), 1);
+  const normalized = Math.min(Math.max(1 - (whip - 1.0) / 0.6, 0), 1);
   return Math.round(normalized * 100);
 }
 
@@ -121,11 +127,11 @@ export function buildDefaultPitcher(name: string, team: string): PitcherStats {
   return {
     name: name || "TBD",
     team,
-    era: 4.00,
+    era: 4.0,
     whip: 1.25,
     k9: 8.5,
     bb9: 3.0,
-    fip: 4.00,
+    fip: 4.0,
     velocity: 93,
     spinRate: 2200,
     pitchCount: 0,
@@ -138,7 +144,7 @@ export function buildDefaultPitcher(name: string, team: string): PitcherStats {
 export function buildGameState(
   scoreData: any,
   homePitcherName: string,
-  awayPitcherName: string
+  awayPitcherName: string,
 ): GameState {
   return {
     inning: scoreData?.inning ?? 0,

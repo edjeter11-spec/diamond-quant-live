@@ -4,16 +4,39 @@ import { useState, useEffect, useMemo } from "react";
 import { useStore } from "@/lib/store";
 import { useSport } from "@/lib/sport-context";
 import {
-  Bot, Brain, TrendingUp, BarChart3, Target,
-  ChevronDown, RefreshCw, CheckCircle, XCircle, Minus, Clock,
-  Flame, Zap, DollarSign, Crown, Activity,
+  Bot,
+  Brain,
+  TrendingUp,
+  BarChart3,
+  Target,
+  ChevronDown,
+  RefreshCw,
+  CheckCircle,
+  XCircle,
+  Minus,
+  Clock,
+  Flame,
+  Zap,
+  DollarSign,
+  Crown,
+  Activity,
 } from "lucide-react";
 import {
-  loadSmartBot, saveSmartBot, generateSmartPicks, settleAndLearn,
-  loadModelAccuracy, type SmartBotState, type SmartBotPick, type ModelAccuracy,
+  loadSmartBot,
+  saveSmartBot,
+  generateSmartPicks,
+  settleAndLearn,
+  loadModelAccuracy,
+  type SmartBotState,
+  type SmartBotPick,
+  type ModelAccuracy,
 } from "@/lib/bot/smart-picks";
 import {
-  loadCLVRecords, saveCLVRecords, trackBet, updateClosingOdds, getCLVSummary,
+  loadCLVRecords,
+  saveCLVRecords,
+  trackBet,
+  updateClosingOdds,
+  getCLVSummary,
   type CLVRecord,
 } from "@/lib/bot/clv-tracker";
 import { loadEloState, saveEloState, updateElo } from "@/lib/bot/elo";
@@ -35,7 +58,8 @@ export default function BotChallenge() {
   // Sport-specific storage keys
   const storageKey = isNBA ? "dq_smart_bot_nba" : "dq_smart_bot";
   const [botState, setBotState] = useState<SmartBotState>(() => {
-    if (typeof window === "undefined") return { bankroll: 5000, picks: [], dailyPnL: {} };
+    if (typeof window === "undefined")
+      return { bankroll: 5000, picks: [], dailyPnL: {} };
     try {
       const stored = localStorage.getItem(storageKey);
       if (stored) return JSON.parse(stored);
@@ -46,6 +70,10 @@ export default function BotChallenge() {
   const [analyses, setAnalyses] = useState<GameAnalysis[]>([]);
   const [expandedPick, setExpandedPick] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  // Analysis fetch failed (timeout / 5xx) — lets the user retry instead of
+  // silently showing "waiting for game data" forever
+  const [analysisError, setAnalysisError] = useState(false);
+  const [retryTick, setRetryTick] = useState(0);
 
   // CLV tracking state
   const [clvRecords, setClvRecords] = useState<CLVRecord[]>(() => {
@@ -58,28 +86,61 @@ export default function BotChallenge() {
   const [expandedPropPick, setExpandedPropPick] = useState<string | null>(null);
 
   // Today's server-generated prop picks (refreshed every 2 hrs)
-  const [todayPropPicks, setTodayPropPicks] = useState<Array<{
-    playerName: string; team: string; propType: string; market: string;
-    line: number; side: "over" | "under"; probability: number;
-    projectedValue: number; odds: number; bookmaker: string;
-    gameTime: string; brainConfidence: number;
-    reasoning?: BrainReasoning; seasonAvg?: number; last5Avg?: number;
-    result?: "win" | "loss" | "push"; actualValue?: number;
-  }>>([]);
+  const [todayPropPicks, setTodayPropPicks] = useState<
+    Array<{
+      playerName: string;
+      team: string;
+      propType: string;
+      market: string;
+      line: number;
+      side: "over" | "under";
+      probability: number;
+      projectedValue: number;
+      odds: number;
+      bookmaker: string;
+      gameTime: string;
+      brainConfidence: number;
+      reasoning?: BrainReasoning;
+      seasonAvg?: number;
+      last5Avg?: number;
+      result?: "win" | "loss" | "push";
+      actualValue?: number;
+    }>
+  >([]);
   const [propPicksLoading, setPropPicksLoading] = useState(false);
-  const [propPicksUpdatedAt, setPropPicksUpdatedAt] = useState<string | null>(null);
+  const [propPicksUpdatedAt, setPropPicksUpdatedAt] = useState<string | null>(
+    null,
+  );
 
   // Cumulative prop pick history (graded over time)
-  const [propHistory, setPropHistory] = useState<Array<{
-    playerName: string; team: string; propType: string; line: number;
-    side: "over" | "under"; odds: number; bookmaker: string; date: string;
-    result?: "pending" | "win" | "loss" | "push"; actualValue?: number;
-  }>>([]);
+  const [propHistory, setPropHistory] = useState<
+    Array<{
+      playerName: string;
+      team: string;
+      propType: string;
+      line: number;
+      side: "over" | "under";
+      odds: number;
+      bookmaker: string;
+      date: string;
+      result?: "pending" | "win" | "loss" | "push";
+      actualValue?: number;
+    }>
+  >([]);
   const [propHistoryStats, setPropHistoryStats] = useState<{
-    graded: number; wins: number; losses: number; pushes: number; pending: number; winRate: number;
+    graded: number;
+    wins: number;
+    losses: number;
+    pushes: number;
+    pending: number;
+    winRate: number;
   } | null>(null);
 
-  const [oddsUsage, setOddsUsage] = useState<{ remaining?: number; used?: number; updatedAt?: string } | null>(null);
+  const [oddsUsage, setOddsUsage] = useState<{
+    remaining?: number;
+    used?: number;
+    updatedAt?: string;
+  } | null>(null);
 
   // Training state
   const [training, setTraining] = useState(false);
@@ -90,10 +151,15 @@ export default function BotChallenge() {
     setTrainingProgress({ status: "running", message: "Starting..." });
     try {
       const { fetchWithAuth } = await import("@/lib/supabase/fetch-with-auth");
-      const res = await fetchWithAuth("/api/nba-prop-train?reset=true&seasons=2022,2023,2024");
+      const res = await fetchWithAuth(
+        "/api/nba-prop-train?reset=true&seasons=2022,2023,2024",
+      );
       const data = await res.json();
       if (!res.ok) {
-        setTrainingProgress({ status: "error", error: data.error ?? "Training failed" });
+        setTrainingProgress({
+          status: "error",
+          error: data.error ?? "Training failed",
+        });
         setTraining(false);
         return;
       }
@@ -112,38 +178,65 @@ export default function BotChallenge() {
   // Load persisted brain, training, and evolution results on mount (NBA only)
   useEffect(() => {
     if (!isNBA) return;
-    import("@/lib/supabase/client").then(({ cloudGet }) => {
-      // Load training progress
-      cloudGet("nba_prop_training_progress", null).then((data: any) => {
-        if (data?.status === "complete") setTrainingProgress(data);
-      });
-      // Load evolution state
-      cloudGet("nba_brain_evolution", null).then((data: any) => {
-        if (data?.status === "complete") setEvolutionResult({ ok: true, ...data });
-      });
-      // Load brain summary for display
-      cloudGet("nba_prop_brain", null).then((brain: any) => {
-        if (brain?.isPreTrained && brain.totalGamesProcessed > 0) {
-          // Show brain stats even without explicit training progress
-          setTrainingProgress((prev: any) => prev ?? {
-            status: "complete",
-            gamesProcessed: brain.totalGamesProcessed,
-            propEventsTotal: brain.totalPredictions,
-            playersTracked: Object.keys(brain.playerMemory ?? {}).length,
-            accuracy: brain.markets ? {
-              player_points: { total: brain.markets.player_points?.totalPredictions ?? 0, hits: brain.markets.player_points?.hits ?? 0, winRate: brain.markets.player_points?.winRate ?? 0 },
-              player_rebounds: { total: brain.markets.player_rebounds?.totalPredictions ?? 0, hits: brain.markets.player_rebounds?.hits ?? 0, winRate: brain.markets.player_rebounds?.winRate ?? 0 },
-              player_assists: { total: brain.markets.player_assists?.totalPredictions ?? 0, hits: brain.markets.player_assists?.hits ?? 0, winRate: brain.markets.player_assists?.winRate ?? 0 },
-            } : {},
-          });
-        }
-      });
-    }).catch(() => {});
+    import("@/lib/supabase/client")
+      .then(({ cloudGet }) => {
+        // Load training progress
+        cloudGet("nba_prop_training_progress", null).then((data: any) => {
+          if (data?.status === "complete") setTrainingProgress(data);
+        });
+        // Load evolution state
+        cloudGet("nba_brain_evolution", null).then((data: any) => {
+          if (data?.status === "complete")
+            setEvolutionResult({ ok: true, ...data });
+        });
+        // Load brain summary for display
+        cloudGet("nba_prop_brain", null).then((brain: any) => {
+          if (brain?.isPreTrained && brain.totalGamesProcessed > 0) {
+            // Show brain stats even without explicit training progress
+            setTrainingProgress(
+              (prev: any) =>
+                prev ?? {
+                  status: "complete",
+                  gamesProcessed: brain.totalGamesProcessed,
+                  propEventsTotal: brain.totalPredictions,
+                  playersTracked: Object.keys(brain.playerMemory ?? {}).length,
+                  accuracy: brain.markets
+                    ? {
+                        player_points: {
+                          total:
+                            brain.markets.player_points?.totalPredictions ?? 0,
+                          hits: brain.markets.player_points?.hits ?? 0,
+                          winRate: brain.markets.player_points?.winRate ?? 0,
+                        },
+                        player_rebounds: {
+                          total:
+                            brain.markets.player_rebounds?.totalPredictions ??
+                            0,
+                          hits: brain.markets.player_rebounds?.hits ?? 0,
+                          winRate: brain.markets.player_rebounds?.winRate ?? 0,
+                        },
+                        player_assists: {
+                          total:
+                            brain.markets.player_assists?.totalPredictions ?? 0,
+                          hits: brain.markets.player_assists?.hits ?? 0,
+                          winRate: brain.markets.player_assists?.winRate ?? 0,
+                        },
+                      }
+                    : {},
+                },
+            );
+          }
+        });
+      })
+      .catch(() => {});
   }, [isNBA]);
 
   useEffect(() => {
     if (!isAdmin) return;
-    fetch("/api/odds-usage").then(r => r.json()).then(d => setOddsUsage(d)).catch(() => {});
+    fetch("/api/odds-usage")
+      .then((r) => r.json())
+      .then((d) => setOddsUsage(d))
+      .catch(() => {});
   }, [isAdmin]);
 
   const startEvolution = async () => {
@@ -154,7 +247,10 @@ export default function BotChallenge() {
       const res = await fetchWithAuth("/api/nba-prop-evolve?generations=3");
       const data = await res.json();
       if (!res.ok) {
-        setEvolutionResult({ ok: false, error: data.error ?? "Evolution failed" });
+        setEvolutionResult({
+          ok: false,
+          error: data.error ?? "Evolution failed",
+        });
         setEvolving(false);
         return;
       }
@@ -188,7 +284,7 @@ export default function BotChallenge() {
     const interval = setInterval(async () => {
       try {
         const { cloudGet } = await import("@/lib/supabase/client");
-        const data = await cloudGet("nba_evolution_progress", null) as any;
+        const data = (await cloudGet("nba_evolution_progress", null)) as any;
         if (data) setEvolutionProgress(data);
         if (data?.status === "complete" || data?.status === "error") {
           clearInterval(interval);
@@ -201,10 +297,14 @@ export default function BotChallenge() {
 
   // Fetch cumulative prop pick history (graded W/L over time)
   useEffect(() => {
-    if (!isNBA) { setPropHistory([]); setPropHistoryStats(null); return; }
+    if (!isNBA) {
+      setPropHistory([]);
+      setPropHistoryStats(null);
+      return;
+    }
     fetch("/api/prop-history?sport=nba&limit=50")
-      .then(r => r.json())
-      .then(d => {
+      .then((r) => r.json())
+      .then((d) => {
         if (d.ok) {
           setPropHistory(d.picks ?? []);
           setPropHistoryStats(d.stats ?? null);
@@ -215,11 +315,16 @@ export default function BotChallenge() {
 
   // Fetch server-generated prop picks (refreshed every 2 hrs by the API)
   useEffect(() => {
-    if (!isNBA) { setTodayPropPicks([]); return; }
+    if (!isNBA) {
+      setTodayPropPicks([]);
+      return;
+    }
     async function fetchPropPicks(force = false) {
       setPropPicksLoading(true);
       try {
-        const res = await fetch(`/api/prop-picks-today${force ? "?force=true" : ""}`);
+        const res = await fetch(
+          `/api/prop-picks-today${force ? "?force=true" : ""}`,
+        );
         if (res.ok) {
           const data = await res.json();
           if (data.picks?.length > 0) {
@@ -251,55 +356,90 @@ export default function BotChallenge() {
   // Fetch sport-specific analysis + load pre-generated picks from Supabase
   useEffect(() => {
     async function init() {
-      try {
-        const today = new Date().toISOString().split("T")[0];
-        const cloudKey = isNBA ? "smart_bot_nba" : "smart_bot";
-        const todayKey = isNBA ? `smart_bot_today_nba_${today}` : `smart_bot_today_mlb_${today}`;
+      const today = new Date().toISOString().split("T")[0];
 
-        // Try to load pre-generated picks from Supabase (set by cron for all users)
+      // 1) Cloud bot state + pre-generated picks (non-fatal — a Supabase
+      //    failure here must NOT block the analysis fetch below)
+      try {
+        const cloudKey = isNBA ? "smart_bot_nba" : "smart_bot";
+        const todayKey = isNBA
+          ? `smart_bot_today_nba_${today}`
+          : `smart_bot_today_mlb_${today}`;
+
         const { cloudGet } = await import("@/lib/supabase/client");
         const [cloudBotState, todayPregen] = await Promise.all([
           cloudGet(cloudKey, null) as Promise<SmartBotState | null>,
-          cloudGet(todayKey, null) as Promise<{ picks: any[]; generatedAt: string } | null>,
+          cloudGet(todayKey, null) as Promise<{
+            picks: any[];
+            generatedAt: string;
+          } | null>,
         ]);
 
-        // Merge cloud state into local if user has no local picks for today
-        if (cloudBotState) {
-          setBotState(prev => {
-            const localToday = prev.picks.filter(p => p.date === today).length;
-            if (localToday === 0 && cloudBotState.picks.length > 0) {
-              return cloudBotState;
+        // Merge cloud state into local if user has no local picks for today.
+        // If neither local nor cloud has today's picks, fall back to the
+        // cron-pregenerated picks (previously dead code when cloud state
+        // existed without today's picks — MLB users saw an empty bot).
+        if (cloudBotState || todayPregen?.picks?.length) {
+          setBotState((prev) => {
+            const localToday = prev.picks.filter(
+              (p) => p.date === today,
+            ).length;
+            if (localToday > 0) return prev;
+            const base =
+              cloudBotState && cloudBotState.picks.length > 0
+                ? cloudBotState
+                : prev;
+            const baseToday = base.picks.filter((p) => p.date === today).length;
+            if (baseToday === 0 && todayPregen?.picks?.length) {
+              return { ...base, picks: [...base.picks, ...todayPregen.picks] };
             }
-            return prev;
-          });
-        } else if (todayPregen?.picks?.length) {
-          // Load pre-generated picks into local state
-          setBotState(prev => {
-            const localToday = prev.picks.filter(p => p.date === today).length;
-            if (localToday === 0) {
-              return { ...prev, picks: [...prev.picks, ...todayPregen.picks] };
-            }
-            return prev;
+            return base;
           });
         }
+      } catch {}
 
+      // 2) Analysis fetch — its own error handling so failures surface.
+      // Client-side timeout so a slow/hung route shows a retry option instead
+      // of a spinner that looks stuck forever.
+      try {
         const url = isNBA ? "/api/nba-analysis" : "/api/bot-analysis";
-        const res = await fetch(url);
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 25000);
+        const res = await fetch(url, { signal: controller.signal });
+        clearTimeout(timeout);
         if (res.ok) {
           const data = await res.json();
           setAnalyses(data.analyses ?? []);
+          setAnalysisError(false);
+        } else {
+          setAnalysisError(true);
         }
-      } catch {}
+      } catch {
+        setAnalysisError(true);
+      }
       setLoading(false);
     }
     init();
-  }, [currentSport, isNBA]);
+  }, [currentSport, isNBA, retryTick]);
+
+  // "Taking longer than usual" hint once the spinner runs past ~6s — avoids
+  // the loading state reading as permanently stuck on a slow connection.
+  const [loadingSlow, setLoadingSlow] = useState(false);
+  useEffect(() => {
+    if (!loading) {
+      setLoadingSlow(false);
+      return;
+    }
+    const t = setTimeout(() => setLoadingSlow(true), 6000);
+    return () => clearTimeout(t);
+  }, [loading]);
 
   // Auto-generate picks when analyses arrive and we don't have today's
   useEffect(() => {
     if (analyses.length === 0) return;
     const today = new Date().toISOString().split("T")[0];
-    const hasTodayPicks = botState.picks.filter(p => p.date === today).length >= 4;
+    const hasTodayPicks =
+      botState.picks.filter((p) => p.date === today).length >= 4;
     if (hasTodayPicks) return;
 
     const newPicks = generateSmartPicks(analyses, botState.bankroll);
@@ -315,8 +455,13 @@ export default function BotChallenge() {
       // Track new picks in CLV (opening odds = bet odds)
       const updatedCLV = newPicks.reduce((recs, pick) => {
         return trackBet(recs, {
-          id: pick.id, date: pick.date, game: pick.game, pick: pick.pick,
-          bookmaker: pick.bookmaker, odds: pick.odds, sport: currentSport,
+          id: pick.id,
+          date: pick.date,
+          game: pick.game,
+          pick: pick.pick,
+          bookmaker: pick.bookmaker,
+          odds: pick.odds,
+          sport: currentSport,
         });
       }, clvRecords);
       saveCLVRecords(updatedCLV, currentSport);
@@ -327,15 +472,20 @@ export default function BotChallenge() {
   // Auto-settle + learn + update CLV + update Elo when scores arrive
   useEffect(() => {
     if (scores.length === 0) return;
-    const { botState: updated, accuracy: newAcc } = settleAndLearn(botState, scores, currentSport);
+    const { botState: updated, accuracy: newAcc } = settleAndLearn(
+      botState,
+      scores,
+      currentSport,
+    );
     if (updated !== botState) {
       setBotState(updated);
       setAccuracy(newAcc);
 
       // Find picks that just transitioned from pending → settled
-      const newlySettled = updated.picks.filter(p =>
-        p.result !== "pending" &&
-        botState.picks.find(prev => prev.id === p.id)?.result === "pending"
+      const newlySettled = updated.picks.filter(
+        (p) =>
+          p.result !== "pending" &&
+          botState.picks.find((prev) => prev.id === p.id)?.result === "pending",
       );
 
       if (newlySettled.length > 0) {
@@ -347,44 +497,71 @@ export default function BotChallenge() {
           if (parts.length !== 2) continue;
           const [awayTeam, homeTeam] = parts;
           // finalScore format: "CHC 3 - NYY 7"
-          const scoreMatch = pick.finalScore.match(/\S+\s+(\d+)\s*-\s*\S+\s+(\d+)/);
+          const scoreMatch = pick.finalScore.match(
+            /\S+\s+(\d+)\s*-\s*\S+\s+(\d+)/,
+          );
           if (!scoreMatch) continue;
           const awayScore = parseInt(scoreMatch[1]);
           const homeScore = parseInt(scoreMatch[2]);
           if (isNaN(awayScore) || isNaN(homeScore)) continue;
-          eloState = updateElo(eloState, homeTeam, awayTeam, homeScore > awayScore, Math.abs(homeScore - awayScore));
+          eloState = updateElo(
+            eloState,
+            homeTeam,
+            awayTeam,
+            homeScore > awayScore,
+            Math.abs(homeScore - awayScore),
+          );
         }
         saveEloState(eloState);
 
         // --- Fetch closing odds and update CLV for settled picks ---
-        fetch(isNBA ? "/api/nba-analysis" : "/api/odds")
-          .then(r => r.json())
+        // NOTE: /api/odds returns { games: [...] }, not a bare array — the old
+        // code iterated the response object and crashed silently for MLB.
+        fetch(
+          isNBA ? "/api/nba-analysis" : `/api/odds?sport=${config.oddsApiKey}`,
+        )
+          .then((r) => r.json())
           .then((rawData: any) => {
-            const oddsGames: any[] = isNBA ? (rawData.analyses ?? []) : rawData;
-            if (isNBA && oddsGames.length === 0) return;
+            const oddsGames: any[] = isNBA
+              ? (rawData.analyses ?? [])
+              : (rawData.games ?? []);
+            if (oddsGames.length === 0) return;
             // Build closing-odds map: "Team ML" → current odds
             const allClosingOdds: Record<string, number> = {};
             for (const game of oddsGames) {
               if (!game.homeTeam || !game.awayTeam) continue;
-              let bestHome = 0, bestAway = 0;
+              let bestHome = 0,
+                bestAway = 0;
               for (const line of game.oddsLines ?? []) {
-                if (line.homeML !== 0 && (bestHome === 0 || Math.abs(line.homeML) < Math.abs(bestHome))) {
+                if (
+                  line.homeML !== 0 &&
+                  (bestHome === 0 || Math.abs(line.homeML) < Math.abs(bestHome))
+                ) {
                   bestHome = line.homeML;
                 }
-                if (line.awayML !== 0 && (bestAway === 0 || Math.abs(line.awayML) < Math.abs(bestAway))) {
+                if (
+                  line.awayML !== 0 &&
+                  (bestAway === 0 || Math.abs(line.awayML) < Math.abs(bestAway))
+                ) {
                   bestAway = line.awayML;
                 }
               }
-              if (bestHome !== 0) allClosingOdds[`${game.homeTeam} ML`] = bestHome;
-              if (bestAway !== 0) allClosingOdds[`${game.awayTeam} ML`] = bestAway;
+              if (bestHome !== 0)
+                allClosingOdds[`${game.homeTeam} ML`] = bestHome;
+              if (bestAway !== 0)
+                allClosingOdds[`${game.awayTeam} ML`] = bestAway;
             }
 
             // Update CLV records: closing odds + result
             let updatedCLV = clvRecords;
             for (const pick of newlySettled) {
-              updatedCLV = updateClosingOdds(updatedCLV, pick.game, allClosingOdds);
-              updatedCLV = updatedCLV.map(r =>
-                r.id === pick.id ? { ...r, result: pick.result } : r
+              updatedCLV = updateClosingOdds(
+                updatedCLV,
+                pick.game,
+                allClosingOdds,
+              );
+              updatedCLV = updatedCLV.map((r) =>
+                r.id === pick.id ? { ...r, result: pick.result } : r,
               );
             }
             saveCLVRecords(updatedCLV, currentSport);
@@ -397,11 +574,11 @@ export default function BotChallenge() {
 
   const formatOdds = (odds: number) => (odds > 0 ? `+${odds}` : `${odds}`);
   const today = new Date().toISOString().split("T")[0];
-  const todayPicks = botState.picks.filter(p => p.date === today);
-  const settled = botState.picks.filter(p => p.result !== "pending");
-  const pendingPicks = botState.picks.filter(p => p.result === "pending");
-  const wins = settled.filter(p => p.result === "win").length;
-  const losses = settled.filter(p => p.result === "loss").length;
+  const todayPicks = botState.picks.filter((p) => p.date === today);
+  const settled = botState.picks.filter((p) => p.result !== "pending");
+  const pendingPicks = botState.picks.filter((p) => p.result === "pending");
+  const wins = settled.filter((p) => p.result === "win").length;
+  const losses = settled.filter((p) => p.result === "loss").length;
   const totalStaked = settled.reduce((s, p) => s + p.stake, 0);
   const totalReturns = settled.reduce((s, p) => s + p.payout, 0);
   const pendingStaked = pendingPicks.reduce((s, p) => s + p.stake, 0);
@@ -411,7 +588,12 @@ export default function BotChallenge() {
   // Overall P&L = bankroll change from $5000 (includes pending exposure)
   const overallPL = botState.bankroll - 5000;
   // Display: use settled stats if available, otherwise show bankroll-based numbers
-  const displayROI = settled.length > 0 ? settledROI : (overallPL !== 0 ? (overallPL / 5000) * 100 : 0);
+  const displayROI =
+    settled.length > 0
+      ? settledROI
+      : overallPL !== 0
+        ? (overallPL / 5000) * 100
+        : 0;
   const displayPL = settled.length > 0 ? settledProfit : overallPL;
   const pending = pendingPicks.length;
 
@@ -429,11 +611,18 @@ export default function BotChallenge() {
         <div className="px-4 py-3 bg-gradient-to-r from-electric/10 to-purple/5 border-b border-electric/15 flex items-center gap-3">
           <Bot className="w-5 h-5 text-electric" />
           <div className="flex-1">
-            <h2 className="text-sm font-bold text-silver">Bot Challenge — 3-Model Powered</h2>
-            <p className="text-[10px] text-mercury/60">$5K sim • 4 picks/day • {config.model1Label} + Market + {config.model3Label} consensus</p>
+            <h2 className="text-sm font-bold text-silver">
+              Bot Challenge — 3-Model Powered
+            </h2>
+            <p className="text-[10px] text-mercury/60">
+              $5K sim • 4 picks/day • {config.model1Label} + Market +{" "}
+              {config.model3Label} consensus
+            </p>
           </div>
           <div className="text-right">
-            <p className={`text-lg font-bold font-mono ${botState.bankroll >= 5000 ? "text-neon" : "text-danger"}`}>
+            <p
+              className={`text-lg font-bold font-mono ${botState.bankroll >= 5000 ? "text-neon" : "text-danger"}`}
+            >
               ${botState.bankroll.toFixed(0)}
             </p>
           </div>
@@ -441,43 +630,90 @@ export default function BotChallenge() {
 
         {/* Stats */}
         <div className="grid grid-cols-4 gap-px bg-slate/10">
-          <MiniStat label="Record" value={`${wins}W-${losses}L`} color="text-silver" />
-          <MiniStat label="ROI" value={`${displayROI >= 0 ? "+" : ""}${displayROI.toFixed(1)}%`} color={displayROI >= 0 ? "text-neon" : "text-danger"} />
-          <MiniStat label="P/L" value={`${displayPL >= 0 ? "+" : ""}$${displayPL.toFixed(0)}`} color={displayPL >= 0 ? "text-neon" : "text-danger"} />
-          <MiniStat label="In Play" value={pending > 0 ? `$${pendingStaked.toFixed(0)}` : "—"} color="text-amber" />
+          <MiniStat
+            label="Record"
+            value={`${wins}W-${losses}L`}
+            color="text-silver"
+          />
+          <MiniStat
+            label="ROI"
+            value={`${displayROI >= 0 ? "+" : ""}${displayROI.toFixed(1)}%`}
+            color={displayROI >= 0 ? "text-neon" : "text-danger"}
+          />
+          <MiniStat
+            label="P/L"
+            value={`${displayPL >= 0 ? "+" : ""}$${displayPL.toFixed(0)}`}
+            color={displayPL >= 0 ? "text-neon" : "text-danger"}
+          />
+          <MiniStat
+            label="In Play"
+            value={pending > 0 ? `$${pendingStaked.toFixed(0)}` : "—"}
+            color="text-amber"
+          />
         </div>
 
         {/* Accuracy — NBA shows Prop Brain, MLB shows consensus engine */}
-        {isNBA ? (
-          trainingProgress?.accuracy && Object.keys(trainingProgress.accuracy).length > 0 && (
-            <div className="px-4 py-2 border-t border-slate/10">
-              <p className="text-[9px] text-mercury uppercase tracking-wider mb-1.5 font-semibold">Prop Brain Accuracy (trained)</p>
-              <div className="grid grid-cols-3 gap-2">
-                {Object.entries(trainingProgress.accuracy as Record<string, any>).map(([key, val]: [string, any]) => (
-                  <div key={key} className="text-center">
-                    <Brain className={`w-3 h-3 mx-auto mb-0.5 ${val.winRate > 50 ? "text-neon" : "text-amber"}`} />
-                    <p className={`text-xs font-bold font-mono ${val.winRate > 50 ? "text-neon" : val.winRate > 45 ? "text-electric" : "text-danger"}`}>
-                      {val.winRate}%
-                    </p>
-                    <p className="text-[7px] text-mercury/50 capitalize">{key.replace("player_", "")} ({val.total ?? 0})</p>
-                  </div>
-                ))}
+        {isNBA
+          ? trainingProgress?.accuracy &&
+            Object.keys(trainingProgress.accuracy).length > 0 && (
+              <div className="px-4 py-2 border-t border-slate/10">
+                <p className="text-[9px] text-mercury uppercase tracking-wider mb-1.5 font-semibold">
+                  Prop Brain Accuracy (trained)
+                </p>
+                <div className="grid grid-cols-3 gap-2">
+                  {Object.entries(
+                    trainingProgress.accuracy as Record<string, any>,
+                  ).map(([key, val]: [string, any]) => (
+                    <div key={key} className="text-center">
+                      <Brain
+                        className={`w-3 h-3 mx-auto mb-0.5 ${val.winRate > 50 ? "text-neon" : "text-amber"}`}
+                      />
+                      <p
+                        className={`text-xs font-bold font-mono ${val.winRate > 50 ? "text-neon" : val.winRate > 45 ? "text-electric" : "text-danger"}`}
+                      >
+                        {val.winRate}%
+                      </p>
+                      <p className="text-[7px] text-mercury/50 capitalize">
+                        {key.replace("player_", "")} ({val.total ?? 0})
+                      </p>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-          )
-        ) : (
-          accuracy.consensus.total > 0 && (
-            <div className="px-4 py-2 border-t border-slate/10">
-              <p className="text-[9px] text-mercury uppercase tracking-wider mb-1.5 font-semibold">Model Accuracy (live tracking)</p>
-              <div className="grid grid-cols-4 gap-2">
-                <ModelAccStat name={config.model1Label} icon={Brain} color="text-purple" acc={accuracy.pitcher} />
-                <ModelAccStat name="Market" icon={BarChart3} color="text-electric" acc={accuracy.market} />
-                <ModelAccStat name={config.model3Label} icon={Activity} color="text-neon" acc={accuracy.trend} />
-                <ModelAccStat name="Consensus" icon={Target} color="text-gold" acc={accuracy.consensus} />
+            )
+          : accuracy.consensus.total > 0 && (
+              <div className="px-4 py-2 border-t border-slate/10">
+                <p className="text-[9px] text-mercury uppercase tracking-wider mb-1.5 font-semibold">
+                  Model Accuracy (live tracking)
+                </p>
+                <div className="grid grid-cols-4 gap-2">
+                  <ModelAccStat
+                    name={config.model1Label}
+                    icon={Brain}
+                    color="text-purple"
+                    acc={accuracy.pitcher}
+                  />
+                  <ModelAccStat
+                    name="Market"
+                    icon={BarChart3}
+                    color="text-electric"
+                    acc={accuracy.market}
+                  />
+                  <ModelAccStat
+                    name={config.model3Label}
+                    icon={Activity}
+                    color="text-neon"
+                    acc={accuracy.trend}
+                  />
+                  <ModelAccStat
+                    name="Consensus"
+                    icon={Target}
+                    color="text-gold"
+                    acc={accuracy.consensus}
+                  />
+                </div>
               </div>
-            </div>
-          )
-        )}
+            )}
 
         {/* CLV Summary — shown once we have closing-line data */}
         {clvSummary.betsWithCLV > 0 && (
@@ -487,22 +723,33 @@ export default function BotChallenge() {
             </p>
             <div className="grid grid-cols-3 gap-2">
               <div className="text-center">
-                <p className={`text-xs font-bold font-mono ${clvSummary.beatClosingRate >= 55 ? "text-neon" : clvSummary.beatClosingRate >= 45 ? "text-electric" : "text-danger"}`}>
+                <p
+                  className={`text-xs font-bold font-mono ${clvSummary.beatClosingRate >= 55 ? "text-neon" : clvSummary.beatClosingRate >= 45 ? "text-electric" : "text-danger"}`}
+                >
                   {clvSummary.beatClosingRate}%
                 </p>
                 <p className="text-[7px] text-mercury/50">Beat-Close</p>
               </div>
               <div className="text-center">
-                <p className={`text-xs font-bold font-mono ${clvSummary.avgCLV >= 0 ? "text-neon" : "text-danger"}`}>
-                  {clvSummary.avgCLV >= 0 ? "+" : ""}{clvSummary.avgCLV}%
+                <p
+                  className={`text-xs font-bold font-mono ${clvSummary.avgCLV >= 0 ? "text-neon" : "text-danger"}`}
+                >
+                  {clvSummary.avgCLV >= 0 ? "+" : ""}
+                  {clvSummary.avgCLV}%
                 </p>
                 <p className="text-[7px] text-mercury/50">Avg CLV</p>
               </div>
               <div className="text-center">
-                <p className={`text-xs font-bold font-mono ${clvSummary.isSharp ? "text-gold" : "text-mercury/60"}`}>
-                  {clvSummary.isSharp ? "SHARP" : `${clvSummary.betsWithCLV} pts`}
+                <p
+                  className={`text-xs font-bold font-mono ${clvSummary.isSharp ? "text-gold" : "text-mercury/60"}`}
+                >
+                  {clvSummary.isSharp
+                    ? "SHARP"
+                    : `${clvSummary.betsWithCLV} pts`}
                 </p>
-                <p className="text-[7px] text-mercury/50">{clvSummary.isSharp ? "Sharp Bettor" : "Sample Size"}</p>
+                <p className="text-[7px] text-mercury/50">
+                  {clvSummary.isSharp ? "Sharp Bettor" : "Sample Size"}
+                </p>
               </div>
             </div>
           </div>
@@ -515,24 +762,31 @@ export default function BotChallenge() {
           <div className="px-4 py-3 bg-gradient-to-r from-purple/10 to-electric/5 border-b border-purple/15 flex items-center gap-2">
             <Brain className="w-4 h-4 text-purple" />
             <div className="flex-1">
-              <h3 className="text-xs font-bold text-silver uppercase tracking-wider">NBA Prop Brain</h3>
+              <h3 className="text-xs font-bold text-silver uppercase tracking-wider">
+                NBA Prop Brain
+              </h3>
               <p className="text-[9px] text-mercury/50">
                 {trainingProgress?.status === "complete"
                   ? `Trained on ${trainingProgress.gamesProcessed?.toLocaleString()} games — ${trainingProgress.propEventsTotal?.toLocaleString()} props quizzed`
                   : evolutionResult?.ok
-                  ? `Evolved ${evolutionResult.generations} generations — Best: ${evolutionResult.bestWinRate}%`
-                  : "AI-powered player prop predictions"}
+                    ? `Evolved ${evolutionResult.generations} generations — Best: ${evolutionResult.bestWinRate}%`
+                    : "AI-powered player prop predictions"}
               </p>
             </div>
             {/* Admin-only: Training button */}
             {isAdmin && !training && !evolving && (
               <>
                 {oddsUsage?.remaining !== undefined && (
-                  <span className={`text-[9px] font-mono ${oddsUsage.remaining < 50 ? "text-danger" : oddsUsage.remaining < 200 ? "text-amber" : "text-neon"}`}>
+                  <span
+                    className={`text-[9px] font-mono ${oddsUsage.remaining < 50 ? "text-danger" : oddsUsage.remaining < 200 ? "text-amber" : "text-neon"}`}
+                  >
                     {oddsUsage.remaining} credits
                   </span>
                 )}
-                <button onClick={startTraining} className="px-2 py-1 rounded-lg bg-purple/15 border border-purple/25 text-purple text-[9px] font-semibold hover:bg-purple/25 transition-all">
+                <button
+                  onClick={startTraining}
+                  className="px-2 py-1 rounded-lg bg-purple/15 border border-purple/25 text-purple text-[9px] font-semibold hover:bg-purple/25 transition-all"
+                >
                   Train Brain
                 </button>
               </>
@@ -544,39 +798,59 @@ export default function BotChallenge() {
             <div className="px-4 py-3 space-y-2">
               <div className="flex items-center gap-2">
                 <RefreshCw className="w-3.5 h-3.5 text-purple animate-spin" />
-                <p className="text-xs text-mercury">{trainingProgress.message ?? "Training..."}</p>
+                <p className="text-xs text-mercury">
+                  {trainingProgress.message ?? "Training..."}
+                </p>
               </div>
               {trainingProgress.gamesProcessed > 0 && (
                 <div className="w-full bg-gunmetal/50 rounded-full h-1.5">
-                  <div className="bg-purple h-1.5 rounded-full transition-all" style={{ width: `${Math.min(100, (trainingProgress.gamesProcessed / Math.max(trainingProgress.totalGames, 1)) * 100)}%` }} />
+                  <div
+                    className="bg-purple h-1.5 rounded-full transition-all"
+                    style={{
+                      width: `${Math.min(100, (trainingProgress.gamesProcessed / Math.max(trainingProgress.totalGames, 1)) * 100)}%`,
+                    }}
+                  />
                 </div>
               )}
             </div>
           )}
 
           {/* Training results — visible to all */}
-          {(trainingProgress?.status === "complete" && trainingProgress.accuracy) && (
-            <div className="px-4 py-2.5 border-t border-slate/10">
-              <div className="grid grid-cols-3 gap-2">
-                {Object.entries(trainingProgress.accuracy as Record<string, any>).map(([key, val]: [string, any]) => (
-                  <div key={key} className="text-center">
-                    <p className={`text-sm font-bold font-mono ${val.winRate > 52 ? "text-neon" : val.winRate > 48 ? "text-electric" : "text-danger"}`}>{val.winRate}%</p>
-                    <p className="text-[7px] text-mercury/50 uppercase">{key.replace("player_", "")}</p>
-                  </div>
-                ))}
+          {trainingProgress?.status === "complete" &&
+            trainingProgress.accuracy && (
+              <div className="px-4 py-2.5 border-t border-slate/10">
+                <div className="grid grid-cols-3 gap-2">
+                  {Object.entries(
+                    trainingProgress.accuracy as Record<string, any>,
+                  ).map(([key, val]: [string, any]) => (
+                    <div key={key} className="text-center">
+                      <p
+                        className={`text-sm font-bold font-mono ${val.winRate > 52 ? "text-neon" : val.winRate > 48 ? "text-electric" : "text-danger"}`}
+                      >
+                        {val.winRate}%
+                      </p>
+                      <p className="text-[7px] text-mercury/50 uppercase">
+                        {key.replace("player_", "")}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+                {trainingProgress.playersTracked && (
+                  <p className="text-[9px] text-mercury/40 text-center mt-1">
+                    {trainingProgress.playersTracked} players tracked
+                  </p>
+                )}
               </div>
-              {trainingProgress.playersTracked && (
-                <p className="text-[9px] text-mercury/40 text-center mt-1">{trainingProgress.playersTracked} players tracked</p>
-              )}
-            </div>
-          )}
+            )}
 
           {/* ── Evolve Brain Section ── */}
           {isAdmin && (
             <div className="px-4 py-3 border-t border-slate/10 space-y-3">
               <div className="flex items-center gap-2">
                 <Zap className="w-3.5 h-3.5 text-neon" />
-                <p className="text-[10px] text-silver font-semibold uppercase tracking-wider flex-1">Evolve Brain</p>
+                <p className="text-[10px] text-silver font-semibold uppercase tracking-wider flex-1">
+                  Evolve Brain
+                </p>
                 {!evolving && (
                   <button
                     onClick={startEvolution}
@@ -605,7 +879,9 @@ export default function BotChallenge() {
                     <div className="w-full bg-gunmetal/50 rounded-full h-1">
                       <div
                         className="bg-neon h-1 rounded-full transition-all"
-                        style={{ width: `${Math.min(100, (evolutionProgress.generation / Math.max(evolutionProgress.totalGenerations, 1)) * 100)}%` }}
+                        style={{
+                          width: `${Math.min(100, (evolutionProgress.generation / Math.max(evolutionProgress.totalGenerations, 1)) * 100)}%`,
+                        }}
                       />
                     </div>
                   )}
@@ -619,9 +895,15 @@ export default function BotChallenge() {
                   <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gold/10 border border-gold/20">
                     <Crown className="w-3.5 h-3.5 text-gold flex-shrink-0" />
                     <p className="text-[10px] text-silver font-semibold flex-1">
-                      Best: <span className="text-gold">{evolutionResult.bestVariant}</span>
+                      Best:{" "}
+                      <span className="text-gold">
+                        {evolutionResult.bestVariant}
+                      </span>
                       {" — "}
-                      <span className="text-neon font-mono">{evolutionResult.bestWinRate}%</span> test accuracy
+                      <span className="text-neon font-mono">
+                        {evolutionResult.bestWinRate}%
+                      </span>{" "}
+                      test accuracy
                     </p>
                   </div>
 
@@ -630,25 +912,38 @@ export default function BotChallenge() {
                     <div className="space-y-2">
                       {/* Group variants by generation */}
                       {evolutionResult.history.map((h: any, gi: number) => {
-                        const genVariants = (evolutionResult.allVariants ?? []).filter((v: any) => v.generation === h.generation);
+                        const genVariants = (
+                          evolutionResult.allVariants ?? []
+                        ).filter((v: any) => v.generation === h.generation);
                         return (
                           <div key={gi} className="space-y-1">
-                            <p className="text-[8px] text-mercury/50 uppercase tracking-wider font-semibold">Generation {h.generation}</p>
+                            <p className="text-[8px] text-mercury/50 uppercase tracking-wider font-semibold">
+                              Generation {h.generation}
+                            </p>
                             {genVariants.length > 0 ? (
                               <div className="rounded-lg overflow-hidden border border-slate/15">
                                 {genVariants.map((v: any, vi: number) => {
-                                  const isWinner = v.id === h.winnerId || v.name === h.winnerName;
+                                  const isWinner =
+                                    v.id === h.winnerId ||
+                                    v.name === h.winnerName;
                                   return (
                                     <div
                                       key={vi}
                                       className={`flex items-center gap-2 px-3 py-1.5 text-[10px] border-b border-slate/10 last:border-0 ${isWinner ? "bg-neon/8" : "bg-transparent"}`}
                                     >
-                                      {isWinner
-                                        ? <Crown className="w-3 h-3 text-neon flex-shrink-0" />
-                                        : <span className="w-3 h-3 flex-shrink-0" />
-                                      }
-                                      <span className={`flex-1 truncate ${isWinner ? "text-silver font-semibold" : "text-mercury/70"}`}>{v.name}</span>
-                                      <span className={`font-mono font-bold ${(v.testWinRate ?? 0) > 52 ? "text-neon" : (v.testWinRate ?? 0) > 48 ? "text-electric" : "text-danger"}`}>
+                                      {isWinner ? (
+                                        <Crown className="w-3 h-3 text-neon flex-shrink-0" />
+                                      ) : (
+                                        <span className="w-3 h-3 flex-shrink-0" />
+                                      )}
+                                      <span
+                                        className={`flex-1 truncate ${isWinner ? "text-silver font-semibold" : "text-mercury/70"}`}
+                                      >
+                                        {v.name}
+                                      </span>
+                                      <span
+                                        className={`font-mono font-bold ${(v.testWinRate ?? 0) > 52 ? "text-neon" : (v.testWinRate ?? 0) > 48 ? "text-electric" : "text-danger"}`}
+                                      >
                                         {v.testWinRate ?? 0}%
                                       </span>
                                     </div>
@@ -658,8 +953,14 @@ export default function BotChallenge() {
                             ) : (
                               <div className="flex items-center gap-2 px-3 py-1.5 text-[10px] rounded-lg bg-neon/8 border border-neon/15">
                                 <Crown className="w-3 h-3 text-neon flex-shrink-0" />
-                                <span className="flex-1 text-silver font-semibold">{h.winnerName}</span>
-                                <span className={`font-mono font-bold ${h.winRate > 52 ? "text-neon" : h.winRate > 48 ? "text-electric" : "text-danger"}`}>{h.winRate}%</span>
+                                <span className="flex-1 text-silver font-semibold">
+                                  {h.winnerName}
+                                </span>
+                                <span
+                                  className={`font-mono font-bold ${h.winRate > 52 ? "text-neon" : h.winRate > 48 ? "text-electric" : "text-danger"}`}
+                                >
+                                  {h.winRate}%
+                                </span>
                               </div>
                             )}
                           </div>
@@ -680,7 +981,9 @@ export default function BotChallenge() {
 
               {/* Evolution error */}
               {evolutionResult?.ok === false && !evolving && (
-                <p className="text-[10px] text-danger">{evolutionResult.error ?? "Evolution failed"}</p>
+                <p className="text-[10px] text-danger">
+                  {evolutionResult.error ?? "Evolution failed"}
+                </p>
               )}
             </div>
           )}
@@ -691,14 +994,27 @@ export default function BotChallenge() {
               <div className="flex items-center gap-2">
                 <Crown className="w-3.5 h-3.5 text-gold" />
                 <p className="text-xs text-silver font-semibold">
-                  Best: {evolutionResult.bestVariant} — <span className="text-neon font-mono">{evolutionResult.bestWinRate}%</span> test accuracy
+                  Best: {evolutionResult.bestVariant} —{" "}
+                  <span className="text-neon font-mono">
+                    {evolutionResult.bestWinRate}%
+                  </span>{" "}
+                  test accuracy
                 </p>
               </div>
               {evolutionResult.history?.slice(-5).map((h: any, i: number) => (
-                <div key={i} className="flex items-center gap-2 text-[10px] text-mercury/60">
-                  <span className="w-12 text-mercury/40">Gen {h.generation}</span>
+                <div
+                  key={i}
+                  className="flex items-center gap-2 text-[10px] text-mercury/60"
+                >
+                  <span className="w-12 text-mercury/40">
+                    Gen {h.generation}
+                  </span>
                   <span className="flex-1 truncate">{h.winnerName}</span>
-                  <span className={`font-mono font-bold ${h.winRate > 50 ? "text-neon" : "text-amber"}`}>{h.winRate}%</span>
+                  <span
+                    className={`font-mono font-bold ${h.winRate > 50 ? "text-neon" : "text-amber"}`}
+                  >
+                    {h.winRate}%
+                  </span>
                 </div>
               ))}
             </div>
@@ -709,12 +1025,21 @@ export default function BotChallenge() {
       {/* Today's Picks Status */}
       {loading ? (
         <div className="space-y-3">
-          <div className="glass rounded-xl p-4 flex items-center justify-center gap-2">
-            <RefreshCw className="w-4 h-4 text-electric animate-spin" />
-            <span className="text-sm text-mercury">Generating today's picks...</span>
+          <div className="glass rounded-xl p-4 flex flex-col items-center justify-center gap-1.5">
+            <div className="flex items-center gap-2">
+              <RefreshCw className="w-4 h-4 text-electric animate-spin" />
+              <span className="text-sm text-mercury">
+                Loading today's picks...
+              </span>
+            </div>
+            {loadingSlow && (
+              <p className="text-[10px] text-mercury/50">
+                Full slate analysis can take a bit longer on busy days
+              </p>
+            )}
           </div>
           {/* Skeleton placeholders so the page isn't a wall of black */}
-          {[0,1,2,3].map(i => (
+          {[0, 1, 2, 3].map((i) => (
             <div key={i} className="glass rounded-xl p-4 animate-pulse">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-gunmetal/40" />
@@ -729,13 +1054,38 @@ export default function BotChallenge() {
         </div>
       ) : todayPicks.length === 0 ? (
         <div className="glass rounded-xl p-4 text-center">
-          <p className="text-sm text-mercury">Waiting for enough game data to generate picks</p>
-          <p className="text-[10px] text-mercury/50 mt-1">Picks auto-generate each morning — no manual action needed</p>
+          {analysisError ? (
+            <>
+              <p className="text-sm text-danger">
+                Couldn't load today's analysis — the server may be busy
+              </p>
+              <button
+                onClick={() => {
+                  setLoading(true);
+                  setRetryTick((t) => t + 1);
+                }}
+                className="mt-2 px-3 py-1.5 rounded-lg bg-electric/10 border border-electric/25 text-electric text-xs font-semibold hover:bg-electric/20 transition-all"
+              >
+                Retry
+              </button>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-mercury">
+                Waiting for enough game data to generate picks
+              </p>
+              <p className="text-[10px] text-mercury/50 mt-1">
+                Picks auto-generate each morning — no manual action needed
+              </p>
+            </>
+          )}
         </div>
       ) : (
         <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-neon/5 border border-neon/15">
           <CheckCircle className="w-3.5 h-3.5 text-neon" />
-          <span className="text-xs text-neon font-medium">Today's {todayPicks.length} picks locked in</span>
+          <span className="text-xs text-neon font-medium">
+            Today's {todayPicks.length} picks locked in
+          </span>
         </div>
       )}
 
@@ -744,16 +1094,20 @@ export default function BotChallenge() {
         <div className="glass rounded-xl overflow-hidden">
           <div className="px-4 py-2.5 border-b border-slate/30 bg-electric/5 flex items-center gap-2">
             <Zap className="w-4 h-4 text-electric" />
-            <span className="text-xs font-bold text-silver uppercase tracking-wider">Today's Picks</span>
+            <span className="text-xs font-bold text-silver uppercase tracking-wider">
+              Today's Picks
+            </span>
           </div>
           <div className="divide-y divide-slate/10">
-            {todayPicks.map(pick => (
+            {todayPicks.map((pick) => (
               <PickRow
                 key={pick.id}
                 pick={pick}
                 clvRecord={clvMap.get(pick.id)}
                 isExpanded={expandedPick === pick.id}
-                onToggle={() => setExpandedPick(expandedPick === pick.id ? null : pick.id)}
+                onToggle={() =>
+                  setExpandedPick(expandedPick === pick.id ? null : pick.id)
+                }
                 formatOdds={formatOdds}
               />
             ))}
@@ -767,7 +1121,9 @@ export default function BotChallenge() {
           <div className="px-4 py-2.5 bg-gradient-to-r from-purple/10 to-neon/5 border-b border-purple/15 flex items-center gap-2">
             <Brain className="w-4 h-4 text-purple" />
             <div className="flex-1">
-              <h3 className="text-xs font-bold text-silver uppercase tracking-wider">Today's Prop Picks</h3>
+              <h3 className="text-xs font-bold text-silver uppercase tracking-wider">
+                Today's Prop Picks
+              </h3>
               <p className="text-[9px] text-mercury/50">
                 {propPicksUpdatedAt
                   ? `Updated ${Math.max(0, Math.round((Date.now() - new Date(propPicksUpdatedAt).getTime()) / 60000))}m ago • auto-refreshes every 2h`
@@ -791,129 +1147,194 @@ export default function BotChallenge() {
               }}
               className="p-1.5 hover:bg-gunmetal/30 rounded transition-colors"
             >
-              <RefreshCw className={`w-3.5 h-3.5 text-mercury ${propPicksLoading ? "animate-spin" : ""}`} />
+              <RefreshCw
+                className={`w-3.5 h-3.5 text-mercury ${propPicksLoading ? "animate-spin" : ""}`}
+              />
             </button>
           </div>
 
           {propPicksLoading && todayPropPicks.length === 0 ? (
             <div className="px-4 py-6 flex items-center justify-center gap-2">
               <Brain className="w-4 h-4 text-purple animate-pulse" />
-              <span className="text-xs text-mercury">Brain analyzing today's props...</span>
+              <span className="text-xs text-mercury">
+                Brain analyzing today's props...
+              </span>
             </div>
           ) : (
             <div className="divide-y divide-slate/10">
-              {(isPro ? todayPropPicks : todayPropPicks.slice(0, 2)).map((prop, i) => {
-                const tier = (prop as any).tier as "HIGH" | "MEDIUM" | "LEAN" | undefined;
-                const tierColor = tier === "HIGH" ? "bg-neon/15 text-neon border-neon/20"
-                  : tier === "MEDIUM" ? "bg-amber/15 text-amber border-amber/20"
-                  : "bg-electric/10 text-electric border-electric/20";
-                const pickKey = `${prop.playerName}-${prop.propType}-${i}`;
-                const isExpanded = expandedPropPick === pickKey;
-                return (
-                  <div key={i}>
-                    <button
-                      onClick={() => setExpandedPropPick(isExpanded ? null : pickKey)}
-                      className="w-full px-4 py-3 flex items-center gap-3 hover:bg-gunmetal/20 text-left transition-colors"
-                    >
-                      {/* Rank */}
-                      <span className={`w-6 h-6 rounded-full text-[9px] font-bold flex items-center justify-center flex-shrink-0 ${
-                        i === 0 ? "bg-gold/20 text-gold" : "bg-purple/20 text-purple"
-                      }`}>{i + 1}</span>
+              {(isPro ? todayPropPicks : todayPropPicks.slice(0, 2)).map(
+                (prop, i) => {
+                  const tier = (prop as any).tier as
+                    "HIGH" | "MEDIUM" | "LEAN" | undefined;
+                  const tierColor =
+                    tier === "HIGH"
+                      ? "bg-neon/15 text-neon border-neon/20"
+                      : tier === "MEDIUM"
+                        ? "bg-amber/15 text-amber border-amber/20"
+                        : "bg-electric/10 text-electric border-electric/20";
+                  const pickKey = `${prop.playerName}-${prop.propType}-${i}`;
+                  const isExpanded = expandedPropPick === pickKey;
+                  return (
+                    <div key={i}>
+                      <button
+                        onClick={() =>
+                          setExpandedPropPick(isExpanded ? null : pickKey)
+                        }
+                        className="w-full px-4 py-3 flex items-center gap-3 hover:bg-gunmetal/20 text-left transition-colors"
+                      >
+                        {/* Rank */}
+                        <span
+                          className={`w-6 h-6 rounded-full text-[9px] font-bold flex items-center justify-center flex-shrink-0 ${
+                            i === 0
+                              ? "bg-gold/20 text-gold"
+                              : "bg-purple/20 text-purple"
+                          }`}
+                        >
+                          {i + 1}
+                        </span>
 
-                      {/* Player */}
-                      <PlayerAvatar name={prop.playerName} sport="nba" size={26} />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <p className="text-xs font-semibold text-silver truncate">{prop.playerName}</p>
-                          {tier && (
-                            <span className={`text-[7px] font-bold px-1 py-0.5 rounded border flex-shrink-0 ${tierColor}`}>
-                              {tier}
+                        {/* Player */}
+                        <PlayerAvatar
+                          name={prop.playerName}
+                          sport="nba"
+                          size={26}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-xs font-semibold text-silver truncate">
+                              {prop.playerName}
+                            </p>
+                            {tier && (
+                              <span
+                                className={`text-[7px] font-bold px-1 py-0.5 rounded border flex-shrink-0 ${tierColor}`}
+                              >
+                                {tier}
+                              </span>
+                            )}
+                            {!(prop as any).liveOdds && (
+                              <span className="text-[7px] px-1 py-0.5 rounded border border-mercury/20 text-mercury/40 flex-shrink-0">
+                                PROJ
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[9px] text-mercury/60">
+                            {prop.team}
+                            {prop.gameTime
+                              ? (() => {
+                                  const gameDay = new Date(
+                                    prop.gameTime,
+                                  ).toLocaleDateString("en-US", {
+                                    timeZone: "America/New_York",
+                                  });
+                                  const today = new Date().toLocaleDateString(
+                                    "en-US",
+                                    { timeZone: "America/New_York" },
+                                  );
+                                  const isTomorrow = gameDay !== today;
+                                  return ` • ${isTomorrow ? "🟡 TOMORROW " : ""}${new Date(prop.gameTime).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" })}`;
+                                })()
+                              : " • Brain projection"}
+                          </p>
+                        </div>
+
+                        {/* Pick */}
+                        <div className="flex flex-col items-end flex-shrink-0 gap-0.5">
+                          <span
+                            className={`text-xs font-bold font-mono ${prop.side === "over" ? "text-neon" : "text-purple"}`}
+                          >
+                            {prop.side === "over" ? "OVER" : "UNDER"}{" "}
+                            {prop.line} {prop.propType}
+                          </span>
+                          <span className="text-[9px] text-mercury/60 font-mono">
+                            {prop.odds !== 0
+                              ? `${prop.odds > 0 ? "+" : ""}${prop.odds}`
+                              : ""}
+                            {prop.odds !== 0 && " · "}proj {prop.projectedValue}{" "}
+                            · {prop.brainConfidence}%
+                          </span>
+                          {prop.result && (
+                            <span
+                              className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                                prop.result === "win"
+                                  ? "bg-neon/20 text-neon"
+                                  : prop.result === "loss"
+                                    ? "bg-danger/20 text-danger"
+                                    : "bg-mercury/20 text-mercury"
+                              }`}
+                            >
+                              {prop.result === "win"
+                                ? `✓ ${prop.actualValue}`
+                                : prop.result === "loss"
+                                  ? `✗ ${prop.actualValue}`
+                                  : "PUSH"}
                             </span>
                           )}
-                          {!(prop as any).liveOdds && (
-                            <span className="text-[7px] px-1 py-0.5 rounded border border-mercury/20 text-mercury/40 flex-shrink-0">PROJ</span>
-                          )}
                         </div>
-                        <p className="text-[9px] text-mercury/60">
-                          {prop.team}
-                          {prop.gameTime ? (() => {
-                            const gameDay = new Date(prop.gameTime).toLocaleDateString("en-US", { timeZone: "America/New_York" });
-                            const today = new Date().toLocaleDateString("en-US", { timeZone: "America/New_York" });
-                            const isTomorrow = gameDay !== today;
-                            return ` • ${isTomorrow ? "🟡 TOMORROW " : ""}${new Date(prop.gameTime).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" })}`;
-                          })() : " • Brain projection"}
-                        </p>
-                      </div>
-
-                      {/* Pick */}
-                      <div className="flex flex-col items-end flex-shrink-0 gap-0.5">
-                        <span className={`text-xs font-bold font-mono ${prop.side === "over" ? "text-neon" : "text-purple"}`}>
-                          {prop.side === "over" ? "OVER" : "UNDER"} {prop.line} {prop.propType}
-                        </span>
-                        <span className="text-[9px] text-mercury/60 font-mono">
-                          {prop.odds !== 0 ? `${prop.odds > 0 ? "+" : ""}${prop.odds}` : ""}
-                          {prop.odds !== 0 && " · "}proj {prop.projectedValue} · {prop.brainConfidence}%
-                        </span>
-                        {prop.result && (
-                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
-                            prop.result === "win" ? "bg-neon/20 text-neon" :
-                            prop.result === "loss" ? "bg-danger/20 text-danger" :
-                            "bg-mercury/20 text-mercury"
-                          }`}>
-                            {prop.result === "win" ? `✓ ${prop.actualValue}` : prop.result === "loss" ? `✗ ${prop.actualValue}` : "PUSH"}
-                          </span>
-                        )}
-                      </div>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          const { addParlayLeg } = useStore.getState();
-                          const label = prop.propType === "player_points" ? "Points"
-                            : prop.propType === "player_rebounds" ? "Rebounds"
-                            : prop.propType === "player_assists" ? "Assists"
-                            : prop.propType;
-                          addParlayLeg({
-                            game: prop.playerName,
-                            market: "player_prop" as any,
-                            pick: `${prop.playerName} ${prop.side === "over" ? "Over" : "Under"} ${prop.line} ${label}`,
-                            odds: prop.odds || -110,
-                            fairProb: (prop.probability ?? 0.5),
-                            bookmaker: prop.bookmaker || "best price",
-                          });
-                        }}
-                        className="px-2 py-1 rounded bg-neon/10 border border-neon/20 text-neon text-[10px] font-bold hover:bg-neon/20 transition-colors flex-shrink-0"
-                        title="Add to parlay"
-                      >
-                        + Parlay
-                      </button>
-                      <ChevronDown className={`w-3.5 h-3.5 text-mercury/40 flex-shrink-0 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
-                    </button>
-
-                    {isExpanded && prop.reasoning && (
-                      <div className="px-4 pb-3 animate-slide-up">
-                        <BrainPickDetail
-                          reasoning={prop.reasoning}
-                          seasonAvg={prop.seasonAvg}
-                          last5Avg={prop.last5Avg}
-                          projectedValue={prop.projectedValue}
-                          probability={prop.probability}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const { addParlayLeg } = useStore.getState();
+                            const label =
+                              prop.propType === "player_points"
+                                ? "Points"
+                                : prop.propType === "player_rebounds"
+                                  ? "Rebounds"
+                                  : prop.propType === "player_assists"
+                                    ? "Assists"
+                                    : prop.propType;
+                            addParlayLeg({
+                              game: prop.playerName,
+                              market: "player_prop" as any,
+                              pick: `${prop.playerName} ${prop.side === "over" ? "Over" : "Under"} ${prop.line} ${label}`,
+                              odds: prop.odds || -110,
+                              fairProb: prop.probability ?? 0.5,
+                              bookmaker: prop.bookmaker || "best price",
+                            });
+                          }}
+                          className="px-2 py-1 rounded bg-neon/10 border border-neon/20 text-neon text-[10px] font-bold hover:bg-neon/20 transition-colors flex-shrink-0"
+                          title="Add to parlay"
+                        >
+                          + Parlay
+                        </button>
+                        <ChevronDown
+                          className={`w-3.5 h-3.5 text-mercury/40 flex-shrink-0 transition-transform ${isExpanded ? "rotate-180" : ""}`}
                         />
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+                      </button>
+
+                      {isExpanded && prop.reasoning && (
+                        <div className="px-4 pb-3 animate-slide-up">
+                          <BrainPickDetail
+                            reasoning={prop.reasoning}
+                            seasonAvg={prop.seasonAvg}
+                            last5Avg={prop.last5Avg}
+                            projectedValue={prop.projectedValue}
+                            probability={prop.probability}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  );
+                },
+              )}
               {todayPropPicks.length === 0 && (
                 <div className="px-4 py-5 text-center">
-                  <p className="text-[10px] text-mercury/50">Odds not yet posted for today — picks generate at tip-off</p>
+                  <p className="text-[10px] text-mercury/50">
+                    Odds not yet posted for today — picks generate at tip-off
+                  </p>
                 </div>
               )}
               {!isPro && todayPropPicks.length > 2 && (
                 <div className="px-4 py-3 bg-gradient-to-r from-gold/10 to-electric/5 border-t border-gold/25 flex items-center gap-3">
                   <Crown className="w-4 h-4 text-gold flex-shrink-0" />
                   <p className="text-[11px] text-silver flex-1">
-                    <span className="font-bold">+{todayPropPicks.length - 2} more picks</span> locked
-                    <span className="text-mercury/60"> • includes our HIGH-confidence plays</span>
+                    <span className="font-bold">
+                      +{todayPropPicks.length - 2} more picks
+                    </span>{" "}
+                    locked
+                    <span className="text-mercury/60">
+                      {" "}
+                      • includes our HIGH-confidence plays
+                    </span>
                   </p>
                   <a
                     href="/pricing"
@@ -931,28 +1352,55 @@ export default function BotChallenge() {
             <div className="border-t border-slate/15">
               <div className="px-4 py-2.5 flex items-center gap-2">
                 <Activity className="w-3.5 h-3.5 text-electric" />
-                <p className="text-[10px] text-silver font-semibold uppercase tracking-wider">Prop Pick History</p>
+                <p className="text-[10px] text-silver font-semibold uppercase tracking-wider">
+                  Prop Pick History
+                </p>
                 {propHistoryStats && propHistoryStats.graded > 0 && (
-                  <span className={`ml-auto text-[10px] font-mono font-bold ${propHistoryStats.winRate >= 55 ? "text-neon" : propHistoryStats.winRate >= 50 ? "text-electric" : "text-amber"}`}>
-                    {propHistoryStats.wins}W-{propHistoryStats.losses}L • {propHistoryStats.winRate}%
+                  <span
+                    className={`ml-auto text-[10px] font-mono font-bold ${propHistoryStats.winRate >= 55 ? "text-neon" : propHistoryStats.winRate >= 50 ? "text-electric" : "text-amber"}`}
+                  >
+                    {propHistoryStats.wins}W-{propHistoryStats.losses}L •{" "}
+                    {propHistoryStats.winRate}%
                   </span>
                 )}
               </div>
               <div className="divide-y divide-slate/10 max-h-80 overflow-y-auto">
                 {propHistory.slice(0, 20).map((p, i) => {
-                  const resultColor = p.result === "win" ? "text-neon" : p.result === "loss" ? "text-danger" : p.result === "push" ? "text-amber" : "text-mercury/50";
-                  const resultIcon = p.result === "win" ? "✓" : p.result === "loss" ? "✗" : p.result === "push" ? "—" : "•";
+                  const resultColor =
+                    p.result === "win"
+                      ? "text-neon"
+                      : p.result === "loss"
+                        ? "text-danger"
+                        : p.result === "push"
+                          ? "text-amber"
+                          : "text-mercury/50";
+                  const resultIcon =
+                    p.result === "win"
+                      ? "✓"
+                      : p.result === "loss"
+                        ? "✗"
+                        : p.result === "push"
+                          ? "—"
+                          : "•";
                   return (
-                    <div key={`${p.playerName}-${p.date}-${i}`} className="px-4 py-2 flex items-center gap-2 text-[10px]">
-                      <span className={`w-4 ${resultColor} font-bold`}>{resultIcon}</span>
+                    <div
+                      key={`${p.playerName}-${p.date}-${i}`}
+                      className="px-4 py-2 flex items-center gap-2 text-[10px]"
+                    >
+                      <span className={`w-4 ${resultColor} font-bold`}>
+                        {resultIcon}
+                      </span>
                       <div className="flex-1 min-w-0">
                         <p className="text-silver truncate">{p.playerName}</p>
                         <p className="text-mercury/50 truncate">
-                          {p.side?.toUpperCase()} {p.line} {p.propType} • {p.date}
+                          {p.side?.toUpperCase()} {p.line} {p.propType} •{" "}
+                          {p.date}
                         </p>
                       </div>
                       <span className="text-mercury/60 font-mono text-[9px]">
-                        {p.actualValue !== undefined ? `actual ${p.actualValue}` : "pending"}
+                        {p.actualValue !== undefined
+                          ? `actual ${p.actualValue}`
+                          : "pending"}
                       </span>
                     </div>
                   );
@@ -968,21 +1416,29 @@ export default function BotChallenge() {
         <div className="glass rounded-xl overflow-hidden">
           <div className="px-4 py-2.5 border-b border-slate/30 flex items-center gap-2">
             <Clock className="w-4 h-4 text-mercury" />
-            <span className="text-xs font-bold text-silver uppercase tracking-wider">History</span>
+            <span className="text-xs font-bold text-silver uppercase tracking-wider">
+              History
+            </span>
           </div>
           <div className="divide-y divide-slate/10 max-h-[300px] overflow-y-auto">
-            {dedupePicks([...botState.picks].reverse().filter(p => p.date !== today)).slice(0, 16).map(({ pick, count }) => (
-              <PickRow
-                key={pick.id}
-                pick={pick}
-                dupeCount={count}
-                clvRecord={clvMap.get(pick.id)}
-                isExpanded={expandedPick === pick.id}
-                onToggle={() => setExpandedPick(expandedPick === pick.id ? null : pick.id)}
-                formatOdds={formatOdds}
-                compact
-              />
-            ))}
+            {dedupePicks(
+              [...botState.picks].reverse().filter((p) => p.date !== today),
+            )
+              .slice(0, 16)
+              .map(({ pick, count }) => (
+                <PickRow
+                  key={pick.id}
+                  pick={pick}
+                  dupeCount={count}
+                  clvRecord={clvMap.get(pick.id)}
+                  isExpanded={expandedPick === pick.id}
+                  onToggle={() =>
+                    setExpandedPick(expandedPick === pick.id ? null : pick.id)
+                  }
+                  formatOdds={formatOdds}
+                  compact
+                />
+              ))}
           </div>
         </div>
       )}
@@ -993,7 +1449,9 @@ export default function BotChallenge() {
 // Collapse duplicate picks (same game+pick text+result) across different books
 // into one row with an ×N badge. Keeps stat counts accurate upstream — this
 // only affects display.
-function dedupePicks(picks: SmartBotPick[]): Array<{ pick: SmartBotPick; count: number }> {
+function dedupePicks(
+  picks: SmartBotPick[],
+): Array<{ pick: SmartBotPick; count: number }> {
   const groups = new Map<string, { pick: SmartBotPick; count: number }>();
   const order: string[] = [];
   for (const p of picks) {
@@ -1009,29 +1467,61 @@ function dedupePicks(picks: SmartBotPick[]): Array<{ pick: SmartBotPick; count: 
   return order.map((k) => groups.get(k)!);
 }
 
-function PickRow({ pick, dupeCount, clvRecord, isExpanded, onToggle, formatOdds, compact }: {
-  pick: SmartBotPick; dupeCount?: number; clvRecord?: CLVRecord; isExpanded: boolean; onToggle: () => void;
-  formatOdds: (n: number) => string; compact?: boolean;
+function PickRow({
+  pick,
+  dupeCount,
+  clvRecord,
+  isExpanded,
+  onToggle,
+  formatOdds,
+  compact,
+}: {
+  pick: SmartBotPick;
+  dupeCount?: number;
+  clvRecord?: CLVRecord;
+  isExpanded: boolean;
+  onToggle: () => void;
+  formatOdds: (n: number) => string;
+  compact?: boolean;
 }) {
   const { config } = useSport();
   const resultStyles: Record<string, string> = {
-    win: "bg-neon/15 text-neon", loss: "bg-danger/15 text-danger",
-    push: "bg-mercury/15 text-mercury", pending: "bg-amber/15 text-amber",
+    win: "bg-neon/15 text-neon",
+    loss: "bg-danger/15 text-danger",
+    push: "bg-mercury/15 text-mercury",
+    pending: "bg-amber/15 text-amber",
   };
 
   return (
     <div>
-      <button onClick={onToggle} className="w-full px-3 sm:px-4 py-2.5 flex items-center gap-2 hover:bg-gunmetal/20 text-left">
-        <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${resultStyles[pick.result]}`}>
-          {pick.result === "win" ? <CheckCircle className="w-3.5 h-3.5" /> :
-           pick.result === "loss" ? <XCircle className="w-3.5 h-3.5" /> :
-           pick.result === "push" ? <Minus className="w-3.5 h-3.5" /> :
-           <Clock className="w-3.5 h-3.5" />}
+      <button
+        onClick={onToggle}
+        className="w-full px-3 sm:px-4 py-2.5 flex items-center gap-2 hover:bg-gunmetal/20 text-left"
+      >
+        <div
+          className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${resultStyles[pick.result]}`}
+        >
+          {pick.result === "win" ? (
+            <CheckCircle className="w-3.5 h-3.5" />
+          ) : pick.result === "loss" ? (
+            <XCircle className="w-3.5 h-3.5" />
+          ) : pick.result === "push" ? (
+            <Minus className="w-3.5 h-3.5" />
+          ) : (
+            <Clock className="w-3.5 h-3.5" />
+          )}
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
-            {pick.confidence === "HIGH" && <Crown className="w-3 h-3 text-gold flex-shrink-0" />}
-            <p className="text-xs sm:text-sm font-medium text-silver truncate">{formatPickLabel(pick.pick, (config as any).key ?? "mlb")}</p>
+            {pick.confidence === "HIGH" && (
+              <Crown className="w-3 h-3 text-gold flex-shrink-0" />
+            )}
+            <p className="text-xs sm:text-sm font-medium text-silver truncate">
+              {formatPickLabel(
+                pick.pick,
+                config.sport === "nba" ? "nba" : "mlb",
+              )}
+            </p>
             {dupeCount && dupeCount > 1 && (
               <span
                 className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-electric/15 border border-electric/30 text-electric flex-shrink-0"
@@ -1042,30 +1532,47 @@ function PickRow({ pick, dupeCount, clvRecord, isExpanded, onToggle, formatOdds,
             )}
             {/* Inline CLV badge on settled picks */}
             {clvRecord && clvRecord.closingOdds !== 0 && (
-              <span className={`text-[8px] font-bold px-1 py-0.5 rounded flex-shrink-0 ${clvRecord.beatClosing ? "bg-neon/15 text-neon" : "bg-danger/15 text-danger"}`}>
-                CLV {clvRecord.clvPercent > 0 ? "+" : ""}{clvRecord.clvPercent}%
+              <span
+                className={`text-[8px] font-bold px-1 py-0.5 rounded flex-shrink-0 ${clvRecord.beatClosing ? "bg-neon/15 text-neon" : "bg-danger/15 text-danger"}`}
+              >
+                CLV {clvRecord.clvPercent > 0 ? "+" : ""}
+                {clvRecord.clvPercent}%
               </span>
             )}
           </div>
           <p className="text-[9px] text-mercury/60 truncate">
             {pick.date ? (
               <span className="text-mercury/80 font-mono">
-                {new Date(pick.date + "T12:00:00Z").toLocaleDateString("en-US", { month: "short", day: "numeric" })} ·{" "}
+                {new Date(pick.date + "T12:00:00Z").toLocaleDateString(
+                  "en-US",
+                  { month: "short", day: "numeric" },
+                )}{" "}
+                ·{" "}
               </span>
             ) : null}
-            {pick.game} {pick.finalScore ? `• ${pick.finalScore}` : `• ${pick.bookmaker}`}
+            {pick.game}{" "}
+            {pick.finalScore ? `• ${pick.finalScore}` : `• ${pick.bookmaker}`}
           </p>
         </div>
         <div className="text-right flex-shrink-0">
-          <p className="text-xs font-mono font-bold text-silver">{formatOdds(pick.odds)}</p>
+          <p className="text-xs font-mono font-bold text-silver">
+            {formatOdds(pick.odds)}
+          </p>
           <p className="text-[9px] text-mercury">${pick.stake.toFixed(0)}</p>
         </div>
         {pick.result !== "pending" && (
-          <span className={`text-xs font-mono font-bold flex-shrink-0 ${pick.payout - pick.stake >= 0 ? "text-neon" : "text-danger"}`}>
-            {pick.payout - pick.stake >= 0 ? "+" : ""}${(pick.payout - pick.stake).toFixed(0)}
+          <span
+            className={`text-xs font-mono font-bold flex-shrink-0 ${pick.payout - pick.stake >= 0 ? "text-neon" : "text-danger"}`}
+          >
+            {pick.payout - pick.stake >= 0 ? "+" : ""}$
+            {(pick.payout - pick.stake).toFixed(0)}
           </span>
         )}
-        {!compact && <ChevronDown className={`w-3.5 h-3.5 text-mercury/40 transition-transform ${isExpanded ? "rotate-180" : ""}`} />}
+        {!compact && (
+          <ChevronDown
+            className={`w-3.5 h-3.5 text-mercury/40 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+          />
+        )}
       </button>
 
       {isExpanded && (
@@ -1074,30 +1581,42 @@ function PickRow({ pick, dupeCount, clvRecord, isExpanded, onToggle, formatOdds,
           <div className="grid grid-cols-3 gap-1.5">
             <div className="text-center p-1.5 rounded bg-purple/10">
               <Brain className="w-3 h-3 text-purple mx-auto mb-0.5" />
-              <p className="text-sm font-bold font-mono text-purple">{pick.pitcherScore}%</p>
+              <p className="text-sm font-bold font-mono text-purple">
+                {pick.pitcherScore}%
+              </p>
               <p className="text-[8px] text-mercury">{config.model1Label}</p>
               {pick.pitcherCorrect !== undefined && (
-                <p className={`text-[8px] font-bold ${pick.pitcherCorrect ? "text-neon" : "text-danger"}`}>
+                <p
+                  className={`text-[8px] font-bold ${pick.pitcherCorrect ? "text-neon" : "text-danger"}`}
+                >
                   {pick.pitcherCorrect ? "RIGHT" : "WRONG"}
                 </p>
               )}
             </div>
             <div className="text-center p-1.5 rounded bg-electric/10">
               <BarChart3 className="w-3 h-3 text-electric mx-auto mb-0.5" />
-              <p className="text-sm font-bold font-mono text-electric">{pick.marketScore}%</p>
+              <p className="text-sm font-bold font-mono text-electric">
+                {pick.marketScore}%
+              </p>
               <p className="text-[8px] text-mercury">Market</p>
               {pick.marketCorrect !== undefined && (
-                <p className={`text-[8px] font-bold ${pick.marketCorrect ? "text-neon" : "text-danger"}`}>
+                <p
+                  className={`text-[8px] font-bold ${pick.marketCorrect ? "text-neon" : "text-danger"}`}
+                >
                   {pick.marketCorrect ? "RIGHT" : "WRONG"}
                 </p>
               )}
             </div>
             <div className="text-center p-1.5 rounded bg-neon/10">
               <Activity className="w-3 h-3 text-neon mx-auto mb-0.5" />
-              <p className="text-sm font-bold font-mono text-neon">{pick.trendScore}%</p>
+              <p className="text-sm font-bold font-mono text-neon">
+                {pick.trendScore}%
+              </p>
               <p className="text-[8px] text-mercury">{config.model3Label}</p>
               {pick.trendCorrect !== undefined && (
-                <p className={`text-[8px] font-bold ${pick.trendCorrect ? "text-neon" : "text-danger"}`}>
+                <p
+                  className={`text-[8px] font-bold ${pick.trendCorrect ? "text-neon" : "text-danger"}`}
+                >
                   {pick.trendCorrect ? "RIGHT" : "WRONG"}
                 </p>
               )}
@@ -1105,29 +1624,43 @@ function PickRow({ pick, dupeCount, clvRecord, isExpanded, onToggle, formatOdds,
           </div>
 
           {/* CLV Detail — shown on settled picks that have closing odds */}
-          {pick.result !== "pending" && clvRecord && clvRecord.closingOdds !== 0 && (
-            <div className="rounded bg-gunmetal/20 p-2.5">
-              <p className="text-[9px] text-mercury uppercase tracking-wider mb-1.5 font-semibold">Closing Line Value</p>
-              <div className="flex flex-wrap items-center gap-2">
-                <span className={`text-xs font-bold font-mono ${clvRecord.clvPercent > 0 ? "text-neon" : "text-danger"}`}>
-                  {clvRecord.clvPercent > 0 ? "+" : ""}{clvRecord.clvPercent}% CLV
-                </span>
-                <span className="text-[10px] text-mercury/50">
-                  Open {formatOdds(clvRecord.openingOdds)} → Close {formatOdds(clvRecord.closingOdds)}
-                </span>
-                <span className={`ml-auto text-[10px] font-bold ${clvRecord.beatClosing ? "text-neon" : "text-danger"}`}>
-                  {clvRecord.beatClosing ? "✓ Beat the close" : "✗ Closed worse"}
-                </span>
+          {pick.result !== "pending" &&
+            clvRecord &&
+            clvRecord.closingOdds !== 0 && (
+              <div className="rounded bg-gunmetal/20 p-2.5">
+                <p className="text-[9px] text-mercury uppercase tracking-wider mb-1.5 font-semibold">
+                  Closing Line Value
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span
+                    className={`text-xs font-bold font-mono ${clvRecord.clvPercent > 0 ? "text-neon" : "text-danger"}`}
+                  >
+                    {clvRecord.clvPercent > 0 ? "+" : ""}
+                    {clvRecord.clvPercent}% CLV
+                  </span>
+                  <span className="text-[10px] text-mercury/50">
+                    Open {formatOdds(clvRecord.openingOdds)} → Close{" "}
+                    {formatOdds(clvRecord.closingOdds)}
+                  </span>
+                  <span
+                    className={`ml-auto text-[10px] font-bold ${clvRecord.beatClosing ? "text-neon" : "text-danger"}`}
+                  >
+                    {clvRecord.beatClosing
+                      ? "✓ Beat the close"
+                      : "✗ Closed worse"}
+                  </span>
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
           {/* Reasoning */}
           <div className="rounded bg-gunmetal/20 p-2.5">
-            <p className="text-[9px] text-mercury uppercase tracking-wider mb-1.5 font-semibold">Analysis</p>
+            <p className="text-[9px] text-mercury uppercase tracking-wider mb-1.5 font-semibold">
+              Analysis
+            </p>
             {pick.reasoning.map((r, i) => (
               <p key={i} className="text-[11px] text-mercury mb-0.5 flex gap-1">
-                <span className="text-electric">{'>'}</span> {r}
+                <span className="text-electric">{">"}</span> {r}
               </p>
             ))}
           </div>
@@ -1137,7 +1670,15 @@ function PickRow({ pick, dupeCount, clvRecord, isExpanded, onToggle, formatOdds,
   );
 }
 
-function MiniStat({ label, value, color }: { label: string; value: string; color: string }) {
+function MiniStat({
+  label,
+  value,
+  color,
+}: {
+  label: string;
+  value: string;
+  color: string;
+}) {
   return (
     <div className="text-center py-2 px-1 bg-bunker/50">
       <p className={`text-sm font-bold font-mono ${color}`}>{value}</p>
@@ -1146,16 +1687,28 @@ function MiniStat({ label, value, color }: { label: string; value: string; color
   );
 }
 
-function ModelAccStat({ name, icon: Icon, color, acc }: {
-  name: string; icon: any; color: string; acc: { correct: number; total: number; winRate: number };
+function ModelAccStat({
+  name,
+  icon: Icon,
+  color,
+  acc,
+}: {
+  name: string;
+  icon: any;
+  color: string;
+  acc: { correct: number; total: number; winRate: number };
 }) {
   return (
     <div className="text-center">
       <Icon className={`w-3 h-3 ${color} mx-auto mb-0.5`} />
-      <p className={`text-xs font-bold font-mono ${acc.winRate > 52 ? "text-neon" : acc.winRate > 48 ? color : "text-danger"}`}>
+      <p
+        className={`text-xs font-bold font-mono ${acc.winRate > 52 ? "text-neon" : acc.winRate > 48 ? color : "text-danger"}`}
+      >
         {acc.winRate}%
       </p>
-      <p className="text-[7px] text-mercury/50">{name} ({acc.total})</p>
+      <p className="text-[7px] text-mercury/50">
+        {name} ({acc.total})
+      </p>
     </div>
   );
 }

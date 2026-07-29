@@ -50,7 +50,13 @@ export async function GET() {
     for (const t of reports) {
       for (const p of t.players) {
         const lower = p.status.toLowerCase();
-        const priority = lower.includes("out") ? 10 : lower.includes("doubtful") ? 8 : lower.includes("questionable") ? 5 : 3;
+        const priority = lower.includes("out")
+          ? 10
+          : lower.includes("doubtful")
+            ? 8
+            : lower.includes("questionable")
+              ? 5
+              : 3;
         injuryItems.push({
           type: "injury",
           player: p.name,
@@ -64,16 +70,25 @@ export async function GET() {
     }
 
     const all = [...injuryItems, ...espn]
-      .sort((a, b) => b.priority - a.priority || (new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()))
+      .sort(
+        (a, b) =>
+          b.priority - a.priority ||
+          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+      )
       .slice(0, 50);
 
     const response = {
       ok: true,
       items: all,
       counts: {
-        out: injuryItems.filter((i) => i.status?.toLowerCase().includes("out")).length,
-        doubtful: injuryItems.filter((i) => i.status?.toLowerCase().includes("doubtful")).length,
-        questionable: injuryItems.filter((i) => i.status?.toLowerCase().includes("questionable")).length,
+        out: injuryItems.filter((i) => i.status?.toLowerCase().includes("out"))
+          .length,
+        doubtful: injuryItems.filter((i) =>
+          i.status?.toLowerCase().includes("doubtful"),
+        ).length,
+        questionable: injuryItems.filter((i) =>
+          i.status?.toLowerCase().includes("questionable"),
+        ).length,
         general: espn.length,
       },
       generatedAt: new Date().toISOString(),
@@ -82,6 +97,10 @@ export async function GET() {
     setCache("nfl_news_combined", response);
     return NextResponse.json(response);
   } catch (error: any) {
-    return NextResponse.json({ ok: false, error: error?.message ?? "Failed", items: [] });
+    return NextResponse.json({
+      ok: false,
+      error: error?.message ?? "Failed",
+      items: [],
+    });
   }
 }

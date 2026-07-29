@@ -7,14 +7,16 @@
 import { projectProp, type ProjectionContext } from "./nba-prop-projector";
 import { isPlayerInjured, getInjuryImpact } from "@/lib/nba/injuries";
 import {
-  type NbaPropBrainState, getPlayerAccuracy,
-  loadNbaPropBrainFromCloud, saveNbaPropBrainToCloud,
+  type NbaPropBrainState,
+  getPlayerAccuracy,
+  loadNbaPropBrainFromCloud,
+  saveNbaPropBrainToCloud,
 } from "./nba-prop-brain";
 import { supabase } from "@/lib/supabase/client";
 
 const PROP_MARKETS = ["player_points", "player_rebounds", "player_assists"];
 const PROP_BOT_MIN_ACCURACY = 0.55; // 55% win rate to auto-bet
-const PROP_BOT_KELLY_FRACTION = 0.10; // quarter-Kelly
+const PROP_BOT_KELLY_FRACTION = 0.1; // quarter-Kelly
 
 export interface PropPrediction {
   sport: string;
@@ -66,7 +68,7 @@ export async function commitPropProjections(
     bestUnderOdds: number;
     isHome: boolean;
   }>,
-  gameContext: Record<string, ProjectionContext>
+  gameContext: Record<string, ProjectionContext>,
 ): Promise<{ committed: number; skipped: number }> {
   if (!supabase) return { committed: 0, skipped: 0 };
 
@@ -82,34 +84,58 @@ export async function commitPropProjections(
     .eq("sport", "nba");
 
   const existingKeys = new Set(
-    (existing ?? []).map((r: any) => `${r.player_name}::${r.prop_type}`)
+    (existing ?? []).map((r: any) => `${r.player_name}::${r.prop_type}`),
   );
 
   const predictions: PropPrediction[] = [];
 
   for (const prop of propsData) {
     const key = `${prop.playerName}::${prop.propType}`;
-    if (existingKeys.has(key)) { skipped++; continue; }
+    if (existingKeys.has(key)) {
+      skipped++;
+      continue;
+    }
 
     // Check injury status — skip OUT/DOUBTFUL players
     try {
       const injury = await isPlayerInjured(prop.playerName);
       if (injury) {
         const impact = getInjuryImpact(injury.status);
-        if (!impact.shouldProject) { skipped++; continue; }
+        if (!impact.shouldProject) {
+          skipped++;
+          continue;
+        }
       }
     } catch {}
 
     // Get player stats for projection
-    const playerStats = getPlayerStatsFromBrain(brain, prop.playerName, prop.propType);
-    const ctx = gameContext[prop.gameId] ?? { isHome: prop.isHome, isB2B: false, leagueAvgTotal: 224 };
+    const playerStats = getPlayerStatsFromBrain(
+      brain,
+      prop.playerName,
+      prop.propType,
+    );
+    const ctx = gameContext[prop.gameId] ?? {
+      isHome: prop.isHome,
+      isB2B: false,
+      leagueAvgTotal: 224,
+    };
 
-    const projection = projectProp(playerStats, prop.propType, prop.line, brain.weights, ctx);
+    const projection = projectProp(
+      playerStats,
+      prop.propType,
+      prop.line,
+      brain.weights,
+      ctx,
+    );
 
     // Calculate EV edge
-    const odds = projection.side === "over" ? prop.bestOverOdds : prop.bestUnderOdds;
-    const impliedProb = odds > 0 ? 100 / (odds + 100) : Math.abs(odds) / (Math.abs(odds) + 100);
-    const evEdge = ((projection.probability - impliedProb) / Math.max(impliedProb, 0.01)) * 100;
+    const odds =
+      projection.side === "over" ? prop.bestOverOdds : prop.bestUnderOdds;
+    const impliedProb =
+      odds > 0 ? 100 / (odds + 100) : Math.abs(odds) / (Math.abs(odds) + 100);
+    const evEdge =
+      ((projection.probability - impliedProb) / Math.max(impliedProb, 0.01)) *
+      100;
 
     predictions.push({
       sport: "nba",
@@ -144,7 +170,7 @@ export async function commitPropProjections(
 function getPlayerStatsFromBrain(
   brain: NbaPropBrainState,
   playerName: string,
-  propType: string
+  propType: string,
 ): { ppg: number; rpg: number; apg: number; tpm: number } {
   const playerKey = playerName.toLowerCase().replace(/\s+/g, "_");
   const mem = brain.playerMemory[playerKey];
@@ -164,7 +190,7 @@ function getPlayerStatsFromBrain(
 
 export function generatePropBotPicks(
   brain: NbaPropBrainState,
-  predictions: PropPrediction[]
+  predictions: PropPrediction[],
 ): PropBotPick[] {
   const picks: PropBotPick[] = [];
   const today = new Date().toISOString().split("T")[0];
@@ -181,9 +207,15 @@ export function generatePropBotPicks(
     // Quarter-Kelly sizing
     const bankroll = 5000; // prop bot bankroll
     const edge = pred.ev_edge / 100;
-    const decimalOdds = pred.odds_at_pick > 0 ? (pred.odds_at_pick / 100) + 1 : (100 / Math.abs(pred.odds_at_pick)) + 1;
+    const decimalOdds =
+      pred.odds_at_pick > 0
+        ? pred.odds_at_pick / 100 + 1
+        : 100 / Math.abs(pred.odds_at_pick) + 1;
     const kelly = (edge * decimalOdds - (1 - edge)) / (decimalOdds - 1);
-    const stake = Math.max(25, Math.min(100, Math.round(bankroll * kelly * PROP_BOT_KELLY_FRACTION)));
+    const stake = Math.max(
+      25,
+      Math.min(100, Math.round(bankroll * kelly * PROP_BOT_KELLY_FRACTION)),
+    );
 
     picks.push({
       id: `prop-bot-${today}-${picks.length}`,

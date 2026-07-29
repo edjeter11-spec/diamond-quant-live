@@ -24,7 +24,10 @@ const BOOKMAKERS = [
 ];
 
 // Display names for bookmakers
-export const BOOK_DISPLAY: Record<string, { name: string; short: string; color: string }> = {
+export const BOOK_DISPLAY: Record<
+  string,
+  { name: string; short: string; color: string }
+> = {
   draftkings: { name: "DraftKings", short: "DK", color: "#53d337" },
   fanduel: { name: "FanDuel", short: "FD", color: "#1493ff" },
   fanatics: { name: "Fanatics", short: "FAN", color: "#e31837" },
@@ -61,11 +64,27 @@ interface OddsAPIGame {
   }>;
 }
 
-export async function fetchOdds(apiKey: string, sportKey: string = SPORT): Promise<OddsAPIGame[]> {
+export async function fetchOdds(
+  apiKey: string,
+  sportKey: string = SPORT,
+): Promise<OddsAPIGame[]> {
   const markets = "h2h,spreads,totals";
   const url = `${BASE_URL}/sports/${sportKey}/odds/?apiKey=${apiKey}&regions=us&markets=${markets}&oddsFormat=american&bookmakers=${BOOKMAKERS.join(",")}`;
 
-  const res = await fetch(url, { next: { revalidate: 30 } });
+  // Hard timeout — an un-bounded fetch here can hang a request for minutes
+  // (observed: 3-4min responses) when the Odds API is slow to answer a
+  // dead/401 key, which then compounds across retry attempts upstream.
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      next: { revalidate: 30 },
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
   const remaining = res.headers.get("x-requests-remaining");
   const used = res.headers.get("x-requests-used");
   if (remaining !== null && parseInt(remaining) <= 0) {
@@ -80,9 +99,12 @@ export async function fetchOdds(apiKey: string, sportKey: string = SPORT): Promi
       updatedAt: new Date().toISOString(),
     };
     setCache("odds_api_usage", usage);
-    import("@/lib/supabase/client").then(({ cloudSet }) => cloudSet("odds_api_usage", usage)).catch(() => {});
+    import("@/lib/supabase/client")
+      .then(({ cloudSet }) => cloudSet("odds_api_usage", usage))
+      .catch(() => {});
   }
-  if (!res.ok) throw new Error(`Odds API error: ${res.status} ${res.statusText}`);
+  if (!res.ok)
+    throw new Error(`Odds API error: ${res.status} ${res.statusText}`);
   return res.json();
 }
 
@@ -91,16 +113,25 @@ export async function fetchMLBOdds(apiKey: string): Promise<OddsAPIGame[]> {
   return fetchOdds(apiKey, SPORT);
 }
 
-
 export async function fetchPlayerProps(
   apiKey: string,
   eventId: string,
   market: string = "pitcher_strikeouts",
-  sportKey: string = SPORT
+  sportKey: string = SPORT,
 ): Promise<OddsAPIGame> {
   const url = `${BASE_URL}/sports/${sportKey}/events/${eventId}/odds?apiKey=${apiKey}&regions=us&markets=${market}&oddsFormat=american&bookmakers=${BOOKMAKERS.join(",")}`;
 
-  const res = await fetch(url, { next: { revalidate: 60 } });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      next: { revalidate: 60 },
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
   const remaining = res.headers.get("x-requests-remaining");
   const used = res.headers.get("x-requests-used");
   if (remaining !== null) {
@@ -111,7 +142,9 @@ export async function fetchPlayerProps(
       updatedAt: new Date().toISOString(),
     };
     setCache("odds_api_usage", usage);
-    import("@/lib/supabase/client").then(({ cloudSet }) => cloudSet("odds_api_usage", usage)).catch(() => {});
+    import("@/lib/supabase/client")
+      .then(({ cloudSet }) => cloudSet("odds_api_usage", usage))
+      .catch(() => {});
   }
   if (!res.ok) {
     throw new Error(`Props API error: ${res.status}`);
@@ -166,7 +199,9 @@ export function parsePlayerProps(game: OddsAPIGame): PlayerProp[] {
       for (const over of overs) {
         if (!over.description) continue;
         const under = unders.find(
-          (u) => u.description === over.description && (u.point ?? 0) === (over.point ?? 0),
+          (u) =>
+            u.description === over.description &&
+            (u.point ?? 0) === (over.point ?? 0),
         );
         if (!under) continue;
 
@@ -191,7 +226,7 @@ export function parsePlayerProps(game: OddsAPIGame): PlayerProp[] {
 export function findBestLine(
   oddsLines: OddsLine[],
   side: "home" | "away",
-  market: "ml" | "spread" | "total_over" | "total_under"
+  market: "ml" | "spread" | "total_over" | "total_under",
 ): { bookmaker: string; odds: number } {
   let best = { bookmaker: "", odds: -Infinity };
 
@@ -212,7 +247,8 @@ export function findBestLine(
         break;
     }
 
-    if (odds > best.odds) {
+    // 0 = no line posted by this book — never treat it as the "best" price
+    if (odds !== 0 && Number.isFinite(odds) && odds > best.odds) {
       best = { bookmaker: line.bookmaker, odds };
     }
   }
