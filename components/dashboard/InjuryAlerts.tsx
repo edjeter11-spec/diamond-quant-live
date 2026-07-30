@@ -2,9 +2,9 @@
 
 // Injury Alerts rail panel from the product render.
 //
-// Real data only — reads /api/nba-injuries, which scrapes the live NBA injury
-// report. That endpoint is NBA-specific, so on other sports this renders an
-// honest "not wired up for this sport yet" state rather than inventing
+// Real data only — reads /api/mlb-injuries or /api/nba-injuries, both of which
+// normalize ESPN's public injury feed. Sports without a wired-up feed render an
+// honest "not available for this sport" state rather than inventing
 // plausible-looking injuries, which on a betting dashboard would be actively
 // dangerous (people size bets off injury news).
 
@@ -15,7 +15,13 @@ interface InjuredPlayer {
   name?: string;
   player?: string;
   status?: string;
+  /** ESPN blurb. NBA emits `shortComment`, MLB normalizes to `detail`. The
+   *  old code only read `injury`, which neither feed sets — so the detail
+   *  line was always blank. */
+  detail?: string;
+  shortComment?: string;
   injury?: string;
+  position?: string;
   returnDate?: string;
 }
 interface TeamReport {
@@ -37,8 +43,10 @@ export default function InjuryAlerts({ sport }: { sport: string }) {
   >([]);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
 
+  const supported = sport === "nba" || sport === "mlb";
+
   useEffect(() => {
-    if (sport !== "nba") {
+    if (!supported) {
       setState("ready");
       setRows([]);
       return;
@@ -46,9 +54,10 @@ export default function InjuryAlerts({ sport }: { sport: string }) {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch("/api/nba-injuries", {
-          signal: AbortSignal.timeout(8000),
-        });
+        const res = await fetch(
+          sport === "mlb" ? "/api/mlb-injuries" : "/api/nba-injuries",
+          { signal: AbortSignal.timeout(8000) },
+        );
         const d = await res.json();
         const flat: typeof rows = [];
         for (const t of (d?.injuries ?? []) as TeamReport[]) {
@@ -57,11 +66,13 @@ export default function InjuryAlerts({ sport }: { sport: string }) {
               name: p.name ?? p.player ?? "Unknown",
               team: t.teamAbbrev ?? "",
               status: (p.status ?? "").toLowerCase(),
-              detail: p.injury ?? "",
+              // Both feeds are covered: MLB normalizes to `detail`, NBA emits
+              // `shortComment`. `injury` is kept last for safety.
+              detail: p.detail ?? p.shortComment ?? p.injury ?? "",
             });
           }
         }
-        // Most actionable first: Out/Doubtful before Questionable.
+        // Most actionable first: Out/Doubtful before day-to-day.
         const rank = (s: string) =>
           s.startsWith("out") ? 0 : s.startsWith("doubt") ? 1 : 2;
         flat.sort((a, b) => rank(a.status) - rank(b.status));
@@ -76,7 +87,7 @@ export default function InjuryAlerts({ sport }: { sport: string }) {
     return () => {
       cancelled = true;
     };
-  }, [sport]);
+  }, [sport, supported]);
 
   return (
     <div className="glass rounded-xl border border-slate/20 overflow-hidden">
@@ -88,9 +99,9 @@ export default function InjuryAlerts({ sport }: { sport: string }) {
       </div>
 
       <div className="p-3">
-        {sport !== "nba" ? (
+        {!supported ? (
           <p className="text-[11px] text-mercury/60 leading-snug">
-            Live injury feed is NBA-only right now. {sport.toUpperCase()} status
+            Live injury feed covers MLB and NBA. {sport.toUpperCase()} status
             still comes through the game cards and matchup detail.
           </p>
         ) : state === "loading" ? (

@@ -590,12 +590,14 @@ export default function PlayerProps() {
                         : "bg-gunmetal/30 border-slate/20"
                   }`}
                 >
+                  {/* Model priced this prop and found the book's line fair —
+                      no edge either way. Still labelled, because the row below
+                      otherwise looks identical to a real pick. */}
                   {searchResult.recommendation.side === "no_edge" && (
-                    <div className="flex items-start gap-2 px-2.5 py-2 rounded-lg bg-amber/10 border border-amber/25 mb-2">
-                      <AlertTriangle className="w-3.5 h-3.5 text-amber flex-shrink-0 mt-0.5" />
-                      <p className="text-[10px] sm:text-[11px] font-bold text-amber uppercase tracking-wide">
-                        No real edge here — shown for visibility only, not a
-                        recommendation
+                    <div className="flex items-start gap-2 px-2.5 py-2 rounded-lg bg-mercury/5 border border-slate/20 mb-2">
+                      <AlertTriangle className="w-3.5 h-3.5 text-mercury/70 flex-shrink-0 mt-0.5" />
+                      <p className="text-[10px] sm:text-[11px] font-semibold text-mercury/80 uppercase tracking-wide">
+                        Line looks fair — no edge either side
                       </p>
                     </div>
                   )}
@@ -1147,11 +1149,10 @@ export default function PlayerProps() {
                                 }`}
                               >
                                 {analysis.recommendation.side === "no_edge" && (
-                                  <div className="flex items-start gap-2 px-2.5 py-2 rounded-lg bg-amber/10 border border-amber/25 mb-2">
-                                    <AlertTriangle className="w-3.5 h-3.5 text-amber flex-shrink-0 mt-0.5" />
-                                    <p className="text-[10px] sm:text-[11px] font-bold text-amber uppercase tracking-wide">
-                                      No real edge here — shown for visibility
-                                      only, not a recommendation
+                                  <div className="flex items-start gap-2 px-2.5 py-2 rounded-lg bg-mercury/5 border border-slate/20 mb-2">
+                                    <AlertTriangle className="w-3.5 h-3.5 text-mercury/70 flex-shrink-0 mt-0.5" />
+                                    <p className="text-[10px] sm:text-[11px] font-semibold text-mercury/80 uppercase tracking-wide">
+                                      Line looks fair — no edge either side
                                     </p>
                                   </div>
                                 )}

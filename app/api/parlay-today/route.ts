@@ -16,6 +16,8 @@ interface ParlayLeg {
   confidence: string;
   commenceTime?: string;
   dayLabel?: string;
+  /** Why this leg made the ticket — shown in the UI dropdown, same as props. */
+  reasoning?: string[];
 }
 
 interface PinnedParlay {
@@ -24,6 +26,8 @@ interface PinnedParlay {
   legs: ParlayLeg[];
   totalOdds: number;
   generatedAt: string;
+  /** Every leg clears the vig. False = best-available, not a real edge. */
+  hasPositiveEv?: boolean;
   lockedUntil: string;
   dayLabel: string; // "Today" or "Tomorrow" etc
 }
@@ -52,6 +56,10 @@ function scorePick(p: { confidence: string; evPercentage?: number }): number {
   return confScore * 5 + (p.evPercentage ?? 0);
 }
 
+function formatAmerican(odds: number): string {
+  return odds > 0 ? `+${odds}` : String(odds);
+}
+
 function americanToDecimalOdds(odds: number): number {
   return odds > 0 ? odds / 100 + 1 : 100 / Math.abs(odds) + 1;
 }
@@ -74,6 +82,15 @@ function toAmericanParlay(legs: ParlayLeg[]): number {
 const MIN_LEG_ODDS = -260; // don't include heavy chalk that adds no payout
 const MAX_LEG_ODDS = 180; // don't include a longshot that blows up the parlay
 const TARGET_MAX_AMERICAN = 150;
+
+// Prop legs get a higher price ceiling than game lines. A flat +180 cap meant
+// every plus-money prop market (HR, steals, and most RBI/runs lines sit +200
+// to +600) was filtered out before scoring, so no matter how the model priced
+// them the parlay could only ever be built from Hits/Ks/Total Bases — which is
+// exactly the "always Over 0.5 Hits" behaviour. The compounded-odds ceiling
+// (TARGET_MAX_AMERICAN, enforced in tryAdd) still keeps the final ticket sane,
+// so a single pricier leg can be included when it's genuinely the best value.
+const MAX_PROP_LEG_ODDS = 400;
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -169,9 +186,18 @@ export async function GET(req: NextRequest) {
           { key: "player_assists", label: "Assists" },
         ]
       : [
+          // Widened from 3 markets to the full MLB catalog. Previously only
+          // Ks / Hits / Total Bases were even fetched, so "best value today"
+          // could never be an RBI, run, steal or HR prop no matter how the
+          // model priced it.
           { key: "pitcher_strikeouts", label: "Ks" },
           { key: "batter_hits", label: "Hits" },
           { key: "batter_total_bases", label: "Total Bases" },
+          { key: "batter_home_runs", label: "HR" },
+          { key: "batter_rbis", label: "RBIs" },
+          { key: "batter_runs_scored", label: "Runs" },
+          { key: "batter_stolen_bases", label: "Steals" },
+          { key: "pitcher_outs", label: "Outs" },
         ];
     await Promise.all(
       markets.map(async ({ key, label }) => {
@@ -193,6 +219,28 @@ export async function GET(req: NextRequest) {
             if (!best?.price) continue;
             const topProb = Math.max(overProb, underProb);
             if (topProb < 55) continue;
+
+            // REAL expected value, priced against what the book is offering.
+            //
+            // This used to be `(topProb - 50) * 2`, which is just a restatement
+            // of the model's probability and ignores the price entirely. Under
+            // that formula an 80%-likely Over 0.5 Hits at -250 always outranked
+            // a 40%-likely HR at +450, even though the first is roughly break-
+            // even and the second is a large edge. That single line is why the
+            // parlay was almost always "Over 0.5 Hits".
+            //
+            // EV% = (p * decimalPayout - 1) * 100, using de-vigged fair prob.
+            const decPayout = americanToDecimalOdds(best.price);
+            const evPct = (topProb / 100) * decPayout - 1;
+            const evPercentage = Math.round(evPct * 100 * 10) / 10;
+            // NOT filtered to positive-EV only. Against real vigged MLB prop
+            // prices, most days have nothing genuinely +EV — filtering to
+            // ev > 0 left the parlay empty almost every day. Instead every
+            // candidate is ranked by this honest number, so the best available
+            // value wins regardless of market, and the response carries
+            // `hasPositiveEv` so the UI can say plainly when the ticket is
+            // "least bad" rather than a real edge.
+
             propCandidates.push({
               id: `prop-${key}-${prop.playerName}`,
               game: prop.playerName,
@@ -200,8 +248,10 @@ export async function GET(req: NextRequest) {
               market: "player_prop",
               odds: best.price,
               bookmaker: best.bookmaker,
-              evPercentage: Math.round((topProb - 50) * 2 * 10) / 10,
+              evPercentage,
               fairProb: topProb,
+              // Confidence still tracks likelihood (how safe the leg is);
+              // evPercentage tracks value. scorePick weighs both.
               confidence:
                 topProb >= 65 ? "HIGH" : topProb >= 58 ? "MEDIUM" : "LOW",
               commenceTime: prop.gameTime,
@@ -222,7 +272,13 @@ export async function GET(req: NextRequest) {
     // with no ceiling produced parlays like +753 under a "Parlay of the
     // Day" banner that's supposed to read as a simple, boostable ticket.
     const allCandidates = [...pool, ...propCandidates]
-      .filter((c) => c.odds >= MIN_LEG_ODDS && c.odds <= MAX_LEG_ODDS)
+      .filter((c) => {
+        if (c.odds < MIN_LEG_ODDS) return false;
+        // Props may be priced higher than game lines — see MAX_PROP_LEG_ODDS.
+        const ceiling =
+          c.market === "player_prop" ? MAX_PROP_LEG_ODDS : MAX_LEG_ODDS;
+        return c.odds <= ceiling;
+      })
       .sort((a, b) => scorePick(b) - scorePick(a));
 
     const legs: ParlayLeg[] = [];
@@ -241,16 +297,54 @@ export async function GET(req: NextRequest) {
         nextDecimal >= 2
           ? Math.round((nextDecimal - 1) * 100)
           : Math.round(-100 / (nextDecimal - 1));
-      if (legs.length >= 3 && nextAmerican > TARGET_MAX_AMERICAN) return false;
+      // Odds ceiling, applied with a floor on leg count. Previously this only
+      // kicked in at 3+ legs, so the first three could compound unchecked (a
+      // +110 leg plus two others produced +341 against a +150 target). But
+      // enforcing it strictly from leg 2 goes too far the other way: two chalky
+      // -250/-200 props already reach +110, leaving no room for a third, and a
+      // 2-leg "Parlay of the Day" isn't much of a parlay. So: allow a wider
+      // ceiling until we have 3 legs, then hold the line.
+      const ceiling =
+        legs.length < 3 ? TARGET_MAX_AMERICAN * 2 : TARGET_MAX_AMERICAN;
+      if (legs.length >= 2 && nextAmerican > ceiling) return false;
 
       const { day: _day, ...leg } = p;
-      legs.push({ ...leg, dayLabel });
+      // Build the rationale from the numbers that actually got this leg
+      // selected, so the dropdown reflects the real decision rather than
+      // generic copy.
+      const impliedProb =
+        p.odds > 0
+          ? (100 / (p.odds + 100)) * 100
+          : (-p.odds / (-p.odds + 100)) * 100;
+      const reasoning = [
+        `Model puts this at ${p.fairProb.toFixed(1)}% to hit — the ${formatAmerican(p.odds)} price on ${p.bookmaker} implies ${impliedProb.toFixed(1)}%.`,
+        p.evPercentage > 0
+          ? `That's a genuine +${p.evPercentage.toFixed(1)}% edge — the model rates it more likely than the price does.`
+          : `Priced at ${p.evPercentage.toFixed(1)}% against the vig — chosen for how often it hits, not for beating the price.`,
+        p.market === "player_prop"
+          ? "Player prop — projected from this player's form and the matchup."
+          : "Game line — model output vs. the market consensus.",
+        `Confidence: ${p.confidence} — how likely this leg is to land.`,
+      ];
+      legs.push({ ...leg, dayLabel, reasoning });
       usedGames.add(p.game);
       runningDecimal = nextDecimal;
       return true;
     };
 
-    for (const c of allCandidates) {
+    // Two passes. A single greedy pass over EV-sorted candidates would let one
+    // plus-money leg consume the whole odds budget (a +110 leg alone leaves no
+    // room under a +150 target), yielding a 2-leg "parlay". So: fill first from
+    // minus-money legs — the ones that add probability without inflating the
+    // price — then let plus-money legs use whatever budget is left.
+    const minusMoney = allCandidates.filter((c) => c.odds < 0);
+    const plusMoney = allCandidates.filter((c) => c.odds >= 0);
+
+    for (const c of minusMoney) {
+      if (legs.length >= 4) break;
+      tryAdd(c);
+    }
+    for (const c of plusMoney) {
       if (legs.length >= 4) break;
       tryAdd(c);
     }
@@ -278,6 +372,10 @@ export async function GET(req: NextRequest) {
       generatedAt: new Date().toISOString(),
       lockedUntil: new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString(),
       dayLabel,
+      // True only when EVERY leg beats the vig. Against real MLB prop prices
+      // that's uncommon, so the UI uses this to avoid calling a break-even
+      // ticket an "edge".
+      hasPositiveEv: legs.length > 0 && legs.every((l) => l.evPercentage > 0),
     };
 
     await cloudSet(cacheKey, result);

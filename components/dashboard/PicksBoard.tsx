@@ -38,7 +38,6 @@ import InfoTip from "@/components/ui/InfoTip";
 import Link from "next/link";
 import { usePremium } from "@/lib/hooks/usePremium";
 import TodayPropPicks from "@/components/dashboard/TodayPropPicks";
-import NRFISection from "@/components/dashboard/NRFISection";
 import NFLPropSection from "@/components/dashboard/NFLPropSection";
 import NHLPropSection from "@/components/dashboard/NHLPropSection";
 import SafeBoundary from "@/components/SafeBoundary";
@@ -687,7 +686,10 @@ export default function PicksBoard() {
     totalOdds: number;
     generatedAt: string;
     dayLabel: string;
+    hasPositiveEv?: boolean;
   } | null>(null);
+  // Which parlay leg has its rationale open (one at a time, like the props rows)
+  const [expandedLeg, setExpandedLeg] = useState<number | null>(null);
   useEffect(() => {
     let cancelled = false;
     fetch(`/api/parlay-today?sport=${currentSport}`)
@@ -699,6 +701,7 @@ export default function PicksBoard() {
             totalOdds: data.totalOdds,
             generatedAt: data.generatedAt,
             dayLabel: data.dayLabel,
+            hasPositiveEv: data.hasPositiveEv,
           });
         } else if (!cancelled) {
           setPinnedParlay(null);
@@ -830,77 +833,143 @@ export default function PicksBoard() {
                 {formatOdds(parlayAmerican)}
               </span>
             </div>
-            <div className="p-2.5 sm:p-3 space-y-1.5">
-              {parlayLegs.map((leg, i) => (
-                <div
-                  key={i}
-                  className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-gunmetal/30 text-left"
-                >
-                  <span className="w-4 h-4 rounded-full bg-purple/20 text-purple text-[9px] font-bold flex items-center justify-center flex-shrink-0">
-                    {i + 1}
-                  </span>
-                  <TeamLogo
-                    team={leg.pick
-                      .split(" ML")[0]
-                      .split(" Over")[0]
-                      .split(" Under")[0]
-                      .split("/")[0]
-                      .trim()}
-                    size={18}
-                  />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs sm:text-sm font-medium text-silver truncate">
-                      {leg.pick}
-                    </p>
-                    <p className="text-[9px] text-mercury/60 truncate">
-                      {leg.commenceTime && (
-                        <span className="text-mercury/80">
-                          {new Date(leg.commenceTime).toLocaleString("en-US", {
-                            month: "short",
-                            day: "numeric",
-                            hour: "numeric",
-                            minute: "2-digit",
-                          })}{" "}
-                          —{" "}
-                        </span>
+            {/* Lead with what's actually true about this ticket: these are the
+                highest-probability legs the model found. Deliberately NOT
+                phrased as "value"/"edge" unless every leg genuinely beats the
+                vig — most days against real MLB prop prices they don't, and
+                calling a -5% ticket an edge is the one claim that shouldn't
+                ship on a betting board. */}
+            {parlayLegs.length > 0 &&
+              (() => {
+                const avgProb =
+                  parlayLegs.reduce((s, l) => s + (l.fairProb ?? 0), 0) /
+                  parlayLegs.length;
+                return (
+                  <div className="px-3 sm:px-4 py-1.5 border-b border-slate/15 bg-purple/5">
+                    <p className="text-[10px] text-mercury/75 leading-snug">
+                      {pinnedParlay?.hasPositiveEv ? (
+                        <>
+                          <span className="text-neon font-semibold">
+                            Every leg beats the price
+                          </span>{" "}
+                          — model has these at {avgProb.toFixed(0)}% average to
+                          hit.
+                        </>
+                      ) : (
+                        <>
+                          <span className="text-silver font-semibold">
+                            Highest-probability legs on the board
+                          </span>{" "}
+                          — {avgProb.toFixed(0)}% average model confidence. Tap
+                          any leg for the math.
+                        </>
                       )}
-                      {leg.game} • {leg.bookmaker}
                     </p>
                   </div>
-                  <div className="text-right flex-shrink-0">
-                    <p className="text-xs font-mono font-semibold text-silver">
-                      {formatOdds(leg.odds)}
-                    </p>
-                    <p className="text-[9px] text-neon">
-                      +{leg.evPercentage.toFixed(1)}%
-                    </p>
+                );
+              })()}
+            <div className="p-2.5 sm:p-3 space-y-1.5">
+              {parlayLegs.map((leg, i) => {
+                const isOpen = expandedLeg === i;
+                const hasWhy = (leg.reasoning?.length ?? 0) > 0;
+                return (
+                  <div key={i} className="rounded-lg bg-gunmetal/30">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        hasWhy && setExpandedLeg(isOpen ? null : i)
+                      }
+                      aria-expanded={isOpen}
+                      className={`w-full flex items-center gap-2 px-2.5 py-1.5 text-left ${
+                        hasWhy ? "cursor-pointer hover:bg-gunmetal/50" : ""
+                      } rounded-lg transition-colors`}
+                    >
+                      <span className="w-4 h-4 rounded-full bg-purple/20 text-purple text-[9px] font-bold flex items-center justify-center flex-shrink-0">
+                        {i + 1}
+                      </span>
+                      <TeamLogo
+                        team={leg.pick
+                          .split(" ML")[0]
+                          .split(" Over")[0]
+                          .split(" Under")[0]
+                          .split("/")[0]
+                          .trim()}
+                        size={18}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs sm:text-sm font-medium text-silver truncate">
+                          {leg.pick}
+                        </p>
+                        <p className="text-[9px] text-mercury/60 truncate">
+                          {leg.commenceTime && (
+                            <span className="text-mercury/80">
+                              {new Date(leg.commenceTime).toLocaleString(
+                                "en-US",
+                                {
+                                  month: "short",
+                                  day: "numeric",
+                                  hour: "numeric",
+                                  minute: "2-digit",
+                                },
+                              )}{" "}
+                              —{" "}
+                            </span>
+                          )}
+                          {leg.game} • {leg.bookmaker}
+                        </p>
+                      </div>
+                      <div className="text-right flex-shrink-0">
+                        <p className="text-xs font-mono font-semibold text-silver">
+                          {formatOdds(leg.odds)}
+                        </p>
+                        <p className="text-[9px] text-neon">
+                          {leg.evPercentage > 0 ? "+" : ""}
+                          {leg.evPercentage.toFixed(1)}%
+                        </p>
+                      </div>
+                      {hasWhy && (
+                        <ChevronDown
+                          className={`w-3.5 h-3.5 text-mercury/50 flex-shrink-0 transition-transform ${
+                            isOpen ? "rotate-180" : ""
+                          }`}
+                        />
+                      )}
+                    </button>
+                    {isOpen && hasWhy && (
+                      <div className="px-2.5 pb-2.5 pt-0.5 space-y-1 border-t border-slate/15 mt-0.5">
+                        {leg.reasoning.map((r: string, ri: number) => (
+                          <p
+                            key={ri}
+                            className="text-[10px] text-mercury/80 leading-snug flex gap-1.5"
+                          >
+                            <span className="text-purple/60 flex-shrink-0">
+                              •
+                            </span>
+                            <span>{r}</span>
+                          </p>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
 
-        {/* Second cell of the 2-up: NRFI. Full detail still lives on the
-            dedicated NRFI tab — this is the at-a-glance card from the render.
-            MLB-only, since NRFI is a first-inning baseball market. */}
-        {currentSport === "mlb" && (
+        {/* Second cell of the 2-up: Today's Player Props. NRFI/YRFI used to
+            sit here but now lives ONLY on its dedicated NRFI tab — it was
+            duplicated in both places. */}
+        {(currentSport === "mlb" || currentSport === "nba") && (
           <SafeBoundary>
-            <NRFISection sport="mlb" />
+            <TodayPropPicks
+              sport={currentSport as "mlb" | "nba"}
+              propsData={propsData}
+              loading={propsLoading}
+            />
           </SafeBoundary>
         )}
       </div>
-
-      {/* ═══ TODAY'S PLAYER PROPS — MLB/NBA only ═══ */}
-      {(currentSport === "mlb" || currentSport === "nba") && (
-        <SafeBoundary>
-          <TodayPropPicks
-            sport={currentSport as "mlb" | "nba"}
-            propsData={propsData}
-            loading={propsLoading}
-          />
-        </SafeBoundary>
-      )}
 
       {/* ═══ NFL Player Props — auto-renders when sport=nfl ═══ */}
       <SafeBoundary>
@@ -947,11 +1016,13 @@ export default function PicksBoard() {
             </button>
             {isCollapsed ? null : sec.picks.length === 0 ? (
               <div className="px-3 py-3">
-                <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-amber/10 border border-amber/25 mb-2">
-                  <AlertTriangle className="w-3.5 h-3.5 text-amber flex-shrink-0 mt-0.5" />
-                  <p className="text-[10px] sm:text-[11px] font-bold text-amber uppercase tracking-wide">
-                    No real edge here — shown for visibility only, not a
-                    recommendation
+                {/* This section found nothing meeting its bar today. The rows
+                    below are the closest alternatives from the wider pool, so
+                    they must stay labelled as such — they did NOT qualify. */}
+                <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-mercury/5 border border-slate/20 mb-2">
+                  <Clock className="w-3.5 h-3.5 text-mercury/70 flex-shrink-0 mt-0.5" />
+                  <p className="text-[10px] sm:text-[11px] font-semibold text-mercury/80 uppercase tracking-wide">
+                    Nothing cleared the bar here today — closest looks below
                   </p>
                 </div>
                 {/* Fallback — show up to 3 varied best picks from pool (deduped by market) */}
@@ -1189,11 +1260,16 @@ function PickCard({
 
   return (
     <div>
+      {/* Placeholder = books haven't posted lines for this game yet (odds 0,
+          bookmaker "No lines posted"). It's a schedule preview, not a pick, so
+          say that plainly rather than warning about a missing "edge" — but it
+          must stay labelled: an unlabelled card on a betting board reads as a
+          recommendation. */}
       {pick.isPlaceholder && (
-        <div className="flex items-center gap-2 px-3 sm:px-4 py-1.5 bg-amber/10 border-b border-amber/25">
-          <AlertTriangle className="w-3.5 h-3.5 text-amber flex-shrink-0" />
-          <p className="text-[10px] sm:text-[11px] font-bold text-amber uppercase tracking-wide">
-            No real edge here — shown for visibility only, not a recommendation
+        <div className="flex items-center gap-2 px-3 sm:px-4 py-1.5 bg-mercury/5 border-b border-slate/20">
+          <Clock className="w-3.5 h-3.5 text-mercury/70 flex-shrink-0" />
+          <p className="text-[10px] sm:text-[11px] font-semibold text-mercury/80 uppercase tracking-wide">
+            Lines not posted yet — schedule preview
           </p>
         </div>
       )}
