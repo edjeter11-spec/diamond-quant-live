@@ -283,7 +283,28 @@ export default function TodayPropPicks({
     };
   }, [sport]);
 
-  const picks = useMemo<PropPick[]>(() => {
+  // ── Pinned board ──
+  // The authoritative list comes from /api/pinned-props, which ranks once and
+  // stores the result so every user sees the same picks. Ranking in the
+  // browser (below, now a fallback) meant two people loading seconds apart
+  // could get different boards, and a pick could disappear as lines moved.
+  const [pinned, setPinned] = useState<PropPick[] | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/pinned-props?sport=${sport}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (!cancelled && d?.ok && Array.isArray(d.picks) && d.picks.length) {
+          setPinned(d.picks as PropPick[]);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [sport]);
+
+  const localPicks = useMemo<PropPick[]>(() => {
     const build = (prop: RawProp, side: "over" | "under"): PropPick | null => {
       const best = side === "over" ? prop.bestOver : prop.bestUnder;
       if (!best?.price) return null;
@@ -376,6 +397,10 @@ export default function TodayPropPicks({
       );
     return out.slice(0, TARGET);
   }, [propsData]);
+
+  // Prefer the pinned board; fall back to the local ranking only if the pinned
+  // endpoint is unavailable, so the panel never goes dark.
+  const picks = pinned ?? localPicks;
 
   if (loading) {
     return (

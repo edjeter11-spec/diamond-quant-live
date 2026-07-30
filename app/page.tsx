@@ -652,8 +652,12 @@ export default function WarRoom() {
                 className="w-full h-full object-cover"
               />
             </div>
-            <div className="hidden sm:block">
-              <h1 className="text-base sm:text-lg font-extrabold text-silver tracking-tight leading-tight whitespace-nowrap">
+            {/* Wordmark shows on mobile too — it was `hidden sm:block`, which
+                left the phone header with just an unlabelled logo tile. The
+                "MLB INTELLIGENCE" subtitle stays desktop-only so the mobile
+                header doesn't crowd the sport switcher. */}
+            <div className="min-w-0">
+              <h1 className="text-sm sm:text-lg font-extrabold text-silver tracking-tight leading-tight whitespace-nowrap">
                 Quant
                 <span
                   className={`ml-1 ${currentSport === "nba" ? "text-orange-400" : "text-neon"}`}
@@ -661,7 +665,7 @@ export default function WarRoom() {
                   Betting
                 </span>
               </h1>
-              <p className="text-[10px] text-mercury/60 -mt-0.5 font-mono tracking-wider">
+              <p className="hidden sm:block text-[10px] text-mercury/60 -mt-0.5 font-mono tracking-wider">
                 {currentSport.toUpperCase()} INTELLIGENCE
               </p>
             </div>
