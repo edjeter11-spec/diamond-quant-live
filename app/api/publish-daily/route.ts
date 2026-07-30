@@ -54,18 +54,28 @@ export async function POST(req: NextRequest) {
   const sport = (searchParams.get("sport") ?? "mlb").toLowerCase();
   const slate = etDateString();
   const batchKey = `${sport}_props_${slate}`;
+  const parlayBatchKey = `${sport}_parlay_${slate}`;
 
-  // Already published today? Don't post a second board.
-  const { data: existing } = await supabaseAdmin
-    .from("manual_picks")
-    .select("id")
-    .eq("batch_key", batchKey)
-    .limit(1);
-  if (existing && existing.length > 0) {
+  // Each batch is guarded independently — if the props board went out but the
+  // parlay failed, a re-run should publish the parlay without duplicating the
+  // props.
+  const alreadyDone = async (key: string) => {
+    const { data } = await supabaseAdmin!
+      .from("manual_picks")
+      .select("id")
+      .eq("batch_key", key)
+      .limit(1);
+    return (data?.length ?? 0) > 0;
+  };
+  const propsDone = await alreadyDone(batchKey);
+  const parlayDone = await alreadyDone(parlayBatchKey);
+
+  if (propsDone && parlayDone) {
     return NextResponse.json({
       ok: true,
       alreadyPublished: true,
       batchKey,
+      parlayBatchKey,
     });
   }
 
@@ -76,98 +86,178 @@ export async function POST(req: NextRequest) {
       ? req.nextUrl.origin
       : "https://diamond-quant-live.vercel.app";
 
-  let picks: any[] = [];
-  try {
-    const r = await fetch(`${baseUrl}/api/pinned-props?sport=${sport}`, {
-      signal: AbortSignal.timeout(20000),
-    });
-    const d = await r.json();
-    picks = d?.picks ?? [];
-  } catch (e) {
-    return NextResponse.json(
-      { ok: false, error: `Could not load pinned board: ${e}` },
-      { status: 502 },
-    );
+  const out: any = { ok: true, props: null, parlay: null };
+
+  // ── 1. Player props board ──
+  if (!propsDone) {
+    let picks: any[] = [];
+    try {
+      const r = await fetch(`${baseUrl}/api/pinned-props?sport=${sport}`, {
+        signal: AbortSignal.timeout(20000),
+      });
+      const d = await r.json();
+      picks = d?.picks ?? [];
+    } catch (e) {
+      out.props = { ok: false, error: `Could not load pinned board: ${e}` };
+    }
+
+    if (picks.length > 0) {
+      const lines = picks.map((p, i) => {
+        const label = MARKET_LABEL[p.market] ?? p.label ?? p.market;
+        const side = p.side === "over" ? "Over" : "Under";
+        return `**${i + 1}.** ${p.playerName} **${side} ${p.line} ${label}** — ${fmtOdds(p.odds)} · ${p.bookmaker}`;
+      });
+      const probs = picks
+        .map((p) => `**${Math.round(p.fairProb)}%**`)
+        .join(", ");
+
+      const discordRes = await postPickToDiscord({
+        id: batchKey,
+        sport,
+        game: "🎯 TODAY'S PLAYER PROPS",
+        market: `${picks.length} Picks · Locked In`,
+        pick_text: lines.join("\n"),
+        units: 1,
+        confidence: "Lock",
+        writeup: `Today's board is locked. We have these at ${probs}.\n\nSame picks for everyone — no cherry-picking after the fact. Grade goes up tomorrow, win or lose.`,
+        status: "published",
+      } as any);
+
+      if (!discordRes.ok) {
+        out.props = { ok: false, error: discordRes.error };
+      } else {
+        // One row per leg — a single row for the whole board couldn't record
+        // per-pick outcomes.
+        const rows = picks.map((p) => ({
+          created_by: null,
+          source: "system",
+          sport,
+          game: p.team ?? null,
+          market: "player_prop",
+          market_key: p.market,
+          player_name: p.playerName,
+          line: p.line,
+          side: p.side,
+          odds: p.odds,
+          bookmaker: p.bookmaker,
+          pick_text: `${p.playerName} ${p.side === "over" ? "Over" : "Under"} ${p.line} ${MARKET_LABEL[p.market] ?? p.market}`,
+          units: 1,
+          confidence: "Lock",
+          status: "published",
+          slate_date: slate,
+          batch_key: batchKey,
+          published_at: new Date().toISOString(),
+          discord_channel_id: discordRes.channel_id,
+          discord_message_id: discordRes.message_id,
+        }));
+        const { error: insErr } = await supabaseAdmin
+          .from("manual_picks")
+          .insert(rows);
+        out.props = insErr
+          ? {
+              ok: true,
+              posted: true,
+              logged: false,
+              // Surfaced, not swallowed: the board is live but ungradeable.
+              warning: `Posted but failed to log: ${insErr.message}`,
+            }
+          : { ok: true, posted: true, logged: rows.length };
+      }
+    } else if (!out.props) {
+      out.props = { ok: false, error: "No pinned picks to publish" };
+    }
+  } else {
+    out.props = { ok: true, alreadyPublished: true };
   }
 
-  if (picks.length === 0)
-    return NextResponse.json({
-      ok: false,
-      error: "No pinned picks to publish",
-    });
+  // ── 2. Parlay of the Day ──
+  if (!parlayDone) {
+    let legs: any[] = [];
+    let totalOdds = 0;
+    try {
+      const r = await fetch(`${baseUrl}/api/parlay-today?sport=${sport}`, {
+        signal: AbortSignal.timeout(20000),
+      });
+      const d = await r.json();
+      legs = d?.legs ?? [];
+      totalOdds = d?.totalOdds ?? 0;
+    } catch (e) {
+      out.parlay = { ok: false, error: `Could not load parlay: ${e}` };
+    }
 
-  // Human-readable lines, same shape as the manual posts.
-  const lines = picks.map((p, i) => {
-    const label = MARKET_LABEL[p.market] ?? p.label ?? p.market;
-    const side = p.side === "over" ? "Over" : "Under";
-    return `**${i + 1}.** ${p.playerName} **${side} ${p.line} ${label}** — ${fmtOdds(p.odds)} · ${p.bookmaker}`;
-  });
+    if (legs.length >= 2) {
+      const lines = legs.map(
+        (l, i) => `**${i + 1}.** ${l.pick} — ${fmtOdds(l.odds)}`,
+      );
+      const probs = legs
+        .map((l) => `**${Math.round(l.fairProb)}%**`)
+        .join(", ");
 
-  const probs = picks.map((p) => `**${Math.round(p.fairProb)}%**`).join(", ");
+      const discordRes = await postPickToDiscord({
+        id: parlayBatchKey,
+        sport,
+        game: "⚾ PARLAY OF THE DAY",
+        market: `${legs.length}-Leg · ${fmtOdds(totalOdds)}`,
+        pick_text: lines.join("\n"),
+        units: 1,
+        confidence: "Lean",
+        writeup: `${legs.length} legs, ${fmtOdds(totalOdds)}. We have these at ${probs} to land.\n\nTap a book below to fire it — odds are best-available right now and will move.`,
+        status: "published",
+      } as any);
 
-  const discordRes = await postPickToDiscord({
-    id: batchKey,
-    sport,
-    game: "🎯 TODAY'S PLAYER PROPS",
-    market: `${picks.length} Picks · Locked In`,
-    pick_text: lines.join("\n"),
-    units: 1,
-    confidence: "Lock",
-    writeup: `Today's board is locked. We have these at ${probs}.\n\nSame picks for everyone — no cherry-picking after the fact. Grade goes up tomorrow, win or lose.`,
-    status: "published",
-  } as any);
+      if (!discordRes.ok) {
+        out.parlay = { ok: false, error: discordRes.error };
+      } else {
+        // Parlay legs are graded individually too. `id` encodes the market
+        // key (e.g. "prop-batter_rbis-Salvador Perez"), which is what the
+        // grader needs — pick text alone isn't reliably parseable.
+        const rows = legs.map((l) => {
+          const m = /^prop-([a-z_]+)-(.+)$/.exec(l.id ?? "");
+          const marketKey = m?.[1] ?? null;
+          const player = m?.[2] ?? l.game ?? null;
+          // "Salvador Perez Under 0.5 RBIs" → side + line
+          const sideMatch = /\b(Over|Under)\s+([\d.]+)/i.exec(l.pick ?? "");
+          return {
+            created_by: null,
+            source: "system",
+            sport,
+            game: l.game ?? null,
+            market: l.market ?? "player_prop",
+            market_key: marketKey,
+            player_name: marketKey ? player : null,
+            line: sideMatch ? Number(sideMatch[2]) : null,
+            side: sideMatch ? sideMatch[1].toLowerCase() : null,
+            odds: l.odds,
+            bookmaker: l.bookmaker,
+            pick_text: l.pick,
+            units: 1,
+            confidence: l.confidence ?? "Lean",
+            status: "published",
+            slate_date: slate,
+            batch_key: parlayBatchKey,
+            published_at: new Date().toISOString(),
+            discord_channel_id: discordRes.channel_id,
+            discord_message_id: discordRes.message_id,
+          };
+        });
+        const { error: insErr } = await supabaseAdmin
+          .from("manual_picks")
+          .insert(rows);
+        out.parlay = insErr
+          ? {
+              ok: true,
+              posted: true,
+              logged: false,
+              warning: `Posted but failed to log: ${insErr.message}`,
+            }
+          : { ok: true, posted: true, logged: rows.length };
+      }
+    } else if (!out.parlay) {
+      out.parlay = { ok: false, error: "Not enough parlay legs to publish" };
+    }
+  } else {
+    out.parlay = { ok: true, alreadyPublished: true };
+  }
 
-  if (!discordRes.ok)
-    return NextResponse.json(
-      { ok: false, error: `Discord post failed: ${discordRes.error}` },
-      { status: 502 },
-    );
-
-  // Log each leg individually so the grader can settle them one by one — a
-  // single row for the whole board couldn't record per-pick outcomes.
-  const rows = picks.map((p) => ({
-    created_by: null,
-    source: "system",
-    sport,
-    game: p.team ?? null,
-    market: "player_prop",
-    market_key: p.market,
-    player_name: p.playerName,
-    line: p.line,
-    side: p.side,
-    odds: p.odds,
-    bookmaker: p.bookmaker,
-    pick_text: `${p.playerName} ${p.side === "over" ? "Over" : "Under"} ${p.line} ${MARKET_LABEL[p.market] ?? p.market}`,
-    units: 1,
-    confidence: "Lock",
-    status: "published",
-    slate_date: slate,
-    batch_key: batchKey,
-    published_at: new Date().toISOString(),
-    discord_channel_id: discordRes.channel_id,
-    discord_message_id: discordRes.message_id,
-  }));
-
-  const { error: insErr } = await supabaseAdmin
-    .from("manual_picks")
-    .insert(rows);
-
-  if (insErr)
-    return NextResponse.json({
-      ok: true,
-      posted: true,
-      logged: false,
-      // Surfaced rather than swallowed: the board is live on Discord but
-      // won't be graded, and that needs to be visible.
-      warning: `Posted to Discord but failed to log for grading: ${insErr.message}`,
-      messageId: discordRes.message_id,
-    });
-
-  return NextResponse.json({
-    ok: true,
-    posted: true,
-    logged: rows.length,
-    batchKey,
-    messageId: discordRes.message_id,
-  });
+  return NextResponse.json({ ...out, slate, batchKey, parlayBatchKey });
 }

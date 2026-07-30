@@ -82,19 +82,6 @@ export async function POST(req: NextRequest) {
       message: `No published picks for ${slate}`,
     });
 
-  // Already recapped? The 30-min cron would otherwise repost every half hour.
-  const batchKey = picks[0].batch_key;
-  const recapKey = `recap_posted_${batchKey}`;
-  if (!force) {
-    const { data: flag } = await supabaseAdmin
-      .from("app_state")
-      .select("value")
-      .eq("key", recapKey)
-      .maybeSingle();
-    if (flag?.value)
-      return NextResponse.json({ ok: true, alreadyPosted: true, slate });
-  }
-
   // Box scores for every final game on that slate.
   const finals = await fetchFinalGames(slate);
   if (finals.length === 0)
@@ -110,8 +97,47 @@ export async function POST(req: NextRequest) {
   if (allLines.length === 0)
     return NextResponse.json({ ok: true, message: "Box scores unavailable" });
 
-  // Grade each pick, writing the outcome back so /results and the track
-  // record reflect it too — not just the Discord post.
+  // Props and the parlay are separate posts, so they get separate recaps —
+  // a combined record would blur "4 of 5 props hit" with "the parlay lost",
+  // which are different things to a reader.
+  const batches = new Map<string, any[]>();
+  for (const p of picks) {
+    const k = p.batch_key ?? "ungrouped";
+    if (!batches.has(k)) batches.set(k, []);
+    batches.get(k)!.push(p);
+  }
+
+  const results: any[] = [];
+  for (const [batchKey, batchPicks] of batches) {
+    results.push(
+      await recapBatch(batchKey, batchPicks, allLines, slate, sport, force),
+    );
+  }
+
+  return NextResponse.json({ ok: true, slate, batches: results });
+}
+
+/** Grade one batch and post its recap. Isolated so props and parlay can
+ *  complete independently — a stuck parlay leg shouldn't hold the props
+ *  recap hostage. */
+async function recapBatch(
+  batchKey: string,
+  picks: any[],
+  allLines: PlayerLine[],
+  slate: string,
+  sport: string,
+  force: boolean,
+): Promise<any> {
+  const recapKey = `recap_posted_${batchKey}`;
+  if (!force) {
+    const { data: flag } = await supabaseAdmin!
+      .from("app_state")
+      .select("value")
+      .eq("key", recapKey)
+      .maybeSingle();
+    if (flag?.value) return { batchKey, alreadyPosted: true };
+  }
+
   const graded: Array<{ text: string; result: string }> = [];
   let ungraded = 0;
   let unitsNet = 0;
@@ -146,7 +172,7 @@ export async function POST(req: NextRequest) {
           ? 0
           : -stake;
 
-    await supabaseAdmin
+    await supabaseAdmin!
       .from("manual_picks")
       .update({
         result: g.result,
@@ -164,25 +190,28 @@ export async function POST(req: NextRequest) {
 
   // Hold the recap until the slate is fully settled — see header note.
   if (ungraded > 0 && !force)
-    return NextResponse.json({
-      ok: true,
+    return {
+      batchKey,
       waiting: true,
       graded: graded.length,
       ungraded,
       message: `${ungraded} pick(s) not final yet — holding recap`,
-    });
+    };
+
+  if (graded.length === 0)
+    return { batchKey, waiting: true, message: "Nothing graded yet" };
 
   if (!BOT_API_URL)
-    return NextResponse.json({
-      ok: false,
-      error: "BOT_API_URL not configured",
-      graded: graded.length,
-    });
+    return { batchKey, ok: false, error: "BOT_API_URL not configured" };
 
   const dateLabel = new Date(slate + "T12:00:00Z").toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
   });
+
+  // Title mirrors the pick post it's settling, so the pair reads as a set.
+  const isParlay = batchKey.includes("_parlay_");
+  const title = isParlay ? "PARLAY OF THE DAY" : "PLAYER PROPS";
 
   try {
     const r = await fetch(`${BOT_API_URL}/results/post`, {
@@ -194,39 +223,31 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify({
         sport,
         dateLabel,
-        title: "PLAYER PROPS",
+        title,
         legs: graded,
         unitsNet: Math.round(unitsNet * 100) / 100,
       }),
       signal: AbortSignal.timeout(10000),
     });
     const posted = await r.json();
-    if (!posted.ok)
-      return NextResponse.json({
-        ok: false,
-        error: posted.error,
-        graded: graded.length,
-      });
+    if (!posted.ok) return { batchKey, ok: false, error: posted.error };
 
     // Mark done so the next cron tick doesn't repost.
-    await supabaseAdmin.from("app_state").upsert({
+    await supabaseAdmin!.from("app_state").upsert({
       key: recapKey,
       value: { messageId: posted.message_id, at: new Date().toISOString() },
     });
 
-    return NextResponse.json({
+    return {
+      batchKey,
       ok: true,
       posted: true,
-      slate,
+      title,
       graded: graded.length,
       unitsNet: Math.round(unitsNet * 100) / 100,
       messageId: posted.message_id,
-    });
+    };
   } catch (e: any) {
-    return NextResponse.json({
-      ok: false,
-      error: String(e),
-      graded: graded.length,
-    });
+    return { batchKey, ok: false, error: String(e) };
   }
 }
