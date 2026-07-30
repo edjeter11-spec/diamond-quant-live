@@ -69,16 +69,28 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
     setLoading(false);
   };
 
+  // Scrollable overlay. This was `flex items-center` with no scrolling, so on
+  // a short mobile viewport — especially once the keyboard opens — the modal
+  // was taller than the screen and got clipped at BOTH ends with no way to
+  // reach the buttons. `overflow-y-auto` + `items-start` (centering only when
+  // there's room, via `sm:items-center`) keeps every control reachable, and
+  // the safe-area padding clears the notch / home indicator.
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div
+      className="fixed inset-0 z-50 flex items-start sm:items-center justify-center p-4 overflow-y-auto overscroll-contain"
+      style={{
+        paddingTop: "max(1rem, env(safe-area-inset-top))",
+        paddingBottom: "max(1rem, env(safe-area-inset-bottom))",
+      }}
+    >
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        className="fixed inset-0 bg-black/60 backdrop-blur-sm"
         onClick={onClose}
       />
 
-      {/* Modal */}
-      <div className="relative w-full max-w-sm rounded-2xl bg-bunker border border-slate/30 shadow-2xl overflow-hidden animate-slide-up">
+      {/* Modal — my-auto keeps it visually centred when it does fit */}
+      <div className="relative w-full max-w-sm my-auto rounded-2xl bg-bunker border border-slate/30 shadow-2xl overflow-hidden animate-slide-up">
         {/* Header */}
         <div className="px-6 pt-6 pb-4 border-b border-slate/20">
           <div className="flex items-center justify-between">

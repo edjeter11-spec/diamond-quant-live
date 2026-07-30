@@ -34,6 +34,7 @@ import {
 } from "lucide-react";
 import { getDeepLink } from "@/lib/odds/sportsbooks";
 import TeamLogo from "@/components/ui/TeamLogo";
+import PlayerAvatar from "@/components/ui/PlayerAvatar";
 import InfoTip from "@/components/ui/InfoTip";
 import Link from "next/link";
 import { usePremium } from "@/lib/hooks/usePremium";
@@ -833,41 +834,12 @@ export default function PicksBoard() {
                 {formatOdds(parlayAmerican)}
               </span>
             </div>
-            {/* Lead with what's actually true about this ticket: these are the
-                highest-probability legs the model found. Deliberately NOT
-                phrased as "value"/"edge" unless every leg genuinely beats the
-                vig — most days against real MLB prop prices they don't, and
-                calling a -5% ticket an edge is the one claim that shouldn't
-                ship on a betting board. */}
-            {parlayLegs.length > 0 &&
-              (() => {
-                const avgProb =
-                  parlayLegs.reduce((s, l) => s + (l.fairProb ?? 0), 0) /
-                  parlayLegs.length;
-                return (
-                  <div className="px-3 sm:px-4 py-1.5 border-b border-slate/15 bg-purple/5">
-                    <p className="text-[10px] text-mercury/75 leading-snug">
-                      {pinnedParlay?.hasPositiveEv ? (
-                        <>
-                          <span className="text-neon font-semibold">
-                            Every leg beats the price
-                          </span>{" "}
-                          — model has these at {avgProb.toFixed(0)}% average to
-                          hit.
-                        </>
-                      ) : (
-                        <>
-                          <span className="text-silver font-semibold">
-                            Highest-probability legs on the board
-                          </span>{" "}
-                          — {avgProb.toFixed(0)}% average model confidence. Tap
-                          any leg for the math.
-                        </>
-                      )}
-                    </p>
-                  </div>
-                );
-              })()}
+            {/* No blanket subheader here. Parlay legs will soon be a mix of
+                model output and admin-authored picks, so any one-line claim
+                about how the whole ticket was built ("highest-probability
+                legs", "best value") would be wrong for half of it. The
+                per-leg dropdown carries the reasoning instead — that stays
+                accurate whatever the source. */}
             <div className="p-2.5 sm:p-3 space-y-1.5">
               {parlayLegs.map((leg, i) => {
                 const isOpen = expandedLeg === i;
@@ -887,15 +859,29 @@ export default function PicksBoard() {
                       <span className="w-4 h-4 rounded-full bg-purple/20 text-purple text-[9px] font-bold flex items-center justify-center flex-shrink-0">
                         {i + 1}
                       </span>
-                      <TeamLogo
-                        team={leg.pick
-                          .split(" ML")[0]
-                          .split(" Over")[0]
-                          .split(" Under")[0]
-                          .split("/")[0]
-                          .trim()}
-                        size={18}
-                      />
+                      {/* Player props get the athlete's headshot; game lines
+                          keep the team logo. Previously everything went through
+                          TeamLogo, so a prop leg showed "SAL" initials in a
+                          circle next to "Salvador Perez". PlayerAvatar resolves
+                          the headshot from the name via the shared player index
+                          and falls back to initials only if there's no photo. */}
+                      {leg.market === "player_prop" ? (
+                        <PlayerAvatar
+                          name={leg.game}
+                          sport={currentSport as "mlb" | "nba"}
+                          size={18}
+                        />
+                      ) : (
+                        <TeamLogo
+                          team={leg.pick
+                            .split(" ML")[0]
+                            .split(" Over")[0]
+                            .split(" Under")[0]
+                            .split("/")[0]
+                            .trim()}
+                          size={18}
+                        />
+                      )}
                       <div className="flex-1 min-w-0">
                         <p className="text-xs sm:text-sm font-medium text-silver truncate">
                           {leg.pick}
