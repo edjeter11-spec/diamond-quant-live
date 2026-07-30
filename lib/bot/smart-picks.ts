@@ -8,6 +8,7 @@ import {
   americanToImpliedProb,
   kellyStake,
 } from "@/lib/model/kelly";
+import { loadJSON, isRecord } from "@/lib/safe-storage";
 import { loadBrain, saveBrain, learnFromGame, type BrainState } from "./brain";
 import type { GameAnalysis, GamePick } from "./three-models";
 import { etDateString } from "@/lib/sports-date";
@@ -28,12 +29,16 @@ export interface ModelAccuracy {
 }
 
 export function loadModelAccuracy(): ModelAccuracy {
-  if (typeof window === "undefined") return defaultAccuracy();
-  try {
-    const stored = localStorage.getItem("dq_model_accuracy");
-    if (stored) return JSON.parse(stored);
-  } catch {}
-  return defaultAccuracy();
+  // Validated read — a corrupt `dq_model_accuracy` key used to crash the tab.
+  return loadJSON<ModelAccuracy>(
+    "dq_model_accuracy",
+    defaultAccuracy(),
+    (v) =>
+      isRecord(v) &&
+      ["pitcher", "market", "trend", "consensus"].every(
+        (k) => isRecord(v[k]) && typeof (v[k] as any).total === "number",
+      ),
+  );
 }
 
 export function saveModelAccuracy(acc: ModelAccuracy) {
@@ -110,14 +115,14 @@ const STARTING_BANKROLL = 5000;
 
 // Sport-aware load/save — MLB and NBA have separate bot states
 export function loadSmartBot(sport: string = "mlb"): SmartBotState {
-  if (typeof window === "undefined")
-    return { bankroll: STARTING_BANKROLL, picks: [], dailyPnL: {} };
   const key = sport === "nba" ? "dq_smart_bot_nba" : "dq_smart_bot";
-  try {
-    const stored = localStorage.getItem(key);
-    if (stored) return JSON.parse(stored);
-  } catch {}
-  return { bankroll: STARTING_BANKROLL, picks: [], dailyPnL: {} };
+  // Validated read — a corrupt bot-state key used to crash the tab on load.
+  return loadJSON<SmartBotState>(
+    key,
+    { bankroll: STARTING_BANKROLL, picks: [], dailyPnL: {} },
+    (v) =>
+      isRecord(v) && typeof v.bankroll === "number" && Array.isArray(v.picks),
+  );
 }
 
 export function saveSmartBot(state: SmartBotState, sport: string = "mlb") {

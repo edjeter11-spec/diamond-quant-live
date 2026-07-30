@@ -304,13 +304,16 @@ export default function WarRoom() {
       setLoading(false);
     }
     setRefreshing(false);
+    // selectedGameId is deliberately NOT a dependency: it's read through
+    // useStore.getState() inside the callback, not captured from the closure.
+    // Listing it re-created fetchData on every game selection, which re-ran
+    // the polling effect and burned Odds API quota for nothing.
   }, [
     setScores,
     setOddsData,
     setGames,
     setLoading,
     snapshotOdds,
-    selectedGameId,
     selectGame,
     currentSport,
     config,

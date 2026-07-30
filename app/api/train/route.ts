@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import {
   fetchHistoricalGames,
   trainOnHistoricalGames,
@@ -8,6 +8,7 @@ import {
   saveLearningState,
   type LearningState,
 } from "@/lib/bot/learning";
+import { getUserFromRequest } from "@/lib/supabase/server-auth";
 
 // Training is expensive — don't cache aggressively
 export const dynamic = "force-dynamic";
@@ -69,7 +70,24 @@ const DEFAULT_STATE: LearningState = {
   learningRate: 0.03,
 };
 
-export async function GET(req: Request) {
+export async function GET(req: NextRequest) {
+  // Lock down: admin-only OR cron secret. 5-min compute job — DOS vector if
+  // left open, which it was.
+  const cronSecret = req.headers.get("x-cron-secret");
+  if (cronSecret !== process.env.CRON_SECRET) {
+    const user = await getUserFromRequest(req);
+    if (!user)
+      return NextResponse.json(
+        { ok: false, error: "Auth required" },
+        { status: 401 },
+      );
+    if (!user.isAdmin)
+      return NextResponse.json(
+        { ok: false, error: "Admin only" },
+        { status: 403 },
+      );
+  }
+
   const { searchParams } = new URL(req.url);
   const startDate = searchParams.get("start") || "2025-03-20"; // Opening Day 2025
   const endDate =

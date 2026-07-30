@@ -14,6 +14,7 @@
 // ──────────────────────────────────────────────────────────
 
 import { supabaseAdmin } from "@/lib/supabase/server-auth";
+import { loadJSON, isRecord } from "@/lib/safe-storage";
 
 export interface ModelWeights {
   pitching: number;
@@ -105,12 +106,13 @@ const DEFAULT_STATE: LearningState = {
 };
 
 export function loadLearningState(): LearningState {
-  if (typeof window === "undefined") return { ...DEFAULT_STATE };
-  try {
-    const stored = localStorage.getItem("dq_learning_state");
-    if (stored) return JSON.parse(stored);
-  } catch {}
-  return { ...DEFAULT_STATE };
+  // Validated read — a corrupt/legacy `dq_learning_state` key used to crash
+  // the tab on load. loadJSON drops the bad key so the app self-heals.
+  return loadJSON<LearningState>(
+    "dq_learning_state",
+    { ...DEFAULT_STATE },
+    (v) => isRecord(v) && isRecord(v.weights),
+  );
 }
 
 export function saveLearningState(state: LearningState) {
