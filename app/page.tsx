@@ -1073,7 +1073,7 @@ export default function WarRoom() {
                       <EdgeFinder />
                     </SafeBoundary>
                     <SafeBoundary>
-                      <LineMovement movements={lineMovements} />
+                      <LineMovement />
                     </SafeBoundary>
                     <SafeBoundary>
                       <InjuryAlerts sport={currentSport} />

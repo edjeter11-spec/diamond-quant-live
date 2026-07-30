@@ -1,21 +1,89 @@
 "use client";
 
-import { Activity, ArrowUp, ArrowDown, Minus, Clock } from "lucide-react";
+// ──────────────────────────────────────────────────────────
+// LINE MOVEMENT
+//
+// Reads server-side history (/api/sharp-money, backed by odds_history) rather
+// than per-browser localStorage snapshots.
+//
+// The old version had three compounding problems that meant it never showed
+// anything: it only rendered when a game was SELECTED (the board passes an
+// empty array otherwise), snapshots lived in localStorage so every visitor
+// started with zero history, and it needed two snapshots ~5 min apart while
+// odds are cached for 15 — so consecutive polls returned identical data and
+// produced no movement. It sat on "Collecting odds data…" permanently.
+//
+// Server-side history fixes all three: the cron snapshots on a schedule, every
+// visitor sees the same moves immediately, and no game selection is required.
+// ──────────────────────────────────────────────────────────
 
-interface LineMove {
+import { useEffect, useState } from "react";
+import { Activity, ArrowUp, ArrowDown, Clock, Flame } from "lucide-react";
+import { useSport } from "@/lib/sport-context";
+
+interface ServerMove {
+  game: string;
   bookmaker: string;
   market: string;
-  oldOdds: number;
-  newOdds: number;
-  movement: number;
-  time: string;
+  from: number;
+  to: number;
+  delta: number;
+  direction: "up" | "down";
+  minutes_ago: number;
+  is_sharp?: boolean;
 }
 
-interface LineMovementProps {
-  movements: LineMove[];
+const SPORT_KEY: Record<string, string> = {
+  mlb: "baseball_mlb",
+  nba: "basketball_nba",
+  nfl: "americanfootball_nfl",
+  nhl: "icehockey_nhl",
+};
+
+function fmt(v: number, market: string): string {
+  // Moneyline is American odds; spread/total are points.
+  if (market.toLowerCase().includes("moneyline"))
+    return v > 0 ? `+${v}` : String(v);
+  return String(v);
 }
 
-export default function LineMovement({ movements }: LineMovementProps) {
+export default function LineMovement() {
+  const { currentSport } = useSport();
+  const [moves, setMoves] = useState<ServerMove[]>([]);
+  const [state, setState] = useState<"loading" | "ready" | "error">("loading");
+
+  useEffect(() => {
+    let cancelled = false;
+    setState("loading");
+    const sportKey = SPORT_KEY[currentSport] ?? "baseball_mlb";
+
+    const load = async () => {
+      try {
+        const r = await fetch(`/api/sharp-money?sport=${sportKey}`, {
+          signal: AbortSignal.timeout(10000),
+        });
+        const d = await r.json();
+        if (cancelled) return;
+        setMoves(Array.isArray(d?.movements) ? d.movements : []);
+        setState("ready");
+      } catch {
+        if (!cancelled) setState("error");
+      }
+    };
+
+    load();
+    // Server caches for 60s; polling faster just burns requests.
+    const id = setInterval(load, 90_000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [currentSport]);
+
+  // Biggest moves first — a 2-point total swing matters more than a half-point.
+  const sorted = [...moves].sort((a, b) => (b.delta ?? 0) - (a.delta ?? 0));
+  const shown = sorted.slice(0, 8);
+
   return (
     <div className="glass rounded-xl overflow-hidden">
       <div className="px-4 py-3 border-b border-slate/50 flex items-center gap-2">
@@ -23,22 +91,31 @@ export default function LineMovement({ movements }: LineMovementProps) {
         <h3 className="text-sm font-semibold text-silver uppercase tracking-wide">
           Line Movement
         </h3>
-        {movements.length > 0 && (
+        {shown.length > 0 && (
           <span className="px-1.5 py-0.5 bg-amber/15 text-amber text-[10px] font-bold rounded">
-            {movements.length} moves
+            {moves.length} move{moves.length === 1 ? "" : "s"}
           </span>
         )}
       </div>
 
-      {movements.length === 0 ? (
+      {state === "loading" ? (
+        <div className="p-4 space-y-2">
+          {[0, 1, 2].map((i) => (
+            <div
+              key={i}
+              className="h-10 rounded-lg bg-gunmetal/30 animate-pulse"
+            />
+          ))}
+        </div>
+      ) : shown.length === 0 ? (
         <div className="p-5 text-center">
           <div className="w-10 h-10 rounded-full bg-gunmetal/50 flex items-center justify-center mx-auto mb-2">
             <Clock className="w-5 h-5 text-mercury/40" />
           </div>
-          <p className="text-sm text-mercury">Collecting odds data...</p>
-          <p className="text-xs text-mercury/50 mt-1 max-w-[200px] mx-auto">
-            Line moves appear after ~5 min of tracking. Keep the page open and
-            we'll catch every shift.
+          <p className="text-sm text-mercury">Lines steady right now</p>
+          <p className="text-xs text-mercury/50 mt-1 max-w-[210px] mx-auto">
+            No meaningful moves in the last hour. We check every few minutes and
+            surface anything that shifts.
           </p>
           <div className="flex items-center justify-center gap-1.5 mt-3">
             <div className="w-1.5 h-1.5 rounded-full bg-amber/50 animate-pulse" />
@@ -49,49 +126,45 @@ export default function LineMovement({ movements }: LineMovementProps) {
         </div>
       ) : (
         <div className="divide-y divide-slate/10">
-          {movements.map((move, i) => (
+          {shown.map((m, i) => (
             <div
-              key={i}
+              key={`${m.game}-${m.bookmaker}-${m.market}-${i}`}
               className="px-4 py-2.5 flex items-center gap-3 hover:bg-gunmetal/30 transition-colors"
             >
               <div
-                className={`p-1.5 rounded ${
-                  move.movement > 0
-                    ? "bg-neon/10"
-                    : move.movement < 0
-                      ? "bg-danger/10"
-                      : "bg-mercury/10"
+                className={`p-1.5 rounded flex-shrink-0 ${
+                  m.direction === "up" ? "bg-neon/10" : "bg-danger/10"
                 }`}
               >
-                {move.movement > 0 ? (
+                {m.direction === "up" ? (
                   <ArrowUp className="w-3.5 h-3.5 text-neon" />
-                ) : move.movement < 0 ? (
-                  <ArrowDown className="w-3.5 h-3.5 text-danger" />
                 ) : (
-                  <Minus className="w-3.5 h-3.5 text-mercury" />
+                  <ArrowDown className="w-3.5 h-3.5 text-danger" />
                 )}
               </div>
+
               <div className="flex-1 min-w-0">
-                <p className="text-sm text-silver">{move.market}</p>
-                <p className="text-xs text-mercury/60">{move.bookmaker}</p>
-              </div>
-              <div className="text-right">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-mono text-mercury/60 line-through">
-                    {move.oldOdds > 0 ? `+${move.oldOdds}` : move.oldOdds}
-                  </span>
-                  <span className="text-xs text-mercury/40">→</span>
-                  <span
-                    className={`text-sm font-mono font-semibold ${
-                      move.movement > 0 ? "text-neon" : "text-danger"
-                    }`}
-                  >
-                    {move.newOdds > 0 ? `+${move.newOdds}` : move.newOdds}
-                  </span>
-                </div>
-                <p className="text-[10px] text-mercury/40 mt-0.5">
-                  {move.time}
+                <p className="text-xs font-semibold text-silver truncate">
+                  {m.game}
                 </p>
+                <p className="text-[10px] text-mercury/60 truncate">
+                  {m.market} · {m.bookmaker} · {m.minutes_ago}m
+                </p>
+              </div>
+
+              <div className="text-right flex-shrink-0">
+                <p className="text-xs font-mono text-silver">
+                  <span className="text-mercury/50">
+                    {fmt(m.from, m.market)}
+                  </span>
+                  {" → "}
+                  <span className="font-semibold">{fmt(m.to, m.market)}</span>
+                </p>
+                {m.is_sharp && (
+                  <span className="inline-flex items-center gap-0.5 text-[9px] text-amber font-bold">
+                    <Flame className="w-2.5 h-2.5" /> SHARP
+                  </span>
+                )}
               </div>
             </div>
           ))}

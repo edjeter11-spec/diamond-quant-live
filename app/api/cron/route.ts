@@ -1283,6 +1283,26 @@ export async function GET(req: Request) {
       } catch {}
     }
 
+    // ── Odds history snapshot ──
+    // Feeds the Line Movement panel. Nothing was calling this, so
+    // odds_history stayed empty and the panel sat on "Collecting odds
+    // data…" forever. Cheap: reuses the already-cached odds fetch.
+    let oddsSnapshot: any = null;
+    try {
+      const snapRes = await fetch(
+        `${new URL(req.url).origin}/api/sharp-money`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sport: "baseball_mlb" }),
+          signal: AbortSignal.timeout(25000),
+        },
+      );
+      oddsSnapshot = await snapRes.json();
+    } catch (e) {
+      oddsSnapshot = { ok: false, error: String(e) };
+    }
+
     // ── Daily Discord board + results recap ──
     // Both are self-gating: publish-daily no-ops if today's board already
     // went out, and post-results holds until every pick on the slate is
@@ -1333,6 +1353,7 @@ export async function GET(req: Request) {
       botSettle,
       pickGen,
       discordDaily,
+      oddsSnapshot,
     });
   } catch (error: any) {
     return NextResponse.json(
