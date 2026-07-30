@@ -103,6 +103,13 @@ export default function NRFITab() {
   const upcoming = games.filter((g) => g.status === "pre");
   const live = games.filter((g) => g.status === "live");
 
+  // 1st-inning result lookup, by game ID — lets the "In Progress" section
+  // show whether the model's NRFI/YRFI call was actually right once the
+  // 1st is over, instead of just repeating the pre-game projection forever.
+  const firstInningById = new Map<string, number | null>(
+    scores.map((s: any) => [String(s.id), s.firstInningRuns ?? null]),
+  );
+
   // Top 3 NRFI picks
   const topNRFI = upcoming
     .filter((g) => g.recommendation.includes("NRFI"))
@@ -288,6 +295,7 @@ export default function NRFITab() {
                 onToggle={() => {}}
                 addParlayLeg={addParlayLeg}
                 compact
+                firstInningRuns={firstInningById.get(game.gameId) ?? null}
               />
             ))}
           </div>
@@ -305,15 +313,39 @@ function GameRow({
   onToggle,
   addParlayLeg,
   compact,
+  firstInningRuns,
 }: {
   game: NRFIGame;
   expanded: boolean;
   onToggle: () => void;
   addParlayLeg: any;
   compact?: boolean;
+  firstInningRuns?: number | null;
 }) {
   const grade = GRADE_COLORS[game.nrfiGrade] ?? GRADE_COLORS.C;
   const rec = REC_LABELS[game.recommendation] ?? REC_LABELS.SKIP;
+
+  // Grade the model's call against the real 1st-inning result, once it's
+  // actually over. Green = called it right, red = called it wrong. Not
+  // gradeable until firstInningRuns resolves (null = 1st inning still live).
+  const calledNRFI =
+    game.recommendation === "NRFI" || game.recommendation === "LEAN_NRFI";
+  const calledYRFI =
+    game.recommendation === "YRFI" || game.recommendation === "LEAN_YRFI";
+  const outcome: "correct" | "wrong" | null =
+    firstInningRuns == null || game.recommendation === "SKIP"
+      ? null
+      : firstInningRuns === 0
+        ? calledNRFI
+          ? "correct"
+          : calledYRFI
+            ? "wrong"
+            : null
+        : calledYRFI
+          ? "correct"
+          : calledNRFI
+            ? "wrong"
+            : null;
 
   // Heatmap color: green (NRFI safe) → red (YRFI danger)
   const heatColor =
@@ -325,11 +357,18 @@ function GameRow({
           ? "bg-amber"
           : "bg-danger";
 
+  const outcomeTint =
+    outcome === "correct"
+      ? "bg-neon/5"
+      : outcome === "wrong"
+        ? "bg-danger/5"
+        : "";
+
   return (
     <div>
       <button
         onClick={onToggle}
-        className="w-full px-3 sm:px-4 py-3 flex items-center gap-2 hover:bg-gunmetal/20 text-left"
+        className={`w-full px-3 sm:px-4 py-3 flex items-center gap-2 hover:bg-gunmetal/20 text-left ${outcomeTint}`}
       >
         {/* Heatmap indicator */}
         <div
@@ -359,6 +398,16 @@ function GameRow({
             <span className={`text-[9px] font-bold ${rec.color} ml-1`}>
               {rec.label}
             </span>
+            {outcome === "correct" && (
+              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-neon/15 text-neon border border-neon/30">
+                ✓ HIT
+              </span>
+            )}
+            {outcome === "wrong" && (
+              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-danger/15 text-danger border border-danger/30">
+                ✗ MISS
+              </span>
+            )}
           </div>
           <p className="text-[9px] text-mercury/50 truncate mt-0.5">
             {game.commenceTime &&

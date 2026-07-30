@@ -10,8 +10,8 @@ const SITE_URL = "https://diamond-quant-live.vercel.app";
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: "Diamond-Quant Live — Sports Betting Intelligence",
-    template: "%s | Diamond-Quant Live",
+    default: "Quant Betting — Sports Betting Intelligence",
+    template: "%s | Quant Betting",
   },
   description:
     "AI-powered MLB & NBA betting analytics — 3-model consensus, live +EV picks, player prop projections, arbitrage scanner, and a self-learning brain.",
@@ -29,19 +29,19 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "DQ Live",
+    title: "Quant Betting",
   },
   openGraph: {
     type: "website",
     url: SITE_URL,
-    siteName: "Diamond-Quant Live",
-    title: "Diamond-Quant Live — Sports Betting Intelligence",
+    siteName: "Quant Betting",
+    title: "Quant Betting — Sports Betting Intelligence",
     description:
       "Quant-driven +EV sports picks across 10+ sportsbooks. Live arbs, player props, and a self-learning brain.",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Diamond-Quant Live",
+    title: "Quant Betting",
     description: "Quant-driven +EV sports picks across 10+ sportsbooks.",
   },
   robots: {

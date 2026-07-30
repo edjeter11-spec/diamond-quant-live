@@ -21,7 +21,7 @@ export default function LegalLayout({
             <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-neon/20 to-electric/20 border border-neon/25 flex items-center justify-center">
               <Diamond className="w-4 h-4 text-neon" />
             </div>
-            <span className="text-sm font-bold">DQ Live</span>
+            <span className="text-sm font-bold">Quant Betting</span>
           </Link>
         </div>
       </header>

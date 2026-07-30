@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Terms of Service — Diamond-Quant Live",
-  description: "Terms governing use of Diamond-Quant Live betting analytics.",
+  title: "Terms of Service — Quant Betting",
+  description: "Terms governing use of Quant Betting betting analytics.",
 };
 
 export default function TermsPage() {
@@ -22,9 +22,9 @@ export default function TermsPage() {
           1. Acceptance of Terms
         </h2>
         <p className="text-sm text-mercury/80 leading-relaxed">
-          By accessing or using Diamond-Quant Live (&quot;the Service&quot;),
-          you agree to be bound by these Terms of Service. If you do not agree,
-          do not use the Service.
+          By accessing or using Quant Betting (&quot;the Service&quot;), you
+          agree to be bound by these Terms of Service. If you do not agree, do
+          not use the Service.
         </p>
       </section>
 
@@ -33,7 +33,7 @@ export default function TermsPage() {
           2. Nature of the Service
         </h2>
         <p className="text-sm text-mercury/80 leading-relaxed">
-          Diamond-Quant Live is an informational and analytical platform that
+          Quant Betting is an informational and analytical platform that
           aggregates publicly available sportsbook odds and applies statistical
           models.{" "}
           <strong className="text-silver">
@@ -94,8 +94,8 @@ export default function TermsPage() {
         </h2>
         <p className="text-sm text-mercury/80 leading-relaxed">
           The Service is provided &quot;as is&quot; without warranty of any
-          kind. In no event shall Diamond-Quant Live or its operators be liable
-          for any direct, indirect, incidental, or consequential damages arising
+          kind. In no event shall Quant Betting or its operators be liable for
+          any direct, indirect, incidental, or consequential damages arising
           from your use of the Service, including any losses from wagers placed
           based on information displayed.
         </p>

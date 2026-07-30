@@ -71,6 +71,20 @@ async function getMlbScores() {
       inning: game.linescore?.currentInning ?? 0,
       inningHalf: game.linescore?.inningHalf?.toLowerCase() ?? "top",
       outs: game.linescore?.outs ?? 0,
+      // 1st-inning result, once it's actually over (linescore hydration
+      // already fetched — just wasn't extracted before). Lets the UI grade
+      // an NRFI/YRFI call against what really happened, not just show a
+      // static pre-game projection forever.
+      firstInningRuns: (() => {
+        const first = game.linescore?.innings?.[0];
+        if (!first) return null;
+        const homeR = first.home?.runs;
+        const awayR = first.away?.runs;
+        // Both sides' half-innings must have actually completed (API omits
+        // `runs` for a half not yet played) — otherwise we don't know yet.
+        if (typeof homeR !== "number" || typeof awayR !== "number") return null;
+        return homeR + awayR;
+      })(),
       startTime: game.gameDate,
       venue: game.venue.name,
       homePitcher: game.teams.home.probablePitcher?.fullName ?? "TBD",

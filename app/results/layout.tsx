@@ -3,21 +3,21 @@ import type { Metadata } from "next";
 const SITE = "https://diamond-quant-live.vercel.app";
 
 export const metadata: Metadata = {
-  title: "Track Record — Diamond-Quant Live",
+  title: "Track Record — Quant Betting",
   description:
     "Public 30-day track record for our AI sports betting picks. Every MLB & NBA pick graded nightly — wins, losses, units, and full transparency.",
   alternates: { canonical: `${SITE}/results` },
   openGraph: {
-    title: "Diamond-Quant Live — 30-Day Track Record",
+    title: "Quant Betting — 30-Day Track Record",
     description:
       "Every pick logged, graded, and public. See how the quant brain is performing.",
     url: `${SITE}/results`,
-    siteName: "Diamond-Quant Live",
+    siteName: "Quant Betting",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Diamond-Quant Live — 30-Day Track Record",
+    title: "Quant Betting — 30-Day Track Record",
     description: "Every pick logged, graded, and public.",
   },
 };
@@ -51,13 +51,13 @@ export default async function ResultsLayout({
   const jsonLd: any = {
     "@context": "https://schema.org",
     "@type": "WebPage",
-    name: "Diamond-Quant Live — Track Record",
+    name: "Quant Betting — Track Record",
     url: `${SITE}/results`,
     description:
       "Public track record for AI-driven sports betting picks. 30-day rolling window, all picks graded.",
     publisher: {
       "@type": "Organization",
-      name: "Diamond-Quant Live",
+      name: "Quant Betting",
       url: SITE,
     },
   };

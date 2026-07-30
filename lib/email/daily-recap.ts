@@ -32,7 +32,7 @@ function renderHtml(p: RecapPayload, displayName?: string): string {
   <div style="max-width:480px;margin:0 auto;padding:32px 20px;">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:24px;">
       <div style="width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,#00ff88,#00d4ff);display:inline-flex;align-items:center;justify-content:center;color:#0a0a0f;font-weight:900;font-size:18px;">D</div>
-      <span style="font-size:15px;font-weight:700;color:#fff;">Diamond-Quant Live</span>
+      <span style="font-size:15px;font-weight:700;color:#fff;">Quant Betting</span>
     </div>
 
     <h1 style="font-size:20px;font-weight:700;color:#fff;margin:0 0 8px;">${greeting}</h1>

@@ -1,4 +1,4 @@
-// Diamond-Quant Live — Service Worker
+// Quant Betting — Service Worker
 // Cache-first for static assets, network-first for HTML + API.
 // Bumps the version → invalidates old cache.
 
@@ -111,7 +111,7 @@ self.addEventListener("push", (event) => {
   try {
     const data = event.data.json();
     event.waitUntil(
-      self.registration.showNotification(data.title ?? "Diamond Quant", {
+      self.registration.showNotification(data.title ?? "Quant Betting", {
         body: data.body ?? "",
         icon: "/apple-icon",
         badge: "/apple-icon",

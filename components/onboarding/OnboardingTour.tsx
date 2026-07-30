@@ -14,7 +14,7 @@ type Step = {
 const STEPS: Step[] = [
   {
     title: "Sport Switcher",
-    hint: "Top-left of the header — small MLB / NBA toggle next to the DQ logo.",
+    hint: "Top-left of the header — small MLB / NBA toggle next to the logo.",
     body: "Switch sports here. Each sport has its own picks, brain, and bot.",
   },
   {
@@ -180,7 +180,7 @@ export default function OnboardingTour() {
             <Sparkles className="w-3.5 h-3.5 text-neon" aria-hidden="true" />
           </div>
           <span className="text-[10px] font-mono uppercase tracking-widest text-electric">
-            Welcome to DQ Live
+            Welcome to Quant Betting
           </span>
         </div>
 

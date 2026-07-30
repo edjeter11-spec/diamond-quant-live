@@ -100,7 +100,7 @@ export default function PWAInstall() {
           </div>
           <div className="flex-1 min-w-0 pr-6">
             <p className="text-sm font-bold text-silver">
-              Install Diamond Quant
+              Install Quant Betting
             </p>
             <p className="text-xs text-mercury/70 mt-1 leading-relaxed">
               Tap{" "}
@@ -132,7 +132,7 @@ export default function PWAInstall() {
           </div>
           <div className="flex-1 min-w-0 pr-6">
             <p className="text-sm font-bold text-silver">
-              Install Diamond Quant
+              Install Quant Betting
             </p>
             <p className="text-xs text-mercury/70 mt-1">
               Faster loads, push alerts, no browser chrome.

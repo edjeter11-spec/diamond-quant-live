@@ -1,5 +1,5 @@
 // ──────────────────────────────────────────────────────────
-// Diamond-Quant Live — Core Types
+// Quant Betting — Core Types
 // ──────────────────────────────────────────────────────────
 
 export interface TeamStats {

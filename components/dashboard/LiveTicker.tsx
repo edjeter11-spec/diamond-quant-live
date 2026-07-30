@@ -69,7 +69,7 @@ export default function LiveTicker() {
   if (combined.length === 0) {
     combined.push({
       type: "ev",
-      text: "Diamond-Quant Live — Scanning markets for edges...",
+      text: "Quant Betting — Scanning markets for edges...",
     });
   }
 

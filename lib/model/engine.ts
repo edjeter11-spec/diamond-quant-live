@@ -1,5 +1,5 @@
 // ──────────────────────────────────────────────────────────
-// Diamond-Quant Live — Core Quantitative Engine
+// Quant Betting — Core Quantitative Engine
 // Live win probability modeling with dynamic weight shifts
 // ──────────────────────────────────────────────────────────
 

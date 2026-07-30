@@ -87,7 +87,7 @@ export default function ParlayBuilder() {
         `${i + 1}. ${l.pick} (${l.game}) — ${l.odds > 0 ? "+" : ""}${l.odds} @ ${l.bookmaker}`,
     );
     const summary =
-      `Diamond Quant Parlay Slip\n` +
+      `Quant Betting Parlay Slip\n` +
       lines.join("\n") +
       (combined != null
         ? `\nCombined: ${combined > 0 ? "+" : ""}${combined} | Pays $${payout100 + 100} on $100`

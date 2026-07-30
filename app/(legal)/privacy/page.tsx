@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy — Diamond-Quant Live",
-  description: "How Diamond-Quant Live collects, uses, and protects your data.",
+  title: "Privacy Policy — Quant Betting",
+  description: "How Quant Betting collects, uses, and protects your data.",
 };
 
 export default function PrivacyPage() {

@@ -95,7 +95,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
           <p className="text-xs text-mercury/60 mt-1">
             {mode === "signin"
               ? "Sign in to sync your data across devices"
-              : "Join Diamond-Quant Live — your picks, your bankroll, everywhere"}
+              : "Join Quant Betting — your picks, your bankroll, everywhere"}
           </p>
         </div>
 

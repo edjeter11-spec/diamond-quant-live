@@ -13,12 +13,8 @@ import { useSport } from "@/lib/sport-context";
 import LiveTicker from "@/components/dashboard/LiveTicker";
 import GameCard from "@/components/dashboard/GameCard";
 import GameDetailModal from "@/components/dashboard/GameDetailModal";
-import OddsGrid from "@/components/dashboard/OddsGrid";
-import QuantVerdict from "@/components/dashboard/QuantVerdict";
 import ArbitrageAlert from "@/components/dashboard/ArbitrageAlert";
 import LineMovement from "@/components/dashboard/LineMovement";
-import SelectedGameBanner from "@/components/dashboard/SelectedGameBanner";
-import GameMatchupBrief from "@/components/dashboard/GameMatchupBrief";
 import BetSlip from "@/components/dashboard/BetSlip";
 import PicksBoard from "@/components/dashboard/PicksBoard";
 import SafeBoundary from "@/components/SafeBoundary";
@@ -645,11 +641,11 @@ export default function WarRoom() {
             </div>
             <div className="hidden sm:block">
               <h1 className="text-base sm:text-lg font-extrabold text-silver tracking-tight leading-tight whitespace-nowrap">
-                DQ
+                Quant
                 <span
                   className={`ml-1 ${currentSport === "nba" ? "text-orange-400" : "text-neon"}`}
                 >
-                  Live
+                  Betting
                 </span>
               </h1>
               <p className="text-[10px] text-mercury/60 -mt-0.5 font-mono tracking-wider">
@@ -1028,65 +1024,6 @@ export default function WarRoom() {
                     </details>
                   )}
 
-                  {/* Game deep-dive (when a game is selected) */}
-                  {selectedGameId && selectedScore && (
-                    <SafeBoundary>
-                      <SelectedGameBanner
-                        game={selectedScore}
-                        onDeselect={() => selectGame(null)}
-                      />
-                      {currentSport === "nba" &&
-                        selectedOdds &&
-                        (() => {
-                          const homeAbbrev = teamNameToAbbrev(
-                            selectedOdds.homeTeam,
-                            "nba",
-                          );
-                          const awayAbbrev = teamNameToAbbrev(
-                            selectedOdds.awayTeam,
-                            "nba",
-                          );
-                          return homeAbbrev && awayAbbrev ? (
-                            <GameMatchupBrief
-                              homeAbbrev={homeAbbrev}
-                              awayAbbrev={awayAbbrev}
-                            />
-                          ) : null;
-                        })()}
-                      {/* Quant Verdict card — admin-only for now. Underlying
-                          logic/component untouched; just not shown publicly
-                          on the homepage yet (same reasoning as the Bot tab
-                          and Arbitrage Scanner above). */}
-                      {isAdmin && (
-                        <QuantVerdict
-                          game={{
-                            homeTeam: selectedOdds?.homeTeam ?? "Select a game",
-                            awayTeam: selectedOdds?.awayTeam ?? "",
-                          }}
-                          analysis={buildVerdict()}
-                          onPlaceBet={
-                            selectedOdds
-                              ? () => {
-                                  const verdict = buildVerdict();
-                                  if (verdict) {
-                                    openBetSlip({
-                                      game: `${selectedOdds.awayTeam} @ ${selectedOdds.homeTeam}`,
-                                      pick: verdict.pick,
-                                      odds: verdict.marketOdds,
-                                      bookmaker: verdict.bookmaker,
-                                      market: "moneyline",
-                                      evAtPlacement: verdict.evPercentage,
-                                    });
-                                  }
-                                }
-                              : undefined
-                          }
-                        />
-                      )}
-                      <OddsGrid gameId={selectedGameId} />
-                    </SafeBoundary>
-                  )}
-
                   {/* Live games — moved to the bottom of the board. Parlay
                       of the Day and player props (inside PicksBoard) are
                       the priority content up top. */}
@@ -1181,7 +1118,7 @@ export default function WarRoom() {
       {/* Mobile bottom nav — floating pill, native-app feel */}
       <nav
         className="md:hidden fixed inset-x-3 z-50 rounded-2xl bg-bunker/90 backdrop-blur-xl border border-slate/40 shadow-[0_8px_32px_rgba(0,0,0,0.5)] flex items-stretch overflow-hidden"
-        style={{ bottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
+        style={{ bottom: "max(0.25rem, env(safe-area-inset-bottom))" }}
       >
         {tabs.map((tab) => {
           const isActive = activeTab === tab.key;
@@ -1211,7 +1148,7 @@ export default function WarRoom() {
 
       <footer className="border-t border-slate/15 mt-6 sm:mt-8 py-4 mb-24 md:mb-0 text-center px-4">
         <p className="text-[10px] sm:text-xs text-mercury/40 font-mono">
-          Diamond-Quant Live v1.0 — Odds via The Odds API. Stats via{" "}
+          Quant Betting v1.0 — Odds via The Odds API. Stats via{" "}
           {currentSport === "nba" ? "NBA Stats API" : "MLB Stats API"}.
         </p>
         <p className="text-[9px] sm:text-[10px] text-mercury/30 mt-1">
@@ -1255,7 +1192,7 @@ function DiscordSettings() {
     if (!webhook) return;
     setTesting(true);
     await sendDiscordAlert(webhook, {
-      title: "Test Alert from Diamond-Quant Live",
+      title: "Test Alert from Quant Betting",
       description: "If you see this, Discord alerts are working!",
       color: 0x00ff88,
       fields: [{ name: "Status", value: "Connected", inline: true }],

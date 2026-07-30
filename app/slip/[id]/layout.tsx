@@ -30,7 +30,7 @@ export async function generateMetadata({
       : "";
     const firstPick = picks[0]?.pick ? `: ${picks[0].pick}` : "";
 
-    const title = `${sharedBy}'s ${legLabel}${oddsLabel} — Diamond Quant`;
+    const title = `${sharedBy}'s ${legLabel}${oddsLabel} — Quant Betting`;
     const description =
       picks.length > 0
         ? `${picks
@@ -39,7 +39,7 @@ export async function generateMetadata({
             .join(
               " • ",
             )}${picks.length > 3 ? ` • +${picks.length - 3} more` : ""}${firstPick ? "" : ""}`
-        : "A shared bet slip from Diamond-Quant Live — +EV picks, live odds, quant edge.";
+        : "A shared bet slip from Quant Betting — +EV picks, live odds, quant edge.";
 
     return {
       title,
@@ -48,7 +48,7 @@ export async function generateMetadata({
         title,
         description,
         type: "website",
-        siteName: "Diamond-Quant Live",
+        siteName: "Quant Betting",
       },
       twitter: {
         card: "summary_large_image",
@@ -58,7 +58,7 @@ export async function generateMetadata({
     };
   } catch {
     return {
-      title: "Shared Bet Slip — Diamond Quant Live",
+      title: "Shared Bet Slip — Quant Betting",
       description: "Quant-driven +EV sports picks.",
     };
   }

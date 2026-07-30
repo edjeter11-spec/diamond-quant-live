@@ -1,7 +1,6 @@
 import { ImageResponse } from "next/og";
 
-export const alt =
-  "Diamond-Quant Live — AI-Powered Sports Betting Intelligence";
+export const alt = "Quant Betting — AI-Powered Sports Betting Intelligence";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 

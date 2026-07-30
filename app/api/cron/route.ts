@@ -625,7 +625,7 @@ export async function GET(req: Request) {
               const { sendPushToAll } = await import("@/lib/push/send");
               await sendPushToAll({
                 title: `🔥 ${highConf.length} high-confidence picks today — ${sportLabel}`,
-                body: `Diamond Quant has locked in ${highConf.length} HIGH confidence plays for today.`,
+                body: `Quant Betting has locked in ${highConf.length} HIGH confidence plays for today.`,
                 url: "/",
                 tag: `high-conf-${today}`,
               });

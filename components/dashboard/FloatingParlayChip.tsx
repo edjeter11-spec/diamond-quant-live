@@ -118,7 +118,7 @@ export default function FloatingParlayChip({
       const url = `${window.location.origin}${data.url}`;
       if (navigator.share) {
         await navigator.share({
-          title: `Diamond Quant: ${legCount}-leg ${isSingle ? "pick" : "parlay"}`,
+          title: `Quant Betting: ${legCount}-leg ${isSingle ? "pick" : "parlay"}`,
           url,
         });
       } else {

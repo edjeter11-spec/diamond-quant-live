@@ -1,7 +1,7 @@
 import { ImageResponse } from "next/og";
 import { cloudGet } from "@/lib/supabase/client";
 
-export const alt = "Diamond-Quant Live — Live Track Record";
+export const alt = "Quant Betting — Live Track Record";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -80,7 +80,7 @@ export default async function OG() {
             display: "flex",
           }}
         >
-          Diamond-Quant Live
+          Quant Betting
         </div>
       </div>
 

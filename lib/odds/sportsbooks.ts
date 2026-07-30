@@ -249,7 +249,7 @@ export async function sendDiscordAlert(
             description: message.description,
             color: message.color,
             fields: message.fields,
-            footer: { text: "Diamond-Quant Live" },
+            footer: { text: "Quant Betting" },
             timestamp: new Date().toISOString(),
           },
         ],

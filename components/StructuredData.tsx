@@ -31,7 +31,7 @@ export default async function StructuredData() {
   const app = {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
-    name: "Diamond-Quant Live",
+    name: "Quant Betting",
     description:
       "AI-powered NBA & MLB sports betting analytics. Self-evolving prop brain, live arbitrage scanner, +EV pick finder.",
     url: "https://diamond-quant-live.vercel.app",
@@ -60,7 +60,7 @@ export default async function StructuredData() {
   const org = {
     "@context": "https://schema.org",
     "@type": "Organization",
-    name: "Diamond-Quant Live",
+    name: "Quant Betting",
     url: "https://diamond-quant-live.vercel.app",
     logo: "https://diamond-quant-live.vercel.app/apple-icon",
   };
@@ -72,7 +72,7 @@ export default async function StructuredData() {
     mainEntity: [
       {
         "@type": "Question",
-        name: "How does Diamond Quant make its picks?",
+        name: "How does Quant Betting make its picks?",
         acceptedAnswer: {
           "@type": "Answer",
           text: "A self-evolving NBA prop brain trained on thousands of games projects player stats vs the line. Auto-trained nightly, auto-evolved weekly via tournament selection.",

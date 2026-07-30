@@ -20,11 +20,11 @@ export const dynamic = "force-dynamic";
 export const revalidate = 60;
 
 export const metadata: Metadata = {
-  title: "Diamond Quant — Live Track Record",
+  title: "Quant Betting — Live Track Record",
   description:
     "Watch our AI-powered NBA prop bot bet in real-time. Model trained on a 4,041-game historical backtest (54.1% win rate) — see the live forward-tested track record on-site. Free 7-day trial.",
   openGraph: {
-    title: "Diamond Quant — Live Track Record",
+    title: "Quant Betting — Live Track Record",
     description:
       "AI sports betting that learns. Self-evolving NBA prop brain trained on a 4,041-game historical backtest (54.1%) — live forward-tested results tracked separately.",
   },

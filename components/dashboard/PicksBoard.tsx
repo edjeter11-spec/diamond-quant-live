@@ -1579,7 +1579,7 @@ function PickCard({
                       const url = `${window.location.origin}${data.url}`;
                       if (navigator.share) {
                         await navigator.share({
-                          title: `Diamond Quant: ${pick.pick}`,
+                          title: `Quant Betting: ${pick.pick}`,
                           url,
                         });
                       } else {
