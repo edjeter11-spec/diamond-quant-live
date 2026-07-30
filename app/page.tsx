@@ -31,6 +31,9 @@ import {
   useWarmMlbPlayerIndex,
 } from "@/lib/hooks/useNbaPlayerIndex";
 import FloatingParlayChip from "@/components/dashboard/FloatingParlayChip";
+import HeroBanner from "@/components/dashboard/HeroBanner";
+import EdgeFinder from "@/components/dashboard/EdgeFinder";
+import InjuryAlerts from "@/components/dashboard/InjuryAlerts";
 import Toaster from "@/components/ui/Toaster";
 import OnboardingTour from "@/components/onboarding/OnboardingTour";
 import { backupOddsToStorage, getOddsBackup } from "@/lib/odds/cache";
@@ -628,15 +631,22 @@ export default function WarRoom() {
       <header className="safe-top border-b border-slate/25 bg-void/70 backdrop-blur-xl sticky top-0 z-40">
         <div className="max-w-[1800px] mx-auto px-3 sm:px-4 py-2 sm:py-3 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            {/* Brand mark — cropped from the QUANT logo. Sport-tinted ring
+                keeps the existing NBA/MLB color cue without recoloring the
+                artwork itself. */}
             <div
-              className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center border flex-shrink-0 shadow-lg ${
+              className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center border flex-shrink-0 shadow-lg overflow-hidden ${
                 currentSport === "nba"
-                  ? "bg-gradient-to-br from-orange-500/25 to-amber-500/10 border-orange-500/25"
-                  : "bg-gradient-to-br from-neon/25 to-electric/10 border-neon/25"
+                  ? "border-orange-500/25"
+                  : "border-neon/25"
               }`}
             >
-              <Diamond
-                className={`w-4 h-4 sm:w-5 sm:h-5 ${currentSport === "nba" ? "text-orange-400" : "text-neon"}`}
+              <img
+                src="/quant-mark.png"
+                alt="Quant Betting"
+                width={36}
+                height={36}
+                className="w-full h-full object-cover"
               />
             </div>
             <div className="hidden sm:block">
@@ -962,6 +972,12 @@ export default function WarRoom() {
 
                 {/* Center — Main Picks Board */}
                 <div className="flex-1 min-w-0 space-y-3 sm:space-y-4">
+                  {/* Desktop hero — brand + value prop. Hidden on mobile so
+                      the phone board still opens straight onto picks. */}
+                  <SafeBoundary>
+                    <HeroBanner />
+                  </SafeBoundary>
+
                   {/* Streak banner — social proof / retention hook */}
                   <SafeBoundary>
                     <StreakBanner />
@@ -1032,13 +1048,28 @@ export default function WarRoom() {
                       <LiveBoard />
                     </Suspense>
                   </SafeBoundary>
+
+                  {/* Desktop stats strip — built and wired to the real graded
+                      track record (/api/results), but not mounted right now:
+                      the current 30-day sample is a losing record and Eddie
+                      opted to hold it back rather than headline it. Component
+                      is kept in place so it can be re-mounted as a one-liner
+                      when the record supports it — the alternative (hardcoding
+                      the flattering numbers from the design comp) was
+                      explicitly rejected. See components/dashboard/StatsStrip.tsx */}
                 </div>
 
                 {/* Right Sidebar — XL */}
                 <div className="hidden xl:block w-80 flex-shrink-0 space-y-4">
                   <div className="sticky top-24 space-y-4">
                     <SafeBoundary>
+                      <EdgeFinder />
+                    </SafeBoundary>
+                    <SafeBoundary>
                       <LineMovement movements={lineMovements} />
+                    </SafeBoundary>
+                    <SafeBoundary>
+                      <InjuryAlerts sport={currentSport} />
                     </SafeBoundary>
                   </div>
                 </div>

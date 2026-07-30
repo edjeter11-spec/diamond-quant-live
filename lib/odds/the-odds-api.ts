@@ -9,19 +9,25 @@ import type { OddsLine, PlayerProp } from "@/lib/model/types";
 const BASE_URL = "https://api.the-odds-api.com/v4";
 const SPORT = "baseball_mlb";
 
-const BOOKMAKERS = [
-  "draftkings",
-  "fanduel",
-  "fanatics",
-  "betmgm",
-  "hardrockbet",
-  "betrivers",
-  "espnbet",
-  "pointsbetus",
-  "bovada",
-  "williamhill_us",
-  "unibet_us",
-];
+// Bookmakers requested per call.
+//
+// COST NOTE: The Odds API bills 1 credit per market per region, and the
+// response size (not the credit count) scales with book count — but every
+// extra book is dead weight if we never surface or link to it. The two books
+// we actually deep-link from picks and Discord buttons are DraftKings and
+// FanDuel; the rest exist to give the model a market consensus to price
+// against and to find line discrepancies.
+//
+// Trimmed from 11 books to 3 (DraftKings, FanDuel, BetMGM) — the books Eddie
+// actually wants surfaced. Smaller payloads and far less parsing per refresh.
+//
+// TRADE-OFF, stated plainly: consensus/no-vig fair-odds and arbitrage detection
+// get weaker with only three books. Arbitrage in particular is close to moot —
+// real arbs almost always need an outlier book, and outliers are exactly what
+// we just removed. EV vs. a 3-book average is still meaningful but noisier than
+// vs. an 11-book market. If arb hunting matters later, widen this list again;
+// nothing else in the code needs to change.
+const BOOKMAKERS = ["draftkings", "fanduel", "betmgm"];
 
 // Display names for bookmakers
 export const BOOK_DISPLAY: Record<
@@ -79,7 +85,13 @@ export async function fetchOdds(
   let res: Response;
   try {
     res = await fetch(url, {
-      next: { revalidate: 30 },
+      // 15 min, not 30s. At revalidate:30 a single always-open dashboard tab
+      // could force ~2,880 upstream fetches/day — multiplied by markets, that
+      // exhausted a 500-credit month in well under a day. Pre-game lines do
+      // not move meaningfully on a 30-second cadence, so this costs nothing
+      // in practice. The 30-min server cache (CACHE_TTL.ODDS) sits in front
+      // of this; this is the backstop for cold/parallel requests.
+      next: { revalidate: 900 },
       signal: controller.signal,
     });
   } finally {
@@ -126,7 +138,11 @@ export async function fetchPlayerProps(
   let res: Response;
   try {
     res = await fetch(url, {
-      next: { revalidate: 60 },
+      // Props are the expensive endpoint: this is a PER-EVENT call, so a
+      // 15-game slate costs 15x whatever the board costs, per market. 30 min
+      // here — prop lines move slower than game lines, and the board already
+      // warns that books post props only 4-6h before first pitch.
+      next: { revalidate: 1800 },
       signal: controller.signal,
     });
   } finally {

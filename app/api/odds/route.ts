@@ -26,7 +26,10 @@ import {
 } from "@/lib/supabase/rate-limit";
 import { snapshotGameMarkets } from "@/lib/odds/line-movement";
 
-export const revalidate = 60;
+// 15 min. Pre-game lines don't move on a 60s cadence, and this route is the
+// single biggest consumer of Odds API credits — see the cost note on
+// BOOKMAKERS in lib/odds/the-odds-api.ts.
+export const revalidate = 900;
 export const maxDuration = 30;
 
 export async function GET(req: Request) {
@@ -47,7 +50,7 @@ export async function GET(req: Request) {
   if (cached) {
     return NextResponse.json(cached, {
       headers: {
-        "Cache-Control": "public, s-maxage=30, stale-while-revalidate=300",
+        "Cache-Control": "public, s-maxage=900, stale-while-revalidate=1800",
       },
     });
   }
@@ -146,7 +149,7 @@ export async function GET(req: Request) {
       }
       return NextResponse.json(response, {
         headers: {
-          "Cache-Control": "public, s-maxage=30, stale-while-revalidate=300",
+          "Cache-Control": "public, s-maxage=900, stale-while-revalidate=1800",
         },
       });
     } catch (error: any) {

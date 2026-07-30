@@ -156,9 +156,15 @@ export default function AdminPage() {
               SYSTEM MANAGEMENT
             </p>
           </div>
+          <Link
+            href="/admin/picks"
+            className="ml-auto text-xs bg-[#4cc9ff]/10 text-[#4cc9ff] border border-[#4cc9ff]/30 rounded-lg px-3 py-1.5 hover:bg-[#4cc9ff]/20 transition-colors"
+          >
+            Create Pick
+          </Link>
           <button
             onClick={loadData}
-            className="ml-auto p-2 rounded-lg hover:bg-[#121727] transition-colors"
+            className="p-2 rounded-lg hover:bg-[#121727] transition-colors"
           >
             <RefreshCw
               className={`w-4 h-4 text-[#8e9ab5] ${loading ? "animate-spin" : ""}`}

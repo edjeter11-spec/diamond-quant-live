@@ -36,9 +36,15 @@ export default function LiveBoard() {
     try {
       const scoreUrl = isNBA ? "/api/nba-scores" : "/api/scores";
       const oddsUrl = `/api/odds?sport=${isNBA ? "basketball_nba" : "baseball_mlb"}`;
+      // Scores get the cache-buster (they're free and genuinely change every
+      // pitch). Odds deliberately do NOT: `?_=${Date.now()}` made every URL
+      // unique, which defeated the CDN, Next fetch cache and browser cache all
+      // at once and forced a paid upstream Odds API call every 30s. Odds are
+      // server-cached for ~15-30min anyway, so busting it bought nothing but
+      // burned the monthly credit budget.
       const [scoresRes, oddsRes] = await Promise.all([
         fetch(`${scoreUrl}?_=${Date.now()}`),
-        fetch(`${oddsUrl}&_=${Date.now()}`),
+        fetch(oddsUrl),
       ]);
       const scoreData = scoresRes.ok ? await scoresRes.json() : { games: [] };
       const oddsData = oddsRes.ok ? await oddsRes.json() : { games: [] };

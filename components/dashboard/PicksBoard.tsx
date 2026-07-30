@@ -38,6 +38,7 @@ import InfoTip from "@/components/ui/InfoTip";
 import Link from "next/link";
 import { usePremium } from "@/lib/hooks/usePremium";
 import TodayPropPicks from "@/components/dashboard/TodayPropPicks";
+import NRFISection from "@/components/dashboard/NRFISection";
 import NFLPropSection from "@/components/dashboard/NFLPropSection";
 import NHLPropSection from "@/components/dashboard/NHLPropSection";
 import SafeBoundary from "@/components/SafeBoundary";
@@ -798,84 +799,97 @@ export default function PicksBoard() {
         </div>
       )}
 
-      {/* ═══ PARLAY OF THE DAY ═══ */}
-      {parlayLegs.length >= 2 && (
-        <div className="glass rounded-xl overflow-hidden border border-purple/20">
-          <div className="px-3 sm:px-4 py-2.5 bg-gradient-to-r from-purple/10 to-neon/5 border-b border-purple/15 flex items-center gap-2">
-            <Layers className="w-4 h-4 text-purple" />
-            <div className="flex-1 min-w-0">
-              <h2 className="text-xs sm:text-sm font-bold text-silver uppercase tracking-wider">
-                Parlay of the Day
-              </h2>
-              {pinnedParlay?.generatedAt && (
-                <p className="text-[9px] text-mercury/60 mt-0.5">
-                  {pinnedParlay.dayLabel} • Locked at{" "}
-                  {new Date(pinnedParlay.generatedAt).toLocaleTimeString(
-                    "en-US",
-                    {
-                      hour: "numeric",
-                      minute: "2-digit",
-                      timeZone: "America/New_York",
-                    },
-                  )}{" "}
-                  ET
-                </p>
-              )}
-            </div>
-            <span className="text-base sm:text-lg font-bold font-mono text-purple">
-              {formatOdds(parlayAmerican)}
-            </span>
-          </div>
-          <div className="p-2.5 sm:p-3 space-y-1.5">
-            {parlayLegs.map((leg, i) => (
-              <div
-                key={i}
-                className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-gunmetal/30 text-left"
-              >
-                <span className="w-4 h-4 rounded-full bg-purple/20 text-purple text-[9px] font-bold flex items-center justify-center flex-shrink-0">
-                  {i + 1}
-                </span>
-                <TeamLogo
-                  team={leg.pick
-                    .split(" ML")[0]
-                    .split(" Over")[0]
-                    .split(" Under")[0]
-                    .split("/")[0]
-                    .trim()}
-                  size={18}
-                />
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs sm:text-sm font-medium text-silver truncate">
-                    {leg.pick}
+      {/* ═══ PARLAY OF THE DAY + NRFI — 2-up on desktop ═══
+          The render pairs these side by side above the props feed. They stack
+          on mobile (single column) so the phone board is unchanged. */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 items-start">
+        {parlayLegs.length >= 2 && (
+          <div className="glass rounded-xl overflow-hidden border border-purple/20">
+            <div className="px-3 sm:px-4 py-2.5 bg-gradient-to-r from-purple/10 to-neon/5 border-b border-purple/15 flex items-center gap-2">
+              <Layers className="w-4 h-4 text-purple" />
+              <div className="flex-1 min-w-0">
+                <h2 className="text-xs sm:text-sm font-bold text-silver uppercase tracking-wider">
+                  Parlay of the Day
+                </h2>
+                {pinnedParlay?.generatedAt && (
+                  <p className="text-[9px] text-mercury/60 mt-0.5">
+                    {pinnedParlay.dayLabel} • Locked at{" "}
+                    {new Date(pinnedParlay.generatedAt).toLocaleTimeString(
+                      "en-US",
+                      {
+                        hour: "numeric",
+                        minute: "2-digit",
+                        timeZone: "America/New_York",
+                      },
+                    )}{" "}
+                    ET
                   </p>
-                  <p className="text-[9px] text-mercury/60 truncate">
-                    {leg.commenceTime && (
-                      <span className="text-mercury/80">
-                        {new Date(leg.commenceTime).toLocaleString("en-US", {
-                          month: "short",
-                          day: "numeric",
-                          hour: "numeric",
-                          minute: "2-digit",
-                        })}{" "}
-                        —{" "}
-                      </span>
-                    )}
-                    {leg.game} • {leg.bookmaker}
-                  </p>
-                </div>
-                <div className="text-right flex-shrink-0">
-                  <p className="text-xs font-mono font-semibold text-silver">
-                    {formatOdds(leg.odds)}
-                  </p>
-                  <p className="text-[9px] text-neon">
-                    +{leg.evPercentage.toFixed(1)}%
-                  </p>
-                </div>
+                )}
               </div>
-            ))}
+              <span className="text-base sm:text-lg font-bold font-mono text-purple">
+                {formatOdds(parlayAmerican)}
+              </span>
+            </div>
+            <div className="p-2.5 sm:p-3 space-y-1.5">
+              {parlayLegs.map((leg, i) => (
+                <div
+                  key={i}
+                  className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-gunmetal/30 text-left"
+                >
+                  <span className="w-4 h-4 rounded-full bg-purple/20 text-purple text-[9px] font-bold flex items-center justify-center flex-shrink-0">
+                    {i + 1}
+                  </span>
+                  <TeamLogo
+                    team={leg.pick
+                      .split(" ML")[0]
+                      .split(" Over")[0]
+                      .split(" Under")[0]
+                      .split("/")[0]
+                      .trim()}
+                    size={18}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs sm:text-sm font-medium text-silver truncate">
+                      {leg.pick}
+                    </p>
+                    <p className="text-[9px] text-mercury/60 truncate">
+                      {leg.commenceTime && (
+                        <span className="text-mercury/80">
+                          {new Date(leg.commenceTime).toLocaleString("en-US", {
+                            month: "short",
+                            day: "numeric",
+                            hour: "numeric",
+                            minute: "2-digit",
+                          })}{" "}
+                          —{" "}
+                        </span>
+                      )}
+                      {leg.game} • {leg.bookmaker}
+                    </p>
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <p className="text-xs font-mono font-semibold text-silver">
+                      {formatOdds(leg.odds)}
+                    </p>
+                    <p className="text-[9px] text-neon">
+                      +{leg.evPercentage.toFixed(1)}%
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+
+        {/* Second cell of the 2-up: NRFI. Full detail still lives on the
+            dedicated NRFI tab — this is the at-a-glance card from the render.
+            MLB-only, since NRFI is a first-inning baseball market. */}
+        {currentSport === "mlb" && (
+          <SafeBoundary>
+            <NRFISection sport="mlb" />
+          </SafeBoundary>
+        )}
+      </div>
 
       {/* ═══ TODAY'S PLAYER PROPS — MLB/NBA only ═══ */}
       {(currentSport === "mlb" || currentSport === "nba") && (
@@ -887,8 +901,6 @@ export default function PicksBoard() {
           />
         </SafeBoundary>
       )}
-
-      {/* NRFI / YRFI moved to its own top-level tab — see app/page.tsx */}
 
       {/* ═══ NFL Player Props — auto-renders when sport=nfl ═══ */}
       <SafeBoundary>

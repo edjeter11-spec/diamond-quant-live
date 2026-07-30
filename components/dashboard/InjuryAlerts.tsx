@@ -1,0 +1,149 @@
+"use client";
+
+// Injury Alerts rail panel from the product render.
+//
+// Real data only — reads /api/nba-injuries, which scrapes the live NBA injury
+// report. That endpoint is NBA-specific, so on other sports this renders an
+// honest "not wired up for this sport yet" state rather than inventing
+// plausible-looking injuries, which on a betting dashboard would be actively
+// dangerous (people size bets off injury news).
+
+import { useEffect, useState } from "react";
+import { Stethoscope } from "lucide-react";
+
+interface InjuredPlayer {
+  name?: string;
+  player?: string;
+  status?: string;
+  injury?: string;
+  returnDate?: string;
+}
+interface TeamReport {
+  teamAbbrev?: string;
+  players?: InjuredPlayer[];
+}
+
+const STATUS_TONE: Record<string, string> = {
+  out: "text-danger",
+  doubtful: "text-danger",
+  questionable: "text-amber",
+  probable: "text-neon",
+  "day-to-day": "text-amber",
+};
+
+export default function InjuryAlerts({ sport }: { sport: string }) {
+  const [rows, setRows] = useState<
+    { name: string; team: string; status: string; detail: string }[]
+  >([]);
+  const [state, setState] = useState<"loading" | "ready" | "error">("loading");
+
+  useEffect(() => {
+    if (sport !== "nba") {
+      setState("ready");
+      setRows([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/nba-injuries", {
+          signal: AbortSignal.timeout(8000),
+        });
+        const d = await res.json();
+        const flat: typeof rows = [];
+        for (const t of (d?.injuries ?? []) as TeamReport[]) {
+          for (const p of t.players ?? []) {
+            flat.push({
+              name: p.name ?? p.player ?? "Unknown",
+              team: t.teamAbbrev ?? "",
+              status: (p.status ?? "").toLowerCase(),
+              detail: p.injury ?? "",
+            });
+          }
+        }
+        // Most actionable first: Out/Doubtful before Questionable.
+        const rank = (s: string) =>
+          s.startsWith("out") ? 0 : s.startsWith("doubt") ? 1 : 2;
+        flat.sort((a, b) => rank(a.status) - rank(b.status));
+        if (!cancelled) {
+          setRows(flat.slice(0, 6));
+          setState("ready");
+        }
+      } catch {
+        if (!cancelled) setState("error");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [sport]);
+
+  return (
+    <div className="glass rounded-xl border border-slate/20 overflow-hidden">
+      <div className="px-4 py-2.5 border-b border-slate/15 flex items-center gap-2">
+        <Stethoscope className="w-4 h-4 text-danger" />
+        <h3 className="text-xs font-bold text-silver uppercase tracking-wider">
+          Injury Alerts
+        </h3>
+      </div>
+
+      <div className="p-3">
+        {sport !== "nba" ? (
+          <p className="text-[11px] text-mercury/60 leading-snug">
+            Live injury feed is NBA-only right now. {sport.toUpperCase()} status
+            still comes through the game cards and matchup detail.
+          </p>
+        ) : state === "loading" ? (
+          <div className="space-y-2">
+            {[0, 1, 2].map((i) => (
+              <div
+                key={i}
+                className="h-8 rounded-lg bg-gunmetal/30 animate-pulse"
+              />
+            ))}
+          </div>
+        ) : state === "error" ? (
+          <p className="text-[11px] text-mercury/60">
+            Injury feed unavailable right now.
+          </p>
+        ) : rows.length === 0 ? (
+          <p className="text-[11px] text-mercury/60">
+            No injuries reported on today&apos;s slate.
+          </p>
+        ) : (
+          <div className="space-y-1.5">
+            {rows.map((r, i) => (
+              <div
+                key={`${r.name}-${i}`}
+                className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-gunmetal/25"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-semibold text-silver truncate">
+                    {r.name}
+                    {r.team && (
+                      <span className="text-mercury/50 font-normal ml-1">
+                        ({r.team})
+                      </span>
+                    )}
+                  </p>
+                  {r.detail && (
+                    <p className="text-[10px] text-mercury/60 truncate">
+                      {r.detail}
+                    </p>
+                  )}
+                </div>
+                <span
+                  className={`text-[9px] font-bold uppercase flex-shrink-0 ${
+                    STATUS_TONE[r.status] ?? "text-mercury"
+                  }`}
+                >
+                  {r.status || "—"}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
