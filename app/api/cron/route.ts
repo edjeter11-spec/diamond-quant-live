@@ -37,7 +37,10 @@ export async function GET(req: Request) {
     const authHeader = req.headers.get("authorization");
     const headerSecret = req.headers.get("x-cron-secret");
     if (authHeader !== `Bearer ${cronSecret}` && headerSecret !== cronSecret) {
-      return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(
+        { ok: false, error: "Unauthorized" },
+        { status: 401 },
+      );
     }
   }
   const url = new URL(req.url);
@@ -1280,6 +1283,40 @@ export async function GET(req: Request) {
       } catch {}
     }
 
+    // ── Daily Discord board + results recap ──
+    // Both are self-gating: publish-daily no-ops if today's board already
+    // went out, and post-results holds until every pick on the slate is
+    // graded. That's what makes them safe on a 30-minute cron.
+    let discordDaily: any = { published: null, recap: null };
+    if (process.env.BOT_API_URL) {
+      const origin = new URL(req.url).origin;
+      const headers = { "x-cron-secret": process.env.CRON_SECRET ?? "" };
+
+      // Publish today's board once there are picks to publish.
+      try {
+        const r = await fetch(`${origin}/api/publish-daily?sport=mlb`, {
+          method: "POST",
+          headers,
+          signal: AbortSignal.timeout(30000),
+        });
+        discordDaily.published = await r.json();
+      } catch (e) {
+        discordDaily.published = { ok: false, error: String(e) };
+      }
+
+      // Recap yesterday's slate once it's fully final.
+      try {
+        const r = await fetch(`${origin}/api/post-results?sport=mlb`, {
+          method: "POST",
+          headers,
+          signal: AbortSignal.timeout(30000),
+        });
+        discordDaily.recap = await r.json();
+      } catch (e) {
+        discordDaily.recap = { ok: false, error: String(e) };
+      }
+    }
+
     return NextResponse.json({
       ok: true,
       timestamp: new Date().toISOString(),
@@ -1295,6 +1332,7 @@ export async function GET(req: Request) {
       userBets: userBetsSettled,
       botSettle,
       pickGen,
+      discordDaily,
     });
   } catch (error: any) {
     return NextResponse.json(
