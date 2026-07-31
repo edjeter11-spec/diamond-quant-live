@@ -191,7 +191,16 @@ export async function GET(req: Request) {
           commence_time: e.commence_time,
         }));
 
-      setCache(eventsCacheKey, events);
+      // Never cache an EMPTY event list. Both sources can transiently return
+      // nothing — an Odds API blip, an 8s timeout, a slow MLB Stats API — and
+      // caching that for EVENTS (60 min) meant one bad moment blanked the
+      // entire board for an hour, with every later request served the empty
+      // array instead of retrying. That is exactly how the board showed zero
+      // props on 2026-07-31 while the paid key was healthy and returning 15
+      // games. An empty result is a failure to answer, not an answer.
+      if (Array.isArray(events) && events.length > 0) {
+        setCache(eventsCacheKey, events);
+      }
     }
 
     // Always re-filter to today's ET date — in case the cached events include
