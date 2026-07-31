@@ -2,7 +2,10 @@
 // Cache-first for static assets, network-first for HTML + API.
 // Bumps the version → invalidates old cache.
 
-const VERSION = "dq-v4";
+// Bump on every SW behaviour change — the activate handler deletes caches
+// that don't match, which is what forces existing installs to drop stale
+// entries instead of serving them indefinitely.
+const VERSION = "dq-v5";
 const RUNTIME = `dq-runtime-${VERSION}`;
 
 // Only precache things that don't change per-deploy. HTML is deliberately NOT
@@ -44,6 +47,18 @@ self.addEventListener("fetch", (event) => {
   const isApi = url.pathname.startsWith("/api/");
   const isHtml =
     request.mode === "navigate" || request.destination === "document";
+
+  // Never serve these from cache. They're the "everyone sees the same thing"
+  // endpoints — a stale copy on one device (e.g. a phone on a flaky
+  // connection falling back to a previous window's board) makes that device
+  // disagree with every other one, which is worse than showing nothing.
+  const isPinned =
+    url.pathname.startsWith("/api/pinned-props") ||
+    url.pathname.startsWith("/api/parlay-today");
+  if (isPinned) {
+    event.respondWith(fetch(request));
+    return;
+  }
 
   // Network-first for fresh data, cache fallback for offline shell
   if (isApi || isHtml) {

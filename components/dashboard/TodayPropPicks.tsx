@@ -289,16 +289,42 @@ export default function TodayPropPicks({
   // browser (below, now a fallback) meant two people loading seconds apart
   // could get different boards, and a pick could disappear as lines moved.
   const [pinned, setPinned] = useState<PropPick[] | null>(null);
+  const [pinnedFailed, setPinnedFailed] = useState(false);
+
   useEffect(() => {
     let cancelled = false;
-    fetch(`/api/pinned-props?sport=${sport}`)
-      .then((r) => r.json())
-      .then((d) => {
-        if (!cancelled && d?.ok && Array.isArray(d.picks) && d.picks.length) {
+
+    // Retry before giving up. A single failed fetch used to drop straight to
+    // the local ranking, which silently showed DIFFERENT picks on that device
+    // — the phone-vs-desktop mismatch. One flaky request on mobile shouldn't
+    // change what the board says.
+    const load = async (attempt = 0): Promise<void> => {
+      try {
+        const r = await fetch(`/api/pinned-props?sport=${sport}`, {
+          cache: "no-store", // never let a stale SW copy win
+          signal: AbortSignal.timeout(10000),
+        });
+        const d = await r.json();
+        if (cancelled) return;
+        if (d?.ok && Array.isArray(d.picks) && d.picks.length) {
           setPinned(d.picks as PropPick[]);
+          setPinnedFailed(false);
+          return;
         }
-      })
-      .catch(() => {});
+        throw new Error("empty pinned board");
+      } catch {
+        if (cancelled) return;
+        if (attempt < 2) {
+          setTimeout(() => load(attempt + 1), 1500 * (attempt + 1));
+          return;
+        }
+        // Out of retries — fall back, but say so rather than quietly
+        // presenting a different board as if it were the published one.
+        setPinnedFailed(true);
+      }
+    };
+
+    load();
     return () => {
       cancelled = true;
     };
@@ -626,6 +652,15 @@ export default function TodayPropPicks({
           <p className="text-[9px] text-mercury/60 mt-0.5">
             {picks.length} picks · {overCount} Over{overCount !== 1 ? "s" : ""}{" "}
             · ranked by edge
+            {pinnedFailed && (
+              // Say it out loud. Silently swapping in a locally-ranked board
+              // is what made the phone and desktop disagree in the first place.
+              <span className="text-amber/80">
+                {" "}
+                · couldn&apos;t load today&apos;s locked board — showing live
+                ranking, refresh to retry
+              </span>
+            )}
           </p>
           {hasTally && (
             <div className="flex items-center gap-2 mt-1 text-[10px] font-semibold">
