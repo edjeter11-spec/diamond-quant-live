@@ -22,6 +22,25 @@ const TARGET = 5; // pinned picks per day
 const MAX_UNDERS = 2; // keep the board Over-weighted, as before
 const REFRESH_HOURS = 3;
 
+// Minimum true EV (%) for a prop to reach the board.
+//
+// Deliberately permissive. fairProb is currently the de-vigged market
+// consensus, so EV here measures price against the market's own opinion — on a
+// normal slate every prop lands negative (2026-07-30: 620 priced sides, best
+// -0.3%, median -5.6%). A 0% floor would empty the board every day. Until a
+// real projection model gives an independent probability, this floor's job is
+// only to drop the worst-priced tail; ranking does the real work.
+const MIN_EV = -8;
+
+// Minimum win probability (%) for a prop to reach the board.
+//
+// Ranking purely on EV surfaces plus-money longshots — the best-priced play on
+// 2026-07-30 was +290 at 25.6% to hit. That's correct on EV and still wrong for
+// a daily board: five picks that lose three nights in four read as broken no
+// matter how sound the pricing. This keeps the board to plays that are more
+// likely than not, and EV ranks within that set.
+const MIN_PROB = 50;
+
 // At most this many picks from any single market.
 //
 // Without it the board fills with Hits props every day: the score is
@@ -63,6 +82,10 @@ function americanImplied(odds: number): number {
   return odds > 0 ? 100 / (odds + 100) : -odds / (-odds + 100);
 }
 
+function americanToDecimal(odds: number): number {
+  return odds > 0 ? 1 + odds / 100 : 1 + 100 / Math.abs(odds);
+}
+
 interface PinnedProp {
   key: string;
   playerName: string;
@@ -87,6 +110,11 @@ interface PinnedBoard {
   window: number;
   picks: PinnedProp[];
   generatedAt: string;
+  // How many props we priced, and how many cleared MIN_EV. Lets the UI say
+  // "nothing priced well today" instead of silently rendering a short board
+  // that looks like a loading failure.
+  considered?: number;
+  qualified?: number;
 }
 
 function build(prop: any, side: "over" | "under"): PinnedProp | null {
@@ -97,8 +125,16 @@ function build(prop: any, side: "over" | "under"): PinnedProp | null {
   const brainFair = side === "over" ? prop.brainOverProb : prop.brainUnderProb;
   const usesBrain = typeof brainFair === "number" && brainFair > 0;
   const fair = usesBrain ? brainFair : marketFair;
+  // True expected value: EV = p * decimalPayout - 1.
+  //
+  // The old formula was `fair - implied` — a probability-space difference that
+  // ignores what the payout is actually worth. Combined with the old score
+  // (`fair - 50 + ev * 0.5`) it let raw probability outweigh price about 8.5:1,
+  // so the board ranked by LIKELIHOOD, not edge. On 2026-07-30 that put the
+  // worst-priced pick on the slate (-6.0% EV at -272) at the top. Ranking on
+  // real EV is the same correction already applied in /api/parlay-today.
   const implied = americanImplied(best.price) * 100;
-  const ev = fair - implied;
+  const ev = ((fair / 100) * americanToDecimal(best.price) - 1) * 100;
   return {
     key: `${prop.market}-${prop.playerName}-${side}`,
     playerName: prop.playerName,
@@ -111,7 +147,11 @@ function build(prop: any, side: "over" | "under"): PinnedProp | null {
     bookmaker: best.bookmaker,
     fairProb: Math.round(fair * 10) / 10,
     evPercentage: Math.round(ev * 10) / 10,
-    score: fair - 50 + ev * 0.5 + (usesBrain ? 0.5 : 0),
+    // Rank on EV. The small probability term is a tie-breaker only (0.05/pt, so
+    // a full 20-point probability gap moves score by 1.0) — enough to prefer the
+    // likelier of two equally-priced plays without letting probability dominate
+    // price the way it used to.
+    score: ev + (fair - 50) * 0.05 + (usesBrain ? 0.5 : 0),
     label: MARKET_LABEL[prop.market] ?? prop.market,
     usesBrain,
     projectedValue: prop.brainProjectedValue,
@@ -154,6 +194,7 @@ export async function GET(req: NextRequest) {
     const overs: PinnedProp[] = [];
     const unders: PinnedProp[] = [];
     const seenPlayer = new Set<string>();
+    let consideredCount = 0;
 
     const results = await Promise.all(
       markets.map(async (market) => {
@@ -200,13 +241,27 @@ export async function GET(req: NextRequest) {
               : "under";
         const winner = pickSide === "over" ? tryOver : tryUnder;
         if (!winner) continue;
+        consideredCount++;
         if (pickSide === "over") overs.push(winner);
         else unders.push(winner);
       }
     }
 
-    overs.sort((a, b) => b.score - a.score);
-    unders.sort((a, b) => b.score - a.score);
+    // Quality floor. A pick has to clear this on true EV to reach the board.
+    //
+    // Publishing five picks every day regardless of price is how the board ended
+    // up averaging -5.3% EV — almost exactly the vig, which is the expected
+    // result of ranking the market's own de-vigged opinion against the market's
+    // own price. Fewer honest picks beat five bad ones, so a short board (or an
+    // empty one) is a valid, truthful output.
+    const qualified = (p: PinnedProp) =>
+      p.evPercentage >= MIN_EV && p.fairProb >= MIN_PROB;
+    const overs2 = overs.filter(qualified).sort((a, b) => b.score - a.score);
+    const unders2 = unders.filter(qualified).sort((a, b) => b.score - a.score);
+    overs.length = 0;
+    overs.push(...overs2);
+    unders.length = 0;
+    unders.push(...unders2);
 
     // Fill the board respecting both the Under limit and the per-market cap.
     const picks: PinnedProp[] = [];
@@ -235,6 +290,9 @@ export async function GET(req: NextRequest) {
     // If the cap left the board short — e.g. a thin slate where only one or
     // two markets have any props at all — backfill ignoring the market cap.
     // A full board of one market beats a half-empty board.
+    //
+    // Note this still only takes picks that cleared MIN_EV, so backfilling can
+    // no longer pad the board with negative-EV plays just to reach five.
     if (picks.length < TARGET) {
       for (const p of [...overs, ...unders]) {
         if (picks.length >= TARGET) break;
@@ -249,11 +307,16 @@ export async function GET(req: NextRequest) {
       window: windowIdx,
       picks: picks.slice(0, TARGET),
       generatedAt: new Date().toISOString(),
+      considered: consideredCount,
+      qualified: overs.length + unders.length,
     };
 
-    // Only pin a board that actually has picks — caching an empty one would
-    // freeze the panel blank for the rest of the window.
-    if (board.picks.length > 0) await cloudSet(cacheKey, board);
+    // Pin whenever we actually priced props, even if none qualified: "we looked
+    // at 180 props and none cleared the bar" is a real answer for this window
+    // and must stay stable for everyone. Only a slate we couldn't price at all
+    // (considered === 0, i.e. upstream fetch failure) is left unpinned so the
+    // next request retries.
+    if (consideredCount > 0) await cloudSet(cacheKey, board);
 
     return NextResponse.json({ ok: true, ...board, cached: false });
   } catch (error: any) {

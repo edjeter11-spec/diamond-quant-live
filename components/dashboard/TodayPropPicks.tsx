@@ -118,14 +118,19 @@ function scoreProp(side: "over" | "under", prop: RawProp): PropPick | null {
       ? marketFair
       : impliedFallback;
 
-  const implied = americanImplied(best.price) * 100;
-  // EV always measured against market implied (that's what you actually bet into)
-  const ev = fair - implied;
+  // True EV = p * decimalPayout - 1, matching /api/pinned-props. The old
+  // `fair - implied` was a probability-space gap that ignored payout, and the
+  // old score let probability outweigh price ~8.5:1 — so this fallback ranked
+  // by likelihood, not value, and could disagree with the pinned board it's
+  // standing in for.
+  const decPayout =
+    best.price > 0 ? 1 + best.price / 100 : 1 + 100 / Math.abs(best.price);
+  const ev = ((fair / 100) * decPayout - 1) * 100;
 
   const boost = side === "over" ? OVER_DISPLAY_BOOST : 0;
   // Slight score bonus when brain is behind the pick — brain picks go higher
   const brainBonus = usesBrain ? 0.5 : 0;
-  const score = fair - 50 + ev * 0.5 + boost + brainBonus;
+  const score = ev + (fair - 50) * 0.05 + boost + brainBonus;
 
   return {
     key: `${prop.market}-${prop.playerName}-${side}`,
@@ -342,8 +347,10 @@ export default function TodayPropPicks({
         side === "over" ? prop.brainOverProb : prop.brainUnderProb;
       const usesBrain = typeof brainFair === "number" && brainFair > 0;
       const fair = usesBrain ? brainFair! : marketFair;
-      const implied = americanImplied(best.price) * 100;
-      const ev = fair - implied;
+      // Same true-EV math as scoreProp and /api/pinned-props.
+      const decPayout =
+        best.price > 0 ? 1 + best.price / 100 : 1 + 100 / Math.abs(best.price);
+      const ev = ((fair / 100) * decPayout - 1) * 100;
       return {
         key: `${prop.market}-${prop.playerName}-${side}`,
         playerName: prop.playerName,
@@ -356,7 +363,7 @@ export default function TodayPropPicks({
         bookmaker: best.bookmaker,
         fairProb: Math.round(fair * 10) / 10,
         evPercentage: Math.round(ev * 10) / 10,
-        score: fair - 50 + ev * 0.5 + (usesBrain ? 0.5 : 0),
+        score: ev + (fair - 50) * 0.05 + (usesBrain ? 0.5 : 0),
         label: MARKET_LABEL[prop.market] ?? prop.market,
         usesBrain,
         projectedValue: prop.brainProjectedValue,
@@ -650,8 +657,11 @@ export default function TodayPropPicks({
             <InfoTip term="EV" />
           </h2>
           <p className="text-[9px] text-mercury/60 mt-0.5">
-            {picks.length} picks · {overCount} Over{overCount !== 1 ? "s" : ""}{" "}
-            · ranked by edge
+            {/* Was "ranked by edge". The ranking is real (true EV, price
+                included) but "edge" claims we're beating the market, and with
+                fairProb coming from market devig we can't support that. State
+                the count and leave it. */}
+            {picks.length} picks · {overCount} Over{overCount !== 1 ? "s" : ""}
             {pinnedFailed && (
               // Say it out loud. Silently swapping in a locally-ranked board
               // is what made the phone and desktop disagree in the first place.
@@ -824,15 +834,16 @@ export default function TodayPropPicks({
                           ~174px on a 375px screen, so the old verbose version
                           ("Hard Rock Bet · 68.2% fair" + edge) wrapped to 3
                           lines and was the last thing making rows ~100px. */}
+                      {/* Book + win probability only.
+                          The EV% that used to sit here was measured against the
+                          market's own de-vigged number, so it was negative on
+                          essentially every prop and read as "we know this is a
+                          bad bet" — not information anyone can act on. Show the
+                          probability, which is a real stat, and let the odds in
+                          the right rail speak for the price. */}
                       <div className="flex items-center gap-1.5 min-w-0">
                         <span className="text-[10px] text-mercury/60 truncate">
-                          {p.bookmaker} · {p.fairProb}%
-                        </span>
-                        <span
-                          className={`text-[10px] font-semibold flex-shrink-0 ${p.evPercentage > 0 ? "text-neon" : "text-mercury/60"}`}
-                        >
-                          {p.evPercentage > 0 ? "+" : ""}
-                          {p.evPercentage}%
+                          {p.bookmaker} · {p.fairProb}% to hit
                         </span>
                       </div>
                       <div className="flex items-center gap-1 flex-wrap">
