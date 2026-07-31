@@ -61,8 +61,17 @@ const BASE_URL = "https://api.the-odds-api.com/v4";
 // First hit of the day primes; everyone after is instant.
 const CDN_CACHE = "public, s-maxage=300, stale-while-revalidate=1800";
 
+// ET, not UTC. toISOString() rolls over at 00:00 UTC — 8pm ET the previous
+// evening — so every snapshot written between 8pm and midnight ET was filed
+// under TOMORROW's key while holding TODAY's games. The next day's first
+// request read that snapshot, passed the "props.length > 0" guard, and
+// filterTodayOnly (which correctly uses ET) then stripped every prop —
+// returning an empty board, with no error, while the Odds API was healthy.
+// That is what blanked the board on 2026-07-31.
 function todayKey() {
-  return new Date().toISOString().split("T")[0];
+  return new Date().toLocaleDateString("en-CA", {
+    timeZone: "America/New_York",
+  });
 }
 
 function filterTodayOnly(response: any): any {
@@ -99,9 +108,14 @@ export async function GET(req: Request) {
   const cacheKey = `props_v5_${sport}_${market}`;
   const cached = getCached(cacheKey, CACHE_TTL.PROPS);
   if (cached) {
-    return NextResponse.json(filterTodayOnly(cached), {
-      headers: { "Cache-Control": CDN_CACHE },
-    });
+    // A cache entry that ET-filters to nothing is stale, not an answer —
+    // fall through and refetch rather than serving an empty board.
+    const filteredCache = filterTodayOnly(cached);
+    if (filteredCache.props?.length > 0) {
+      return NextResponse.json(filteredCache, {
+        headers: { "Cache-Control": CDN_CACHE },
+      });
+    }
   }
 
   // Cold server cache — check Supabase snapshot next (shared across serverless
@@ -116,26 +130,26 @@ export async function GET(req: Request) {
       Array.isArray(snapshot.props) &&
       snapshot.props.length > 0
     ) {
+      // Only serve the snapshot if it still has props AFTER the ET filter. A
+      // snapshot can be non-empty yet hold nothing for today (stale key,
+      // yesterday's slate); serving it returned an empty board while silently
+      // skipping the live fetch that would have succeeded.
       const filtered = filterTodayOnly(snapshot);
-      setCache(cacheKey, filtered); // warm the server cache too
-      return NextResponse.json(filtered, {
-        headers: { "Cache-Control": CDN_CACHE },
-      });
+      if (filtered.props.length > 0) {
+        setCache(cacheKey, filtered); // warm the server cache too
+        return NextResponse.json(filtered, {
+          headers: { "Cache-Control": CDN_CACHE },
+        });
+      }
     }
   } catch {}
 
   const apiKey = getApiKey();
-  // Temporary: surfaced via ?debug=1 to locate where events are lost in prod.
-  const dbg: Record<string, unknown> = {
-    keyLen: apiKey ? apiKey.length : 0,
-    keyTail: apiKey ? apiKey.slice(-4) : null,
-  };
 
   try {
     // Fetch event list for the right sport
     const eventsCacheKey = `${sport}_events_props`;
     let events = getCached(eventsCacheKey, CACHE_TTL.EVENTS);
-    dbg.fromCache = Array.isArray(events) ? events.length : null;
 
     if (!events) {
       let allEvents: any[] = [];
@@ -146,13 +160,10 @@ export async function GET(req: Request) {
             `${BASE_URL}/sports/${sport}/events?apiKey=${apiKey}`,
             { next: { revalidate: 300 }, signal: AbortSignal.timeout(8000) },
           );
-          dbg.oddsHttp = eventsRes.status;
           if (eventsRes.ok) {
             allEvents = await eventsRes.json();
-            dbg.oddsEvents = Array.isArray(allEvents) ? allEvents.length : -1;
           }
         } catch (e) {
-          dbg.oddsErr = e instanceof Error ? e.message : String(e);
           console.error(
             "Odds API events fetch failed, falling back to free source:",
             e instanceof Error ? e.message : e,
@@ -163,9 +174,7 @@ export async function GET(req: Request) {
       if (!Array.isArray(allEvents) || allEvents.length === 0) {
         try {
           allEvents = await getFreeEvents(sport);
-          dbg.freeEvents = Array.isArray(allEvents) ? allEvents.length : -1;
         } catch (e) {
-          dbg.freeErr = e instanceof Error ? e.message : String(e);
           console.error(
             "Free events fallback failed:",
             e instanceof Error ? e.message : e,
@@ -181,11 +190,6 @@ export async function GET(req: Request) {
       const todayET = new Date().toLocaleDateString("en-US", {
         timeZone: "America/New_York",
       });
-      dbg.beforePool = Array.isArray(allEvents) ? allEvents.length : -1;
-      dbg.sampleCommence = Array.isArray(allEvents)
-        ? allEvents.slice(0, 2).map((e: any) => e.commence_time)
-        : null;
-      dbg.todayET = todayET;
       const pool = allEvents.filter((e: any) => {
         const t = new Date(e.commence_time).getTime();
         const gameDay = new Date(e.commence_time).toLocaleDateString("en-US", {
@@ -214,12 +218,10 @@ export async function GET(req: Request) {
       // array instead of retrying. That is exactly how the board showed zero
       // props on 2026-07-31 while the paid key was healthy and returning 15
       // games. An empty result is a failure to answer, not an answer.
-      dbg.afterPool = pool.length;
       if (Array.isArray(events) && events.length > 0) {
         setCache(eventsCacheKey, events);
       }
     }
-    dbg.eventsBeforeRefilter = Array.isArray(events) ? events.length : -1;
 
     // Always re-filter to today's ET date — in case the cached events include
     // tomorrow's games (cached before this filter was added).
@@ -235,7 +237,6 @@ export async function GET(req: Request) {
       return t >= nowMs - 4 * 60 * 60 * 1000 && gameDay === todayFilterET;
     });
 
-    dbg.eventsAfterRefilter = (events as any[]).length;
 
     // Request main + alternate markets together so we get 5-10 lines per player
     const alt = ALT_MARKETS[market];
@@ -277,8 +278,6 @@ export async function GET(req: Request) {
         }),
       );
       allProps = perGameResults.flat();
-      dbg.rawProps = allProps.length;
-      dbg.propGames = propGames.length;
     }
 
     let grouped = groupByPlayer(allProps);
@@ -443,7 +442,6 @@ export async function GET(req: Request) {
         }));
 
     const response = {
-      ...(searchParams.get("debug") === "1" ? { dbg } : {}),
       props: slim,
       markets: marketsFor(sport),
       events: events.map((g: any) => ({
