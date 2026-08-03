@@ -148,9 +148,9 @@ export async function POST(req: NextRequest) {
           pick_text: lines.join("\n"),
           units: 1,
           confidence: "Lean",
-          writeup:
-            `**🎟️ One-tap betslip:** ${url}\n` +
-            `_Opens Playbook with all ${legs.length} legs loaded — pick your book from there._`,
+          // Its own field in the embed, not appended to the write-up — see
+          // buildPickEmbed. Buried in "Write-up" it read as a footnote.
+          betslip_url: url,
           status: "published",
           discord_message_id: msgId,
           discord_channel_id: legs.find((l: any) => l.discord_channel_id)

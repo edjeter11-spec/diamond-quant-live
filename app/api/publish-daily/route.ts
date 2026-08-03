@@ -225,10 +225,14 @@ export async function POST(req: NextRequest) {
           // player props ("please provide a valid betslip input") while their
           // website parses the identical string fine — the two don't share a
           // parser.
+          // When a link exists it goes in its own embed field (betslip_url,
+          // below) rather than here, so it reads as a button and not a
+          // footnote. The copy-paste fallback stays in the write-up.
           (playbookLink
-            ? `**🎟️ One-tap betslip:** ${playbookLink}\n_Opens Playbook with all ${legs.length} legs loaded — pick your book from there._`
+            ? ""
             : `**Build it in one tap:** copy the line below into <https://playbookbot.com>\n` +
               `\`\`\`\n${playbookText || legs.map((l: any) => l.pick).join(", ")}\n\`\`\``),
+        betslip_url: playbookLink || undefined,
         status: "published",
       } as any);
 
