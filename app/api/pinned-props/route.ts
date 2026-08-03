@@ -174,7 +174,11 @@ export async function GET(req: NextRequest) {
     }),
   );
   const windowIdx = Math.floor(hourET / REFRESH_HOURS);
-  const cacheKey = `pinned_props_${sport}_${today}_w${windowIdx}`;
+  // v2: bumped when MLB projections landed. A board pinned by the previous
+  // deploy was built from market-devig probabilities, so without this bump it
+  // would stay frozen for the rest of the window and the model's picks would
+  // never appear.
+  const cacheKey = `pinned_props_v2_${sport}_${today}_w${windowIdx}`;
 
   if (!force) {
     const cached = await cloudGet<PinnedBoard | null>(cacheKey, null);

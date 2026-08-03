@@ -1324,6 +1324,61 @@ export async function GET(req: Request) {
         discordDaily.published = { ok: false, error: String(e) };
       }
 
+      // ── Off-market line alerts ──
+      // Only fires when DK/FD actually disagree with the market, and only
+      // once per (game, book, market, line) per day — an off-market line
+      // persists across many cron runs, so without the dedupe key this would
+      // re-alert every 30 minutes until the book corrected.
+      try {
+        const sm = await fetch(
+          `${origin}/api/sharp-money?sport=baseball_mlb`,
+          { signal: AbortSignal.timeout(20000) },
+        );
+        const smData = await sm.json();
+        const items: any[] = Array.isArray(smData?.outliers)
+          ? smData.outliers
+          : [];
+        if (items.length > 0) {
+          const alertKey = `line_alerts_${etDateString()}`;
+          const seen = await cloudGet<string[]>(alertKey, []);
+          const seenSet = new Set(seen ?? []);
+          const fresh = items.filter(
+            (i) =>
+              !seenSet.has(
+                `${i.game_id}|${i.bookmaker}|${i.market}|${i.ourLine}`,
+              ),
+          );
+          if (fresh.length > 0) {
+            const r = await fetch(`${process.env.BOT_API_URL}/alert`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "x-api-secret": process.env.BOT_API_SECRET ?? "",
+              },
+              body: JSON.stringify({ sport: "mlb", items: fresh }),
+              signal: AbortSignal.timeout(15000),
+            });
+            discordDaily.lineAlerts = {
+              sent: r.ok,
+              count: fresh.length,
+            };
+            // Record only after a successful post, so a failed send retries
+            // next run instead of being silently marked as delivered.
+            if (r.ok) {
+              await cloudSet(alertKey, [
+                ...seenSet,
+                ...fresh.map(
+                  (i) =>
+                    `${i.game_id}|${i.bookmaker}|${i.market}|${i.ourLine}`,
+                ),
+              ]);
+            }
+          }
+        }
+      } catch (e) {
+        discordDaily.lineAlerts = { ok: false, error: String(e) };
+      }
+
       // Recap yesterday's slate once it's fully final.
       try {
         const r = await fetch(`${origin}/api/post-results?sport=mlb`, {

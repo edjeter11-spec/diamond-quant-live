@@ -33,6 +33,18 @@ interface ServerMove {
   is_sharp?: boolean;
 }
 
+/** DK/FD sitting off the market median — actionable without any model. */
+interface Outlier {
+  game: string;
+  bookmaker: string;
+  market: string;
+  ourLine: number;
+  marketMedian: number;
+  diff: number;
+  books: number;
+  note: string;
+}
+
 const SPORT_KEY: Record<string, string> = {
   mlb: "baseball_mlb",
   nba: "basketball_nba",
@@ -50,6 +62,7 @@ function fmt(v: number, market: string): string {
 export default function LineMovement() {
   const { currentSport } = useSport();
   const [moves, setMoves] = useState<ServerMove[]>([]);
+  const [outliers, setOutliers] = useState<Outlier[]>([]);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
 
   useEffect(() => {
@@ -65,6 +78,7 @@ export default function LineMovement() {
         const d = await r.json();
         if (cancelled) return;
         setMoves(Array.isArray(d?.movements) ? d.movements : []);
+        setOutliers(Array.isArray(d?.outliers) ? d.outliers : []);
         setState("ready");
       } catch {
         if (!cancelled) setState("error");
@@ -107,7 +121,7 @@ export default function LineMovement() {
             />
           ))}
         </div>
-      ) : shown.length === 0 ? (
+      ) : outliers.length === 0 && shown.length === 0 ? (
         <div className="p-5 text-center">
           <div className="w-10 h-10 rounded-full bg-gunmetal/50 flex items-center justify-center mx-auto mb-2">
             <Clock className="w-5 h-5 text-mercury/40" />
@@ -126,6 +140,32 @@ export default function LineMovement() {
         </div>
       ) : (
         <div className="divide-y divide-slate/10">
+          {/* Off-market lines first. A move tells you the market changed its
+              mind; an outlier tells you OUR book hasn't caught up yet, which
+              is the one you can actually still bet. */}
+          {outliers.slice(0, 4).map((o, i) => (
+            <div
+              key={`out-${o.game}-${o.bookmaker}-${o.market}-${i}`}
+              className="px-4 py-2.5 bg-amber/5"
+            >
+              <div className="flex items-center gap-2">
+                <span className="px-1.5 py-0.5 rounded bg-amber/20 text-amber text-[9px] font-bold flex-shrink-0">
+                  OFF MARKET
+                </span>
+                <p className="text-xs font-semibold text-silver truncate">
+                  {o.game}
+                </p>
+              </div>
+              <p className="text-[10px] text-mercury/70 mt-1">
+                {o.bookmaker} {o.market}{" "}
+                <span className="font-mono text-silver">{o.ourLine}</span> vs
+                market{" "}
+                <span className="font-mono text-silver">{o.marketMedian}</span>{" "}
+                <span className="text-mercury/50">({o.books} books)</span>
+              </p>
+              <p className="text-[10px] text-amber/80 mt-0.5">{o.note}</p>
+            </div>
+          ))}
           {shown.map((m, i) => (
             <div
               key={`${m.game}-${m.bookmaker}-${m.market}-${i}`}
