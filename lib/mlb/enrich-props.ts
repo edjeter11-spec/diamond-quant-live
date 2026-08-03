@@ -125,6 +125,35 @@ async function loadPlayer(
   }
 }
 
+/** "Away Team @ Home Team" -> both club names. */
+function resolveSides(team: unknown): string[] {
+  if (typeof team !== "string" || !team.includes("@")) return [];
+  return team
+    .split("@")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+/**
+ * pitcherByTeam is keyed by the team a starter is pitching AGAINST, and it's
+ * built from MLB abbreviations while props carry full club names. Match on
+ * the name the slate reported for each side.
+ */
+function pickOpposing(
+  sides: string[],
+  byTeam: Map<string, PitcherContext>,
+  nameToAbbrev?: Map<string, string>,
+): PitcherContext | undefined {
+  for (const side of sides) {
+    const abbrev = nameToAbbrev?.get(side);
+    if (abbrev) {
+      const p = byTeam.get(abbrev);
+      if (p) return p;
+    }
+  }
+  return undefined;
+}
+
 /** Run `jobs` with bounded concurrency. */
 async function pool<T>(items: T[], n: number, fn: (t: T) => Promise<void>) {
   let i = 0;
@@ -161,6 +190,7 @@ export async function enrichMlbProps(
       pitcherByTeam: new Map(),
       opponentOf: new Map(),
       slotByPlayer: new Map(),
+      abbrevByName: new Map(),
     };
   }
 
@@ -174,11 +204,23 @@ export async function enrichMlbProps(
 
     g.playerId = g.playerId ?? bundle.id;
 
-    // Which starter does this player face? `team` is "Away @ Home"; the
-    // player's own club is whichever side he's on, so look up his abbrev.
+    // Which starter does this player face?
+    //
+    // /people/search does NOT return currentTeam, so bundle.teamAbbrev is
+    // usually empty and looking the pitcher up by it silently missed every
+    // time — projections ran, but with mult = 1, i.e. without the matchup
+    // signal that is the entire reason this model beats the baseline.
+    //
+    // The prop itself carries "Away @ Home", and pitcherByTeam is keyed by
+    // the team each starter is pitching AGAINST. So whichever of the two
+    // sides has an entry naming a pitcher who isn't on this player's own
+    // club is the right one; resolve by trying both and preferring the side
+    // that produces a starter.
+    const sides = resolveSides(g.team);
     const opposing: PitcherContext | undefined = isPitcherMarket
       ? undefined
-      : slate.pitcherByTeam.get(bundle.teamAbbrev);
+      : (bundle.teamAbbrev && slate.pitcherByTeam.get(bundle.teamAbbrev)) ||
+        pickOpposing(sides, slate.pitcherByTeam, slate.abbrevByName);
 
     let mult = 1;
     let slotMult = 1;

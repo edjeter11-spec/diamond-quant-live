@@ -128,10 +128,13 @@ export async function fetchSlateContext(dateISO: string): Promise<{
   opponentOf: Map<string, string>;
   /** playerId -> batting order slot (1-9), only when the lineup is posted. */
   slotByPlayer: Map<number, number>;
+  /** Full club name ("Philadelphia Phillies") -> abbreviation ("PHI"). */
+  abbrevByName: Map<string, string>;
 }> {
   const pitcherByTeam = new Map<string, PitcherContext>();
   const opponentOf = new Map<string, string>();
   const slotByPlayer = new Map<number, number>();
+  const abbrevByName = new Map<string, string>();
 
   const season = Number(dateISO.slice(0, 4));
   let games: any[] = [];
@@ -141,7 +144,7 @@ export async function fetchSlateContext(dateISO: string): Promise<{
     );
     games = d.dates?.[0]?.games ?? [];
   } catch {
-    return { pitcherByTeam, opponentOf, slotByPlayer };
+    return { pitcherByTeam, opponentOf, slotByPlayer, abbrevByName };
   }
 
   const jobs: Promise<void>[] = [];
@@ -153,6 +156,11 @@ export async function fetchSlateContext(dateISO: string): Promise<{
       opponentOf.set(home, away);
       opponentOf.set(away, home);
     }
+    // Props carry full club names; the slate keys everything by abbreviation.
+    const homeName = g.teams?.home?.team?.name;
+    const awayName = g.teams?.away?.team?.name;
+    if (homeName && home) abbrevByName.set(homeName, home);
+    if (awayName && away) abbrevByName.set(awayName, away);
 
     // Lineup slots — present only once a team posts, usually a few hours out.
     for (const [side, key] of [
@@ -204,7 +212,7 @@ export async function fetchSlateContext(dateISO: string): Promise<{
   }
 
   await Promise.all(jobs);
-  return { pitcherByTeam, opponentOf, slotByPlayer };
+  return { pitcherByTeam, opponentOf, slotByPlayer, abbrevByName };
 }
 
 /**
