@@ -112,7 +112,7 @@ export async function GET(req: Request) {
   // props long after the model shipped — the board would look unchanged and
   // the model would appear broken. Bump this key on any change to the SHAPE
   // of the cached response, not just its freshness.
-  const cacheKey = `props_v6_${sport}_${market}`;
+  const cacheKey = `props_v7_${sport}_${market}`;
   const cached = getCached(cacheKey, CACHE_TTL.PROPS);
   if (cached) {
     // A cache entry that ET-filters to nothing is stale, not an answer —
@@ -129,7 +129,7 @@ export async function GET(req: Request) {
   // instances, persists across deploys). Lets a newly-spun Vercel region serve
   // instantly instead of hitting the Odds API cold.
   // v3: re-filter also applied post-cache-read
-  const snapshotKey = `props_snap_v4_${sport}_${market}_${todayKey()}`;
+  const snapshotKey = `props_snap_v5_${sport}_${market}_${todayKey()}`;
   try {
     const snapshot = await cloudGet<any>(snapshotKey, null);
     if (
