@@ -719,6 +719,37 @@ export default function PicksBoard() {
   }, [currentSport]);
 
   const parlayLegs = pinnedParlay?.legs ?? [];
+
+  // Live leg status. MLB's boxscore updates during play, so a leg that has
+  // already cleared its number can be shown as hit immediately instead of
+  // making everyone wait for the slate to settle.
+  //
+  // Keyed by player name because the parlay's leg ids don't survive into
+  // manual_picks unchanged. One-directional by design — see /api/live-grade:
+  // a leg goes pending -> hit, never pending -> miss, since mid-game "0 hits"
+  // means "not yet", not "failed".
+  const [liveHits, setLiveHits] = useState<Record<string, number>>({});
+  useEffect(() => {
+    let cancelled = false;
+    const load = () =>
+      fetch("/api/live-grade")
+        .then((r) => r.json())
+        .then((d) => {
+          if (cancelled || !Array.isArray(d?.legs)) return;
+          const map: Record<string, number> = {};
+          for (const l of d.legs)
+            if (l.status === "hit" && l.player && typeof l.actual === "number")
+              map[String(l.player).toLowerCase()] = l.actual;
+          setLiveHits(map);
+        })
+        .catch(() => {});
+    load();
+    const t = setInterval(load, 90_000);
+    return () => {
+      cancelled = true;
+      clearInterval(t);
+    };
+  }, []);
   const parlayAmerican = pinnedParlay?.totalOdds ?? 0;
 
   const formatOdds = (odds: number) => (odds > 0 ? `+${odds}` : `${odds}`);
@@ -846,8 +877,20 @@ export default function PicksBoard() {
               {parlayLegs.map((leg, i) => {
                 const isOpen = expandedLeg === i;
                 const hasWhy = (leg.reasoning?.length ?? 0) > 0;
+                // `leg.game` holds the player's name on prop legs.
+                const legHit =
+                  leg.market === "player_prop"
+                    ? liveHits[String(leg.game ?? "").toLowerCase()]
+                    : undefined;
                 return (
-                  <div key={i} className="rounded-lg bg-gunmetal/30">
+                  <div
+                    key={i}
+                    className={`rounded-lg ${
+                      legHit !== undefined
+                        ? "bg-neon/10 ring-1 ring-neon/30"
+                        : "bg-gunmetal/30"
+                    }`}
+                  >
                     <button
                       type="button"
                       onClick={() =>
@@ -858,9 +901,22 @@ export default function PicksBoard() {
                         hasWhy ? "cursor-pointer hover:bg-gunmetal/50" : ""
                       } rounded-lg transition-colors`}
                     >
-                      <span className="w-4 h-4 rounded-full bg-purple/20 text-purple text-[9px] font-bold flex items-center justify-center flex-shrink-0">
-                        {i + 1}
-                      </span>
+                      {/* Cleared legs swap the number for a check. Only OVERs
+                          that have already passed their line show this — a leg
+                          still short is "not yet", not a loss, so it keeps its
+                          number rather than turning red mid-game. */}
+                      {legHit !== undefined ? (
+                        <span
+                          className="w-4 h-4 rounded-full bg-neon/25 text-neon text-[10px] font-bold flex items-center justify-center flex-shrink-0"
+                          title={`Cleared — ${legHit} so far`}
+                        >
+                          ✓
+                        </span>
+                      ) : (
+                        <span className="w-4 h-4 rounded-full bg-purple/20 text-purple text-[9px] font-bold flex items-center justify-center flex-shrink-0">
+                          {i + 1}
+                        </span>
+                      )}
                       {/* Player props get the athlete's headshot; game lines
                           keep the team logo. Previously everything went through
                           TeamLogo, so a prop leg showed "SAL" initials in a
