@@ -34,6 +34,12 @@ export interface AuthedUser {
   id: string;
   email?: string;
   isAdmin: boolean;
+  /**
+   * Paid subscriber. Read server-side from user_profiles so gating can't be
+   * bypassed — the client previously decided this on its own and only used it
+   * to slice an array it had already been sent.
+   */
+  isPremium: boolean;
 }
 
 /**
@@ -65,18 +71,28 @@ export async function getUserFromRequest(
     const { data, error } = await client.auth.getUser(token);
     if (error || !data?.user) return null;
 
-    // Fetch admin flag from user_profiles (small query, cached by Supabase)
+    // Fetch admin + premium flags from user_profiles (small query, cached by
+    // Supabase). Both are service-role reads of columns the user cannot write
+    // to — see migration 011, which revoked UPDATE on them.
     let isAdmin = false;
+    let isPremium = false;
     if (supabaseAdmin) {
       const { data: profile } = await supabaseAdmin
         .from("user_profiles")
-        .select("is_admin")
+        .select("is_admin, is_premium")
         .eq("id", data.user.id)
         .single();
       isAdmin = !!profile?.is_admin;
+      isPremium = !!profile?.is_premium;
     }
 
-    return { id: data.user.id, email: data.user.email, isAdmin };
+    // Admins see everything; otherwise the paid flag decides.
+    return {
+      id: data.user.id,
+      email: data.user.email,
+      isAdmin,
+      isPremium: isPremium || isAdmin,
+    };
   } catch {
     return null;
   }

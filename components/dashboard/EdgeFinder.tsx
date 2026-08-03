@@ -101,7 +101,10 @@ export default function EdgeFinder() {
             {withEdge} of {total} games
           </p>
           <p className="text-[11px] text-mercury/70 leading-snug mt-1">
-            show a model edge on today&apos;s slate.
+            {/* "model edge" overstated it: the +EV flag compares one book's
+                price to the de-vigged consensus of the others, so this counts
+                price gaps between books, not a model beating the market. */}
+            have a book priced off the consensus today.
           </p>
           <p className="text-[10px] text-mercury/50 leading-snug mt-2">
             Slate coverage — not a win rate.

@@ -26,15 +26,21 @@ function loadFromStorage<T>(key: string, fallback: T): T {
     const ok = Array.isArray(fallback)
       ? Array.isArray(parsed)
       : typeof fallback === "object" && fallback !== null
-        ? typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
+        ? typeof parsed === "object" &&
+          parsed !== null &&
+          !Array.isArray(parsed)
         : typeof parsed === typeof fallback;
     if (!ok) {
-      try { localStorage.removeItem(key); } catch {}
+      try {
+        localStorage.removeItem(key);
+      } catch {}
       return fallback;
     }
     return parsed;
   } catch {
-    try { localStorage.removeItem(key); } catch {}
+    try {
+      localStorage.removeItem(key);
+    } catch {}
     return fallback;
   }
 }
@@ -244,7 +250,11 @@ async function hydrateFromCloud(set: any, currentBetHistory: any[] = []) {
     }
     const { cloudGet } = await import("@/lib/supabase/client");
     const [bankroll, betHistory, savedParlays] = await Promise.all([
-      cloudGet("bankroll", null, (v) => v && typeof v === "object" && !Array.isArray(v)),
+      cloudGet(
+        "bankroll",
+        null,
+        (v) => v && typeof v === "object" && !Array.isArray(v),
+      ),
       cloudGet("betHistory", null, Array.isArray),
       cloudGet("savedParlays", null, Array.isArray),
     ]);

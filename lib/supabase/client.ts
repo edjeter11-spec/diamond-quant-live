@@ -55,7 +55,7 @@ const TABLE = "app_state";
 export async function cloudGet<T>(
   key: string,
   fallback: T,
-  validate?: (v: any) => boolean
+  validate?: (v: any) => boolean,
 ): Promise<T> {
   // Try Supabase first
   if (supabase) {
@@ -82,7 +82,9 @@ export async function cloudGet<T>(
       localStorage.removeItem(`dq_${key}`); // self-heal corrupt key
     }
   } catch {
-    try { localStorage.removeItem(`dq_${key}`); } catch {}
+    try {
+      localStorage.removeItem(`dq_${key}`);
+    } catch {}
   }
 
   return fallback;

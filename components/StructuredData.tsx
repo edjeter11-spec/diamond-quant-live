@@ -8,6 +8,11 @@ interface PropHistItem {
   result?: string;
 }
 
+// Same sample floor as components/dashboard/StatsStrip.tsx. This file feeds
+// Google rich snippets, so a thin-sample percentage here gets quoted in
+// search results where no caption travels with it.
+const MIN_SAMPLE = 30;
+
 async function getLiveStats() {
   try {
     const history = ((await cloudGet<PropHistItem[]>(
@@ -44,8 +49,10 @@ export default async function StructuredData() {
       priceValidUntil: "2026-12-31",
       availability: "https://schema.org/InStock",
     },
+    // Raised from 20 to MIN_SAMPLE: this rating is derived from winRate, so
+    // it inherits the same sample-floor requirement as the rate itself.
     aggregateRating:
-      stats.total >= 20
+      stats.total >= MIN_SAMPLE
         ? {
             "@type": "AggregateRating",
             ratingValue: Math.min(5, 3 + (stats.winRate - 50) / 10).toFixed(1),
@@ -83,10 +90,14 @@ export default async function StructuredData() {
         name: "What's the win rate?",
         acceptedAnswer: {
           "@type": "Answer",
+          // Below MIN_SAMPLE we state the record, not a rate — a percentage
+          // in a rich snippet travels with no sample-size caption attached.
           text:
-            stats.total > 0
+            stats.total >= MIN_SAMPLE
               ? `${stats.winRate}% on ${stats.total} graded NBA prop picks. Track record is public and verified against ESPN box scores.`
-              : "Track record is public — graded against ESPN box scores after every game.",
+              : stats.total > 0
+                ? `${stats.wins}-${stats.losses} on ${stats.total} graded NBA prop picks so far — too small a sample to quote a meaningful win rate. Track record is public and verified against ESPN box scores.`
+                : "Track record is public — graded against ESPN box scores after every game.",
         },
       },
       {

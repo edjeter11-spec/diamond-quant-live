@@ -894,7 +894,17 @@ export default function PlayerProps() {
                                     />
                                     <StatBox
                                       label="HIT%"
-                                      value={`${(analysis.player as any).hitRates?.[selectedMarket]?.rate ?? 50}%`}
+                                      // Missing hit-rate data used to fall back
+                                      // to 50, rendering absent data as a
+                                      // confident coin-flip. Show "—" instead —
+                                      // same honesty rule as StatsStrip.tsx.
+                                      value={
+                                        (analysis.player as any).hitRates?.[
+                                          selectedMarket
+                                        ]?.rate !== undefined
+                                          ? `${(analysis.player as any).hitRates[selectedMarket].rate}%`
+                                          : "—"
+                                      }
                                     />
                                   </>
                                 )}
@@ -1078,7 +1088,15 @@ export default function PlayerProps() {
                                   />
                                   <StatBox
                                     label="HIT%"
-                                    value={`${(analysis.player as any).hitRates?.[selectedMarket]?.rate ?? 50}%`}
+                                    // Absent hit-rate data renders "—", not a
+                                    // fabricated 50%. See StatsStrip.tsx.
+                                    value={
+                                      (analysis.player as any).hitRates?.[
+                                        selectedMarket
+                                      ]?.rate !== undefined
+                                        ? `${(analysis.player as any).hitRates[selectedMarket].rate}%`
+                                        : "—"
+                                    }
                                   />
                                 </div>
                               </div>

@@ -508,12 +508,15 @@ export default function WarRoom() {
     const confidence =
       best?.confidence ?? (evPercentage > 3 ? "MEDIUM" : "LOW");
 
+    // "fair value" for game lines is the de-vigged consensus of all books
+    // (getMarketConsensus), so calling the market mispriced is circular. What
+    // this actually detects is one book pricing away from the others.
     const defaultReasoning = [
-      "Market odds are mispriced relative to model fair value",
+      "This book's price is off the consensus across other books",
       bookmaker
         ? `Best available line at ${bookmaker}`
-        : "Model-only edge — no live odds feed",
-      `${evPercentage.toFixed(1)}% edge — quarter-Kelly sizing applied`,
+        : "No live odds feed — consensus price unavailable",
+      `${evPercentage.toFixed(1)}% vs consensus — quarter-Kelly sizing applied`,
     ];
 
     return {
@@ -770,8 +773,12 @@ export default function WarRoom() {
                   +EV (Positive Expected Value)
                 </p>
                 <p className="text-mercury">
-                  A bet where the true probability of winning is higher than
-                  what the odds imply. Over time, +EV bets make money.
+                  {/* No profit promise: our game-line "fair" probability is the
+                      de-vigged consensus of all books, so +EV here means one
+                      book is off the others' price — not a guaranteed return. */}
+                  A bet where the estimated probability of winning is higher
+                  than what the odds imply. For game lines that estimate is the
+                  consensus across books, so +EV means you found the best price.
                 </p>
               </div>
               <div className="p-3 rounded-lg bg-gunmetal/30">

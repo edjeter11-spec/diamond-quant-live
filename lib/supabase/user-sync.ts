@@ -45,7 +45,7 @@ async function getCurrentUserId(): Promise<string | null> {
 export async function userGet<T>(
   key: string,
   fallback: T,
-  validate?: (v: any) => boolean
+  validate?: (v: any) => boolean,
 ): Promise<T> {
   const userId = await getCurrentUserId();
 
@@ -58,7 +58,8 @@ export async function userGet<T>(
         .eq("user_id", userId)
         .eq("key", key)
         .single();
-      if (data && !error && (!validate || validate(data.value))) return data.value as T;
+      if (data && !error && (!validate || validate(data.value)))
+        return data.value as T;
     } catch {}
   }
 
@@ -72,7 +73,9 @@ export async function userGet<T>(
       localStorage.removeItem(`dq_${key}`); // self-heal corrupt key
     }
   } catch {
-    try { localStorage.removeItem(`dq_${key}`); } catch {}
+    try {
+      localStorage.removeItem(`dq_${key}`);
+    } catch {}
   }
 
   return fallback;

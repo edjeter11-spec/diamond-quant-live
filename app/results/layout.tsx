@@ -61,7 +61,10 @@ export default async function ResultsLayout({
       url: SITE,
     },
   };
-  if (overall?.total >= 5) {
+  // Raised from 5 to the MIN_SAMPLE floor used in StatsStrip.tsx — this
+  // description publishes a win-rate percentage to search engines, where it
+  // appears with no sample-size context of its own.
+  if (overall?.total >= 30) {
     jsonLd.mainEntity = {
       "@type": "Dataset",
       name: "30-Day Pick Performance",

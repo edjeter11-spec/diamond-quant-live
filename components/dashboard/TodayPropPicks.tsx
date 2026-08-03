@@ -18,6 +18,7 @@ import {
 import { americanToDecimal } from "@/lib/model/kelly";
 import { useStore } from "@/lib/store";
 import { usePremium } from "@/lib/hooks/usePremium";
+import { fetchWithAuth } from "@/lib/supabase/fetch-with-auth";
 import InfoTip from "@/components/ui/InfoTip";
 import PlayerAvatar from "@/components/ui/PlayerAvatar";
 import PropDetail from "@/components/dashboard/PropDetail";
@@ -295,6 +296,7 @@ export default function TodayPropPicks({
   // could get different boards, and a pick could disappear as lines moved.
   const [pinned, setPinned] = useState<PropPick[] | null>(null);
   const [pinnedFailed, setPinnedFailed] = useState(false);
+  const [serverLocked, setServerLocked] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -305,7 +307,9 @@ export default function TodayPropPicks({
     // change what the board says.
     const load = async (attempt = 0): Promise<void> => {
       try {
-        const r = await fetch(`/api/pinned-props?sport=${sport}`, {
+        // Authed so the server can resolve premium status. Without the token
+        // every request looks anonymous and the board comes back truncated.
+        const r = await fetchWithAuth(`/api/pinned-props?sport=${sport}`, {
           cache: "no-store", // never let a stale SW copy win
           signal: AbortSignal.timeout(10000),
         });
@@ -313,6 +317,9 @@ export default function TodayPropPicks({
         if (cancelled) return;
         if (d?.ok && Array.isArray(d.picks) && d.picks.length) {
           setPinned(d.picks as PropPick[]);
+          // How many the server withheld for this viewer. Authoritative —
+          // the client can't compute it, because it never sees them.
+          setServerLocked(typeof d.locked === "number" ? d.locked : 0);
           setPinnedFailed(false);
           return;
         }
@@ -598,8 +605,12 @@ export default function TodayPropPicks({
     );
   }
 
-  const visible = isPremium ? picks : picks.slice(0, 5);
-  const lockedCount = picks.length - visible.length;
+  // No client-side slicing. The server already withheld the locked picks and
+  // reports how many in `locked` — slicing here would be theatre, since a free
+  // user's response simply doesn't contain them. Falls back to the local
+  // count for the live-ranking path, which never leaves the browser anyway.
+  const visible = picks;
+  const lockedCount = serverLocked;
   const overCount = picks.filter((p) => p.side === "over").length;
 
   // Running W/L tally across all visible picks — updates live as games grade.

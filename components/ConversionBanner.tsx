@@ -7,6 +7,11 @@ import Link from "next/link";
 
 const DISMISS_KEY = "dq_conv_banner_dismissed_v1";
 
+// Same sample floor as components/dashboard/StatsStrip.tsx. This banner is a
+// marketing surface with no room for a caption, so below MIN_SAMPLE it drops
+// the win-rate claim entirely rather than quoting a thin-sample percentage.
+const MIN_SAMPLE = 30;
+
 export default function ConversionBanner() {
   const { user, profile, loading } = useAuth();
   const [stats, setStats] = useState<{
@@ -48,7 +53,7 @@ export default function ConversionBanner() {
         <Crown className="w-4 h-4 text-gold flex-shrink-0" />
         <div className="flex-1 min-w-0">
           <p className="text-xs text-silver">
-            {stats && stats.recent > 5 ? (
+            {stats && stats.recent >= MIN_SAMPLE ? (
               <>
                 <span className="font-bold text-gold">{stats.winRate}%</span>{" "}
                 win rate on last {stats.recent} graded prop picks.{" "}

@@ -34,7 +34,11 @@ export default async function OG() {
   const record = hasRecord
     ? `${overall.wins}-${overall.losses}`
     : "Building record";
-  const winPct = hasRecord ? `${(overall.winRate * 100).toFixed(0)}%` : "—";
+  // The raw record and units are fine off a handful of picks, but a win-rate
+  // percentage needs the MIN_SAMPLE floor from StatsStrip.tsx — this is a
+  // share card, so the number travels with no caption attached.
+  const winPct =
+    overall.total >= 30 ? `${(overall.winRate * 100).toFixed(0)}%` : "—";
   const units = hasRecord
     ? `${overall.profitUnits >= 0 ? "+" : ""}${overall.profitUnits.toFixed(1)}u`
     : "—";

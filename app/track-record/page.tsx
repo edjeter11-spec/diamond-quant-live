@@ -51,12 +51,22 @@ interface PropPick {
   bookmaker: string;
 }
 
+// Same standard as components/dashboard/StatsStrip.tsx: below MIN_SAMPLE
+// decided picks we report the raw record and skip the rate entirely. A 3-1
+// start is not "75.0% accuracy", and on a betting site that number is what
+// people stake money on. Keep this threshold in sync with StatsStrip.
+const MIN_SAMPLE = 30;
+
 async function getStats() {
   const history =
     (await cloudGet<PropPick[]>("prop_pick_history_nba", [])) ?? [];
   const graded = history.filter(
     (p) => p.result === "win" || p.result === "loss",
   );
+  // Pushes are excluded from the win-rate denominator (standard betting
+  // convention), but that exclusion has to be visible or the W/L numbers
+  // won't reconcile with the graded total. Counted here, surfaced in the UI.
+  const pushes = history.filter((p) => p.result === "push").length;
   const wins = graded.filter((p) => p.result === "win").length;
   const losses = graded.filter((p) => p.result === "loss").length;
   const winRate = graded.length > 0 ? (wins / graded.length) * 100 : 0;
@@ -83,7 +93,15 @@ async function getStats() {
   // Recent picks (last 30)
   const recent = history.slice(0, 30);
 
-  return { wins, losses, winRate, totalGraded: graded.length, daily, recent };
+  return {
+    wins,
+    losses,
+    pushes,
+    winRate,
+    totalGraded: graded.length,
+    daily,
+    recent,
+  };
 }
 
 async function getBrain() {
@@ -100,6 +118,11 @@ async function getBrain() {
 
 export default async function TrackRecordPage() {
   const [stats, brain] = await Promise.all([getStats(), getBrain()]);
+
+  // Thin sample => no headline percentage anywhere on this page. See
+  // MIN_SAMPLE above and StatsStrip.tsx for the rationale.
+  const thin = stats.totalGraded < MIN_SAMPLE;
+  const needed = MIN_SAMPLE - stats.totalGraded;
 
   return (
     <div className="min-h-screen bg-bunker">
@@ -161,20 +184,35 @@ export default async function TrackRecordPage() {
             after games end. This is live performance, not a simulation.
           </p>
           <div className="grid grid-cols-2 gap-3">
+            {/* Below MIN_SAMPLE the big tile shows the raw record instead of a
+                percentage — a giant "75.0%" off 4 picks is the misleading
+                number this whole guard exists to prevent (see StatsStrip.tsx). */}
             <div className="glass rounded-xl p-4 text-center border border-neon/20">
               <Trophy className="w-5 h-5 text-neon mx-auto mb-2" />
               <p
-                className={`text-3xl font-bold font-mono ${stats.winRate >= 55 ? "text-neon" : stats.winRate >= 50 ? "text-electric" : "text-amber"}`}
+                className={`text-3xl font-bold font-mono ${thin ? "text-silver" : stats.winRate >= 55 ? "text-neon" : stats.winRate >= 50 ? "text-electric" : "text-amber"}`}
               >
-                {stats.totalGraded > 0 ? `${stats.winRate.toFixed(1)}%` : "—"}
+                {stats.totalGraded === 0
+                  ? "—"
+                  : thin
+                    ? `${stats.wins}W-${stats.losses}L`
+                    : `${stats.winRate.toFixed(1)}%`}
               </p>
               <p className="text-[10px] text-mercury/60 uppercase mt-1">
-                Live Win Rate
+                {thin ? "Live Record" : "Live Win Rate"}
               </p>
-              {stats.totalGraded > 0 && stats.totalGraded < 50 && (
+              {stats.totalGraded === 0 ? (
+                <p className="text-[9px] text-mercury/60 mt-1.5 leading-tight">
+                  No graded picks yet
+                </p>
+              ) : thin ? (
                 <p className="text-[9px] text-amber/80 mt-1.5 leading-tight">
-                  Based on {stats.totalGraded} graded picks — check back as more
-                  data settles
+                  {stats.totalGraded} graded — need {needed} more for a
+                  meaningful win rate
+                </p>
+              ) : (
+                <p className="text-[9px] text-mercury/60 mt-1.5 leading-tight">
+                  over {stats.totalGraded} graded picks
                 </p>
               )}
             </div>
@@ -187,6 +225,12 @@ export default async function TrackRecordPage() {
               </p>
               <p className="text-[10px] text-mercury/60 uppercase mt-1">
                 Live Record
+              </p>
+              {/* Pushes are dropped from the win-rate denominator; disclose the
+                  count so W + L + pushes reconciles with what users see. */}
+              <p className="text-[9px] text-mercury/60 mt-1.5 leading-tight">
+                {stats.pushes} push{stats.pushes === 1 ? "" : "es"} (excluded
+                from win rate)
               </p>
             </div>
           </div>
@@ -238,7 +282,8 @@ export default async function TrackRecordPage() {
             backtest or simulation.
           </p>
           <ProfitChart sport="nba" />
-          {stats.totalGraded > 0 && stats.totalGraded < 50 && (
+          {/* Same MIN_SAMPLE threshold as the tiles above, not a separate number. */}
+          {stats.totalGraded > 0 && thin && (
             <p className="text-[10px] text-amber/70 mt-2 text-center">
               Small sample ({stats.totalGraded} graded picks) — early results
               can swing widely and aren't yet statistically reliable.

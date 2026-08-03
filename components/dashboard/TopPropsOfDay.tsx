@@ -508,8 +508,22 @@ export default function TopPropsOfDay() {
 function scoreAndAnalyzeProp(prop: any, market: string): PropAnalysis | null {
   if (!prop.bestOver || !prop.bestUnder) return null;
 
-  const overProb = (prop.fairOverProb ?? 50) / 100;
-  const underProb = (prop.fairUnderProb ?? 50) / 100;
+  // Prefer the projection model over market devig when it's available.
+  //
+  // This panel was reading fairOverProb — the de-vigged average of the books —
+  // which means it was comparing the market against itself and calling the
+  // difference an edge. /api/players already ships brainOverProb for MLB props
+  // (lib/mlb/enrich-props.ts), so the independent number was sitting in the
+  // payload unused. Falls back to devig when the model has no projection
+  // (thin sample, player not on tonight's slate, NBA).
+  const hasBrain =
+    typeof prop.brainOverProb === "number" && prop.brainOverProb > 0;
+  const overProb = hasBrain
+    ? prop.brainOverProb / 100
+    : (prop.fairOverProb ?? 50) / 100;
+  const underProb = hasBrain
+    ? (100 - prop.brainOverProb) / 100
+    : (prop.fairUnderProb ?? 50) / 100;
 
   // Determine which side has more value
   const isOver = overProb > 0.52;
@@ -556,11 +570,14 @@ function scoreAndAnalyzeProp(prop: any, market: string): PropAnalysis | null {
     reasoning: [
       `Fair probability: ${(fairProb * 100).toFixed(1)}% ${side} (de-vigged from ${bookCount} books)`,
       `Best price: ${bestOdds > 0 ? "+" : ""}${bestOdds} at ${bestBook}`,
+      // `fairProb` above is de-vigged consensus across books, not an
+      // independent projection — so this measures how far this book's price
+      // sits from the other books, i.e. line-shopping, not an edge on the market.
       evEdge > 3
-        ? `Strong +${evEdge.toFixed(1)}% edge over market`
-        : `+${evEdge.toFixed(1)}% edge`,
+        ? `+${evEdge.toFixed(1)}% better than the consensus price`
+        : `+${evEdge.toFixed(1)}% vs consensus price`,
     ],
-    aiSummary: `The model favors ${side} ${prop.line} ${MARKET_LABELS[market] ?? market} for ${prop.playerName}. Best available at ${bestBook}.`,
+    aiSummary: `Consensus across books leans ${side} ${prop.line} ${MARKET_LABELS[market] ?? market} for ${prop.playerName}. Best price at ${bestBook}.`,
     stats: {
       seasonAvg: 0,
       last10Avg: 0,
@@ -630,9 +647,11 @@ function buildDetailedReasoning(pick: PropAnalysis, analysis: any): string[] {
     }
   }
 
-  // EV edge
+  // Price gap vs consensus. evEdge is derived from the de-vigged multi-book
+  // fairProb, so it measures how far this book sits from the others — calling
+  // it an "EV edge" implied we'd beaten the market, which this number can't show.
   r.push(
-    `${pick.evEdge > 3 ? "Strong" : "Positive"} +${pick.evEdge.toFixed(1)}% EV edge at ${pick.bestBook} (${pick.bestOdds > 0 ? "+" : ""}${pick.bestOdds})`,
+    `+${pick.evEdge.toFixed(1)}% better than the consensus price at ${pick.bestBook} (${pick.bestOdds > 0 ? "+" : ""}${pick.bestOdds})`,
   );
 
   return r;
@@ -643,7 +662,9 @@ function buildAISummary(pick: PropAnalysis, analysis: any): string {
   const isOver = pick.recommendation === "OVER";
 
   if (pick.confidence > 60) {
-    return `Strong play. ${pick.playerName} is averaging ${pick.stats.last10Avg} ${ml} over the last 10 games against a line of ${pick.line}. The ${isOver ? "over" : "under"} has hit in ${pick.stats.hitRate}% of recent outings. ${pick.bestBook} has the best price at ${pick.bestOdds > 0 ? "+" : ""}${pick.bestOdds} with a +${pick.evEdge.toFixed(1)}% edge. ${pick.stats.trend === "up" ? "Performance is trending upward." : pick.stats.trend === "down" ? "Note: recent trend is declining." : ""}`;
+    // "with a +X% edge" -> "vs consensus": the number is a book-to-book price
+    // gap, not an edge over the market's estimate of the outcome.
+    return `${pick.playerName} is averaging ${pick.stats.last10Avg} ${ml} over the last 10 games against a line of ${pick.line}. The ${isOver ? "over" : "under"} has hit in ${pick.stats.hitRate}% of recent outings. ${pick.bestBook} has the best price at ${pick.bestOdds > 0 ? "+" : ""}${pick.bestOdds}, +${pick.evEdge.toFixed(1)}% vs consensus. ${pick.stats.trend === "up" ? "Performance is trending upward." : pick.stats.trend === "down" ? "Note: recent trend is declining." : ""}`;
   }
 
   return `${pick.playerName} ${isOver ? "over" : "under"} ${pick.line} ${ml} — fair probability ${pick.fairProb.toFixed(0)}% based on multi-book consensus. Averaging ${pick.stats.last10Avg} recently with a ${pick.stats.hitRate}% ${isOver ? "over" : "under"} rate. Best price at ${pick.bestBook} (${pick.bestOdds > 0 ? "+" : ""}${pick.bestOdds}).`;

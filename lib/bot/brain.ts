@@ -174,7 +174,11 @@ function createFreshBrain(): BrainState {
 
 // Load: try cloud first, then localStorage, then fresh
 export function loadBrain(): BrainState {
-  const stored = loadJSON<BrainState | null>("dq_brain", null, (v) => isRecord(v) && isRecord(v.weights));
+  const stored = loadJSON<BrainState | null>(
+    "dq_brain",
+    null,
+    (v) => isRecord(v) && isRecord(v.weights),
+  );
   return stored ? repairWeights(stored) : createFreshBrain();
 }
 

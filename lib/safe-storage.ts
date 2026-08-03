@@ -11,7 +11,7 @@
 export function loadJSON<T>(
   key: string,
   fallback: T,
-  validate?: (v: any) => boolean
+  validate?: (v: any) => boolean,
 ): T {
   if (typeof window === "undefined") return fallback;
   try {
@@ -23,22 +23,30 @@ export function loadJSON<T>(
       : Array.isArray(fallback)
         ? Array.isArray(parsed)
         : typeof fallback === "object" && fallback !== null
-          ? typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
+          ? typeof parsed === "object" &&
+            parsed !== null &&
+            !Array.isArray(parsed)
           : typeof parsed === typeof fallback;
     if (!ok) {
-      try { localStorage.removeItem(key); } catch {}
+      try {
+        localStorage.removeItem(key);
+      } catch {}
       return fallback;
     }
     return parsed as T;
   } catch {
-    try { localStorage.removeItem(key); } catch {}
+    try {
+      localStorage.removeItem(key);
+    } catch {}
     return fallback;
   }
 }
 
 // Common validators
-export const isArrayOf = (itemCheck?: (item: any) => boolean) => (v: any): boolean =>
-  Array.isArray(v) && (!itemCheck || v.every(itemCheck));
+export const isArrayOf =
+  (itemCheck?: (item: any) => boolean) =>
+  (v: any): boolean =>
+    Array.isArray(v) && (!itemCheck || v.every(itemCheck));
 
 export const isRecord = (v: any): v is Record<string, unknown> =>
   typeof v === "object" && v !== null && !Array.isArray(v);

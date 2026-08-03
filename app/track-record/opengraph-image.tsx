@@ -5,6 +5,11 @@ export const alt = "Quant Betting — Live Track Record";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
+// Same sample floor as components/dashboard/StatsStrip.tsx and the
+// /track-record page. This image is the social-share card, so a thin-sample
+// percentage here travels further than anywhere else on the site.
+const MIN_SAMPLE = 30;
+
 interface PropHistItem {
   result?: string;
 }
@@ -37,9 +42,18 @@ export default async function OG() {
         ? "#4cc9ff"
         : "#f5c451";
   const profitColor = stats.profit >= 0 ? "#2ee6a6" : "#ff5c7a";
-  const winRateText =
-    stats.totalGraded > 0 ? `${stats.winRate.toFixed(1)}%` : "—";
   const recordText = `${stats.wins}-${stats.losses}`;
+  // Below MIN_SAMPLE we print the sample size rather than a win-rate
+  // percentage, and relabel the tile so the card never claims a rate it
+  // can't support. Mirrors StatsStrip.tsx / the track-record page.
+  const thin = stats.totalGraded < MIN_SAMPLE;
+  const winRateText =
+    stats.totalGraded === 0
+      ? "—"
+      : thin
+        ? String(stats.totalGraded)
+        : `${stats.winRate.toFixed(1)}%`;
+  const winRateLabel = thin ? "GRADED PICKS" : "WIN RATE";
   const profitText = `${stats.profit >= 0 ? "+" : ""}$${Math.round(stats.profit)}`;
 
   return new ImageResponse(
@@ -131,7 +145,7 @@ export default async function OG() {
             style={{
               fontSize: 80,
               fontWeight: 900,
-              color: wrColor,
+              color: thin ? "#ffffff" : wrColor,
               lineHeight: 1,
               display: "flex",
             }}
@@ -147,7 +161,7 @@ export default async function OG() {
               display: "flex",
             }}
           >
-            WIN RATE
+            {winRateLabel}
           </div>
         </div>
         <div

@@ -138,6 +138,29 @@ async function recapBatch(
     if (flag?.value) return { batchKey, alreadyPosted: true };
   }
 
+  // Claim the recap BEFORE posting, using an INSERT rather than an upsert.
+  //
+  // The read above is not a guard on its own: it's separated from the write at
+  // the end of this function by grading work and a Discord round-trip, so two
+  // concurrent cron invocations — or a retry after the 10s post timeout where
+  // the post actually succeeded — both saw no flag and both posted. `key` is
+  // the PRIMARY KEY of app_state, so a plain insert makes the claim atomic:
+  // exactly one caller wins, the loser gets a duplicate-key error and bails.
+  //
+  // The row is deleted again if we end up not posting (nothing graded yet, or
+  // the send failed), so a claim never permanently blocks a legitimate recap.
+  if (!force) {
+    const { error: claimErr } = await supabaseAdmin!.from("app_state").insert({
+      key: recapKey,
+      value: { claimedAt: new Date().toISOString(), pending: true },
+    });
+    if (claimErr) return { batchKey, alreadyPosted: true };
+  }
+  const releaseClaim = async () => {
+    if (!force)
+      await supabaseAdmin!.from("app_state").delete().eq("key", recapKey);
+  };
+
   const graded: Array<{ text: string; result: string }> = [];
   let ungraded = 0;
   let unitsNet = 0;
@@ -189,7 +212,8 @@ async function recapBatch(
   }
 
   // Hold the recap until the slate is fully settled — see header note.
-  if (ungraded > 0 && !force)
+  if (ungraded > 0 && !force) {
+    await releaseClaim();
     return {
       batchKey,
       waiting: true,
@@ -197,12 +221,17 @@ async function recapBatch(
       ungraded,
       message: `${ungraded} pick(s) not final yet — holding recap`,
     };
+  }
 
-  if (graded.length === 0)
+  if (graded.length === 0) {
+    await releaseClaim();
     return { batchKey, waiting: true, message: "Nothing graded yet" };
+  }
 
-  if (!BOT_API_URL)
+  if (!BOT_API_URL) {
+    await releaseClaim();
     return { batchKey, ok: false, error: "BOT_API_URL not configured" };
+  }
 
   const dateLabel = new Date(slate + "T12:00:00Z").toLocaleDateString("en-US", {
     month: "short",
@@ -230,7 +259,10 @@ async function recapBatch(
       signal: AbortSignal.timeout(10000),
     });
     const posted = await r.json();
-    if (!posted.ok) return { batchKey, ok: false, error: posted.error };
+    if (!posted.ok) {
+      await releaseClaim();
+      return { batchKey, ok: false, error: posted.error };
+    }
 
     // Mark done so the next cron tick doesn't repost.
     await supabaseAdmin!.from("app_state").upsert({
@@ -248,6 +280,8 @@ async function recapBatch(
       messageId: posted.message_id,
     };
   } catch (e: any) {
+    // Release so a transient failure doesn't permanently suppress the recap.
+    await releaseClaim().catch(() => {});
     return { batchKey, ok: false, error: String(e) };
   }
 }

@@ -109,7 +109,13 @@ export interface NbaPropBrainState {
 // ── Load / Save ──
 
 export function loadNbaPropBrain(): NbaPropBrainState {
-  return loadJSON<NbaPropBrainState | null>("dq_nba_prop_brain", null, (v) => isRecord(v) && isRecord(v.weights)) ?? createDefaultBrain();
+  return (
+    loadJSON<NbaPropBrainState | null>(
+      "dq_nba_prop_brain",
+      null,
+      (v) => isRecord(v) && isRecord(v.weights),
+    ) ?? createDefaultBrain()
+  );
 }
 
 export function saveNbaPropBrain(brain: NbaPropBrainState) {

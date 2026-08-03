@@ -1,6 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cloudGet, cloudSet } from "@/lib/supabase/client";
 import { etDateString } from "@/lib/sports-date";
+import { getUserFromRequest } from "@/lib/supabase/server-auth";
+
+/**
+ * Truncate the board for non-subscribers and report what was withheld, so the
+ * UI can show an accurate "N more picks" prompt without ever receiving them.
+ */
+function gate<T extends { picks: any[] }>(
+  board: T,
+  isPremium: boolean,
+): T & { locked: number; isPremium: boolean } {
+  if (isPremium) return { ...board, locked: 0, isPremium: true };
+  const total = board.picks.length;
+  return {
+    ...board,
+    picks: board.picks.slice(0, FREE_PICKS),
+    locked: Math.max(0, total - FREE_PICKS),
+    isPremium: false,
+  };
+}
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +38,15 @@ export const dynamic = "force-dynamic";
 // ──────────────────────────────────────────────────────────
 
 const TARGET = 5; // pinned picks per day
+
+// How many picks a non-subscriber receives. The rest are never serialised
+// into the response.
+//
+// This was previously enforced only in the browser — `picks.slice(0, 5)` in
+// TodayPropPicks — while the API sent the full board to everyone. The locked
+// picks were one devtools Network tab away, so the paid tier gated nothing.
+// Truncating here is the only version of this that actually holds.
+const FREE_PICKS = 2;
 const MAX_UNDERS = 2; // keep the board Over-weighted, as before
 const REFRESH_HOURS = 3;
 
@@ -175,6 +203,12 @@ export async function GET(req: NextRequest) {
   const isNBA = sport === "nba";
   const today = etDateString();
 
+  // Resolved server-side from user_profiles. An unauthenticated or free user
+  // gets a truncated board — the withheld picks are never serialised, so
+  // there's nothing to recover from the network tab.
+  const viewer = await getUserFromRequest(req);
+  const isPremium = !!viewer?.isPremium;
+
   // Which refresh window are we in? Same board for everyone inside it.
   const hourET = Number(
     new Date().toLocaleString("en-US", {
@@ -193,7 +227,11 @@ export async function GET(req: NextRequest) {
   if (!force) {
     const cached = await cloudGet<PinnedBoard | null>(cacheKey, null);
     if (cached?.picks?.length) {
-      return NextResponse.json({ ok: true, ...cached, cached: true });
+      return NextResponse.json({
+        ok: true,
+        ...gate(cached, isPremium),
+        cached: true,
+      });
     }
   }
 
@@ -334,7 +372,11 @@ export async function GET(req: NextRequest) {
     // next request retries.
     if (consideredCount > 0) await cloudSet(cacheKey, board);
 
-    return NextResponse.json({ ok: true, ...board, cached: false });
+    return NextResponse.json({
+      ok: true,
+      ...gate(board, isPremium),
+      cached: false,
+    });
   } catch (error: any) {
     console.error("pinned-props error:", error);
     return NextResponse.json({ ok: false, picks: [], error: error?.message });

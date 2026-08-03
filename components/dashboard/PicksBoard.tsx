@@ -383,8 +383,10 @@ export default function PicksBoard() {
               "Underdog value play — higher payout if correct",
             ].filter(Boolean),
             aiTip: `Underdog spot for ${game.awayTeam}. Early line — value may disappear as market sharpens.`,
+            // No historical profitability claim here: we have no backtest of
+            // road-underdog ROI in this repo. Only state what the numbers are.
             history: [
-              "Road underdogs with value have historically been profitable long-term",
+              `Implied win probability at this price: ${(imp * 100).toFixed(0)}%`,
             ],
             commenceTime: game.commenceTime,
             gameStatus: status as Pick["gameStatus"],
@@ -1435,14 +1437,17 @@ function PickCard({
                     <p className="text-[7px] text-mercury/60 uppercase">Edge</p>
                   </div>
                   <div className="text-center">
+                    {/* Was "Model Fair" / "% true". This value is fairProb from
+                        getMarketConsensus() — the de-vigged average of all books,
+                        not our model and not ground truth. Label it as consensus. */}
                     <p className="text-[8px] text-mercury/60 uppercase tracking-wider mb-0.5">
-                      Model Fair
+                      Consensus
                     </p>
                     <p className="text-sm font-bold font-mono text-electric">
                       {formatOdds(fairAmerican)}
                     </p>
                     <p className="text-[10px] font-mono text-mercury">
-                      {pick.fairProb.toFixed(1)}% true
+                      {pick.fairProb.toFixed(1)}% implied
                     </p>
                   </div>
                 </div>
@@ -1986,15 +1991,25 @@ function PropSection({
 }
 
 // ──────────────────────────────────────────────────────────
+// Copy note for both helpers below: these describe GAME LINES, whose
+// `fairProb` comes from getMarketConsensus() in lib/odds/arbitrage.ts — the
+// de-vigged AVERAGE OF ALL BOOKS. So "fair" here IS the market. We cannot
+// claim the market is mispriced or that a model disagrees with it; the only
+// true claim is line-shopping: this book's price beats the consensus price.
 function generateReasons(bet: any): string[] {
   const r: string[] = [];
   if (bet.evPercentage > 8)
     r.push(
-      `Strong ${bet.evPercentage.toFixed(1)}% edge — well above the 3% threshold`,
+      `${bet.evPercentage.toFixed(1)}% better than the consensus price — well above the 3% threshold`,
     );
   else if (bet.evPercentage > 4)
-    r.push(`Solid ${bet.evPercentage.toFixed(1)}% edge over market consensus`);
-  else r.push(`${bet.evPercentage.toFixed(1)}% positive edge detected`);
+    r.push(
+      `${bet.evPercentage.toFixed(1)}% better than the consensus price across books`,
+    );
+  else
+    r.push(
+      `${bet.evPercentage.toFixed(1)}% above the consensus price across books`,
+    );
   r.push(
     `Best price at ${bet.bookmaker} (${bet.odds > 0 ? "+" : ""}${bet.odds})`,
   );
@@ -2004,8 +2019,9 @@ function generateReasons(bet: any): string[] {
       : Math.abs(bet.odds) / (Math.abs(bet.odds) + 100);
   const fair = bet.fairProb / 100;
   if (fair > imp + 0.03)
+    // Labeled "Consensus", not "Model" — this number is the other books' average.
     r.push(
-      `Model: ${(fair * 100).toFixed(0)}% win prob vs ${(imp * 100).toFixed(0)}% implied — mismatch`,
+      `Consensus: ${(fair * 100).toFixed(0)}% win prob vs ${(imp * 100).toFixed(0)}% implied here`,
     );
   r.push(`Quarter-Kelly: $${bet.kellyStake.toFixed(0)} on $1k bankroll`);
   return r;
@@ -2013,12 +2029,12 @@ function generateReasons(bet: any): string[] {
 
 function generateAITip(bet: any): string {
   if (bet.evPercentage > 8)
-    return `Premium edge — the market is significantly mispriced at ${bet.bookmaker}. Strong play with proper bankroll management.`;
+    return `${bet.bookmaker} is well off the consensus price on this one. Shop it here, not elsewhere.`;
   if (bet.evPercentage > 4)
-    return `Good value. The line at ${bet.bookmaker} is softer than the market average. Consistent +EV plays like this build bankroll over time.`;
+    return `The line at ${bet.bookmaker} is softer than the market average. You're paying less for the same bet.`;
   if (bet.odds > 150)
-    return `Longshot value. The model sees more upside than the market gives credit. Small stake, big potential return.`;
-  return `Marginal edge at ${bet.bookmaker}. Play this as part of a high-volume +EV strategy.`;
+    return `Longshot priced above consensus at ${bet.bookmaker}. Small stake, big potential return.`;
+  return `Slightly better price at ${bet.bookmaker} than the rest of the market.`;
 }
 
 function generateHistory(bet: any): string[] {
