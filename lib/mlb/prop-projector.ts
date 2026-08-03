@@ -105,11 +105,28 @@ const SHRINK_GAMES = 25;
 const PROB_REGRESSION = 0.18;
 
 // Markets driven by discrete plate appearances → binomial.
-const PA_MARKETS = new Set([
-  "batter_hits",
-  "batter_home_runs",
+// Markets where a plate appearance really is close to an independent trial.
+// A hit or a home run depends on THIS batter against THIS pitcher, so
+// modelling ~4 PA at rate p is sound.
+//
+// RBIs and runs scored are deliberately NOT here. Both require game state the
+// batter doesn't control — an RBI needs runners already on base, a run needs
+// someone behind you to drive you in — so they arrive in clusters rather than
+// as independent per-PA events. Treating them as binomial badly overstates
+// P(at least one): the model had CJ Abrams at 57.5% to record an RBI on
+// 2026-08-03 when his own 109-game history says 45.0% and the market said
+// 38.8%. Modelling them as Poisson on the per-game rate reproduces the
+// clustering and lands much closer to the observed base rate.
+const PA_MARKETS = new Set(["batter_hits", "batter_home_runs"]);
+
+// Markets whose events cluster within a game — see the overdispersion note in
+// projectProp. Total bases is included because extra-base hits bunch together
+// the same way (a 2-for-4 with a double is one good night, not four
+// independent draws).
+const CLUSTERED_MARKETS = new Set([
   "batter_rbis",
   "batter_runs_scored",
+  "batter_total_bases",
 ]);
 
 // League-average park factor is 1.0; clamp adjustments so a single extreme
@@ -314,6 +331,27 @@ export function projectProp(input: ProjectionInput): Projection | null {
     );
   } else {
     overProb = probOverPoisson(line, rate);
+
+    // Overdispersion correction for run-scoring events.
+    //
+    // Poisson assumes events arrive independently at a constant rate. RBIs and
+    // runs violate that hard: a batter's chances depend on runners being on
+    // base (or on teammates behind him), so multi-RBI games and zero-RBI games
+    // both cluster more than Poisson allows. The variance is larger than the
+    // mean, which inflates P(at least one).
+    //
+    // Measured against seven hitters' own full-season base rates, the raw
+    // Poisson ran +6.2 points high on EVERY player — a systematic bias, not
+    // noise. Shrinking the excess over the empirical base rate corrects it
+    // without flattening genuine differences between players.
+    if (CLUSTERED_MARKETS.has(market)) {
+      const empirical =
+        seasonVals.filter((v) => v > line).length / seasonVals.length;
+      // Trust the player's own observed frequency more as his sample grows.
+      const w = Math.min(0.75, played.length / 150);
+      overProb = (1 - w) * overProb + w * empirical;
+    }
+
     reasons.push(`projecting ${rate.toFixed(2)}`);
   }
 
