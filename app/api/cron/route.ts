@@ -1330,10 +1330,9 @@ export async function GET(req: Request) {
       // persists across many cron runs, so without the dedupe key this would
       // re-alert every 30 minutes until the book corrected.
       try {
-        const sm = await fetch(
-          `${origin}/api/sharp-money?sport=baseball_mlb`,
-          { signal: AbortSignal.timeout(20000) },
-        );
+        const sm = await fetch(`${origin}/api/sharp-money?sport=baseball_mlb`, {
+          signal: AbortSignal.timeout(20000),
+        });
         const smData = await sm.json();
         const items: any[] = Array.isArray(smData?.outliers)
           ? smData.outliers
@@ -1368,8 +1367,7 @@ export async function GET(req: Request) {
               await cloudSet(alertKey, [
                 ...seenSet,
                 ...fresh.map(
-                  (i) =>
-                    `${i.game_id}|${i.bookmaker}|${i.market}|${i.ourLine}`,
+                  (i) => `${i.game_id}|${i.bookmaker}|${i.market}|${i.ourLine}`,
                 ),
               ]);
             }

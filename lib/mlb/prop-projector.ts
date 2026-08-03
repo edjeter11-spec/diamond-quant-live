@@ -230,7 +230,16 @@ export function projectProp(input: ProjectionInput): Projection | null {
   // pitcher markets — but never low enough to project off one or two outings.
   const isPitcher =
     market === "pitcher_strikeouts" || market === "pitcher_outs";
-  const MIN_GAMES = isPitcher ? 5 : 10;
+  // Raised from 10 to 40 for hitters. At 10 games the shrinkage prior is
+  // doing nearly all the work, and what survives is noise dressed as signal:
+  // on 2026-08-03 the board's top pick was a 14-game rookie the model had at
+  // 62.4% against a 50.0% actual rate, producing a fake +21.8% EV. Against a
+  // market that has scouted the player properly, a 14-game log is not an
+  // edge — it's the model not knowing enough to disagree.
+  //
+  // Pitchers stay low because starters make ~30 appearances a season, so 8
+  // is already a quarter of their year.
+  const MIN_GAMES = isPitcher ? 8 : 40;
 
   const played = logs.filter(
     (g) => (g.atBats ?? 0) > 0 || (g.inningsPitched ?? 0) > 0,

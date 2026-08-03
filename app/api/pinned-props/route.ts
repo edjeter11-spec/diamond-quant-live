@@ -41,6 +41,16 @@ const MIN_EV = -8;
 // likely than not, and EV ranks within that set.
 const MIN_PROB = 50;
 
+// Maximum believable EV. Anything above this is the MODEL being wrong, not the
+// market — books price mainstream MLB props tightly, and a genuine 20%+ edge
+// on a liquid market essentially does not exist. Every time this fired during
+// development it was a bug: first the binomial inflating RBI probabilities
+// (+48.3% on CJ Abrams), then a 14-game rookie sample (+21.8%). Publishing
+// those would be the most damaging thing this board could do, so they are
+// dropped rather than shown. If this rejects everything, the honest output is
+// a short board.
+const MAX_EV = 15;
+
 // At most this many picks from any single market.
 //
 // Without it the board fills with Hits props every day: the score is
@@ -178,7 +188,7 @@ export async function GET(req: NextRequest) {
   // deploy was built from market-devig probabilities, so without this bump it
   // would stay frozen for the rest of the window and the model's picks would
   // never appear.
-  const cacheKey = `pinned_props_v3_${sport}_${today}_w${windowIdx}`;
+  const cacheKey = `pinned_props_v4_${sport}_${today}_w${windowIdx}`;
 
   if (!force) {
     const cached = await cloudGet<PinnedBoard | null>(cacheKey, null);
@@ -259,7 +269,9 @@ export async function GET(req: NextRequest) {
     // own price. Fewer honest picks beat five bad ones, so a short board (or an
     // empty one) is a valid, truthful output.
     const qualified = (p: PinnedProp) =>
-      p.evPercentage >= MIN_EV && p.fairProb >= MIN_PROB;
+      p.evPercentage >= MIN_EV &&
+      p.evPercentage <= MAX_EV &&
+      p.fairProb >= MIN_PROB;
     const overs2 = overs.filter(qualified).sort((a, b) => b.score - a.score);
     const unders2 = unders.filter(qualified).sort((a, b) => b.score - a.score);
     overs.length = 0;
