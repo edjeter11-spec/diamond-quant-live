@@ -492,6 +492,48 @@ export async function GET(req: Request) {
                 });
               }
 
+              // ── Persist to the verifiable ledger ──
+              // The cloudSet above writes a blob only this cron reads, and the
+              // UI's bankroll still lives in each visitor's localStorage — so
+              // there has never been a checkable record. bot_picks is one row
+              // per pick, service-role write, public read, graded against
+              // final scores. That's what makes a 62% backtest into something
+              // anyone can audit.
+              try {
+                const { supabaseAdmin } =
+                  await import("@/lib/supabase/server-auth");
+                if (supabaseAdmin) {
+                  const rows = mlbPicks.map((p: any) => ({
+                    id: p.id,
+                    sport: "mlb",
+                    slate_date: etDateString(),
+                    game_id: p.gameId ?? null,
+                    game: p.game,
+                    pick: p.pick,
+                    market: p.market ?? "moneyline",
+                    odds: p.odds,
+                    bookmaker: p.bookmaker ?? null,
+                    stake: p.stake,
+                    model_prob: (p.consensusProb ?? 50) / 100,
+                    ev_percentage: p.evPercentage ?? null,
+                    pitcher_score: p.pitcherScore ?? null,
+                    market_score: p.marketScore ?? null,
+                    trend_score: p.trendScore ?? null,
+                    confidence: p.confidence ?? null,
+                  }));
+                  // ignoreDuplicates, not overwrite: a re-run must never
+                  // rewrite a pick that has already been graded.
+                  const { error: bpErr } = await supabaseAdmin
+                    .from("bot_picks")
+                    .upsert(rows, { onConflict: "id", ignoreDuplicates: true });
+                  (pickGen as any).mlbLedger = bpErr
+                    ? `error: ${bpErr.message}`
+                    : rows.length;
+                }
+              } catch (e) {
+                (pickGen as any).mlbLedger = `error: ${String(e)}`;
+              }
+
               // ── Log to public track record ──
               // Forced picks (no game cleared the confidence+EV bar today —
               // shown for visibility only, explicitly not a recommendation)
@@ -794,6 +836,40 @@ export async function GET(req: Request) {
           await cloudSet(key, settled);
           if (sport === "mlb") botSettle.mlb = newlySettled;
           else botSettle.nba = newlySettled;
+
+          // Mirror the outcome into bot_picks. settleAndLearn only updates the
+          // cloud blob, which nobody can audit; the ledger is the public,
+          // per-row record. Written here rather than re-derived later so a
+          // pick's grade always matches the one the bot actually acted on.
+          try {
+            const { supabaseAdmin } =
+              await import("@/lib/supabase/server-auth");
+            if (supabaseAdmin) {
+              for (const p of settled.picks as any[]) {
+                if (p.result === "pending") continue;
+                const stake = Number(p.stake ?? 0);
+                const profit =
+                  p.result === "win"
+                    ? Number(p.payout ?? 0) - stake
+                    : p.result === "push"
+                      ? 0
+                      : -stake;
+                await supabaseAdmin
+                  .from("bot_picks")
+                  .update({
+                    result: p.result,
+                    payout: Number(p.payout ?? 0),
+                    profit_units: Math.round(profit * 100) / 100,
+                    final_score: p.finalScore ?? null,
+                    settled_at: new Date().toISOString(),
+                  })
+                  .eq("id", p.id)
+                  .eq("result", "pending"); // never re-grade a settled row
+              }
+            }
+          } catch (e) {
+            console.error("bot_picks settle mirror failed:", e);
+          }
         }
       }
     } catch (e) {
