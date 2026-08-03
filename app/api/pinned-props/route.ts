@@ -120,6 +120,59 @@ function americanImplied(odds: number): number {
   return odds > 0 ? 100 / (odds + 100) : -odds / (-odds + 100);
 }
 
+/**
+ * ET hour of today's earliest first pitch, or null if we can't determine it.
+ *
+ * Read from the free MLB Stats API rather than hardcoded, because slates vary
+ * a lot — a 1:05pm getaway day and a 10:10pm West Coast opener need different
+ * lock times, and a hardcoded 6pm would either freeze an afternoon board
+ * hours late or an evening board hours early.
+ *
+ * Returning null on any failure is deliberate: the caller then keeps its
+ * normal rolling window, so a flaky upstream degrades to today's behaviour
+ * instead of freezing the board at whatever window happened to be current.
+ */
+const firstPitchCache = new Map<string, { at: number; hour: number | null }>();
+
+async function getFirstPitchHourET(sport: string): Promise<number | null> {
+  if (sport !== "mlb") return null;
+  const day = etDateString();
+  const hit = firstPitchCache.get(day);
+  // Cache for an hour — a schedule doesn't move, and this runs on every
+  // board request.
+  if (hit && Date.now() - hit.at < 3_600_000) return hit.hour;
+
+  try {
+    const r = await fetch(
+      `https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${day}`,
+      { signal: AbortSignal.timeout(6000) },
+    );
+    if (!r.ok) return null;
+    const d = await r.json();
+    const games = d?.dates?.[0]?.games ?? [];
+    const times = games
+      .map((g: any) => new Date(g.gameDate).getTime())
+      .filter((t: number) => Number.isFinite(t));
+    if (!times.length) {
+      firstPitchCache.set(day, { at: Date.now(), hour: null });
+      return null;
+    }
+    const earliest = new Date(Math.min(...times));
+    const hour = Number(
+      earliest.toLocaleString("en-US", {
+        timeZone: "America/New_York",
+        hour: "2-digit",
+        hour12: false,
+      }),
+    );
+    const out = Number.isFinite(hour) ? hour : null;
+    firstPitchCache.set(day, { at: Date.now(), hour: out });
+    return out;
+  } catch {
+    return null;
+  }
+}
+
 function americanToDecimal(odds: number): number {
   return odds > 0 ? 1 + odds / 100 : 1 + 100 / Math.abs(odds);
 }
@@ -217,7 +270,32 @@ export async function GET(req: NextRequest) {
       hour12: false,
     }),
   );
-  const windowIdx = Math.floor(hourET / REFRESH_HOURS);
+  // Stop rebuilding once the slate is underway.
+  //
+  // The window rolls every 3 hours so the board can pick up genuinely better
+  // value during the morning. But with a 6:40pm first pitch, the 9pm roll was
+  // rebuilding against a slate already half-played: it would swap in picks for
+  // games nobody can bet, and those picks still get logged and graded. A
+  // published position has to stop moving when the games start.
+  //
+  // Freezing at the last pre-game window means the board a reader saw before
+  // first pitch is the board that gets graded — which is also the only version
+  // of a track record that means anything.
+  let windowIdx = Math.floor(hourET / REFRESH_HOURS);
+  const firstPitchHourET = await getFirstPitchHourET(isNBA ? "nba" : "mlb");
+  if (firstPitchHourET !== null) {
+    // The last window that ENDS at or before first pitch — the last one lying
+    // entirely in pre-game time.
+    //
+    // The -1 matters. floor(fp / REFRESH) is the window CONTAINING first
+    // pitch: for a 6:40pm start that's window 6 (18:00-20:59), so locking to
+    // it would still rebuild at 6pm, 7pm and 8pm, after the games began.
+    // Stepping back one window guarantees the board stops moving before any
+    // game starts, at every slate time from a noon getaway day to a 10pm West
+    // Coast opener (verified across 11:00-22:00 first pitches).
+    const lockedWindow = Math.floor(firstPitchHourET / REFRESH_HOURS) - 1;
+    if (windowIdx > lockedWindow) windowIdx = Math.max(0, lockedWindow);
+  }
   // v2: bumped when MLB projections landed. A board pinned by the previous
   // deploy was built from market-devig probabilities, so without this bump it
   // would stay frozen for the rest of the window and the model's picks would
