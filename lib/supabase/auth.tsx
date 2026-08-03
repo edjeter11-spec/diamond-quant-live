@@ -106,8 +106,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           .single(),
       ]);
 
+      // A permission error is NOT a missing row — retrying can't fix it, and
+      // silently treating it as "no profile" is how a column-grant regression
+      // took the whole admin panel down without a single visible error
+      // (migration 011 revoked SELECT on columns that `select("*")` needs;
+      // profile stayed null, so `isAdmin` was false for everyone). Log it so
+      // the next one is diagnosable from the console instead of by inference.
+      if (profileRes.error) {
+        console.error(
+          "user_profiles read failed:",
+          profileRes.error.code,
+          profileRes.error.message,
+        );
+      }
+
       // Profile might not exist yet if the trigger is still running (new signup)
-      if (!profileRes.data && attempt < 3) {
+      if (!profileRes.data && !profileRes.error && attempt < 3) {
         setTimeout(() => fetchProfile(userId, attempt + 1), 1000);
         return;
       }
