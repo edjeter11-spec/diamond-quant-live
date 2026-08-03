@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cloudGet, cloudSet } from "@/lib/supabase/client";
-import { getUserFromRequest } from "@/lib/supabase/server-auth";
+import { getUserFromRequest, supabaseAdmin } from "@/lib/supabase/server-auth";
+import { editPickInDiscord } from "@/lib/bot/discord-bridge";
 import { etDateString } from "@/lib/sports-date";
 
 export const dynamic = "force-dynamic";
@@ -102,6 +103,65 @@ export async function POST(req: NextRequest) {
     savedAt: new Date().toISOString(),
     savedBy: user.email,
   };
+
+  // Saving publishes. If today's parlay is already in Discord, edit that
+  // message in place rather than waiting for the next cron tick — by then the
+  // games have often started and the slip is worthless. Editing (not
+  // re-posting) matters because people may already have the original message
+  // open; a second post would compete with it.
+  //
+  // Pass ?post=false to save quietly without touching Discord.
+  const shouldPost = new URL(req.url).searchParams.get("post") !== "false";
+  let discord: any = { attempted: false };
+
+  if (shouldPost && supabaseAdmin) {
+    try {
+      const parlayBatchKey = `${sport}_parlay_${slate}`;
+      const { data: legs } = await supabaseAdmin
+        .from("manual_picks")
+        .select("pick_text, odds, discord_message_id, discord_channel_id")
+        .eq("batch_key", parlayBatchKey)
+        .eq("status", "published");
+
+      const msgId = legs?.find(
+        (l: any) => l.discord_message_id,
+      )?.discord_message_id;
+
+      if (!legs?.length || !msgId) {
+        discord = {
+          attempted: true,
+          ok: false,
+          reason: "Today's parlay hasn't posted to Discord yet",
+        };
+      } else {
+        const lines = legs.map(
+          (l: any, i: number) =>
+            `**${i + 1}.** ${l.pick_text}${
+              l.odds ? ` — ${Number(l.odds) > 0 ? "+" : ""}${l.odds}` : ""
+            }`,
+        );
+        const res = await editPickInDiscord({
+          id: parlayBatchKey,
+          sport,
+          game: "⚾ PARLAY OF THE DAY",
+          market: `${legs.length}-Leg`,
+          pick_text: lines.join("\n"),
+          units: 1,
+          confidence: "Lean",
+          writeup:
+            `**🎟️ One-tap betslip:** ${url}\n` +
+            `_Opens Playbook with all ${legs.length} legs loaded — pick your book from there._`,
+          status: "published",
+          discord_message_id: msgId,
+          discord_channel_id: legs.find((l: any) => l.discord_channel_id)
+            ?.discord_channel_id,
+        } as any);
+        discord = { attempted: true, ok: res.ok, error: res.error };
+      }
+    } catch (e) {
+      discord = { attempted: true, ok: false, error: String(e) };
+    }
+  }
   await cloudSet(keyFor(sport, slate), stored);
-  return NextResponse.json({ ok: true, sport, slate, link: stored });
+  return NextResponse.json({ ok: true, sport, slate, link: stored, discord });
 }

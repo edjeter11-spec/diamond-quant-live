@@ -164,7 +164,22 @@ export default function AdminPicksPage() {
     } else {
       setPbSaved(clear ? null : (d.link?.url ?? null));
       if (clear) setPbLink("");
-      setPbMsg(clear ? "Cleared" : "Saved — next Discord post will use it");
+      // Say what actually happened in Discord. "Saved" alone would be
+      // misleading on the days the parlay hasn't posted yet — the link is
+      // stored, but nobody has seen it.
+      if (clear) {
+        setPbMsg("Cleared");
+      } else if (d.discord?.ok) {
+        setPbMsg("Posted — today's parlay message now has the betslip");
+      } else if (d.discord?.reason) {
+        setPbMsg(
+          `Saved. ${d.discord.reason} — it'll be included when it does.`,
+        );
+      } else if (d.discord?.error) {
+        setPbMsg(`Saved, but Discord update failed: ${d.discord.error}`);
+      } else {
+        setPbMsg("Saved");
+      }
     }
     setPbBusy(false);
   }
@@ -253,8 +268,11 @@ export default function AdminPicksPage() {
           </div>
           <p className="text-[11px] text-[#8e9ab5] mb-3 leading-snug">
             Paste the legs into playbookbot.com, copy the share link, drop it
-            here. The daily parlay post uses it as a one-tap betslip. Without
-            one it falls back to the copy-paste line, so this is optional.
+            here. <strong className="text-[#e6eaf4]">Saving posts it</strong> —
+            today&apos;s parlay message is edited in place with a one-tap
+            betslip. If the parlay hasn&apos;t gone out yet, it&apos;s included
+            when it does. Optional: without a link the post falls back to the
+            copy-paste line.
           </p>
 
           {/* Step 1 — the exact string that builds the slip */}
