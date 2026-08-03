@@ -174,6 +174,7 @@ export async function POST(req: NextRequest) {
   if (!parlayDone) {
     let legs: any[] = [];
     let totalOdds = 0;
+    let playbookText = "";
     try {
       const r = await fetch(`${baseUrl}/api/parlay-today?sport=${sport}`, {
         signal: AbortSignal.timeout(20000),
@@ -181,6 +182,7 @@ export async function POST(req: NextRequest) {
       const d = await r.json();
       legs = d?.legs ?? [];
       totalOdds = d?.totalOdds ?? 0;
+      playbookText = d?.playbookText ?? "";
     } catch (e) {
       out.parlay = { ok: false, error: `Could not load parlay: ${e}` };
     }
@@ -201,7 +203,19 @@ export async function POST(req: NextRequest) {
         pick_text: lines.join("\n"),
         units: 1,
         confidence: "Lean",
-        writeup: `${legs.length} legs, ${fmtOdds(totalOdds)}. We have these at ${probs} to land.\n\nTap a book below to fire it — odds are best-available right now and will move.`,
+        writeup:
+          `${legs.length} legs, ${fmtOdds(totalOdds)}. We have these at ${probs} to land.\n\n` +
+          `Tap a book below to fire it — odds are best-available right now and will move.\n\n` +
+          // One-tap build: playbookbot.com turns this exact line into a
+          // pre-loaded slip with DraftKings/FanDuel/BetMGM deep links.
+          // Verified 2026-08-03 with three MLB prop legs.
+          //
+          // Posted as text to copy rather than tagging @Playbook, because
+          // their Discord bot rejects MLB player props ("please provide a
+          // valid betslip input") while their website parses the same string
+          // fine — the two don't share a parser.
+          `**Build it in one tap:** copy the line below into <https://playbookbot.com>\n` +
+          `\`\`\`\n${playbookText || legs.map((l: any) => l.pick).join(", ")}\n\`\`\``,
         status: "published",
       } as any);
 

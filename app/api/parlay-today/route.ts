@@ -30,6 +30,8 @@ interface PinnedParlay {
   hasPositiveEv?: boolean;
   lockedUntil: string;
   dayLabel: string; // "Today" or "Tomorrow" etc
+  /** Legs formatted for paste into playbookbot.com's web input. */
+  playbookText?: string;
 }
 
 // ET date (sports day). After midnight ET, counts as the next day.
@@ -376,6 +378,16 @@ export async function GET(req: NextRequest) {
       // that's uncommon, so the UI uses this to avoid calling a break-even
       // ticket an "edge".
       hasPositiveEv: legs.length > 0 && legs.every((l) => l.evPercentage > 0),
+      // Comma-separated legs in the exact shape playbookbot.com's web input
+      // accepts, e.g. "Bryce Harper Over 0.5 Hits, Ben Rice Over 0.5 Hits".
+      // Verified 2026-08-03: pasting this built a correct 3-leg slip with
+      // BetMGM/FanDuel/Fanatics deep links.
+      //
+      // Their @Playbook Discord bot rejects the identical text ("please
+      // provide a valid betslip input") — the website and the bot don't share
+      // a parser — so this is the string a human pastes into the site rather
+      // than something we can tag the bot with.
+      playbookText: legs.map((l) => l.pick).join(", "),
     };
 
     await cloudSet(cacheKey, result);
