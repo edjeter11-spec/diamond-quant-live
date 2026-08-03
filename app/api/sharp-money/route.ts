@@ -155,10 +155,39 @@ function computeOutliers(rows: any[]): any[] {
   }
 
   const out: any[] = [];
-  for (const entries of byMarket.values()) {
+  for (let entries of byMarket.values()) {
     if (entries.length < 3) continue; // need a real market to be an outlier from
 
-    const field = entries[0].market === "totals" ? "total" : "spread";
+    // Spreads are only comparable from the SAME side. Books quote whichever
+    // team they list first, so a row holding -1.5 and a row holding +1.5 can
+    // be the identical line seen from opposite ends — comparing them raw
+    // reported a 3-point disagreement where there was none (2026-08-03:
+    // "draftkings Spread -1.5 vs 1.5"). Totals have no such ambiguity.
+    const isSpread = entries[0].market !== "totals";
+    const field = isSpread ? "spread" : "total";
+    if (isSpread) {
+      // The snapshot writer stores the HOME team's spread (see homeSpread at
+      // the POST handler), so all rows should already share a side. Rows whose
+      // sign disagrees with the group are from an older capture convention;
+      // comparing them raw produced "-1.5 vs 1.5" — the same line seen from
+      // opposite ends, reported as a 3-point disagreement. Drop the minority
+      // sign rather than guess which convention a row used.
+      const signs = entries
+        .map((e) => e.spread)
+        .filter((v): v is number => typeof v === "number" && v !== 0)
+        .map((v) => Math.sign(v));
+      if (signs.length) {
+        const pos = signs.filter((s) => s > 0).length;
+        const majority = pos >= signs.length - pos ? 1 : -1;
+        entries = entries.filter(
+          (e) =>
+            typeof e.spread !== "number" ||
+            e.spread === 0 ||
+            Math.sign(e.spread) === majority,
+        );
+        if (entries.length < 3) continue;
+      }
+    }
     const vals = entries
       .map((e) => e[field])
       .filter((v): v is number => typeof v === "number");
