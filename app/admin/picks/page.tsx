@@ -56,6 +56,19 @@ export default function AdminPicksPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // ── Playbook slip link ──
+  // Their slip builder is only reachable through their website (the API behind
+  // it uses a key that ships in their own JS, which isn't ours to use — see
+  // PLAYBOOK-PARTNER-REQUEST.md). So the admin pastes today's parlay there,
+  // copies the share link, and drops it here; the Discord post then carries a
+  // real one-tap betslip instead of a line the reader has to paste themselves.
+  const [pbText, setPbText] = useState("");
+  const [pbLink, setPbLink] = useState("");
+  const [pbSaved, setPbSaved] = useState<string | null>(null);
+  const [pbBusy, setPbBusy] = useState(false);
+  const [pbMsg, setPbMsg] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
   const [form, setForm] = useState({
     sport: "mlb",
     game: "",
@@ -111,6 +124,49 @@ export default function AdminPicksPage() {
     if (!data.ok) setError(data.error ?? `Failed to ${action}`);
     await load();
     setBusyId(null);
+  }
+
+  // Load today's parlay text + any link already saved, so the panel shows the
+  // current state rather than an empty box that looks like nothing is set.
+  const loadPlaybook = useCallback(async () => {
+    if (!isAdmin) return;
+    try {
+      const [p, l] = await Promise.all([
+        fetch("/api/parlay-today?sport=mlb").then((r) => r.json()),
+        authedFetch("/api/admin/playbook-link?sport=mlb").then((r) => r.json()),
+      ]);
+      setPbText(
+        p?.playbookText ??
+          (p?.legs ?? []).map((x: any) => x.pick).join(", ") ??
+          "",
+      );
+      setPbSaved(l?.link?.url ?? null);
+      setPbLink(l?.link?.url ?? "");
+    } catch {
+      /* panel just stays empty — not worth an error banner */
+    }
+  }, [isAdmin]);
+
+  useEffect(() => {
+    loadPlaybook();
+  }, [loadPlaybook]);
+
+  async function savePlaybookLink(clear = false) {
+    setPbBusy(true);
+    setPbMsg(null);
+    const res = await authedFetch("/api/admin/playbook-link", {
+      method: "POST",
+      body: JSON.stringify({ sport: "mlb", url: clear ? "" : pbLink.trim() }),
+    });
+    const d = await res.json();
+    if (!d.ok) {
+      setPbMsg(d.error ?? "Failed to save");
+    } else {
+      setPbSaved(clear ? null : (d.link?.url ?? null));
+      if (clear) setPbLink("");
+      setPbMsg(clear ? "Cleared" : "Saved — next Discord post will use it");
+    }
+    setPbBusy(false);
   }
 
   async function gradePick(id: string, result: string) {
@@ -176,6 +232,114 @@ export default function AdminPicksPage() {
               className={`w-4 h-4 text-[#8e9ab5] ${loading ? "animate-spin" : ""}`}
             />
           </button>
+        </div>
+
+        {/* ── Playbook one-tap betslip ── */}
+        <div className="mb-6 rounded-xl border border-[#f59e0b]/25 bg-[#f59e0b]/[0.04] p-4">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-base">🎟️</span>
+            <h2 className="text-sm font-bold text-white">
+              Playbook betslip link
+            </h2>
+            {pbSaved ? (
+              <span className="ml-auto px-2 py-0.5 rounded bg-[#2ee6a6]/15 text-[#2ee6a6] text-[10px] font-bold">
+                SET FOR TODAY
+              </span>
+            ) : (
+              <span className="ml-auto px-2 py-0.5 rounded bg-[#8e9ab5]/15 text-[#8e9ab5] text-[10px] font-bold">
+                NOT SET
+              </span>
+            )}
+          </div>
+          <p className="text-[11px] text-[#8e9ab5] mb-3 leading-snug">
+            Paste the legs into playbookbot.com, copy the share link, drop it
+            here. The daily parlay post uses it as a one-tap betslip. Without
+            one it falls back to the copy-paste line, so this is optional.
+          </p>
+
+          {/* Step 1 — the exact string that builds the slip */}
+          <label className="block text-[10px] uppercase tracking-wide text-[#8e9ab5] mb-1">
+            1 · Today&apos;s legs
+          </label>
+          <div className="flex gap-2 mb-3">
+            <code className="flex-1 min-w-0 px-3 py-2 rounded-lg bg-[#0b0f1a] border border-[#1b2235] text-[11px] text-[#e6eaf4] font-mono overflow-x-auto whitespace-nowrap">
+              {pbText || "No parlay built yet today"}
+            </code>
+            <button
+              type="button"
+              disabled={!pbText}
+              onClick={() => {
+                navigator.clipboard.writeText(pbText).then(
+                  () => {
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 1800);
+                  },
+                  () =>
+                    setPbMsg("Clipboard blocked — select and copy manually"),
+                );
+              }}
+              className="px-3 rounded-lg bg-[#1b2235] hover:bg-[#243049] disabled:opacity-40 text-xs font-semibold text-white whitespace-nowrap transition-colors"
+            >
+              {copied ? "Copied" : "Copy"}
+            </button>
+            <a
+              href="https://playbookbot.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-3 py-2 rounded-lg bg-[#f59e0b]/15 hover:bg-[#f59e0b]/25 text-xs font-semibold text-[#f59e0b] whitespace-nowrap transition-colors"
+            >
+              Open ↗
+            </a>
+          </div>
+
+          {/* Step 2 — the link back */}
+          <label className="block text-[10px] uppercase tracking-wide text-[#8e9ab5] mb-1">
+            2 · Paste the share link
+          </label>
+          <div className="flex gap-2">
+            <input
+              value={pbLink}
+              onChange={(e) => setPbLink(e.target.value)}
+              placeholder="https://playbookbot.com/books/..."
+              className="flex-1 min-w-0 px-3 py-2 rounded-lg bg-[#0b0f1a] border border-[#1b2235] text-xs text-[#e6eaf4] font-mono placeholder:text-[#4a5670] focus:outline-none focus:border-[#4cc9ff]/50"
+            />
+            <button
+              type="button"
+              disabled={pbBusy || !pbLink.trim()}
+              onClick={() => savePlaybookLink(false)}
+              className="px-4 rounded-lg bg-[#4cc9ff] hover:bg-[#6fd5ff] disabled:opacity-40 text-xs font-bold text-[#05070d] whitespace-nowrap transition-colors"
+            >
+              {pbBusy ? "…" : "Save"}
+            </button>
+            {pbSaved && (
+              <button
+                type="button"
+                disabled={pbBusy}
+                onClick={() => savePlaybookLink(true)}
+                className="px-3 rounded-lg bg-[#1b2235] hover:bg-[#ff5c7a]/20 text-xs font-semibold text-[#8e9ab5] hover:text-[#ff5c7a] whitespace-nowrap transition-colors"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+
+          {pbMsg && (
+            <p
+              className={`text-[11px] mt-2 ${pbMsg.startsWith("Saved") || pbMsg === "Cleared" ? "text-[#2ee6a6]" : "text-[#ff5c7a]"}`}
+            >
+              {pbMsg}
+            </p>
+          )}
+          {pbSaved && (
+            <a
+              href={pbSaved}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block text-[11px] mt-2 text-[#4cc9ff] hover:underline truncate"
+            >
+              Test it → {pbSaved}
+            </a>
+          )}
         </div>
 
         {error && (

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/server-auth";
+import { cloudGet } from "@/lib/supabase/client";
 import { etDateString } from "@/lib/sports-date";
 import { postPickToDiscord } from "@/lib/bot/discord-bridge";
 
@@ -175,6 +176,7 @@ export async function POST(req: NextRequest) {
     let legs: any[] = [];
     let totalOdds = 0;
     let playbookText = "";
+    let playbookLink = "";
     try {
       const r = await fetch(`${baseUrl}/api/parlay-today?sport=${sport}`, {
         signal: AbortSignal.timeout(20000),
@@ -183,6 +185,14 @@ export async function POST(req: NextRequest) {
       legs = d?.legs ?? [];
       totalOdds = d?.totalOdds ?? 0;
       playbookText = d?.playbookText ?? "";
+      // Today's slip link, if an admin pasted one. Keyed per sport per ET day,
+      // so a link from an earlier slate can never ride along with today's
+      // parlay — that would send readers to bets that already settled.
+      const saved = await cloudGet<{ url?: string } | null>(
+        `playbook_link_${sport}_${slate}`,
+        null,
+      );
+      playbookLink = saved?.url ?? "";
     } catch (e) {
       out.parlay = { ok: false, error: `Could not load parlay: ${e}` };
     }
@@ -206,16 +216,19 @@ export async function POST(req: NextRequest) {
         writeup:
           `${legs.length} legs, ${fmtOdds(totalOdds)}. We have these at ${probs} to land.\n\n` +
           `Tap a book below to fire it — odds are best-available right now and will move.\n\n` +
-          // One-tap build: playbookbot.com turns this exact line into a
-          // pre-loaded slip with DraftKings/FanDuel/BetMGM deep links.
-          // Verified 2026-08-03 with three MLB prop legs.
+          // If an admin has pasted today's Playbook slip link (see
+          // /api/admin/playbook-link), lead with it — that's one tap straight
+          // into a pre-loaded betslip.
           //
-          // Posted as text to copy rather than tagging @Playbook, because
-          // their Discord bot rejects MLB player props ("please provide a
-          // valid betslip input") while their website parses the same string
-          // fine — the two don't share a parser.
-          `**Build it in one tap:** copy the line below into <https://playbookbot.com>\n` +
-          `\`\`\`\n${playbookText || legs.map((l: any) => l.pick).join(", ")}\n\`\`\``,
+          // Otherwise fall back to the copy-paste line. It has to be text
+          // rather than tagging @Playbook: their Discord bot rejects MLB
+          // player props ("please provide a valid betslip input") while their
+          // website parses the identical string fine — the two don't share a
+          // parser.
+          (playbookLink
+            ? `**🎟️ One-tap betslip:** ${playbookLink}\n_Opens Playbook with all ${legs.length} legs loaded — pick your book from there._`
+            : `**Build it in one tap:** copy the line below into <https://playbookbot.com>\n` +
+              `\`\`\`\n${playbookText || legs.map((l: any) => l.pick).join(", ")}\n\`\`\``),
         status: "published",
       } as any);
 
