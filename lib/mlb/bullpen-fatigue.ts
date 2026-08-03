@@ -194,6 +194,11 @@ export async function getBullpenFatigue(
     score,
     summary,
   };
-  setCache(cacheKey, result);
+  // Only cache when we actually observed relief appearances. Every
+  // fetchReliefUsage failing leaves byPitcher empty, which produces
+  // "bullpen is fresh — no relievers over threshold" and tired: false — a
+  // positive claim manufactured from total data loss, then held for 6 hours.
+  // An empty map means we couldn't see the usage, not that nobody pitched.
+  if (byPitcher.size > 0) setCache(cacheKey, result);
   return result;
 }

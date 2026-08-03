@@ -75,9 +75,36 @@ export default function InjuryAlerts({ sport }: { sport: string }) {
         // Most actionable first: Out/Doubtful before day-to-day.
         const rank = (s: string) =>
           s.startsWith("out") ? 0 : s.startsWith("doubt") ? 1 : 2;
-        flat.sort((a, b) => rank(a.status) - rank(b.status));
+
+        // Interleave teams before slicing. The feed arrives grouped by team and
+        // Array.sort is stable, so when every player ranks the same (they're
+        // nearly all "Out"), the original grouping survived and slice(0, 6)
+        // returned six players from whichever team sorted first — the panel
+        // showed six Diamondbacks and nothing from the 29 other teams.
+        // Round-robin gives one player per team before any team gets a second.
+        const byTeam = new Map<string, typeof flat>();
+        for (const r of flat) {
+          const list = byTeam.get(r.team) ?? [];
+          list.push(r);
+          byTeam.set(r.team, list);
+        }
+        for (const list of byTeam.values())
+          list.sort((a, b) => rank(a.status) - rank(b.status));
+        const spread: typeof flat = [];
+        for (let i = 0; spread.length < flat.length; i++) {
+          let added = false;
+          for (const list of byTeam.values()) {
+            if (list[i]) {
+              spread.push(list[i]);
+              added = true;
+            }
+          }
+          if (!added) break;
+        }
+        spread.sort((a, b) => rank(a.status) - rank(b.status));
+
         if (!cancelled) {
-          setRows(flat.slice(0, 6));
+          setRows(spread.slice(0, 6));
           setState("ready");
         }
       } catch {

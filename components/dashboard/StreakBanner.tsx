@@ -83,8 +83,13 @@ export default function StreakBanner() {
 
         <div className="flex-1 min-w-0">
           <p className="text-sm sm:text-base font-bold text-silver leading-tight">
+            {/* DAYS, not picks. The loop above walks the `daily` array and
+                counts days where wins - losses > 0, so a 3-day run of
+                4-3, 5-4, 3-2 was rendering as "3 picks in a row hit" while the
+                real record over those days was 12-9. Say what's counted. */}
             <span className="text-gold">
-              {currentStreak.length} picks in a row hit
+              {currentStreak.length} winning{" "}
+              {currentStreak.length === 1 ? "day" : "days"} in a row
             </span>
             <span className="text-mercury/60 font-normal">
               {" "}

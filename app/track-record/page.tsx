@@ -19,14 +19,22 @@ import StructuredData from "@/components/StructuredData";
 export const dynamic = "force-dynamic";
 export const revalidate = 60;
 
+// The previous description advertised a "4,041-game historical backtest
+// (54.1% win rate)". Those two numbers appeared nowhere else in the codebase —
+// no backtest artifact, no computation, no DB read. They were literals typed
+// into page metadata, which is what Google and every social share surface, and
+// 54.1% sits just above the ~52.4% break-even at -110, i.e. precisely the
+// figure that reads as "this model is profitable". Removed: an unsourced
+// performance claim is the single most misleading thing this site could show
+// someone deciding whether to stake money.
 export const metadata: Metadata = {
   title: "Quant Betting — Live Track Record",
   description:
-    "Watch our AI-powered NBA prop bot bet in real-time. Model trained on a 4,041-game historical backtest (54.1% win rate) — see the live forward-tested track record on-site. Free 7-day trial.",
+    "Every pick we publish, graded against final scores — wins and losses both. Live, forward-tested results with the sample size shown.",
   openGraph: {
     title: "Quant Betting — Live Track Record",
     description:
-      "AI sports betting that learns. Self-evolving NBA prop brain trained on a 4,041-game historical backtest (54.1%) — live forward-tested results tracked separately.",
+      "Every pick we publish, graded against final scores — wins and losses both. Live, forward-tested results with the sample size shown.",
   },
 };
 

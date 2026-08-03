@@ -126,7 +126,15 @@ export async function getRestState(abbrev: string): Promise<RestState> {
     summary,
   };
 
-  setCache(cacheKey, result);
+  // Only cache when at least one scoreboard actually came back. fetchScoreboard
+  // returns [] on failure, so a full ESPN outage leaves every day empty,
+  // daysRest keeps its default of 5, and this caches
+  // "rested (5+ days since last game)" with isB2B: false for a team that is in
+  // fact on a back-to-back. computeRestEdge then awards a rested-vs-tired
+  // bonus off that — a network failure doesn't just blank the signal, it
+  // inverts it and manufactures a bet in the wrong direction.
+  const sawAnyData = daysChecked.some((d) => d.events.length > 0);
+  if (sawAnyData) setCache(cacheKey, result);
   return result;
 }
 

@@ -139,11 +139,13 @@ export async function getDailyLineup(
 
   const regulars = await fetchTeamSeasonRegulars(teamId);
   if (regulars.length === 0) {
-    setCache(cacheKey, {
-      ...empty,
-      lineupPosted: true,
-      summary: `${teamAbbrev} lineup posted (no regular-stats context)`,
-    });
+    // Don't cache. This branch is a FAILURE sentinel — fetchTeamSeasonRegulars
+    // returns [] both when the call errors and when stats are genuinely
+    // missing — and it previously cached `lineupPosted: true` while RETURNING
+    // `empty` (lineupPosted: false). The first caller got edge 0 via
+    // computeLineupEdge's !lineupPosted guard; every caller for the next 20
+    // minutes got the cached true with zero scratches, i.e. a different answer
+    // to the same question depending only on arrival time.
     return empty;
   }
 

@@ -124,7 +124,14 @@ export async function getTeamInjuries(
     summary,
   };
 
-  setCache(cacheKey, result);
+  // Only cache a roster we actually read. fetchFullRoster returns [] on any
+  // HTTP failure, which walks the loop zero times and produces
+  // "lineup mostly healthy" with totalOnIL: 0 — a confident affirmative built
+  // from no data. Cached for 6 hours, that prices a team with three stars on
+  // the IL as fully healthy for an entire slate, and computeInjuryEdge reads
+  // it as a real zero. Empty here means the fetch failed, not that nobody's
+  // hurt, so leave it uncached and let the next call retry.
+  if (roster.length > 0) setCache(cacheKey, result);
   return result;
 }
 

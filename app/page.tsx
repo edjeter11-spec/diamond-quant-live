@@ -1189,8 +1189,36 @@ export default function WarRoom() {
           Quant Betting v1.0 — Odds via The Odds API. Stats via{" "}
           {currentSport === "nba" ? "NBA Stats API" : "MLB Stats API"}.
         </p>
-        <p className="text-[9px] sm:text-[10px] text-mercury/30 mt-1">
-          Analytics platform — for informational & educational purposes only.
+        {/* Responsible-gambling disclosure. The site previously had NO 21+
+            notice, no problem-gambling resource, and no eligibility notice
+            anywhere in the codebase — a real compliance gap for a paid
+            betting-picks product, and a real harm risk for at-risk users.
+            Deliberately legible (mercury/60, not /30): a disclaimer nobody can
+            read isn't a disclaimer. */}
+        <p className="text-[9px] sm:text-[10px] text-mercury/40 mt-1">
+          Analytics platform — for informational &amp; educational purposes
+          only. Not betting advice. Past performance does not guarantee future
+          results.
+        </p>
+        <p className="text-[10px] sm:text-[11px] text-mercury/60 mt-2 font-semibold">
+          21+ only. Must be physically located in a state where sports wagering
+          is legal.
+        </p>
+        <p className="text-[10px] sm:text-[11px] text-mercury/60 mt-1">
+          Gambling problem? Call{" "}
+          <a href="tel:1-800-522-4700" className="underline hover:text-mercury">
+            1-800-GAMBLER
+          </a>{" "}
+          or visit{" "}
+          <a
+            href="https://www.ncpgambling.org/help-treatment/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline hover:text-mercury"
+          >
+            ncpgambling.org
+          </a>
+          .
         </p>
         <div className="flex flex-wrap items-center justify-center gap-3 mt-3 text-[10px] text-mercury/50">
           <a href="/results" className="hover:text-mercury transition-colors">
