@@ -237,7 +237,6 @@ export async function GET(req: Request) {
       return t >= nowMs - 4 * 60 * 60 * 1000 && gameDay === todayFilterET;
     });
 
-
     // Request main + alternate markets together so we get 5-10 lines per player
     const alt = ALT_MARKETS[market];
     const marketsParam = alt ? `${market},${alt}` : market;
@@ -298,6 +297,29 @@ export async function GET(req: Request) {
       } catch (e) {
         console.error(
           `Synthesis failed for ${sport}/${market}:`,
+          e instanceof Error ? e.message : e,
+        );
+      }
+    }
+
+    // Augment MLB props with an INDEPENDENT projection.
+    //
+    // Before this, MLB props had no enrichment at all — brainOverProb was
+    // never set, so fairProb fell back to de-vigged market consensus and the
+    // board was ranking the market against its own price. That difference is
+    // the vig by construction, which is why every prop showed negative EV.
+    //
+    // Validated walk-forward before wiring (see lib/mlb/enrich-props.ts):
+    // beats the naive baseline on two independent 20-hitter samples. Failures
+    // leave the prop untouched, so it degrades to the old devig behaviour
+    // rather than going blank.
+    if (sport === "baseball_mlb" && grouped.length > 0) {
+      try {
+        const { enrichMlbProps } = await import("@/lib/mlb/enrich-props");
+        await enrichMlbProps(grouped, todayKey());
+      } catch (e) {
+        console.error(
+          "MLB projection enrichment failed:",
           e instanceof Error ? e.message : e,
         );
       }
@@ -436,6 +458,10 @@ export async function GET(req: Request) {
           brainUnderProb: g.brainUnderProb,
           brainConfidence: g.brainConfidence,
           brainProjectedValue: g.brainProjectedValue,
+          // Why the model likes it, and who's on the mound — both are shown
+          // in the pick rationale, so they must survive the slim response.
+          brainReasons: g.brainReasons,
+          opposingPitcher: g.opposingPitcher,
           injuryStatus: g.injuryStatus,
           bestAlt: g.bestAlt,
           isSynthesized: g.isSynthesized,

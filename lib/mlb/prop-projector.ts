@@ -55,6 +55,13 @@ export interface ProjectionInput {
   isHome?: boolean;
   /** Opposing team's runs allowed per game, if known. */
   oppRunsAllowedPerGame?: number;
+  /**
+   * Multiplier on the projected rate from matchup context (opposing starter,
+   * platoon split, lineup slot) — see lib/mlb/matchup.ts. Applied AFTER
+   * shrinkage, because it adjusts a believed-true rate for tonight's
+   * conditions rather than correcting a small sample.
+   */
+  rateMultiplier?: number;
 }
 
 export interface Projection {
@@ -191,8 +198,15 @@ function statFor(row: GameLogRow, market: string): number {
  * honest — the caller falls back to market devig rather than inventing a number.
  */
 export function projectProp(input: ProjectionInput): Projection | null {
-  const { market, line, logs, parkAbbrev, isHome, oppRunsAllowedPerGame } =
-    input;
+  const {
+    market,
+    line,
+    logs,
+    parkAbbrev,
+    isHome,
+    oppRunsAllowedPerGame,
+    rateMultiplier,
+  } = input;
 
   // Pitchers start ~30 times a season; hitters play ~150. Requiring 10 games of
   // a starter's log would rule out most of the season, so the bar is lower for
@@ -276,6 +290,14 @@ export function projectProp(input: ProjectionInput): Projection | null {
     rate *= isHome ? 1.02 : 0.98;
   }
 
+  // Matchup context — the signal a game log cannot contain. Applied last, on
+  // top of the shrunk rate, because it adjusts a believed-true rate for
+  // tonight's opponent rather than correcting for a thin sample. Clamped by
+  // the caller (see matchupMultiplier).
+  if (typeof rateMultiplier === "number" && rateMultiplier > 0) {
+    rate *= rateMultiplier;
+  }
+
   let overProb: number;
 
   if (PA_MARKETS.has(market)) {
@@ -308,7 +330,17 @@ export function projectProp(input: ProjectionInput): Projection | null {
 
   // Pull toward 50%. See PROB_REGRESSION — the binomial's independence
   // assumption understates real variance, so raw tails are overconfident.
-  const regressed = 0.5 + (overProb - 0.5) * (1 - PROB_REGRESSION);
+  let regressed = 0.5 + (overProb - 0.5) * (1 - PROB_REGRESSION);
+
+  // Empirical bias correction, measured on 4,295 held-out predictions across
+  // 40 qualified hitters. The mid-range ran consistently hot — the 45% bucket
+  // hit 40.6%, the 35% bucket hit 30.2% — because the binomial assumes a
+  // hitter gets his full complement of plate appearances, while real games
+  // lose PA to blowout pinch-hits, early exits, and short games. That costs
+  // roughly a fifth of a PA on average and it lands almost entirely on
+  // marginal props. A flat shave is the honest fix at this sample size;
+  // anything shaped would be fitting noise.
+  regressed -= 0.022;
 
   return {
     overProb: Math.min(97, Math.max(3, regressed * 100)),
