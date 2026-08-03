@@ -104,8 +104,21 @@ export default function LiveTicker() {
     }
   }
 
-  // Double the content for seamless loop
-  const tickerItems = [...combined, ...combined];
+  // Repeat until the strip is comfortably wider than any phone, then double
+  // for the seamless loop.
+  //
+  // The keyframe translates -50%, which only loops seamlessly if the rendered
+  // content is exactly twice the visible width. With one or two short items on
+  // a 375px screen the doubled strip was still narrower than the viewport, so
+  // it scrolled fully off-screen and the banner appeared to vanish a few
+  // seconds after load. Padding the list first keeps -50% correct at every
+  // width.
+  const MIN_ITEMS = 8;
+  const padded: typeof combined = [];
+  while (padded.length < MIN_ITEMS && combined.length > 0) {
+    padded.push(...combined);
+  }
+  const tickerItems = [...padded, ...padded];
 
   return (
     <div className="safe-top w-full bg-bunker border-b border-slate/50 overflow-hidden">

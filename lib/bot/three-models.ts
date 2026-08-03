@@ -103,7 +103,8 @@ export interface GameAnalysis {
   trendModel: ModelPrediction;
   // Consensus
   consensus: {
-    homeWinProb: number;
+    homeWinProb: number; // calibrated — this is what EV/Kelly consume
+    rawHomeWinProb?: number; // pre-calibration blend, recorded for audit
     confidence: "HIGH" | "MEDIUM" | "LOW" | "NO_PLAY";
     modelsAgree: boolean;
     disagreementLevel: number; // 0-1, higher = more disagreement
@@ -746,6 +747,31 @@ async function runEloPowerModel(
 // CONSENSUS ENGINE — combines 3 models
 // ══════════════════════════════════════════════════════════
 
+// Platt scaling parameters, fitted on the 2024 season and validated on 2025.
+// Re-fit with scripts/fit-calibration.mts if the model changes.
+const CAL_A = 2.7548;
+
+// Intercept forced to 0, NOT the -0.0890 the fit produced.
+//
+// That fitted intercept mapped a coin-flip game to 47.8% home — i.e. it
+// asserted a lean toward AWAY teams. Home teams actually won 52.6% (2024) and
+// 54.1% (2025) of games, so the model's midpoint isn't biased high; the fit
+// had picked up noise. Keeping it would have applied a systematic away-lean to
+// every single pick, which is exactly the sort of small persistent error that
+// looks fine in aggregate Brier and quietly costs money on every bet.
+//
+// The slope is where the real correction lives — the model is underconfident,
+// and CAL_A > 1 sharpens it. Dropping the intercept costs a little Brier and
+// removes a bias I can't justify from the data.
+const CAL_B = 0;
+
+/** Map a raw model probability onto a calibrated one. */
+export function calibrate(p: number): number {
+  const c = Math.min(0.995, Math.max(0.005, p));
+  const z = CAL_A * Math.log(c / (1 - c)) + CAL_B;
+  return 1 / (1 + Math.exp(-z));
+}
+
 function buildConsensus(
   pitcher: ModelPrediction,
   market: ModelPrediction,
@@ -756,10 +782,24 @@ function buildConsensus(
   const pitcherWeight = 0.35;
   const trendWeight = 0.25;
 
-  const prob =
+  const rawProb =
     pitcher.homeWinProb * pitcherWeight +
     market.homeWinProb * marketWeight +
     trend.homeWinProb * trendWeight;
+
+  // Platt-scaled calibration.
+  //
+  // The raw blend ranks games well but its NUMBERS are wrong — badly
+  // underconfident. Backtested walk-forward over 2025: when it said 65%, teams
+  // actually won 87%. That matters because EV and Kelly staking both consume
+  // this probability directly, so every stake it sized was wrong.
+  //
+  // Fitted on 2024 (a=2.7548, b=-0.0890), validated on held-out 2025:
+  // Brier 0.2351 -> 0.2261, a 3.82% improvement, with buckets that now track
+  // (55%->55%, 65%->60%, 75%->80%). Fitting and testing on the same season
+  // would only have measured memorisation, so the two are deliberately split.
+  // See scripts/fit-calibration.mts to re-fit.
+  const prob = calibrate(rawProb);
 
   // Disagreement = standard deviation of the 3 predictions
   const probs = [pitcher.homeWinProb, market.homeWinProb, trend.homeWinProb];
@@ -779,6 +819,10 @@ function buildConsensus(
 
   return {
     homeWinProb: prob,
+    // Kept so bot_picks can record what the model believed BEFORE calibration.
+    // If the curve is ever re-fitted, we can re-score history against what was
+    // actually predicted rather than silently rewriting it.
+    rawHomeWinProb: rawProb,
     confidence,
     modelsAgree: allSameSide,
     disagreementLevel: Math.round(disagreement * 100) / 100,

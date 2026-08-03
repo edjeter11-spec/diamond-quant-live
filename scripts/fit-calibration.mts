@@ -145,6 +145,8 @@ const main = async () => {
 
   const { a, b } = fitPlatt(fit);
   const cal = (p: number) => sigmoid(a * logit(clamp(p)) + b);
+  // Slope-only variant: intercept forced to 0 so a coin-flip stays a coin-flip.
+  const calNoB = (p: number) => sigmoid(a * logit(clamp(p)));
 
   console.log(
     `\nfitted on ${FIT_SEASON}:  a=${a.toFixed(4)}  b=${b.toFixed(4)}`,
@@ -154,6 +156,17 @@ const main = async () => {
   console.log(`  calibrated Brier ${brier(test, cal).toFixed(4)}`);
   const imp = (1 - brier(test, cal) / brier(test, (p) => p)) * 100;
   console.log(`  improvement: ${imp.toFixed(2)}%`);
+
+  // Slope-only. The fitted intercept encodes a directional lean, and a lean
+  // the data doesn't support is a systematic error on every single bet — the
+  // kind that hides inside an aggregate Brier score. Report both so the cost
+  // of dropping it is explicit rather than assumed.
+  const impNoB = (1 - brier(test, calNoB) / brier(test, (p) => p)) * 100;
+  console.log(`  slope-only (b=0) Brier ${brier(test, calNoB).toFixed(4)}`);
+  console.log(`  slope-only improvement: ${impNoB.toFixed(2)}%`);
+  console.log(
+    `  coin-flip maps to: fitted-b ${(cal(0.5) * 100).toFixed(1)}%  |  slope-only ${(calNoB(0.5) * 100).toFixed(1)}%`,
+  );
 
   console.log(
     `\ncalibration on held-out ${TEST_SEASON} (predicted -> actual):`,
