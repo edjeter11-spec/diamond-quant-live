@@ -1,10 +1,29 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useStore } from "@/lib/store";
-import { AlertTriangle, TrendingUp, Zap } from "lucide-react";
+import { AlertTriangle, TrendingUp, Zap, Newspaper } from "lucide-react";
 
 export default function LiveTicker() {
   const { oddsData, scores } = useStore();
+
+  // Real MLB trades, roster moves and headlines, used when there's nothing
+  // live to scroll. The banner used to loop "Scanning markets for edges…",
+  // which is both dull and not quite true — nothing is scanning, there just
+  // aren't any alerts. Off-hours that was the only thing a visitor ever saw.
+  const [feed, setFeed] = useState<Array<{ type: string; text: string }>>([]);
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/ticker-feed")
+      .then((r) => r.json())
+      .then((d) => {
+        if (!cancelled && Array.isArray(d?.items)) setFeed(d.items);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Live scores get their own dedicated, always-first entries — a real
   // scrolling scoreboard rather than one alert buried among arbs/EV lines.
@@ -62,15 +81,27 @@ export default function LiveTicker() {
 
   // Merge: live scores first (dedicated scoreboard entries), then alerts.
   // If there's truly nothing to show, fall back to a default idle message.
-  const combined: Array<{ type: "arb" | "ev" | "live"; text: string }> = [
+  const combined: Array<{
+    type: "arb" | "ev" | "live" | "news";
+    text: string;
+  }> = [
     ...liveScores.map((s) => ({ type: "live" as const, text: s.text })),
     ...alerts,
   ];
+  // Nothing live? Show real news rather than a placeholder. Only fall back to
+  // a static line if the feed itself is unavailable, so the banner is never
+  // empty.
   if (combined.length === 0) {
-    combined.push({
-      type: "ev",
-      text: "Quant Betting — Scanning markets for edges...",
-    });
+    if (feed.length > 0) {
+      combined.push(
+        ...feed.map((f) => ({ type: "news" as const, text: f.text })),
+      );
+    } else {
+      combined.push({
+        type: "ev",
+        text: "Quant Betting — no live alerts right now",
+      });
+    }
   }
 
   // Double the content for seamless loop
@@ -95,6 +126,12 @@ export default function LiveTicker() {
                 <>
                   <TrendingUp className="w-3.5 h-3.5 text-neon flex-shrink-0" />
                   <span className="text-neon">{alert.text}</span>
+                </>
+              )}
+              {alert.type === "news" && (
+                <>
+                  <Newspaper className="w-3.5 h-3.5 text-mercury/60 flex-shrink-0" />
+                  <span className="text-mercury">{alert.text}</span>
                 </>
               )}
               {alert.type === "live" && (
