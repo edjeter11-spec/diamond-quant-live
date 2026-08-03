@@ -1352,7 +1352,11 @@ export async function GET(req: Request) {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
-                "x-api-secret": process.env.BOT_API_SECRET ?? "",
+                // x-bot-secret, matching the bot's auth middleware and every
+                // other caller (post-results, publish-daily). This was
+                // x-api-secret, which the bot rejects with 401 — the alert
+                // would have silently never posted in production.
+                "x-bot-secret": process.env.BOT_API_SECRET ?? "",
               },
               body: JSON.stringify({ sport: "mlb", items: fresh }),
               signal: AbortSignal.timeout(15000),
