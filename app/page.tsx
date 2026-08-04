@@ -41,19 +41,12 @@ import { sendDiscordAlert } from "@/lib/odds/sportsbooks";
 import { getDiscordWebhook, setDiscordWebhook } from "@/lib/store";
 
 // Lazy-load heavy tabs — not needed on first paint
-const BotChallenge = lazy(() => import("@/components/dashboard/BotChallenge"));
 const PlayersTab = lazy(() => import("@/components/dashboard/PlayersTab"));
 const NRFITab = lazy(() => import("@/components/dashboard/NRFITab"));
 const DingersTab = lazy(() => import("@/components/dashboard/DingersTab"));
 const ArbBoard = lazy(() => import("@/components/dashboard/ArbBoard"));
 const NewsBoard = lazy(() => import("@/components/dashboard/NewsBoard"));
 const LiveBoard = lazy(() => import("@/components/dashboard/LiveBoard"));
-const ThreeModelBot = lazy(
-  () => import("@/components/dashboard/ThreeModelBot"),
-);
-const BrainViz = lazy(() => import("@/components/dashboard/BrainViz"));
-const ModelLogs = lazy(() => import("@/components/dashboard/ModelLogs"));
-const GhostBots = lazy(() => import("@/components/dashboard/GhostBots"));
 const UserProfile = lazy(() => import("@/components/auth/UserProfile"));
 
 function TabSkeleton() {
@@ -66,7 +59,6 @@ function TabSkeleton() {
   );
 }
 import {
-  Diamond,
   BarChart3,
   User,
   UserCircle,
@@ -543,16 +535,16 @@ export default function WarRoom() {
   };
 
   // Simplified to 4 tabs. Live / Props / Arbs / News all merge into Board.
-  // Bot tab is admin-only — the underlying pick-generation/learning engine
-  // still runs on its normal schedule and feeds picks elsewhere, but its
-  // own record/stats aren't public-facing yet (thin sample, mixes backtest
-  // and live numbers in ways a visitor could easily misread as a proven
-  // track record). Keep watching it internally; don't show it publicly.
+  // The Bot Challenge (and the model/brain internals that sat beside it) is
+  // no longer a dashboard tab at all — it lives at /admin/bot. The underlying
+  // pick-generation/learning engine still runs on its normal schedule and
+  // feeds picks elsewhere, but its own record/stats aren't public-facing
+  // (thin sample, mixes backtest and live numbers in ways a visitor could
+  // easily misread as a proven track record). Watch it internally instead.
   const tabs = [
     { key: "dashboard" as const, icon: BarChart3, label: "Board" },
     { key: "nrfi" as const, icon: Target, label: "NRFI" },
     { key: "dingers" as const, icon: Flame, label: "Dingers" },
-    ...(isAdmin ? [{ key: "bot" as const, icon: Diamond, label: "Bot" }] : []),
     { key: "players" as const, icon: Search, label: "Players" },
     { key: "profile" as const, icon: UserCircle, label: "Profile" },
   ];
@@ -1090,21 +1082,8 @@ export default function WarRoom() {
               </div>
             </div>
 
-            <div
-              className={`max-w-3xl mx-auto space-y-4 ${activeTab === "bot" && isAdmin ? "" : "hidden"}`}
-            >
-              <Suspense fallback={<TabSkeleton />}>
-                <BotChallenge />
-                {currentSport === "mlb" && isAdmin && (
-                  <>
-                    <ThreeModelBot />
-                    <BrainViz />
-                    <GhostBots />
-                    <ModelLogs />
-                  </>
-                )}
-              </Suspense>
-            </div>
+            {/* Bot Challenge + model internals moved to /admin/bot — see
+                the tabs list above. Nothing bot-related renders publicly. */}
 
             <div className={activeTab === "nrfi" ? "" : "hidden"}>
               <Suspense fallback={<TabSkeleton />}>

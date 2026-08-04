@@ -162,6 +162,12 @@ export default function AdminPage() {
           >
             Create Pick
           </Link>
+          <Link
+            href="/admin/bot"
+            className="text-xs bg-[#a855f7]/10 text-[#a855f7] border border-[#a855f7]/30 rounded-lg px-3 py-1.5 hover:bg-[#a855f7]/20 transition-colors"
+          >
+            Bot Challenge
+          </Link>
           <button
             onClick={loadData}
             className="p-2 rounded-lg hover:bg-[#121727] transition-colors"
