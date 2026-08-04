@@ -191,6 +191,8 @@ export async function enrichMlbProps(
       opponentOf: new Map(),
       slotByPlayer: new Map(),
       abbrevByName: new Map(),
+      parkByTeam: new Map(),
+      isHomeByTeam: new Map(),
     };
   }
 
@@ -258,8 +260,32 @@ export async function enrichMlbProps(
       matchupReasons = r.reasons;
     }
 
+    // Which club is this player on, and therefore which park is he hitting in
+    // tonight? bundle.teamAbbrev is usually empty (/people/search doesn't
+    // return currentTeam), so fall back to matching the prop's "Away @ Home"
+    // string against the slate. Whichever side has a starter indexed AGAINST
+    // it is this player's own team — that's how pitcherByTeam is keyed.
+    let ownAbbrev = bundle.teamAbbrev;
+    if (!ownAbbrev) {
+      for (const side of sides) {
+        const ab = slate.abbrevByName.get(side);
+        if (ab && slate.pitcherByTeam.has(ab)) {
+          ownAbbrev = ab;
+          break;
+        }
+      }
+    }
+    const parkAbbrev = ownAbbrev ? slate.parkByTeam.get(ownAbbrev) : undefined;
+    const isHome = ownAbbrev ? slate.isHomeByTeam.get(ownAbbrev) : undefined;
+
     const proj = projectProp({
       market: g.market,
+      // Park factor and home/away were already implemented in the projector
+      // and simply never supplied — every prop was scored as if played in a
+      // neutral park. Coors and Petco differ by ~25% on runs; that is not a
+      // rounding error on a hits or total-bases line.
+      parkAbbrev,
+      isHome,
       line: g.line,
       logs: bundle.logs,
       rateMultiplier: mult * slotMult,

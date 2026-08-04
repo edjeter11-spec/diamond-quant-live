@@ -130,11 +130,21 @@ export async function fetchSlateContext(dateISO: string): Promise<{
   slotByPlayer: Map<number, number>;
   /** Full club name ("Philadelphia Phillies") -> abbreviation ("PHI"). */
   abbrevByName: Map<string, string>;
+  /**
+   * Team abbrev -> the park they're playing in tonight, and whether they're
+   * home. prop-projector already accepts parkAbbrev and isHome and applies
+   * park factors to them — enrich-props just never passed either, so Coors
+   * and Petco were scored identically on every prop.
+   */
+  parkByTeam: Map<string, string>;
+  isHomeByTeam: Map<string, boolean>;
 }> {
   const pitcherByTeam = new Map<string, PitcherContext>();
   const opponentOf = new Map<string, string>();
   const slotByPlayer = new Map<number, number>();
   const abbrevByName = new Map<string, string>();
+  const parkByTeam = new Map<string, string>();
+  const isHomeByTeam = new Map<string, boolean>();
 
   const season = Number(dateISO.slice(0, 4));
   let games: any[] = [];
@@ -144,7 +154,14 @@ export async function fetchSlateContext(dateISO: string): Promise<{
     );
     games = d.dates?.[0]?.games ?? [];
   } catch {
-    return { pitcherByTeam, opponentOf, slotByPlayer, abbrevByName };
+    return {
+      pitcherByTeam,
+      opponentOf,
+      slotByPlayer,
+      abbrevByName,
+      parkByTeam,
+      isHomeByTeam,
+    };
   }
 
   const jobs: Promise<void>[] = [];
@@ -161,6 +178,18 @@ export async function fetchSlateContext(dateISO: string): Promise<{
     const awayName = g.teams?.away?.team?.name;
     if (homeName && home) abbrevByName.set(homeName, home);
     if (awayName && away) abbrevByName.set(awayName, away);
+
+    // Both clubs play in the HOME team's park — that's the whole point of a
+    // park factor, and keying it off each team's own abbrev (the obvious
+    // mistake) would score every road hitter in a park they aren't in.
+    if (home) {
+      parkByTeam.set(home, home);
+      isHomeByTeam.set(home, true);
+    }
+    if (away && home) {
+      parkByTeam.set(away, home);
+      isHomeByTeam.set(away, false);
+    }
 
     // Lineup slots — present only once a team posts, usually a few hours out.
     for (const [side, key] of [
@@ -212,7 +241,14 @@ export async function fetchSlateContext(dateISO: string): Promise<{
   }
 
   await Promise.all(jobs);
-  return { pitcherByTeam, opponentOf, slotByPlayer, abbrevByName };
+  return {
+    pitcherByTeam,
+    opponentOf,
+    slotByPlayer,
+    abbrevByName,
+    parkByTeam,
+    isHomeByTeam,
+  };
 }
 
 /**
