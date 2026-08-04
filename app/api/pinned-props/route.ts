@@ -223,13 +223,6 @@ interface PinnedBoard {
   // that looks like a loading failure.
   considered?: number;
   qualified?: number;
-  /** Why candidates were turned away — see `rejects` in the fill loop. */
-  rejects?: {
-    player: number;
-    unders: number;
-    market: number;
-    full: number;
-  };
 }
 
 function build(prop: any, side: "over" | "under"): PinnedProp | null {
@@ -432,31 +425,14 @@ export async function GET(req: NextRequest) {
     const perMarket = new Map<string, number>();
     let underCount = 0;
 
-    // Why candidates get rejected. A board that fills 2 of 3 slots off 28
-    // qualifying picks is a filter problem, and without this you're guessing
-    // which filter — I guessed wrong twice.
-    const rejects = { player: 0, unders: 0, market: 0, full: 0 };
-
     const tryTake = (p: PinnedProp, ignoreMarketCap = false): boolean => {
-      if (picks.length >= TARGET) {
-        rejects.full++;
-        return false;
-      }
+      if (picks.length >= TARGET) return false;
       // One pick per player, enforced here rather than at build time so a
       // player's best prop across ALL markets competes for the slot.
-      if (seenPlayer.has(p.playerName)) {
-        rejects.player++;
-        return false;
-      }
-      if (p.side === "under" && underCount >= MAX_UNDERS) {
-        rejects.unders++;
-        return false;
-      }
+      if (seenPlayer.has(p.playerName)) return false;
+      if (p.side === "under" && underCount >= MAX_UNDERS) return false;
       const used = perMarket.get(p.market) ?? 0;
-      if (!ignoreMarketCap && used >= MAX_PER_MARKET) {
-        rejects.market++;
-        return false;
-      }
+      if (!ignoreMarketCap && used >= MAX_PER_MARKET) return false;
       picks.push(p);
       seenPlayer.add(p.playerName);
       perMarket.set(p.market, used + 1);
@@ -490,7 +466,6 @@ export async function GET(req: NextRequest) {
       generatedAt: new Date().toISOString(),
       considered: consideredCount,
       qualified: overs.length + unders.length,
-      rejects,
     };
 
     // Pin whenever we actually priced props, even if none qualified: "we looked
