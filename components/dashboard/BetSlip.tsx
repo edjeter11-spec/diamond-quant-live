@@ -131,8 +131,10 @@ export default function BetSlip({ isOpen, onClose, prefill }: BetSlipProps) {
       />
 
       {/* Card — flex-shrink-0 so a tall slip scrolls rather than being
-          squashed by the flex parent. */}
-      <div className="relative w-full max-w-md my-auto flex-shrink-0 glass rounded-xl border border-slate/40 shadow-2xl animate-slide-up">
+          squashed by the flex parent. No my-auto: an auto block margin inside
+          a scroll container pushes content past where the scroller can reach,
+          stranding the bottom of the card. */}
+      <div className="relative w-full max-w-md mx-auto flex-shrink-0 glass rounded-xl border border-slate/40 shadow-2xl animate-slide-up">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate/40">
           <div className="flex items-center gap-2">

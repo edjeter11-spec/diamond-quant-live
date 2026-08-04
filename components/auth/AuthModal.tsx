@@ -98,11 +98,17 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
         onClick={onClose}
       />
 
-      {/* Modal — my-auto keeps it visually centred when it does fit.
+      {/* Modal.
           flex-shrink-0 stops the flex parent squashing it into a sliver when
           the content is taller than the remaining space; the parent scrolls
-          instead. */}
-      <div className="relative w-full max-w-sm my-auto flex-shrink-0 rounded-2xl bg-bunker border border-slate/30 shadow-2xl overflow-hidden animate-slide-up">
+          instead.
+          NOT my-auto: an auto block margin on a flex item inside a scroll
+          container centres the card by pushing it with margin the scroller
+          can't reach past. At 375x420 that left the bottom 31px of the form
+          permanently unreachable even after scrolling to the end. Vertical
+          centring is handled by sm:items-center on the parent, which only
+          applies when there's room for it. */}
+      <div className="relative w-full max-w-sm mx-auto flex-shrink-0 rounded-2xl bg-bunker border border-slate/30 shadow-2xl overflow-hidden animate-slide-up">
         {/* Header */}
         <div className="px-6 pt-6 pb-4 border-b border-slate/20">
           <div className="flex items-center justify-between">
