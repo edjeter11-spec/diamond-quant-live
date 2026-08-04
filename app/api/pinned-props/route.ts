@@ -37,7 +37,13 @@ export const dynamic = "force-dynamic";
 // value during the day, but within a window it is identical for every user.
 // ──────────────────────────────────────────────────────────
 
-const TARGET = 5; // pinned picks per day
+// 3, not 5.
+//
+// The 7-day props record was 54.6% and STILL -6.03 units — winning more than
+// half and losing money, because slots 4 and 5 were being filled with whatever
+// cleared a -8% floor rather than with plays worth publishing. Fewer picks at
+// better prices is the fix; a short board is a feature, not a gap.
+const TARGET = 3; // pinned picks per day
 
 // How many picks a non-subscriber receives. The rest are never serialised
 // into the response.
@@ -52,13 +58,19 @@ const REFRESH_HOURS = 3;
 
 // Minimum true EV (%) for a prop to reach the board.
 //
-// Deliberately permissive. fairProb is currently the de-vigged market
-// consensus, so EV here measures price against the market's own opinion — on a
-// normal slate every prop lands negative (2026-07-30: 620 priced sides, best
-// -0.3%, median -5.6%). A 0% floor would empty the board every day. Until a
-// real projection model gives an independent probability, this floor's job is
-// only to drop the worst-priced tail; ranking does the real work.
-const MIN_EV = -8;
+// Was -8, set back when fairProb was de-vigged MARKET consensus — comparing
+// the market to itself, which is negative by construction, so a permissive
+// floor was the only way to have a board at all.
+//
+// That reason is gone: props now carry an independent projection, so EV is a
+// real comparison and a negative number means we genuinely think the price is
+// bad. Publishing those was the mechanism behind 54.6% wins and -6.03 units.
+//
+// -2 rather than 0: at -110 the vig is ~4.5%, so demanding strictly positive
+// EV against our own model would empty the board most nights and pretend to a
+// precision the model doesn't have (+0.77% skill, not +10%). This clears the
+// genuinely bad prices without inventing certainty.
+const MIN_EV = -2;
 
 // Minimum win probability (%) for a prop to reach the board.
 //

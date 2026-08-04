@@ -168,6 +168,51 @@ export async function GET(req: NextRequest) {
         : ([...new Set(candidates.map((c) => c.day))].sort()[0] ?? today);
     const dayLabel = targetDay === today ? "Today" : "Tomorrow";
 
+    // ── Model-backed moneylines ──
+    //
+    // The game lines above come from evBets, whose fairProb is de-vigged
+    // MARKET consensus — the market compared to itself. The three-model
+    // engine (lib/bot/three-models.ts) produces an INDEPENDENT probability and
+    // backtests at 62% accuracy / +5.5% skill across 2024 and 2025, roughly 7x
+    // the prop model's edge. Those are the game lines worth a parlay slot.
+    //
+    // Deliberately additive: moneylines compete for slots on merit, they don't
+    // displace props, and nothing about the two records is merged — the
+    // moneyline model is still unproven forward (4 graded picks so far), so
+    // its performance stays separately tracked in bot_picks until it earns
+    // otherwise.
+    try {
+      const r = await fetch(`${baseUrl}/api/bot-analysis`, {
+        signal: AbortSignal.timeout(15000),
+      });
+      if (r.ok) {
+        const analyses = (await r.json())?.analyses ?? [];
+        const { generateSmartPicks } = await import("@/lib/bot/smart-picks");
+        for (const p of generateSmartPicks(analyses, 5000)) {
+          // Only the confident ones. The backtest's edge concentrates hard in
+          // the top band (81% correct at >=8pts of model edge); a coin-flip
+          // moneyline in a 3-leg parlay is just a way to lose the other two.
+          if (p.confidence === "LOW") continue;
+          if (!p.odds || Math.abs(p.odds) > 250) continue;
+          candidates.push({
+            id: `ml-${p.gameId ?? p.game}-${p.pick}`,
+            game: p.game,
+            pick: p.pick,
+            market: "moneyline",
+            odds: p.odds,
+            bookmaker: p.bookmaker ?? "",
+            evPercentage: p.evPercentage ?? 0,
+            fairProb: p.consensusProb ?? 50,
+            confidence: p.confidence ?? "MEDIUM",
+            commenceTime: undefined,
+            day: today,
+          } as Candidate);
+        }
+      }
+    } catch {
+      /* moneylines are a bonus — a failure here must not empty the parlay */
+    }
+
     let pool = candidates
       .filter((c) => c.day === targetDay)
       .filter(
