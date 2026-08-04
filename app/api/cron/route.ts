@@ -1470,6 +1470,19 @@ export async function GET(req: Request) {
       }
     }
 
+    // ── Heartbeat ──
+    // Last thing before returning, so it only records a run that got all the
+    // way through. On 2026-08-04 the cron stopped for ~24h because Vercel
+    // suspends scheduled functions on an overdue account — the site kept
+    // serving, every endpoint worked when called by hand, and the only symptom
+    // was a Discord post that never arrived. Nothing surfaced it. This does.
+    try {
+      await cloudSet("cron_heartbeat", {
+        at: new Date().toISOString(),
+        publishedToday: !!discordDaily.published,
+      });
+    } catch {}
+
     return NextResponse.json({
       ok: true,
       timestamp: new Date().toISOString(),
