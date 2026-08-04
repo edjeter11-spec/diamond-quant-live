@@ -107,16 +107,32 @@ export default function BetSlip({ isOpen, onClose, prefill }: BetSlipProps) {
     }, 1200);
   };
 
+  // Sized to the VISUAL viewport, not the layout one. `inset-0` stays the full
+  // page height on mobile even while the URL bar or keyboard is showing, so a
+  // centred modal ends up centred inside a box that runs off-screen. 100dvh
+  // tracks what's actually visible; items-start + overflow-y-auto keeps the
+  // whole slip reachable when it doesn't fit.
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Overlay */}
+    <div
+      className="fixed inset-x-0 top-0 z-50 flex items-start sm:items-center justify-center p-4 overflow-y-auto overscroll-contain"
+      style={{
+        height: "100dvh",
+        maxHeight: "100dvh",
+        paddingTop: "max(1rem, env(safe-area-inset-top))",
+        paddingBottom: "max(1rem, env(safe-area-inset-bottom))",
+      }}
+    >
+      {/* Overlay — `fixed`, not `absolute`. The parent is now only as tall as
+          the visible viewport, so an absolutely-positioned backdrop would stop
+          short of the page bottom and leave a tappable gap. */}
       <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        className="fixed inset-0 bg-black/60 backdrop-blur-sm"
         onClick={onClose}
       />
 
-      {/* Card */}
-      <div className="relative w-full max-w-md glass rounded-xl border border-slate/40 shadow-2xl animate-slide-up">
+      {/* Card — flex-shrink-0 so a tall slip scrolls rather than being
+          squashed by the flex parent. */}
+      <div className="relative w-full max-w-md my-auto flex-shrink-0 glass rounded-xl border border-slate/40 shadow-2xl animate-slide-up">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate/40">
           <div className="flex items-center gap-2">

@@ -69,16 +69,25 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
     setLoading(false);
   };
 
-  // Scrollable overlay. This was `flex items-center` with no scrolling, so on
-  // a short mobile viewport — especially once the keyboard opens — the modal
-  // was taller than the screen and got clipped at BOTH ends with no way to
-  // reach the buttons. `overflow-y-auto` + `items-start` (centering only when
-  // there's room, via `sm:items-center`) keeps every control reachable, and
-  // the safe-area padding clears the notch / home indicator.
+  // Scrollable overlay sized to the VISUAL viewport.
+  //
+  // `fixed inset-0` resolves against the LAYOUT viewport, which on mobile
+  // browsers stays the full page height even while the URL bar is showing or
+  // the keyboard is open. The overlay was therefore taller than the visible
+  // area and the modal centred inside a box that extended off-screen — so only
+  // a sliver of the sign-in form was reachable. `100dvh` tracks the actually
+  // visible height and shrinks when the keyboard appears.
+  //
+  // `items-start` + `overflow-y-auto` keeps every control reachable when the
+  // form is taller than the remaining space; sm:items-center restores
+  // centering on screens with room. Safe-area padding clears the notch and
+  // home indicator.
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start sm:items-center justify-center p-4 overflow-y-auto overscroll-contain"
+      className="fixed inset-x-0 top-0 z-50 flex items-start sm:items-center justify-center p-4 overflow-y-auto overscroll-contain"
       style={{
+        height: "100dvh",
+        maxHeight: "100dvh",
         paddingTop: "max(1rem, env(safe-area-inset-top))",
         paddingBottom: "max(1rem, env(safe-area-inset-bottom))",
       }}
@@ -89,8 +98,11 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
         onClick={onClose}
       />
 
-      {/* Modal — my-auto keeps it visually centred when it does fit */}
-      <div className="relative w-full max-w-sm my-auto rounded-2xl bg-bunker border border-slate/30 shadow-2xl overflow-hidden animate-slide-up">
+      {/* Modal — my-auto keeps it visually centred when it does fit.
+          flex-shrink-0 stops the flex parent squashing it into a sliver when
+          the content is taller than the remaining space; the parent scrolls
+          instead. */}
+      <div className="relative w-full max-w-sm my-auto flex-shrink-0 rounded-2xl bg-bunker border border-slate/30 shadow-2xl overflow-hidden animate-slide-up">
         {/* Header */}
         <div className="px-6 pt-6 pb-4 border-b border-slate/20">
           <div className="flex items-center justify-between">
