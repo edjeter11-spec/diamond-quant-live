@@ -25,6 +25,11 @@ const MLB_TEAM_IDS: Record<string, number> = {
   NYM: 121,
   NYY: 147,
   OAK: 133,
+  // The Athletics dropped their city prefix after leaving Oakland, so MLB and
+  // most feeds now emit "ATH" / "Athletics" with no city. Without this the
+  // abbrev lookup missed and the card fell back to an "ATH" text badge — the
+  // team logo that was visibly absent on the games rail.
+  ATH: 133,
   PHI: 143,
   PIT: 134,
   SD: 135,

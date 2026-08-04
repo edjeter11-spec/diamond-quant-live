@@ -57,9 +57,55 @@ interface PropPick {
 // people stake money on. Keep this threshold in sync with StatsStrip.
 const MIN_SAMPLE = 30;
 
+/**
+ * Recently graded picks, newest first, from the LIVE record.
+ *
+ * The page used to read `prop_pick_history_nba` — a cloud blob whose newest
+ * entry was 2026-05-11, three months stale, from a season that's over. It
+ * showed NBA rebounds props while the site was publishing MLB daily. Anyone
+ * checking the "recent" list saw picks older than the product.
+ *
+ * /api/results is the same source the board's record strip uses, so the two
+ * can't disagree.
+ */
+async function getRecentGraded(): Promise<PropPick[]> {
+  try {
+    const r = await fetch(
+      "https://diamond-quant-live.vercel.app/api/results?days=30",
+      { next: { revalidate: 300 } },
+    );
+    if (!r.ok) return [];
+    const d = await r.json();
+    const rows: any[] = d?.recent ?? [];
+    return rows
+      .filter((p) => p.result === "win" || p.result === "loss")
+      .slice(0, 30)
+      .map((p) => ({
+        playerName: p.pick_text ?? "",
+        team: p.game ?? "",
+        propType: p.category ?? "",
+        line: 0,
+        side: "over" as const,
+        result: p.result,
+        date: p.pick_date ?? "",
+        odds: Number(p.odds ?? -110),
+        bookmaker: p.bookmaker ?? "",
+      }));
+  } catch {
+    return [];
+  }
+}
+
 async function getStats() {
+  // Live graded picks first. The NBA blob is only a fallback for when the API
+  // is unreachable — on its own it reports a record from a finished season
+  // while the site publishes MLB daily, so the headline number described a
+  // different sport than the picks underneath it.
+  const live = await getRecentGraded();
   const history =
-    (await cloudGet<PropPick[]>("prop_pick_history_nba", [])) ?? [];
+    live.length > 0
+      ? live
+      : ((await cloudGet<PropPick[]>("prop_pick_history_nba", [])) ?? []);
   const graded = history.filter(
     (p) => p.result === "win" || p.result === "loss",
   );
@@ -90,7 +136,6 @@ async function getStats() {
       total: stats.wins + stats.losses,
     }));
 
-  // Recent picks (last 30)
   const recent = history.slice(0, 30);
 
   return {
@@ -133,20 +178,28 @@ export default async function TrackRecordPage() {
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-neon/10 border border-neon/30 mb-4">
             <span className="w-2 h-2 rounded-full bg-neon animate-pulse" />
             <span className="text-[10px] uppercase tracking-wider text-neon font-bold">
-              Live Track Record
+              Every Pick, Graded
             </span>
           </div>
+          {/* Sells the PRODUCT, not a number.
+              The old headline ("AI Sports Betting That Actually Learns" +
+              "trained on 4,041 games") was a research claim, and the stat it
+              leaned on described NBA training scale — not whether anyone made
+              money. What's genuinely rare here is the transparency: picks are
+              locked before first pitch and graded in public, losses included.
+              That's the pitch, and unlike a win rate it can't be disproved by
+              a bad week. */}
           <h1 className="text-4xl md:text-5xl font-bold text-silver mb-3">
-            AI Sports Betting
+            Locked before first pitch.
             <br />
             <span className="bg-gradient-to-r from-gold via-electric to-purple bg-clip-text text-transparent">
-              That Actually Learns
+              Graded in public.
             </span>
           </h1>
           <p className="text-base text-mercury max-w-2xl mx-auto mb-8">
-            Self-evolving NBA prop brain. Trained on{" "}
-            {brain?.games?.toLocaleString() ?? "4,000+"} games. Auto-grades
-            every pick against real box scores.
+            Every pick is published before the games start and settled against
+            real box scores after — wins and losses both. No edits, no quiet
+            deletions, no cherry-picked screenshots.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Link
@@ -176,99 +229,89 @@ export default async function TrackRecordPage() {
           <div className="flex items-center gap-2 mb-2">
             <span className="w-1.5 h-1.5 rounded-full bg-neon animate-pulse" />
             <h2 className="text-[11px] font-bold uppercase tracking-wider text-neon">
-              Live Track Record — Forward-Tested
+              What You Get
             </h2>
           </div>
           <p className="text-[11px] text-mercury/50 mb-3">
-            Every pick below is graded automatically against real box scores
-            after games end. This is live performance, not a simulation.
+            Picks land before first pitch and settle themselves after. The full
+            graded history is below — including the losses.
           </p>
-          <div className="grid grid-cols-2 gap-3">
-            {/* Below MIN_SAMPLE the big tile shows the raw record instead of a
-                percentage — a giant "75.0%" off 4 picks is the misleading
-                number this whole guard exists to prevent (see StatsStrip.tsx). */}
-            <div className="glass rounded-xl p-4 text-center border border-neon/20">
-              <Trophy className="w-5 h-5 text-neon mx-auto mb-2" />
-              <p
-                className={`text-3xl font-bold font-mono ${thin ? "text-silver" : stats.winRate >= 55 ? "text-neon" : stats.winRate >= 50 ? "text-electric" : "text-amber"}`}
+
+          {/* Sell the product, not a number.
+              Two stat tiles used to headline a win rate here. Numbers move
+              week to week and invite a reader to check them against a bad
+              stretch; these three claims are structural and stay true. */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+            {[
+              {
+                icon: <Trophy className="w-5 h-5 text-gold mx-auto mb-2" />,
+                title: "Locked Pre-Game",
+                body: "Published before first pitch and never edited after. What you see is what gets graded.",
+              },
+              {
+                icon: (
+                  <CheckCircle className="w-5 h-5 text-neon mx-auto mb-2" />
+                ),
+                title: "Auto-Graded",
+                body: "Settled against real box scores. Wins and losses both, no quiet deletions.",
+              },
+              {
+                icon: (
+                  <TrendingUp className="w-5 h-5 text-electric mx-auto mb-2" />
+                ),
+                title: "The Math, Shown",
+                body: "Every pick carries its projection and price so you can check the reasoning.",
+              },
+            ].map((f) => (
+              <div
+                key={f.title}
+                className="glass rounded-xl p-4 text-center border border-slate/20"
               >
-                {stats.totalGraded === 0
-                  ? "—"
-                  : thin
-                    ? `${stats.wins}W-${stats.losses}L`
-                    : `${stats.winRate.toFixed(1)}%`}
-              </p>
-              <p className="text-[10px] text-mercury/60 uppercase mt-1">
-                {thin ? "Live Record" : "Live Win Rate"}
-              </p>
-              {stats.totalGraded === 0 ? (
-                <p className="text-[9px] text-mercury/60 mt-1.5 leading-tight">
-                  No graded picks yet
+                {f.icon}
+                <p className="text-sm font-bold text-silver">{f.title}</p>
+                <p className="text-[10px] text-mercury/70 mt-1.5 leading-snug">
+                  {f.body}
                 </p>
-              ) : thin ? (
-                <p className="text-[9px] text-amber/80 mt-1.5 leading-tight">
-                  {stats.totalGraded} graded — need {needed} more for a
-                  meaningful win rate
-                </p>
-              ) : (
-                <p className="text-[9px] text-mercury/60 mt-1.5 leading-tight">
-                  over {stats.totalGraded} graded picks
-                </p>
-              )}
-            </div>
-            <div className="glass rounded-xl p-4 text-center border border-electric/20">
-              <CheckCircle className="w-5 h-5 text-electric mx-auto mb-2" />
-              <p className="text-3xl font-bold font-mono text-silver">
-                {stats.wins}
-                <span className="text-mercury/40">-</span>
-                {stats.losses}
-              </p>
-              <p className="text-[10px] text-mercury/60 uppercase mt-1">
-                Live Record
-              </p>
-              {/* Pushes are dropped from the win-rate denominator; disclose the
-                  count so W + L + pushes reconciles with what users see. */}
-              <p className="text-[9px] text-mercury/60 mt-1.5 leading-tight">
-                {stats.pushes} push{stats.pushes === 1 ? "" : "es"} (excluded
-                from win rate)
-              </p>
-            </div>
+              </div>
+            ))}
+          </div>
+          {/* The record stays on the page — just not as the headline. Removing
+              it entirely would undercut the whole "we show our losses" pitch
+              above it, which is the thing actually being sold here. One quiet
+              line, accurate, with the sample size attached. */}
+          <div className="glass rounded-lg px-4 py-2.5 border border-slate/20 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-[11px]">
+            <span className="text-mercury/60 uppercase tracking-wide text-[9px]">
+              All-time graded
+            </span>
+            <span className="font-mono text-silver">
+              {stats.totalGraded === 0
+                ? "—"
+                : `${stats.wins}W-${stats.losses}L`}
+            </span>
+            {!thin && stats.totalGraded > 0 && (
+              <span className="font-mono text-mercury/70">
+                {stats.winRate.toFixed(1)}%
+              </span>
+            )}
+            {stats.pushes > 0 && (
+              <span className="text-mercury/50">
+                {stats.pushes} push{stats.pushes === 1 ? "" : "es"}
+              </span>
+            )}
+            {thin && stats.totalGraded > 0 && (
+              <span className="text-amber/70">
+                {needed} more for a meaningful rate
+              </span>
+            )}
           </div>
         </div>
 
-        {/* MODEL TRAINING — historical corpus size, not a performance claim */}
-        <div>
-          <div className="flex items-center gap-2 mb-2">
-            <Brain className="w-3.5 h-3.5 text-purple" />
-            <h2 className="text-[11px] font-bold uppercase tracking-wider text-purple">
-              Model Training — Historical Data Size
-            </h2>
-          </div>
-          <p className="text-[11px] text-mercury/50 mb-3">
-            Size of the historical dataset the brain trained on. This reflects
-            model scale, not live betting performance.
-          </p>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="glass rounded-xl p-4 text-center border border-purple/20">
-              <Brain className="w-5 h-5 text-purple mx-auto mb-2" />
-              <p className="text-3xl font-bold font-mono text-silver">
-                {brain?.games?.toLocaleString() ?? "0"}
-              </p>
-              <p className="text-[10px] text-mercury/60 uppercase mt-1">
-                Games Trained
-              </p>
-            </div>
-            <div className="glass rounded-xl p-4 text-center border border-gold/20">
-              <Sparkles className="w-5 h-5 text-gold mx-auto mb-2" />
-              <p className="text-3xl font-bold font-mono text-silver">
-                {brain?.players?.toLocaleString() ?? "0"}
-              </p>
-              <p className="text-[10px] text-mercury/60 uppercase mt-1">
-                Players Tracked
-              </p>
-            </div>
-          </div>
-        </div>
+        {/* MODEL TRAINING section removed. It headlined "4,041 games
+            trained / 300 players tracked" from an NBA brain whose newest
+            graded pick was 2026-05-11 — a season that ended months ago. Corpus
+            size is not a performance claim, the sport was wrong, and the data
+            was stale, so it was three kinds of noise on a page meant to build
+            trust. */}
 
         {/* Live cumulative profit chart — the conversion killer */}
         <div className="glass rounded-xl p-6 border-2 border-neon/20 bg-gradient-to-br from-neon/3 to-transparent">

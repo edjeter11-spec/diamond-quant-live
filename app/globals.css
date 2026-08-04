@@ -208,7 +208,10 @@ select:focus-visible {
   }
   .ticker-content {
     display: inline-flex;
-    animation: ticker-scroll 40s linear infinite;
+    /* 40s was too fast to actually read a headline before it left the screen,
+       and the strip got longer when real news replaced the one-line
+       placeholder — same duration over more content means faster scroll. */
+    animation: ticker-scroll 110s linear infinite;
   }
   .ticker-content:hover {
     animation-play-state: paused;
