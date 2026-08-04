@@ -53,7 +53,12 @@ const TARGET = 3; // pinned picks per day
 // picks were one devtools Network tab away, so the paid tier gated nothing.
 // Truncating here is the only version of this that actually holds.
 const FREE_PICKS = 2;
-const MAX_UNDERS = 2; // keep the board Over-weighted, as before
+// Was 2, to keep the board Over-weighted for readability. That cap made sense
+// when fairProb was market devig and the sides were interchangeable noise; it
+// actively hurts now. On 2026-08-04, 24 of 28 qualifying sides were UNDERS and
+// the cap plus the over-bias tiebreak below reduced a 28-candidate slate to a
+// 2-pick board. Let the model pick the side it actually likes.
+const MAX_UNDERS = 3;
 const REFRESH_HOURS = 3;
 
 // Minimum true EV (%) for a prop to reach the board.
@@ -371,11 +376,19 @@ export async function GET(req: NextRequest) {
         const tryOver = build(prop, "over");
         const tryUnder = forceOver ? null : build(prop, "under");
 
-        // Over wins ties within 3 points — same bias the board always had.
+        // Take whichever side actually scores better.
+        //
+        // This used to spot the Over a 3-point handicap, from when fairProb was
+        // market devig and the two sides were interchangeable noise — a
+        // cosmetic preference for a board that reads as "overs". With a real
+        // projection behind it that handicap discards genuinely better picks:
+        // on 2026-08-04 it took an Over at +0.3% EV over an Under the model
+        // liked more, and combined with MAX_UNDERS left a 28-candidate slate
+        // producing 2 picks.
         const pickSide = forceOver
           ? "over"
           : tryOver && tryUnder
-            ? tryOver.score >= tryUnder.score - 3
+            ? tryOver.score >= tryUnder.score
               ? "over"
               : "under"
             : tryOver
