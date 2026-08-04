@@ -84,18 +84,22 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
   // home indicator.
   return (
     <div
-      // A BLOCK scroll container, not flex. Flex swallowed the child's
-      // margin-bottom when computing scrollHeight, so the scroll range came up
-      // ~6px short and the Sign In button stayed below the fold no matter how
-      // far you scrolled. In normal block flow the child's margin is part of
-      // the scrollable area, and a plain `py` on the container works too.
-      // Horizontal centring comes from mx-auto on the card.
-      className="fixed inset-x-0 top-0 z-50 block px-4 py-4 overflow-y-auto overscroll-contain"
+      // Block scroll container sized to the VISUAL viewport (100dvh), so it
+      // shrinks with the keyboard instead of resolving against the taller
+      // layout viewport.
+      //
+      // NOTE: no bottom padding here, and no margin on the card. Browsers
+      // exclude a scroll container's bottom padding from scrollHeight, and
+      // flex parents swallow a child's bottom margin the same way — measured
+      // at 375x420, both left maxScroll at 50 when 54 was needed, stranding
+      // the Sign In button 6px below the fold. The trailing gap is a real
+      // spacer element at the end of the content instead; a laid-out box
+      // always counts toward scrollHeight.
+      className="fixed inset-x-0 top-0 z-50 block px-4 overflow-y-auto overscroll-contain"
       style={{
         height: "100dvh",
         maxHeight: "100dvh",
         paddingTop: "max(1rem, env(safe-area-inset-top))",
-        paddingBottom: "max(1rem, env(safe-area-inset-bottom))",
       }}
     >
       {/* Backdrop */}
@@ -288,6 +292,15 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
           </div>
         )}
       </div>
+
+      {/* Trailing gap as a real element. Container bottom-padding and child
+          bottom-margin are both excluded from scrollHeight (verified at
+          375x420: maxScroll 50 where 54 was needed), which left the Sign In
+          button unreachable. A laid-out box always counts. */}
+      <div
+        aria-hidden
+        style={{ height: "max(1.25rem, env(safe-area-inset-bottom))" }}
+      />
     </div>
   );
 }
