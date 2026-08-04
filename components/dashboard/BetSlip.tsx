@@ -114,12 +114,11 @@ export default function BetSlip({ isOpen, onClose, prefill }: BetSlipProps) {
   // whole slip reachable when it doesn't fit.
   return (
     <div
-      className="fixed inset-x-0 top-0 z-50 flex items-start sm:items-center justify-center p-4 overflow-y-auto overscroll-contain"
+      className="fixed inset-x-0 top-0 z-50 flex items-start sm:items-center justify-center px-4 overflow-y-auto overscroll-contain"
       style={{
         height: "100dvh",
         maxHeight: "100dvh",
         paddingTop: "max(1rem, env(safe-area-inset-top))",
-        paddingBottom: "max(1rem, env(safe-area-inset-bottom))",
       }}
     >
       {/* Overlay — `fixed`, not `absolute`. The parent is now only as tall as
@@ -134,7 +133,13 @@ export default function BetSlip({ isOpen, onClose, prefill }: BetSlipProps) {
           squashed by the flex parent. No my-auto: an auto block margin inside
           a scroll container pushes content past where the scroller can reach,
           stranding the bottom of the card. */}
-      <div className="relative w-full max-w-md mx-auto flex-shrink-0 glass rounded-xl border border-slate/40 shadow-2xl animate-slide-up">
+      <div
+        className="relative w-full max-w-md mx-auto flex-shrink-0 glass rounded-xl border border-slate/40 shadow-2xl animate-slide-up"
+        // Bottom gap on the CARD: a scroll container's bottom padding is not
+        // part of its scrollHeight, so the last control ends up past the end
+        // of the scroll range and is unreachable.
+        style={{ marginBottom: "max(1rem, env(safe-area-inset-bottom))" }}
+      >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate/40">
           <div className="flex items-center gap-2">

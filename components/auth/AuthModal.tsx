@@ -84,12 +84,11 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
   // home indicator.
   return (
     <div
-      className="fixed inset-x-0 top-0 z-50 flex items-start sm:items-center justify-center p-4 overflow-y-auto overscroll-contain"
+      className="fixed inset-x-0 top-0 z-50 flex items-start sm:items-center justify-center px-4 overflow-y-auto overscroll-contain"
       style={{
         height: "100dvh",
         maxHeight: "100dvh",
         paddingTop: "max(1rem, env(safe-area-inset-top))",
-        paddingBottom: "max(1rem, env(safe-area-inset-bottom))",
       }}
     >
       {/* Backdrop */}
@@ -108,7 +107,16 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
           permanently unreachable even after scrolling to the end. Vertical
           centring is handled by sm:items-center on the parent, which only
           applies when there's room for it. */}
-      <div className="relative w-full max-w-sm mx-auto flex-shrink-0 rounded-2xl bg-bunker border border-slate/30 shadow-2xl overflow-hidden animate-slide-up">
+      <div
+        className="relative w-full max-w-sm mx-auto flex-shrink-0 rounded-2xl bg-bunker border border-slate/30 shadow-2xl overflow-hidden animate-slide-up"
+        // Bottom gap lives on the CARD, not as padding on the scroll
+        // container. A scroller's bottom padding is not part of its
+        // scrollHeight, so `pb-4` on the overlay left the final control 6px
+        // past the end of the scroll range — the Sign In button itself was
+        // unreachable at 375x420. As a margin on the scrolled child it's
+        // included, so the button clears the fold.
+        style={{ marginBottom: "max(1rem, env(safe-area-inset-bottom))" }}
+      >
         {/* Header */}
         <div className="px-6 pt-6 pb-4 border-b border-slate/20">
           <div className="flex items-center justify-between">
