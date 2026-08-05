@@ -184,15 +184,22 @@ export async function GET(req: NextRequest) {
     //
     // The game lines above come from evBets, whose fairProb is de-vigged
     // MARKET consensus — the market compared to itself. The three-model
-    // engine (lib/bot/three-models.ts) produces an INDEPENDENT probability and
-    // backtests at 62% accuracy / +5.5% skill across 2024 and 2025, roughly 7x
-    // the prop model's edge. Those are the game lines worth a parlay slot.
+    // engine (lib/bot/three-models.ts) produces an independent probability,
+    // now Platt-recalibrated (CAL_A 2.7548 -> 1.2949) after the 449-pick
+    // priced backfill showed the old constant running 6-13 points hot in
+    // every confidence band (scripts/refit-calibration.mts). That backfill's
+    // honest result: 55.0% accuracy, -7.69% ROI overall, and even the
+    // highest-confidence band (62% accuracy) still lost money at -1.09% —
+    // the model agrees with the market exactly where the market is already
+    // right. There is no found edge in the moneyline model itself; see
+    // scripts/divergence-backtest.mts. Its only proven value is the sharp
+    // Pinnacle-anchor scanner (/api/edge-scan), which is unrelated to this
+    // code path.
     //
     // Deliberately additive: moneylines compete for slots on merit, they don't
     // displace props, and nothing about the two records is merged — the
-    // moneyline model is still unproven forward (4 graded picks so far), so
-    // its performance stays separately tracked in bot_picks until it earns
-    // otherwise.
+    // moneyline model's forward performance stays separately tracked in
+    // bot_picks and graded via /api/clv-report rather than assumed.
     try {
       const r = await fetch(`${baseUrl}/api/bot-analysis`, {
         signal: AbortSignal.timeout(15000),
@@ -201,9 +208,8 @@ export async function GET(req: NextRequest) {
         const analyses = (await r.json())?.analyses ?? [];
         const { generateSmartPicks } = await import("@/lib/bot/smart-picks");
         for (const p of generateSmartPicks(analyses, 5000)) {
-          // Only the confident ones. The backtest's edge concentrates hard in
-          // the top band (81% correct at >=8pts of model edge); a coin-flip
-          // moneyline in a 3-leg parlay is just a way to lose the other two.
+          // Only the confident ones — LOW-confidence coin flips just add
+          // variance without evidence of edge (see note above).
           if (p.confidence === "LOW") continue;
           if (!p.odds || Math.abs(p.odds) > 250) continue;
           candidates.push({
