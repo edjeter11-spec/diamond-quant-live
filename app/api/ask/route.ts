@@ -67,9 +67,17 @@ export async function GET(req: NextRequest) {
   const wantedMarket = inferMarket(query);
 
   // Strip the market words so "Bryce Harper hit" searches for the player.
+  // Multi-word phrases first — "go yard" has to be stripped as a unit, or the
+  // single-word pass leaves "yard" behind and the name search fails. That's
+  // exactly how "does Shohei Ohtani go yard tonight" ended up searching for
+  // "Shohei Ohtani go yard" and finding nobody.
   const nameGuess = query
     .replace(
-      /\b(is|are|does|will|get|gets|getting|a|an|the|to|hit|hits|home\s?run|hr|rbi|rbis|run|runs|total bases?|tb|strikeouts?|ks?|outs?|today|tonight|over|under|favou?red|likely|odds|chance)\b/gi,
+      /\b(go\s+yard|going\s+yard|total\s+bases?|home\s?runs?|strike\s?outs?|punch\s?outs?)\b/gi,
+      " ",
+    )
+    .replace(
+      /\b(is|are|does|do|will|can|should|get|gets|getting|got|a|an|the|to|for|on|tonight|today|hit|hits|hitting|dinger|dingers|hr|rbi|rbis|run|runs|score|scores|tb|bases|ks?|outs?|innings?|over|under|favou?red|favorite|likely|odds|chance|chances|prop|line|bet|play|thoughts?|about|what|how|think)\b/gi,
       " ",
     )
     .replace(/[?.!,]/g, " ")
