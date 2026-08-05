@@ -1479,7 +1479,15 @@ export async function GET(req: Request) {
     try {
       await cloudSet("cron_heartbeat", {
         at: new Date().toISOString(),
-        publishedToday: !!discordDaily.published,
+        // `!!discordDaily.published` was true for ANY response, including
+        // {ok:false} — so the heartbeat reported publishedToday:true on
+        // 2026-08-05 while nothing reached Discord at all. Report the two
+        // states that actually differ: did it post, or was it already done.
+        publishedToday:
+          discordDaily.published?.props?.posted === true ||
+          discordDaily.published?.parlay?.posted === true ||
+          discordDaily.published?.alreadyPublished === true,
+        publishDetail: discordDaily.published ?? null,
       });
     } catch {}
 
