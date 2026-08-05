@@ -34,6 +34,7 @@ export default function EdgeScanner() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [scannedAt, setScannedAt] = useState<string | null>(null);
+  const [clv, setClv] = useState<any>(null);
 
   const scan = useCallback(async () => {
     setLoading(true);
@@ -60,9 +61,13 @@ export default function EdgeScanner() {
   }, []);
 
   // Costs 2 Odds API credits per scan, so scan on mount and on demand — no
-  // auto-refresh loop.
+  // auto-refresh loop. The CLV report is free (reads a Supabase log).
   useEffect(() => {
     scan();
+    fetch("/api/clv-report")
+      .then((r) => r.json())
+      .then((d) => d?.ok && setClv(d))
+      .catch(() => {});
   }, [scan]);
 
   return (
@@ -138,6 +143,40 @@ export default function EdgeScanner() {
           );
         })}
       </div>
+
+      {/* CLV scoreboard — whether alerted prices held value to Pinnacle's
+          close. This is the panel's report card: ~50 closed alerts tells us
+          if the scanner is real, long before win/loss could. */}
+      {clv && clv.totalAlerts > 0 && (
+        <div className="mt-3 pt-3 border-t border-[#232a3d]/40">
+          <p className="text-[10px] text-[#8e9ab5] font-mono mb-1">
+            CLV — {clv.closed} closed · {clv.pending} pending
+            {clv.missed > 0 && ` · ${clv.missed} missed`}
+          </p>
+          {clv.closed > 0 ? (
+            <p className="text-[11px] text-[#e6eaf4]">
+              <span
+                className={
+                  (clv.avgCloseEv ?? 0) > 0
+                    ? "text-[#4ade80] font-bold"
+                    : "text-[#ff5c7a] font-bold"
+                }
+              >
+                {clv.beatClosePct}% beat the close
+              </span>{" "}
+              · avg EV at alert +{clv.avgAlertEv}% → at close{" "}
+              {(clv.avgCloseEv ?? 0) >= 0 ? "+" : ""}
+              {clv.avgCloseEv}%
+            </p>
+          ) : (
+            <p className="text-[11px] text-[#8e9ab5] italic">
+              No alerts have closed yet — closers snapshot on the last scan
+              before first pitch.
+            </p>
+          )}
+          <p className="text-[10px] text-[#8e9ab5] mt-0.5">{clv.verdict}</p>
+        </div>
+      )}
     </div>
   );
 }

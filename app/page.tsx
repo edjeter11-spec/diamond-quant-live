@@ -649,7 +649,7 @@ export default function WarRoom() {
             </div>
             {/* Wordmark shows on mobile too — it was `hidden sm:block`, which
                 left the phone header with just an unlabelled logo tile. The
-                "MLB INTELLIGENCE" subtitle stays desktop-only so the mobile
+                "SPORTS INTELLIGENCE" subtitle stays desktop-only so the mobile
                 header doesn't crowd the sport switcher. */}
             <div className="min-w-0">
               <h1 className="text-sm sm:text-lg font-extrabold text-silver tracking-tight leading-tight whitespace-nowrap">
@@ -661,7 +661,7 @@ export default function WarRoom() {
                 </span>
               </h1>
               <p className="hidden sm:block text-[10px] text-mercury/60 -mt-0.5 font-mono tracking-wider">
-                {currentSport.toUpperCase()} INTELLIGENCE
+                SPORTS INTELLIGENCE
               </p>
             </div>
             {/* Sport Switcher — segmented pill, thumb-sized targets */}

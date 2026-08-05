@@ -1464,11 +1464,16 @@ export async function GET(req: Request) {
       // is usually gone by the time anyone taps the notification. Deduped per
       // (game, side, book) per day like the line alerts above.
       try {
-        const es = await fetch(`${origin}/api/edge-scan?minEv=2`, {
+        // all=1 → every game's current Pinnacle fair prob rides along, which
+        // the CLV tracker below uses to snapshot closers. Same 2 credits.
+        const es = await fetch(`${origin}/api/edge-scan?minEv=2&all=1`, {
           signal: AbortSignal.timeout(20000),
         });
         const esData = await es.json();
         const edges: any[] = Array.isArray(esData?.edges) ? esData.edges : [];
+        const anchors: any[] = Array.isArray(esData?.anchors)
+          ? esData.anchors
+          : [];
         if (edges.length > 0) {
           const edgeKey = `edge_alerts_${etDateString()}`;
           const seenE = new Set((await cloudGet<string[]>(edgeKey, [])) ?? []);
@@ -1501,11 +1506,117 @@ export async function GET(req: Request) {
                 ...seenE,
                 ...freshE.map((e) => `${e.gameId}|${e.side}|${e.book}`),
               ]);
+              // Log every SENT alert for CLV grading below. The alert price
+              // is the entry price; the last Pinnacle fair before first pitch
+              // is the closer.
+              const log = (await cloudGet<any[]>("edge_clv_log", [])) ?? [];
+              for (const e of freshE)
+                log.push({
+                  id: `${e.gameId}|${e.side}|${e.book}`,
+                  at: new Date().toISOString(),
+                  commence: e.commence,
+                  game: e.game,
+                  side: e.side,
+                  book: e.book,
+                  price: e.decimalPrice,
+                  alertEv: e.evPct,
+                  alertFair: e.fairProb,
+                });
+              await cloudSet("edge_clv_log", log.slice(-300));
+            }
+          }
+        }
+
+        // ── CLV capture ──
+        // The scoreboard that tells us within ~50 alerts whether the scanner
+        // has a real edge, instead of waiting 1,000 bets for win/loss to
+        // converge. For every logged alert whose game starts within the next
+        // 40 minutes (i.e. this is the final scan before first pitch), record
+        // Pinnacle's CURRENT fair prob as the closer and re-price the alert:
+        //   closeEv = closingFair × alertPrice − 1
+        // closeEv > 0 = we beat the close = the alert was real. A game that
+        // already started with no capture is marked missed, not dropped —
+        // silently losing the failures would bias the scoreboard upward.
+        try {
+          const log = (await cloudGet<any[]>("edge_clv_log", [])) ?? [];
+          const now = Date.now();
+          let dirty = false;
+          const anchorById = new Map(anchors.map((a: any) => [a.gameId, a]));
+          for (const entry of log) {
+            if (entry.close || entry.missed) continue;
+            const start = Date.parse(entry.commence);
+            if (!Number.isFinite(start)) continue;
+            if (start - now > 40 * 60 * 1000) continue; // not closing yet
+            const anchor = anchorById.get(entry.id.split("|")[0]);
+            const fair = anchor?.fair?.[entry.side];
+            if (typeof fair === "number") {
+              entry.close = {
+                fair,
+                ev:
+                  Math.round((fair / 100) * entry.price * 10000 - 10000) / 100,
+                at: new Date().toISOString(),
+              };
+              dirty = true;
+            } else if (now > start) {
+              entry.missed = true; // started before we caught a closer
+              dirty = true;
+            }
+          }
+          if (dirty) await cloudSet("edge_clv_log", log);
+        } catch {
+          // CLV is bookkeeping — never let it break the alert path.
+        }
+      } catch (e) {
+        discordDaily.edgeAlerts = { ok: false, error: String(e) };
+      }
+
+      // ── Star-sitting lineup alerts ──
+      // Confirmed lineups drop 2-4h before first pitch; a top-of-the-order
+      // regular missing is the news soft books lag on. Deduped per
+      // (game, player) per day — a sitting star stays sat all afternoon.
+      try {
+        const lw = await fetch(`${origin}/api/lineup-watch`, {
+          signal: AbortSignal.timeout(30000),
+        });
+        const lwData = await lw.json();
+        const sits: any[] = Array.isArray(lwData?.alerts) ? lwData.alerts : [];
+        if (sits.length > 0) {
+          const sitKey = `lineup_alerts_${etDateString()}`;
+          const seenS = new Set((await cloudGet<string[]>(sitKey, [])) ?? []);
+          const freshS = sits.filter(
+            (s) => !seenS.has(`${s.gamePk}|${s.playerId}`),
+          );
+          if (freshS.length > 0) {
+            const r = await fetch(`${process.env.BOT_API_URL}/alert`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "x-bot-secret": process.env.BOT_API_SECRET ?? "",
+              },
+              body: JSON.stringify({
+                sport: "mlb",
+                items: freshS.map((s) => ({
+                  game_id: String(s.gamePk),
+                  bookmaker: "lineup",
+                  market: "h2h",
+                  game: s.game,
+                  ourLine: `${s.player} SITTING`,
+                  note: `${s.note} — check the line before the book moves it`,
+                })),
+              }),
+              signal: AbortSignal.timeout(15000),
+            });
+            discordDaily.lineupAlerts = { sent: r.ok, count: freshS.length };
+            if (r.ok) {
+              await cloudSet(sitKey, [
+                ...seenS,
+                ...freshS.map((s) => `${s.gamePk}|${s.playerId}`),
+              ]);
             }
           }
         }
       } catch (e) {
-        discordDaily.edgeAlerts = { ok: false, error: String(e) };
+        discordDaily.lineupAlerts = { ok: false, error: String(e) };
       }
 
       // Recap yesterday's slate once it's fully final.

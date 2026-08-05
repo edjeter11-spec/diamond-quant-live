@@ -86,6 +86,11 @@ export async function GET(req: NextRequest) {
   // Below ~1.5% the morning-vs-now line noise swamps the signal; default
   // conservative and let the admin page loosen it.
   const minEv = Number(searchParams.get("minEv") ?? 1.5);
+  // all=1 → also return Pinnacle's fair prob for EVERY anchored game, not
+  // just the ones with an edge. The CLV tracker needs this: a closing price
+  // is captured for alerts whose edge has since evaporated, which is exactly
+  // the case that must be recorded honestly rather than dropped.
+  const wantAll = searchParams.get("all") === "1";
 
   const apiKey = getApiKey();
   if (!apiKey)
@@ -119,6 +124,7 @@ export async function GET(req: NextRequest) {
 
   const softById = new Map(soft.map((g) => [g.id, g]));
   const edges: any[] = [];
+  const anchors: any[] = [];
   let anchored = 0;
 
   for (const game of sharp) {
@@ -134,6 +140,16 @@ export async function GET(req: NextRequest) {
       [game.home_team]: fairHome,
       [game.away_team]: fairAway,
     };
+    if (wantAll)
+      anchors.push({
+        gameId: game.id,
+        commence: game.commence_time,
+        game: `${game.away_team} @ ${game.home_team}`,
+        fair: {
+          [game.home_team]: Math.round(fairHome * 1000) / 10,
+          [game.away_team]: Math.round(fairAway * 1000) / 10,
+        },
+      });
 
     const usGame = softById.get(game.id);
     if (!usGame) continue;
@@ -178,6 +194,7 @@ export async function GET(req: NextRequest) {
     minEv,
     gamesAnchored: anchored,
     edges,
+    ...(wantAll ? { anchors } : {}),
     note:
       edges.length === 0
         ? "No US book currently beats Pinnacle's fair price by the threshold. Normal — edges appear and vanish in minutes; scan again near lineup-confirmation time."
