@@ -1619,6 +1619,67 @@ export async function GET(req: Request) {
         discordDaily.lineupAlerts = { ok: false, error: String(e) };
       }
 
+      // ── Props CLV capture ──
+      // Mirrors the moneyline CLV block above. For every logged pick whose
+      // game starts within the next 40 minutes, fetch that market fresh and
+      // record the CURRENT consensus fair prob as the closer. Missed (game
+      // already started, never captured) is recorded rather than dropped —
+      // silently excluding failures would flatter the average.
+      try {
+        const log = (await cloudGet<any[]>("props_clv_log", [])) ?? [];
+        const now = Date.now();
+        const dueSoon = log.filter((e) => {
+          if (e.close || e.missed) return false;
+          return true; // gameTime isn't logged on the entry; resolve via a fresh fetch below
+        });
+        if (dueSoon.length > 0) {
+          const marketsNeeded = [
+            ...new Set(dueSoon.map((e) => e.market as string)),
+          ];
+          const freshByMarket = new Map<string, any[]>();
+          for (const m of marketsNeeded) {
+            const r = await fetch(
+              `${origin}/api/players?sport=baseball_mlb&market=${m}`,
+              { signal: AbortSignal.timeout(20000) },
+            );
+            const d = await r.json().catch(() => null);
+            freshByMarket.set(m, Array.isArray(d?.props) ? d.props : []);
+          }
+
+          let dirty = false;
+          for (const entry of log) {
+            if (entry.close || entry.missed) continue;
+            const props = freshByMarket.get(entry.market) ?? [];
+            const match = props.find(
+              (p: any) =>
+                String(p.playerName).toLowerCase() ===
+                  String(entry.playerName).toLowerCase() &&
+                Number(p.line) === Number(entry.line),
+            );
+            if (!match) continue; // not found this pass — try again next tick
+            const start = match.gameTime ? Date.parse(match.gameTime) : NaN;
+            const closeFair =
+              entry.side === "over" ? match.fairOverProb : match.fairUnderProb;
+            if (Number.isFinite(start) && start - now <= 40 * 60 * 1000) {
+              if (typeof closeFair === "number") {
+                entry.closeFairProb = closeFair;
+                entry.close = { at: new Date().toISOString() };
+                dirty = true;
+              } else if (now > start) {
+                entry.missed = true;
+                dirty = true;
+              }
+            } else if (Number.isFinite(start) && now > start) {
+              entry.missed = true; // game started, never caught a closer
+              dirty = true;
+            }
+          }
+          if (dirty) await cloudSet("props_clv_log", log);
+        }
+      } catch (e) {
+        discordDaily.propsClv = { ok: false, error: String(e) };
+      }
+
       // Recap yesterday's slate once it's fully final.
       try {
         const r = await fetch(`${origin}/api/post-results?sport=mlb`, {

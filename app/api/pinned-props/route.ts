@@ -372,6 +372,19 @@ export async function GET(req: NextRequest) {
     // Coast opener (verified across 11:00-22:00 first pitches).
     const lockedWindow = Math.floor(firstPitchHourET / REFRESH_HOURS) - 1;
     if (windowIdx > lockedWindow) windowIdx = Math.max(0, lockedWindow);
+
+    // Don't PIN before lineups have had a chance to confirm.
+    //
+    // Confirmed lineups post 2-4h before first pitch, and prop consensus
+    // sharpens through the day as more money and information hits the
+    // market — a board built at 10am on a 7pm slate is pricing against a
+    // soft, lineup-blind number. Floor the window to first-pitch-minus-3h so
+    // the earliest possible pin already has lineups in view. This only
+    // DELAYS which window gets pinned; it never un-freezes a board that's
+    // already locked above.
+    const earliestWindow = Math.floor((firstPitchHourET - 3) / REFRESH_HOURS);
+    if (windowIdx < earliestWindow)
+      windowIdx = Math.min(lockedWindow, Math.max(0, earliestWindow));
   }
   // v2: bumped when MLB projections landed. A board pinned by the previous
   // deploy was built from market-devig probabilities, so without this bump it
@@ -534,6 +547,39 @@ export async function GET(req: NextRequest) {
     // (considered === 0, i.e. upstream fetch failure) is left unpinned so the
     // next request retries.
     if (consideredCount > 0) await cloudSet(cacheKey, board);
+
+    // Log each newly-pinned pick for CLV grading — the real accuracy metric.
+    // marketFair at post time is the entry price; /api/cron snapshots the
+    // SAME player+market+line's consensus again right before first pitch as
+    // the closer. If our picks consistently beat the close, the board has
+    // real predictive value independent of win/loss (which needs ~1000 picks
+    // to resolve instead of ~50). Only logs on the FIRST time a pick is
+    // pinned (new cacheKey write), so re-fetches of an already-built window
+    // don't duplicate entries.
+    if (consideredCount > 0 && board.picks.length > 0) {
+      try {
+        const clvLog = (await cloudGet<any[]>("props_clv_log", [])) ?? [];
+        const existingIds = new Set(clvLog.map((e) => e.id));
+        for (const p of board.picks) {
+          const id = `${today}|${p.key}`;
+          if (existingIds.has(id)) continue;
+          clvLog.push({
+            id,
+            postedAt: new Date().toISOString(),
+            playerName: p.playerName,
+            market: p.market,
+            side: p.side,
+            line: p.line,
+            entryFairProb: p.fairProb,
+            entryOdds: p.odds,
+            entryBook: p.bookmaker,
+          });
+        }
+        await cloudSet("props_clv_log", clvLog.slice(-500));
+      } catch {
+        // CLV logging is bookkeeping — never let it break the board response.
+      }
+    }
 
     return NextResponse.json({
       ok: true,

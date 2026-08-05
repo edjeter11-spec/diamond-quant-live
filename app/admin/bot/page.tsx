@@ -17,6 +17,9 @@ const BrainViz = lazy(() => import("@/components/dashboard/BrainViz"));
 const ModelLogs = lazy(() => import("@/components/dashboard/ModelLogs"));
 const GhostBots = lazy(() => import("@/components/dashboard/GhostBots"));
 const EdgeScanner = lazy(() => import("@/components/dashboard/EdgeScanner"));
+const PropsClvPanel = lazy(
+  () => import("@/components/dashboard/PropsClvPanel"),
+);
 
 function PanelSkeleton() {
   return (
@@ -125,6 +128,7 @@ export default function AdminBotPage() {
             {/* First panel on purpose: the only +EV source here that doesn't
                 depend on the in-house model being right. */}
             {currentSport === "mlb" && <EdgeScanner />}
+            {currentSport === "mlb" && <PropsClvPanel />}
             <BotChallenge />
             {currentSport === "mlb" && (
               <>
