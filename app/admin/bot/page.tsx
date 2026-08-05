@@ -16,6 +16,7 @@ const ThreeModelBot = lazy(
 const BrainViz = lazy(() => import("@/components/dashboard/BrainViz"));
 const ModelLogs = lazy(() => import("@/components/dashboard/ModelLogs"));
 const GhostBots = lazy(() => import("@/components/dashboard/GhostBots"));
+const EdgeScanner = lazy(() => import("@/components/dashboard/EdgeScanner"));
 
 function PanelSkeleton() {
   return (
@@ -121,6 +122,9 @@ export default function AdminBotPage() {
 
         <div className="space-y-4">
           <Suspense fallback={<PanelSkeleton />}>
+            {/* First panel on purpose: the only +EV source here that doesn't
+                depend on the in-house model being right. */}
+            {currentSport === "mlb" && <EdgeScanner />}
             <BotChallenge />
             {currentSport === "mlb" && (
               <>

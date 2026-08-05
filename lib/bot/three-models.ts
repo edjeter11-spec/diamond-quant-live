@@ -747,11 +747,25 @@ async function runEloPowerModel(
 // CONSENSUS ENGINE — combines 3 models
 // ══════════════════════════════════════════════════════════
 
-// Platt scaling parameters, fitted on the 2024 season and validated on 2025.
-// Re-fit with scripts/fit-calibration.mts if the model changes.
-const CAL_A = 2.7548;
+// Platt scaling parameters.
+//
+// HISTORY: originally 2.7548, fitted on 2024 and validated on 2025 — that fit
+// said the raw blend was underconfident and needed sharpening. The 449-pick
+// live-replay backfill (2025-26, priced with real moneylines) showed the
+// OPPOSITE at the output end: stored picks ran 6-13 points hot in every band
+// (model said 62.4%, reality 49.6%; Brier 0.2544 — worse than a coin flip).
+// Refitting Platt on those 434 priced rows gives a correction slope of 0.4701
+// on the stored prob, which composes with the old constant to
+// 0.4701 × 2.7548 = 1.2949. See scripts/refit-calibration.mts.
+//
+// Blend-scan on the same data: best weight for the model vs the de-vigged
+// market was w=0.20 — the model carries almost nothing beyond the market, so
+// its probabilities must at minimum stop overriding the market with fake
+// confidence. This shrink does that.
+const CAL_A = 1.2949;
 
-// Intercept forced to 0, NOT the -0.0890 the fit produced.
+// Intercept forced to 0, NOT the fitted value (-0.0890 on the 2024 fit,
+// -0.0649 on the 2026 refit — both small, both discarded for the same reason).
 //
 // That fitted intercept mapped a coin-flip game to 47.8% home — i.e. it
 // asserted a lean toward AWAY teams. Home teams actually won 52.6% (2024) and
@@ -787,18 +801,10 @@ function buildConsensus(
     market.homeWinProb * marketWeight +
     trend.homeWinProb * trendWeight;
 
-  // Platt-scaled calibration.
-  //
-  // The raw blend ranks games well but its NUMBERS are wrong — badly
-  // underconfident. Backtested walk-forward over 2025: when it said 65%, teams
-  // actually won 87%. That matters because EV and Kelly staking both consume
-  // this probability directly, so every stake it sized was wrong.
-  //
-  // Fitted on 2024 (a=2.7548, b=-0.0890), validated on held-out 2025:
-  // Brier 0.2351 -> 0.2261, a 3.82% improvement, with buckets that now track
-  // (55%->55%, 65%->60%, 75%->80%). Fitting and testing on the same season
-  // would only have measured memorisation, so the two are deliberately split.
-  // See scripts/fit-calibration.mts to re-fit.
+  // Platt-scaled calibration. EV and Kelly staking consume this probability
+  // directly, so its NUMBER matters, not just its ranking. The constant's
+  // history (2.7548 → 1.2949 after the priced 449-pick replay showed the
+  // output running 6-13 points hot) is documented at CAL_A above.
   const prob = calibrate(rawProb);
 
   // Disagreement = standard deviation of the 3 predictions

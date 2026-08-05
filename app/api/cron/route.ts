@@ -1457,6 +1457,57 @@ export async function GET(req: Request) {
         discordDaily.lineAlerts = { ok: false, error: String(e) };
       }
 
+      // ── Sharp-anchor edges (Pinnacle vs US books) ──
+      // The highest-conviction alert we have: a US book beating Pinnacle's
+      // de-vigged fair price is +EV by definition, no model involved. Costs 2
+      // Odds API credits per cron tick. Threshold 2% — below that, the edge
+      // is usually gone by the time anyone taps the notification. Deduped per
+      // (game, side, book) per day like the line alerts above.
+      try {
+        const es = await fetch(`${origin}/api/edge-scan?minEv=2`, {
+          signal: AbortSignal.timeout(20000),
+        });
+        const esData = await es.json();
+        const edges: any[] = Array.isArray(esData?.edges) ? esData.edges : [];
+        if (edges.length > 0) {
+          const edgeKey = `edge_alerts_${etDateString()}`;
+          const seenE = new Set((await cloudGet<string[]>(edgeKey, [])) ?? []);
+          const freshE = edges.filter(
+            (e) => !seenE.has(`${e.gameId}|${e.side}|${e.book}`),
+          );
+          if (freshE.length > 0) {
+            const r = await fetch(`${process.env.BOT_API_URL}/alert`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "x-bot-secret": process.env.BOT_API_SECRET ?? "",
+              },
+              body: JSON.stringify({
+                sport: "mlb",
+                items: freshE.map((e) => ({
+                  game_id: e.gameId,
+                  bookmaker: e.book,
+                  market: "h2h",
+                  game: e.game,
+                  ourLine: `${e.side} ${e.price > 0 ? "+" : ""}${e.price}`,
+                  note: `+${e.evPct}% EV vs Pinnacle fair ${e.fairProb}% (Pin ${e.pinnaclePrice > 0 ? "+" : ""}${e.pinnaclePrice})`,
+                })),
+              }),
+              signal: AbortSignal.timeout(15000),
+            });
+            discordDaily.edgeAlerts = { sent: r.ok, count: freshE.length };
+            if (r.ok) {
+              await cloudSet(edgeKey, [
+                ...seenE,
+                ...freshE.map((e) => `${e.gameId}|${e.side}|${e.book}`),
+              ]);
+            }
+          }
+        }
+      } catch (e) {
+        discordDaily.edgeAlerts = { ok: false, error: String(e) };
+      }
+
       // Recap yesterday's slate once it's fully final.
       try {
         const r = await fetch(`${origin}/api/post-results?sport=mlb`, {
