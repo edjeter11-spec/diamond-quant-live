@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/server-auth";
+import { cloudGet } from "@/lib/supabase/client";
 import { etDateString } from "@/lib/sports-date";
 import {
   fetchFinalGames,
@@ -183,6 +184,40 @@ async function recapBatch(
     );
 
     if (!g) {
+      // Distinguish "not final yet" from "will never grade".
+      //
+      // gradeMlbProp returns null both for a game still in progress AND for a
+      // player who never entered a game that has already ended — a scratch, a
+      // late lineup change, a pitcher who didn't take the mound. Treating both
+      // as "wait" meant one scratched player held the entire recap forever:
+      // the slate was complete, every other leg was settled, and the post just
+      // never came.
+      //
+      // If the player's game is FINAL and there's still no line for him, the
+      // pick can't be graded and never will be. That's a void, which is how a
+      // sportsbook treats a scratch too — stake back, excluded from the record
+      // rather than counted as a loss.
+      const gameFinal = allLines.length > 0;
+      if (gameFinal && p.player_name) {
+        const played = allLines.some(
+          (l) =>
+            l.name.toLowerCase().trim() ===
+            String(p.player_name).toLowerCase().trim(),
+        );
+        if (!played) {
+          await supabaseAdmin!
+            .from("manual_picks")
+            .update({
+              result: "void",
+              settled_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", p.id)
+            .is("result", null);
+          graded.push({ text: p.pick_text, result: "void" });
+          continue;
+        }
+      }
       ungraded++;
       continue;
     }
@@ -253,6 +288,15 @@ async function recapBatch(
         sport,
         dateLabel,
         title,
+        // Echoed back on a sweep so the recap can show the exact slip that
+        // cashed — see buildResultsEmbed. Same key the admin panel writes.
+        betslip_url:
+          (
+            await cloudGet<{ url?: string } | null>(
+              `playbook_link_${sport}_${slate}`,
+              null,
+            )
+          )?.url ?? undefined,
         legs: graded,
         unitsNet: Math.round(unitsNet * 100) / 100,
       }),
