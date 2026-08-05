@@ -84,10 +84,30 @@ export async function GET(req: NextRequest) {
     .replace(/\s+/g, " ")
     .trim();
 
-  const search = await j(
-    `${SITE}/api/mlb-player-search?q=${encodeURIComponent(nameGuess || query)}`,
-  );
-  const player = search?.results?.[0];
+  // Chasing filler words with an ever-growing blocklist is a losing game —
+  // "whats the line on Kyle Schwarber" still failed after two passes. Instead,
+  // try the cleaned string, then progressively drop leading words. A real name
+  // is almost always the LAST 1-2 words of a question, so this converges fast
+  // and doesn't care what phrasing someone invents.
+  const words = (nameGuess || query).split(/\s+/).filter(Boolean);
+  const attempts: string[] = [];
+  if (nameGuess) attempts.push(nameGuess);
+  for (let i = 1; i < words.length && i <= 4; i++)
+    attempts.push(words.slice(i).join(" "));
+  if (words.length >= 2) attempts.push(words.slice(-2).join(" "));
+  if (words.length >= 1) attempts.push(words[words.length - 1]);
+
+  let player: any = null;
+  for (const attempt of attempts) {
+    if (attempt.trim().length < 3) continue;
+    const search = await j(
+      `${SITE}/api/mlb-player-search?q=${encodeURIComponent(attempt)}`,
+    );
+    if (search?.results?.[0]) {
+      player = search.results[0];
+      break;
+    }
+  }
   if (!player?.id)
     return NextResponse.json({
       ok: false,
