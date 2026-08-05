@@ -206,6 +206,11 @@ interface PinnedProp {
   bookmaker: string;
   fairProb: number;
   evPercentage: number;
+  /** EV of this same price against the de-vigged BOOK CONSENSUS rather than
+   *  our projection — i.e. is the price off-market, independent of our model? */
+  marketEv: number;
+  /** marketEv > 0. Model-independent evidence of value. */
+  beatsMarket: boolean;
   score: number;
   label: string;
   usesBrain: boolean;
@@ -243,6 +248,33 @@ function build(prop: any, side: "over" | "under"): PinnedProp | null {
   // real EV is the same correction already applied in /api/parlay-today.
   const implied = americanImplied(best.price) * 100;
   const ev = ((fair / 100) * americanToDecimal(best.price) - 1) * 100;
+
+  // Price-vs-market check — the lesson from the moneyline backtest, applied
+  // to props.
+  //
+  // That backtest showed our model's probability, on its own, is not evidence
+  // of value: it ran 6-13 points hot, and picks where the model "found edge"
+  // by disagreeing with the market lost money in every bucket. The props
+  // record says the same thing from the other direction — 54.6% winners but
+  // -6.03u, i.e. right players, wrong prices.
+  //
+  // marketEv re-prices the same bet using the DE-VIGGED CONSENSUS of the books
+  // instead of our projection. It answers: is this price off-market, or does
+  // it only look good because our model says so?
+  //
+  //   marketEv > 0  → the book we're taking is offering better than the rest
+  //                   of the market. Real, model-independent value.
+  //   marketEv < 0  → every book agrees this price is bad, and the only thing
+  //                   claiming +EV is us.
+  //
+  // Kept as a field rather than a hard filter: MIN_EV still governs what makes
+  // the board, and `score` now demotes model-only picks instead of banning
+  // them. A hard cut here would empty the board on days when no book is off
+  // consensus, which is most days.
+  const marketEv =
+    ((marketFair / 100) * americanToDecimal(best.price) - 1) * 100;
+  const beatsMarket = marketEv > 0;
+
   return {
     key: `${prop.market}-${prop.playerName}-${side}`,
     playerName: prop.playerName,
@@ -255,11 +287,21 @@ function build(prop: any, side: "over" | "under"): PinnedProp | null {
     bookmaker: best.bookmaker,
     fairProb: Math.round(fair * 10) / 10,
     evPercentage: Math.round(ev * 10) / 10,
+    marketEv: Math.round(marketEv * 10) / 10,
+    beatsMarket,
     // Rank on EV. The small probability term is a tie-breaker only (0.05/pt, so
     // a full 20-point probability gap moves score by 1.0) — enough to prefer the
     // likelier of two equally-priced plays without letting probability dominate
     // price the way it used to.
-    score: ev + (fair - 50) * 0.05 + (usesBrain ? 0.5 : 0),
+    //
+    // The +1.5 for beating consensus is the biggest non-EV term by design: a
+    // price that's off-market is evidence from outside our model, and the
+    // backtest was unambiguous that outside evidence is worth more than our
+    // own confidence. It's a thumb on the scale, not a veto — enough to break
+    // ties toward genuinely off-market prices and push model-only picks down
+    // the board.
+    score:
+      ev + (fair - 50) * 0.05 + (usesBrain ? 0.5 : 0) + (beatsMarket ? 1.5 : 0),
     label: MARKET_LABEL[prop.market] ?? prop.market,
     usesBrain,
     projectedValue: prop.brainProjectedValue,

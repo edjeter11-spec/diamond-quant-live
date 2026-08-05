@@ -13,6 +13,9 @@ interface ParlayLeg {
   bookmaker: string;
   evPercentage: number;
   fairProb: number;
+  /** This book's price beats the de-vigged consensus of the others — value
+   *  that holds regardless of whether our projection is right. */
+  beatsMarket?: boolean;
   confidence: string;
   commenceTime?: string;
   dayLabel?: string;
@@ -46,7 +49,11 @@ function etDateOf(iso: string): string {
   return etDateString(new Date(iso));
 }
 
-function scorePick(p: { confidence: string; evPercentage?: number }): number {
+function scorePick(p: {
+  confidence: string;
+  evPercentage?: number;
+  beatsMarket?: boolean;
+}): number {
   const confScore =
     p.confidence === "HIGH"
       ? 3
@@ -55,7 +62,12 @@ function scorePick(p: { confidence: string; evPercentage?: number }): number {
         : p.confidence === "LOW"
           ? 1
           : 0;
-  return confScore * 5 + (p.evPercentage ?? 0);
+  // beatsMarket bonus: this leg's book is offering better than the de-vigged
+  // consensus of the others. Weighted heavier here than on the props board
+  // (2.0 vs 1.5) because parlay legs MULTIPLY — a leg taken at a below-market
+  // price doesn't just cost its own edge, it drags the whole ticket, and the
+  // props record (54.6% winners, -6.03u) is what losing on price looks like.
+  return confScore * 5 + (p.evPercentage ?? 0) + (p.beatsMarket ? 2 : 0);
 }
 
 function formatAmerican(odds: number): string {
@@ -280,6 +292,18 @@ export async function GET(req: NextRequest) {
             const decPayout = americanToDecimalOdds(best.price);
             const evPct = (topProb / 100) * decPayout - 1;
             const evPercentage = Math.round(evPct * 100 * 10) / 10;
+
+            // Is the book we're taking actually off-market, or is this price
+            // just the least-bad of a uniformly bad set?
+            //
+            // fairOverProb/fairUnderProb are the DE-VIGGED CONSENSUS across
+            // books, so `evPct > 0` here means this specific book pays more
+            // than the market's own fair price for the same outcome — value
+            // that doesn't depend on any projection being right. When it's
+            // <= 0, every book agrees the price is bad. Given the props
+            // record is 54.6% winners at -6.03u, that distinction is the one
+            // that was missing.
+            const beatsMarket = evPct > 0;
             // NOT filtered to positive-EV only. Against real vigged MLB prop
             // prices, most days have nothing genuinely +EV — filtering to
             // ev > 0 left the parlay empty almost every day. Instead every
@@ -296,6 +320,7 @@ export async function GET(req: NextRequest) {
               odds: best.price,
               bookmaker: best.bookmaker,
               evPercentage,
+              beatsMarket,
               fairProb: topProb,
               // Confidence still tracks likelihood (how safe the leg is);
               // evPercentage tracks value. scorePick weighs both.
