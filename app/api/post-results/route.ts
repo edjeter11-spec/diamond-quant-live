@@ -2,12 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/server-auth";
 import { cloudGet } from "@/lib/supabase/client";
 import { etDateString } from "@/lib/sports-date";
-import {
-  fetchFinalGames,
-  fetchGamePlayerLines,
-  gradeMlbProp,
-  type PlayerLine,
-} from "@/lib/mlb/prop-grader";
+import * as mlbGrader from "@/lib/mlb/prop-grader";
+import * as nbaGrader from "@/lib/nba/prop-grader";
+import * as nflGrader from "@/lib/nfl/prop-grader";
 import { americanToDecimal } from "@/lib/model/kelly";
 
 export const dynamic = "force-dynamic";
@@ -23,7 +20,50 @@ export const maxDuration = 60;
 // slate is graded. Posting a partial recap while games are live would show a
 // losing record that later turns into a winning one, which is worse than
 // posting nothing.
+//
+// Sport dispatch: each sport supplies its own box-score source and grading
+// function behind a common shape ({fetchFinalGames, fetchGamePlayerLines,
+// gradeProp}) — see lib/mlb/prop-grader.ts, lib/nba/prop-grader.ts,
+// lib/nfl/prop-grader.ts. The recap-posting/Discord/claim-dedup logic below
+// is sport-agnostic and shared by all three.
 // ──────────────────────────────────────────────────────────
+
+type PlayerLine =
+  mlbGrader.PlayerLine | nbaGrader.PlayerLine | nflGrader.PlayerLine;
+
+interface SportGrader {
+  fetchFinalGames(
+    dateISO: string,
+  ): Promise<Array<{ home: string; away: string; [k: string]: any }>>;
+  fetchGamePlayerLines(gameId: any): Promise<PlayerLine[]>;
+  gradeProp(
+    pick: {
+      playerName: string;
+      market: string;
+      line: number;
+      side: "over" | "under";
+    },
+    lines: PlayerLine[],
+  ): any;
+}
+
+const GRADERS: Record<string, SportGrader> = {
+  mlb: {
+    fetchFinalGames: mlbGrader.fetchFinalGames,
+    fetchGamePlayerLines: (g: any) => mlbGrader.fetchGamePlayerLines(g.gamePk),
+    gradeProp: mlbGrader.gradeMlbProp,
+  } as any,
+  nba: {
+    fetchFinalGames: nbaGrader.fetchFinalGames,
+    fetchGamePlayerLines: (g: any) => nbaGrader.fetchGamePlayerLines(g.gameId),
+    gradeProp: nbaGrader.gradeNbaProp,
+  } as any,
+  nfl: {
+    fetchFinalGames: nflGrader.fetchFinalGames,
+    fetchGamePlayerLines: (g: any) => nflGrader.fetchGamePlayerLines(g.gameId),
+    gradeProp: nflGrader.gradeNflProp,
+  } as any,
+};
 
 const BOT_API_URL = process.env.BOT_API_URL || "";
 const BOT_API_SECRET = process.env.BOT_API_SECRET || "";
@@ -58,10 +98,11 @@ export async function POST(req: NextRequest) {
   const slate = searchParams.get("slate") ?? previousSlate();
   const force = searchParams.get("force") === "true";
 
-  if (sport !== "mlb")
+  const grader = GRADERS[sport];
+  if (!grader)
     return NextResponse.json({
       ok: false,
-      error: "Only MLB grading is implemented",
+      error: `Grading not implemented for sport "${sport}"`,
     });
 
   // Pull that slate's published picks.
@@ -84,7 +125,7 @@ export async function POST(req: NextRequest) {
     });
 
   // Box scores for every final game on that slate.
-  const finals = await fetchFinalGames(slate);
+  const finals = await grader.fetchFinalGames(slate);
   if (finals.length === 0)
     return NextResponse.json({
       ok: true,
@@ -93,7 +134,7 @@ export async function POST(req: NextRequest) {
 
   const allLines: PlayerLine[] = [];
   for (const g of finals) {
-    allLines.push(...(await fetchGamePlayerLines(g.gamePk)));
+    allLines.push(...(await grader.fetchGamePlayerLines(g)));
   }
   if (allLines.length === 0)
     return NextResponse.json({ ok: true, message: "Box scores unavailable" });
@@ -111,7 +152,15 @@ export async function POST(req: NextRequest) {
   const results: any[] = [];
   for (const [batchKey, batchPicks] of batches) {
     results.push(
-      await recapBatch(batchKey, batchPicks, allLines, slate, sport, force),
+      await recapBatch(
+        batchKey,
+        batchPicks,
+        allLines,
+        slate,
+        sport,
+        force,
+        grader,
+      ),
     );
   }
 
@@ -128,6 +177,7 @@ async function recapBatch(
   slate: string,
   sport: string,
   force: boolean,
+  grader: SportGrader,
 ): Promise<any> {
   const recapKey = `recap_posted_${batchKey}`;
   if (!force) {
@@ -173,7 +223,7 @@ async function recapBatch(
       continue;
     }
 
-    const g = gradeMlbProp(
+    const g = grader.gradeProp(
       {
         playerName: p.player_name,
         market: p.market_key,
@@ -186,7 +236,7 @@ async function recapBatch(
     if (!g) {
       // Distinguish "not final yet" from "will never grade".
       //
-      // gradeMlbProp returns null both for a game still in progress AND for a
+      // gradeProp returns null both for a game still in progress AND for a
       // player who never entered a game that has already ended — a scratch, a
       // late lineup change, a pitcher who didn't take the mound. Treating both
       // as "wait" meant one scratched player held the entire recap forever:

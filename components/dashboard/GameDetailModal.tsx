@@ -11,6 +11,8 @@ import {
 } from "lucide-react";
 import TeamLogo from "@/components/ui/TeamLogo";
 import { useStore } from "@/lib/store";
+import { useSport } from "@/lib/sport-context";
+import PitcherMatchup from "./PitcherMatchup";
 
 interface GameDetailModalProps {
   gameId: string;
@@ -37,6 +39,7 @@ export default function GameDetailModal({
   onAddToParlay,
 }: GameDetailModalProps) {
   const { oddsData, scores, addParlayLeg } = useStore();
+  const { currentSport } = useSport();
 
   const gameOdds = oddsData.find((g: any) => g.id === gameId);
   const gameScore = scores.find((s: any) => s.id === gameId);
@@ -208,6 +211,16 @@ export default function GameDetailModal({
         </div>
 
         <div className="px-4 sm:px-6 py-4 space-y-5">
+          {/* Section 0 — Starting Pitchers (MLB only) */}
+          {currentSport === "mlb" && (
+            <PitcherMatchup
+              homeAbbrev={homeAbbrev}
+              awayAbbrev={awayAbbrev}
+              homeTeam={homeTeam}
+              awayTeam={awayTeam}
+            />
+          )}
+
           {/* Section 1 — Model Consensus */}
           {(homeWinProb !== null || consensus) && (
             <section>

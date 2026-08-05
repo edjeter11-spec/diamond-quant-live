@@ -24,7 +24,7 @@ interface ParlayLeg {
 }
 
 interface PinnedParlay {
-  sport: "nba" | "mlb";
+  sport: "nba" | "mlb" | "nfl";
   date: string; // ET date: YYYY-MM-DD
   legs: ParlayLeg[];
   totalOdds: number;
@@ -109,9 +109,10 @@ const MAX_PROP_LEG_ODDS = 400;
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const sport = (searchParams.get("sport") ?? "mlb").toLowerCase() as
-    "nba" | "mlb";
+    "nba" | "mlb" | "nfl";
   const force = searchParams.get("force") === "true";
   const isNBA = sport === "nba";
+  const isNFL = sport === "nfl";
   const today = etDateString();
   const cacheKey = `parlay_today_${sport}_${today}`;
 
@@ -133,7 +134,11 @@ export async function GET(req: NextRequest) {
       process.env.NODE_ENV === "development"
         ? req.nextUrl.origin
         : "https://diamond-quant-live.vercel.app";
-    const sportKey = isNBA ? "basketball_nba" : "baseball_mlb";
+    const sportKey = isNBA
+      ? "basketball_nba"
+      : isNFL
+        ? "americanfootball_nfl"
+        : "baseball_mlb";
 
     // Fetch odds (contains evBets with confidence/EV). When the odds source
     // is empty (Odds API exhausted), we fall through to the player-prop
@@ -250,20 +255,32 @@ export async function GET(req: NextRequest) {
           { key: "player_rebounds", label: "Rebounds" },
           { key: "player_assists", label: "Assists" },
         ]
-      : [
-          // Widened from 3 markets to the full MLB catalog. Previously only
-          // Ks / Hits / Total Bases were even fetched, so "best value today"
-          // could never be an RBI, run, steal or HR prop no matter how the
-          // model priced it.
-          { key: "pitcher_strikeouts", label: "Ks" },
-          { key: "batter_hits", label: "Hits" },
-          { key: "batter_total_bases", label: "Total Bases" },
-          { key: "batter_home_runs", label: "HR" },
-          { key: "batter_rbis", label: "RBIs" },
-          { key: "batter_runs_scored", label: "Runs" },
-          { key: "batter_stolen_bases", label: "Steals" },
-          { key: "pitcher_outs", label: "Outs" },
-        ];
+      : isNFL
+        ? [
+            // Attempt-count markets (player_pass_attempts, player_rush_attempts)
+            // are deliberately left off — same curation call as pinned-props:
+            // yards/TDs/receptions read better than attempt totals for a
+            // "best value today" pick.
+            { key: "player_pass_yds", label: "Pass Yds" },
+            { key: "player_pass_tds", label: "Pass TDs" },
+            { key: "player_rush_yds", label: "Rush Yds" },
+            { key: "player_receptions", label: "Receptions" },
+            { key: "player_reception_yds", label: "Rec Yds" },
+          ]
+        : [
+            // Widened from 3 markets to the full MLB catalog. Previously only
+            // Ks / Hits / Total Bases were even fetched, so "best value today"
+            // could never be an RBI, run, steal or HR prop no matter how the
+            // model priced it.
+            { key: "pitcher_strikeouts", label: "Ks" },
+            { key: "batter_hits", label: "Hits" },
+            { key: "batter_total_bases", label: "Total Bases" },
+            { key: "batter_home_runs", label: "HR" },
+            { key: "batter_rbis", label: "RBIs" },
+            { key: "batter_runs_scored", label: "Runs" },
+            { key: "batter_stolen_bases", label: "Steals" },
+            { key: "pitcher_outs", label: "Outs" },
+          ];
     await Promise.all(
       markets.map(async ({ key, label }) => {
         try {

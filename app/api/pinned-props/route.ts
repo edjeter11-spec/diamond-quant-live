@@ -124,6 +124,11 @@ const MARKET_LABEL: Record<string, string> = {
   player_points: "Points",
   player_rebounds: "Rebounds",
   player_assists: "Assists",
+  player_pass_yds: "Pass Yds",
+  player_pass_tds: "Pass TDs",
+  player_rush_yds: "Rush Yds",
+  player_receptions: "Receptions",
+  player_reception_yds: "Rec Yds",
 };
 
 const MLB_MARKETS = [
@@ -135,6 +140,18 @@ const MLB_MARKETS = [
   "batter_runs_scored",
 ];
 const NBA_MARKETS = ["player_points", "player_rebounds", "player_assists"];
+// Attempt-count markets (player_pass_attempts, player_rush_attempts) are
+// deliberately left off this public board. They're live on The Odds API and
+// nfl-prop-projector.ts already prices them, but "Over 24.5 Pass Attempts" is
+// a worse read for a casual visitor than yards/TDs/receptions — a curation
+// choice, not a gap.
+const NFL_MARKETS = [
+  "player_pass_yds",
+  "player_pass_tds",
+  "player_rush_yds",
+  "player_receptions",
+  "player_reception_yds",
+];
 
 function americanImplied(odds: number): number {
   return odds > 0 ? 100 / (odds + 100) : -odds / (-odds + 100);
@@ -331,6 +348,7 @@ export async function GET(req: NextRequest) {
   const sport = (searchParams.get("sport") ?? "mlb").toLowerCase();
   const force = searchParams.get("force") === "true";
   const isNBA = sport === "nba";
+  const isNFL = sport === "nfl";
   const today = etDateString();
 
   // Resolved server-side from user_profiles. An unauthenticated or free user
@@ -359,7 +377,14 @@ export async function GET(req: NextRequest) {
   // first pitch is the board that gets graded — which is also the only version
   // of a track record that means anything.
   let windowIdx = Math.floor(hourET / REFRESH_HOURS);
-  const firstPitchHourET = await getFirstPitchHourET(isNBA ? "nba" : "mlb");
+  // getFirstPitchHourET returns null for anything other than "mlb", which
+  // falls through to the plain rolling REFRESH_HOURS window below — the same
+  // fallback NBA already runs on. NFL games are Sun/Mon/Thu rather than
+  // daily, but that's exactly the "no freeze" case this null already covers;
+  // nothing about the freeze logic needs to change for a third sport.
+  const firstPitchHourET = await getFirstPitchHourET(
+    isNBA ? "nba" : isNFL ? "nfl" : "mlb",
+  );
   if (firstPitchHourET !== null) {
     // The last window that ENDS at or before first pitch — the last one lying
     // entirely in pre-game time.
@@ -408,8 +433,12 @@ export async function GET(req: NextRequest) {
       process.env.NODE_ENV === "development"
         ? req.nextUrl.origin
         : "https://diamond-quant-live.vercel.app";
-    const sportKey = isNBA ? "basketball_nba" : "baseball_mlb";
-    const markets = isNBA ? NBA_MARKETS : MLB_MARKETS;
+    const sportKey = isNBA
+      ? "basketball_nba"
+      : isNFL
+        ? "americanfootball_nfl"
+        : "baseball_mlb";
+    const markets = isNBA ? NBA_MARKETS : isNFL ? NFL_MARKETS : MLB_MARKETS;
 
     const overs: PinnedProp[] = [];
     const unders: PinnedProp[] = [];

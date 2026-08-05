@@ -10,6 +10,14 @@ import { projectProp } from "@/lib/bot/nba-prop-projector";
 import { cloudGet, cloudSet } from "@/lib/supabase/client";
 import { teamNameToAbbrev } from "@/lib/logos";
 import { getFreeEvents } from "@/lib/odds/free-events";
+import { loadNFLPropBrainFromCloud } from "@/lib/bot/nfl-prop-brain";
+import { projectNFLProp } from "@/lib/bot/nfl-prop-projector";
+import { NFL_STAR_FALLBACK } from "@/lib/nfl/star-fallback";
+import { getNFLGameWeather } from "@/lib/nfl/weather";
+import { computeNFLRest } from "@/lib/nfl/rest-days";
+import { fetchNFLInjuries, getNFLTeamInjuries } from "@/lib/nfl/injuries";
+import { getNFLTeamRating } from "@/lib/nfl/team-ratings";
+import { getNFLTeamAbbrev } from "@/lib/nfl/teams";
 
 export const revalidate = 600;
 export const maxDuration = 30;
@@ -33,8 +41,20 @@ const NBA_PROP_MARKETS = [
   "player_pra",
 ];
 
+const NFL_PROP_MARKETS = [
+  "player_pass_yds",
+  "player_pass_tds",
+  "player_pass_attempts",
+  "player_rush_yds",
+  "player_rush_attempts",
+  "player_receptions",
+  "player_reception_yds",
+];
+
 function marketsFor(sport: string): string[] {
-  return sport === "basketball_nba" ? NBA_PROP_MARKETS : MLB_PROP_MARKETS;
+  if (sport === "basketball_nba") return NBA_PROP_MARKETS;
+  if (sport === "americanfootball_nfl") return NFL_PROP_MARKETS;
+  return MLB_PROP_MARKETS;
 }
 
 // Back-compat alias used by older fallback paths in this file
@@ -103,6 +123,7 @@ export async function GET(req: Request) {
   let sport = searchParams.get("sport") || "baseball_mlb";
   // Normalize sport strings: "nba" → "basketball_nba"
   if (sport === "nba") sport = "basketball_nba";
+  if (sport === "nfl") sport = "americanfootball_nfl";
 
   // Check server cache (keyed by sport + market)
   //
@@ -438,6 +459,166 @@ export async function GET(req: Request) {
       } catch (e) {
         console.error(
           "NBA prop augmentation failed:",
+          e instanceof Error ? e.message : e,
+        );
+      }
+    }
+
+    // Augment NFL props with an independent projection from the NFL prop
+    // brain (lib/bot/nfl-prop-brain.ts + nfl-prop-projector.ts). Mirrors the
+    // NBA block above: same field names (brainSide/brainOverProb/etc) so
+    // downstream code (pinned-props) consumes NFL identically to MLB/NBA.
+    //
+    // Player matching: the Odds API gives us prop.playerName as a full name
+    // ("Patrick Mahomes") and prop.team as "Away @ Home" full team names.
+    // NFL_STAR_FALLBACK only carries season-average baselines (no live
+    // per-game box scores), so unlike NBA we match by name against that
+    // fallback list rather than a live per-player stats API. Bench players
+    // without a fallback entry are left untouched — same "skip gracefully"
+    // pattern as MLB/NBA.
+    if (sport === "americanfootball_nfl" && grouped.length > 0) {
+      try {
+        const brain = await loadNFLPropBrainFromCloud().catch(() => null);
+        const weights = brain?.weights;
+
+        const augmentTargets = grouped.slice(0, 30);
+
+        // Build a case-insensitive name -> star lookup once.
+        const starByName = new Map<
+          string,
+          (typeof NFL_STAR_FALLBACK)[number]
+        >();
+        for (const star of NFL_STAR_FALLBACK) {
+          starByName.set(star.playerName.toLowerCase(), star);
+        }
+
+        // Collect every team abbrev appearing across the augment targets so
+        // we only fetch weather/rest/injuries/pace once per team, not once
+        // per prop.
+        const teamAbbrevs = new Set<string>();
+        for (const g of augmentTargets) {
+          const teamStr: string = g.team ?? "";
+          const atIdx = teamStr.indexOf(" @ ");
+          const awayName = atIdx >= 0 ? teamStr.slice(0, atIdx) : "";
+          const homeName = atIdx >= 0 ? teamStr.slice(atIdx + 3) : "";
+          const awayAbbrev = getNFLTeamAbbrev(awayName);
+          const homeAbbrev = getNFLTeamAbbrev(homeName);
+          if (awayAbbrev) teamAbbrevs.add(awayAbbrev);
+          if (homeAbbrev) teamAbbrevs.add(homeAbbrev);
+        }
+
+        // Batch fetch weather (keyed by home team) + injuries per team,
+        // in parallel. Injuries share one ESPN fetch (fetchNFLInjuries is
+        // internally cached), so this is cheap even with several teams.
+        const weatherCache = new Map<
+          string,
+          Awaited<ReturnType<typeof getNFLGameWeather>>
+        >();
+        const injuryCache = new Map<
+          string,
+          Awaited<ReturnType<typeof getNFLTeamInjuries>>
+        >();
+        await Promise.all([
+          Promise.all(
+            [...teamAbbrevs].map((abbrev) =>
+              getNFLGameWeather(abbrev)
+                .then((w) => weatherCache.set(abbrev, w))
+                .catch(() => weatherCache.set(abbrev, null)),
+            ),
+          ),
+          Promise.all(
+            [...teamAbbrevs].map((abbrev) =>
+              getNFLTeamInjuries(abbrev)
+                .then((inj) => injuryCache.set(abbrev, inj))
+                .catch(() => injuryCache.set(abbrev, [])),
+            ),
+          ),
+        ]);
+
+        await Promise.all(
+          augmentTargets.map(async (g: any) => {
+            try {
+              const star = starByName.get((g.playerName ?? "").toLowerCase());
+              if (!star || !weights) return; // bench player or brain unavailable — leave untouched
+
+              const teamStr: string = g.team ?? "";
+              const atIdx = teamStr.indexOf(" @ ");
+              const awayName = atIdx >= 0 ? teamStr.slice(0, atIdx) : "";
+              const homeName = atIdx >= 0 ? teamStr.slice(atIdx + 3) : "";
+              const awayAbbrev = getNFLTeamAbbrev(awayName);
+              const homeAbbrev = getNFLTeamAbbrev(homeName);
+
+              const isHome = homeAbbrev === star.team;
+              const oppAbbrev = isHome ? awayAbbrev : homeAbbrev;
+              if (!oppAbbrev) return; // couldn't resolve opponent — skip gracefully
+
+              const weather = weatherCache.get(homeAbbrev) ?? null;
+
+              // Rest: no reliable "last game date" in this live route (unlike
+              // the pipeline, which has the prior week's schedule on hand) —
+              // simplified to the pipeline's own v1 punt of a standard
+              // 7-day week rather than guessing at a last-game date.
+              const rest = computeNFLRest(
+                null,
+                g.gameTime ?? new Date().toISOString(),
+              );
+
+              // Own-team injury factor: count key-position OUT players.
+              const ownInjuries = injuryCache.get(star.team) ?? [];
+              const keyOuts = ownInjuries.filter(
+                (p) =>
+                  p.status.toLowerCase().includes("out") &&
+                  [
+                    "QB",
+                    "WR",
+                    "RB",
+                    "TE",
+                    "LT",
+                    "LG",
+                    "C",
+                    "RG",
+                    "RT",
+                  ].includes(p.position),
+              ).length;
+              const injuryFactor = Math.max(0.7, 1 - keyOuts * 0.05);
+
+              const pace = getNFLTeamRating(star.team).paceSec;
+
+              const projection = projectNFLProp(
+                star,
+                g.market,
+                g.line,
+                weights,
+                {
+                  oppAbbrev,
+                  isHome,
+                  weather,
+                  rest,
+                  injuryFactor,
+                  pace,
+                },
+              );
+              if (!projection) return;
+
+              g.brainSide = projection.side;
+              const probPct = projection.probability * 100;
+              g.brainOverProb =
+                projection.side === "over" ? probPct : 100 - probPct;
+              g.brainUnderProb =
+                projection.side === "under" ? probPct : 100 - probPct;
+              g.brainConfidence = projection.confidence;
+              g.brainProjectedValue = projection.projectedValue;
+            } catch (e) {
+              console.error(
+                `Failed to augment NFL ${g.playerName}:`,
+                e instanceof Error ? e.message : e,
+              );
+            }
+          }),
+        );
+      } catch (e) {
+        console.error(
+          "NFL prop augmentation failed:",
           e instanceof Error ? e.message : e,
         );
       }

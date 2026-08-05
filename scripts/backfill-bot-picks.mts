@@ -205,13 +205,17 @@ const main = async () => {
   console.log(`
 edge distribution (|p-0.5|):`);
   const edges = rows.map((r) => Math.abs(r.model_prob - 0.5));
-  edges.sort((a,b)=>a-b);
-  console.log(`  min ${(edges[0]*100).toFixed(1)}pts  median ${(edges[Math.floor(edges.length/2)]*100).toFixed(1)}pts  max ${(edges[edges.length-1]*100).toFixed(1)}pts`);
-  for (const t of [0.05,0.10,0.15,0.20]) {
+  edges.sort((a, b) => a - b);
+  console.log(
+    `  min ${(edges[0] * 100).toFixed(1)}pts  median ${(edges[Math.floor(edges.length / 2)] * 100).toFixed(1)}pts  max ${(edges[edges.length - 1] * 100).toFixed(1)}pts`,
+  );
+  for (const t of [0.05, 0.1, 0.15, 0.2]) {
     const sel = rows.filter((r) => Math.abs(r.model_prob - 0.5) >= t);
     if (sel.length < 20) continue;
     const w = sel.filter((r) => r.result === "win").length;
-    console.log(`  edge>=${(t*100).toFixed(0)}pts: ${String(sel.length).padStart(4)} picks  ${((w/sel.length)*100).toFixed(1)}%`);
+    console.log(
+      `  edge>=${(t * 100).toFixed(0)}pts: ${String(sel.length).padStart(4)} picks  ${((w / sel.length) * 100).toFixed(1)}%`,
+    );
   }
   console.log(`\nreplayed ${rows.length} picks`);
   console.log(
