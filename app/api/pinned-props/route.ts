@@ -71,11 +71,14 @@ const REFRESH_HOURS = 3;
 // real comparison and a negative number means we genuinely think the price is
 // bad. Publishing those was the mechanism behind 54.6% wins and -6.03 units.
 //
-// -2 rather than 0: at -110 the vig is ~4.5%, so demanding strictly positive
-// EV against our own model would empty the board most nights and pretend to a
-// precision the model doesn't have (+0.77% skill, not +10%). This clears the
-// genuinely bad prices without inventing certainty.
-const MIN_EV = -2;
+// -5 (was -2): fairProb is now the projection SHRUNK 75% toward consensus
+// (see W_BRAIN), which pulled every EV down ~8-10 points — the -2 floor was
+// calibrated against the raw projection's inflated numbers and would empty
+// the board under honest ones. Against a mostly-market fair prob, EV ≈ -vig
+// (-4 to -6%) is what a NORMAL fair price looks like; below -5 the price is
+// genuinely off against us. The ranking (EV + beatsMarket bonus) still puts
+// the best-priced plays on top within the gate.
+const MIN_EV = -5;
 
 // Minimum win probability (%) for a prop to reach the board.
 //
@@ -237,7 +240,22 @@ function build(prop: any, side: "over" | "under"): PinnedProp | null {
     side === "over" ? (prop.fairOverProb ?? 50) : (prop.fairUnderProb ?? 50);
   const brainFair = side === "over" ? prop.brainOverProb : prop.brainUnderProb;
   const usesBrain = typeof brainFair === "number" && brainFair > 0;
-  const fair = usesBrain ? brainFair : marketFair;
+
+  // Shrink the projection toward market consensus instead of trusting it raw.
+  //
+  // Evidence, both markets, same verdict:
+  //  - Moneylines: 434 priced picks, best market-blend weight for the model
+  //    was w=0.20 (scripts/refit-calibration.mts).
+  //  - Props: the graded record realized ≈ -4.6% EV — almost exactly where
+  //    CONSENSUS priced those picks (-6.5%), nowhere near the +10% the raw
+  //    projection claimed.
+  // The projection still adds player-specific information the market prices
+  // lazily (that's the 25%), but the market carries the number. This is what
+  // stops the board displaying 10% edges that don't exist.
+  const W_BRAIN = 0.25;
+  const fair = usesBrain
+    ? W_BRAIN * brainFair + (1 - W_BRAIN) * marketFair
+    : marketFair;
   // True expected value: EV = p * decimalPayout - 1.
   //
   // The old formula was `fair - implied` — a probability-space difference that

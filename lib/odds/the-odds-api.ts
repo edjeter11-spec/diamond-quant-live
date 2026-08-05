@@ -18,16 +18,24 @@ const SPORT = "baseball_mlb";
 // FanDuel; the rest exist to give the model a market consensus to price
 // against and to find line discrepancies.
 //
-// Trimmed from 11 books to 3 (DraftKings, FanDuel, BetMGM) — the books Eddie
-// actually wants surfaced. Smaller payloads and far less parsing per refresh.
-//
-// TRADE-OFF, stated plainly: consensus/no-vig fair-odds and arbitrage detection
-// get weaker with only three books. Arbitrage in particular is close to moot —
-// real arbs almost always need an outlier book, and outliers are exactly what
-// we just removed. EV vs. a 3-book average is still meaningful but noisier than
-// vs. an 11-book market. If arb hunting matters later, widen this list again;
-// nothing else in the code needs to change.
-const BOOKMAKERS = ["draftkings", "fanduel", "betmgm"];
+// Widened back to 8 books from the 3-book trim (DK/FD/MGM). The trim saved
+// payload, but it also quietly killed off-market price detection: with three
+// books, the "best price" is essentially always inside the consensus, which
+// is why a full slate scanned 0-for-36 sides beating market. The Odds API
+// bills per MARKET per REGION — book count is free — so the extra books cost
+// response size and parsing only, and they're the entire supply of outlier
+// prices that beatsMarket/EV ranking feeds on. DK/FD remain the only books
+// we deep-link.
+const BOOKMAKERS = [
+  "draftkings",
+  "fanduel",
+  "betmgm",
+  "williamhill_us",
+  "betrivers",
+  "espnbet",
+  "hardrockbet",
+  "fanatics",
+];
 
 // Display names for bookmakers
 export const BOOK_DISPLAY: Record<
