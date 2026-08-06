@@ -257,7 +257,13 @@ export async function GET(req: NextRequest) {
     // displace props, and nothing about the two records is merged — the
     // moneyline model's forward performance stays separately tracked in
     // bot_picks and graded via /api/clv-report rather than assumed.
+    // MLB ONLY. /api/bot-analysis is the MLB three-model engine and ignores
+    // any sport param — so calling this for nba/nfl returned MLB GAMES, which
+    // then got published to Discord as an "NBA parlay" containing the
+    // Brewers and the Mariners. An earlier note here claimed this block
+    // "naturally contributes nothing" for other sports; that was wrong.
     try {
+      if (sport !== "mlb") throw new Error("moneyline model is MLB-only");
       const r = await fetch(`${baseUrl}/api/bot-analysis`, {
         signal: AbortSignal.timeout(15000),
       });
