@@ -73,6 +73,11 @@ interface PropPick {
   bestAlt?: RawProp["bestAlt"];
   isSynthesized?: boolean;
   gameTime?: string;
+  /** Server-graded outcome joined in by /api/pinned-props from manual_picks.
+   *  Authoritative once present — this is what posted to Discord and what the
+   *  published record counts. Absent = not settled yet. */
+  result?: "win" | "loss" | "push" | "void";
+  profitUnits?: number | null;
 }
 
 const MARKET_LABEL: Record<string, string> = {
@@ -737,7 +742,21 @@ export default function TodayPropPicks({
           {visible.map((p) => {
             const isOpen = openPick === p.key;
             // Grade this pick against box score actuals if available
-            const boxRows = resultsMap[p.playerName.toLowerCase()] ?? [];
+            // Accent-insensitive lookup. resultsMap is keyed off the box
+            // score's spelling ("jeremy peña") while the board carries the
+            // plain-ASCII one ("jeremy pena") — a direct [] lookup missed
+            // entirely, so an accented player's pick rendered with no result
+            // at all. Same class of bug that made the grader void him server
+            // side (see lib/mlb/prop-grader.ts stripAccents).
+            const deaccent = (s: string) =>
+              s.normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase();
+            const wanted = deaccent(p.playerName);
+            const boxRows =
+              resultsMap[p.playerName.toLowerCase()] ??
+              Object.entries(resultsMap).find(
+                ([k]) => deaccent(k) === wanted,
+              )?.[1] ??
+              [];
             const boxRow = boxRows.find((r) => r.market === p.market);
             let result: "win" | "loss" | "push" | "live" | null = null;
             let actual: number | null = null;
@@ -754,6 +773,17 @@ export default function TodayPropPicks({
                 result = isFinal ? "win" : "live";
               else result = isFinal ? "loss" : "live";
             }
+            // The server-side graded result is authoritative once it exists —
+            // it's what got posted to Discord and what the record counts.
+            // The box-score path above stays as the LIVE in-progress view for
+            // picks that haven't settled yet.
+            if (
+              p.result === "win" ||
+              p.result === "loss" ||
+              p.result === "push"
+            )
+              result = p.result;
+            else if (p.result === "void") result = null;
 
             // Row tinting based on settled result
             const rowTint =

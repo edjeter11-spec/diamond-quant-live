@@ -882,13 +882,28 @@ export default function PicksBoard() {
                   leg.market === "player_prop"
                     ? liveHits[String(leg.game ?? "").toLowerCase()]
                     : undefined;
+                // Final graded outcome, joined in from manual_picks by
+                // /api/parlay-today. Distinct from `legHit`, which is a LIVE
+                // in-progress signal ("this over already cleared"). Once a
+                // leg is settled the real result wins — a moneyline can only
+                // ever be shown by this, since legHit is props-only.
+                const settled: string | undefined = leg.result;
+                const settledStyle =
+                  settled === "win"
+                    ? "bg-neon/10 ring-1 ring-neon/30"
+                    : settled === "loss"
+                      ? "bg-danger/10 ring-1 ring-danger/25"
+                      : settled === "push" || settled === "void"
+                        ? "bg-gunmetal/40 ring-1 ring-slate/30"
+                        : null;
                 return (
                   <div
                     key={i}
                     className={`rounded-lg ${
-                      legHit !== undefined
+                      settledStyle ??
+                      (legHit !== undefined
                         ? "bg-neon/10 ring-1 ring-neon/30"
-                        : "bg-gunmetal/30"
+                        : "bg-gunmetal/30")
                     }`}
                   >
                     <button
@@ -905,7 +920,30 @@ export default function PicksBoard() {
                           that have already passed their line show this — a leg
                           still short is "not yet", not a loss, so it keeps its
                           number rather than turning red mid-game. */}
-                      {legHit !== undefined ? (
+                      {settled ? (
+                        <span
+                          className={`w-4 h-4 rounded-full text-[10px] font-bold flex items-center justify-center flex-shrink-0 ${
+                            settled === "win"
+                              ? "bg-neon/25 text-neon"
+                              : settled === "loss"
+                                ? "bg-danger/25 text-danger"
+                                : "bg-slate/30 text-mercury"
+                          }`}
+                          title={
+                            settled === "void"
+                              ? "Void — player didn't appear (stake returned)"
+                              : settled === "push"
+                                ? "Push — stake returned"
+                                : settled.toUpperCase()
+                          }
+                        >
+                          {settled === "win"
+                            ? "✓"
+                            : settled === "loss"
+                              ? "✗"
+                              : "–"}
+                        </span>
+                      ) : legHit !== undefined ? (
                         <span
                           className="w-4 h-4 rounded-full bg-neon/25 text-neon text-[10px] font-bold flex items-center justify-center flex-shrink-0"
                           title={`Cleared — ${legHit} so far`}

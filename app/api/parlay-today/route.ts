@@ -21,6 +21,10 @@ interface ParlayLeg {
   dayLabel?: string;
   /** Why this leg made the ticket — shown in the UI dropdown, same as props. */
   reasoning?: string[];
+  /** Graded outcome, joined in from manual_picks at read time (the pinned
+   *  blob itself is never rewritten). Undefined = not graded yet. */
+  result?: string;
+  profitUnits?: number | null;
 }
 
 interface PinnedParlay {
@@ -106,6 +110,53 @@ const TARGET_MAX_AMERICAN = 150;
 // so a single pricier leg can be included when it's genuinely the best value.
 const MAX_PROP_LEG_ODDS = 400;
 
+/**
+ * Attach graded outcomes to a pinned parlay's legs.
+ *
+ * The parlay is pinned to a cloud blob at build time and never rewritten, so
+ * it has no `result` field — while grading happens entirely in the
+ * `manual_picks` table (see /api/post-results). Nothing joined the two, which
+ * is why a fully-graded parlay still rendered as ungraded on the homepage
+ * long after its recap had posted to Discord.
+ *
+ * Matched on pick_text, which publish-daily copies verbatim from the leg, so
+ * this is an exact-string join rather than a fuzzy one. A leg with no
+ * matching row (or one still ungraded) simply keeps `result: undefined` and
+ * renders as pending, exactly as before.
+ */
+async function attachResults(
+  parlay: PinnedParlay,
+  sport: string,
+): Promise<PinnedParlay> {
+  try {
+    const { supabaseAdmin } = await import("@/lib/supabase/server-auth");
+    if (!supabaseAdmin) return parlay;
+    const { data } = await supabaseAdmin
+      .from("manual_picks")
+      .select("pick_text,result,profit_units")
+      .eq("sport", sport)
+      .eq("slate_date", parlay.date)
+      .eq("status", "published")
+      .not("result", "is", null);
+    if (!data?.length) return parlay;
+    const byText = new Map(
+      data.map((r: any) => [String(r.pick_text).trim(), r]),
+    );
+    return {
+      ...parlay,
+      legs: parlay.legs.map((l) => {
+        const hit = byText.get(String(l.pick).trim());
+        return hit
+          ? { ...l, result: hit.result, profitUnits: hit.profit_units }
+          : l;
+      }),
+    };
+  } catch {
+    // Grading display is additive — never let it break the parlay itself.
+    return parlay;
+  }
+}
+
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const sport = (searchParams.get("sport") ?? "mlb").toLowerCase() as
@@ -120,7 +171,8 @@ export async function GET(req: NextRequest) {
   if (!force) {
     const cached = await cloudGet<PinnedParlay | null>(cacheKey, null);
     if (cached?.legs?.length) {
-      return NextResponse.json({ ok: true, ...cached, cached: true });
+      const withResults = await attachResults(cached, sport);
+      return NextResponse.json({ ok: true, ...withResults, cached: true });
     }
   }
 

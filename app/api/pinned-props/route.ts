@@ -235,6 +235,60 @@ interface PinnedProp {
   label: string;
   usesBrain: boolean;
   projectedValue?: number;
+  /** Graded outcome, joined in from manual_picks at read time (the pinned
+   *  board blob itself is never rewritten). Undefined = not graded yet. */
+  result?: string;
+  profitUnits?: number | null;
+}
+
+/**
+ * Attach graded outcomes to a pinned board's picks.
+ *
+ * The board is pinned to a cloud blob and never rewritten, while grading
+ * happens entirely in `manual_picks` (see /api/post-results). Nothing joined
+ * the two, so a graded pick still rendered as ungraded on the site long after
+ * its recap posted to Discord.
+ *
+ * The join key is publish-daily's exact pick_text format:
+ *   `${playerName} ${Over|Under} ${line} ${MARKET_LABEL[market]}`
+ * reconstructed here from the same MARKET_LABEL map, so it's an exact-string
+ * match. A pick with no matching row (or one still ungraded) keeps
+ * `result: undefined` and renders as pending, exactly as before.
+ */
+async function attachResults(
+  board: PinnedBoard,
+  sport: string,
+): Promise<PinnedBoard> {
+  try {
+    const { supabaseAdmin } = await import("@/lib/supabase/server-auth");
+    if (!supabaseAdmin) return board;
+    const { data } = await supabaseAdmin
+      .from("manual_picks")
+      .select("pick_text,result,profit_units")
+      .eq("sport", sport)
+      .eq("slate_date", board.date)
+      .eq("status", "published")
+      .not("result", "is", null);
+    if (!data?.length) return board;
+    const byText = new Map(
+      data.map((r: any) => [String(r.pick_text).trim(), r]),
+    );
+    return {
+      ...board,
+      picks: board.picks.map((p) => {
+        const key =
+          `${p.playerName} ${p.side === "over" ? "Over" : "Under"} ` +
+          `${p.line} ${MARKET_LABEL[p.market] ?? p.market}`;
+        const hit = byText.get(key.trim());
+        return hit
+          ? { ...p, result: hit.result, profitUnits: hit.profit_units }
+          : p;
+      }),
+    };
+  } catch {
+    // Grading display is additive — never let it break the board itself.
+    return board;
+  }
 }
 
 interface PinnedBoard {
@@ -420,9 +474,10 @@ export async function GET(req: NextRequest) {
   if (!force) {
     const cached = await cloudGet<PinnedBoard | null>(cacheKey, null);
     if (cached?.picks?.length) {
+      const withResults = await attachResults(cached, sport);
       return NextResponse.json({
         ok: true,
-        ...gate(cached, isPremium),
+        ...gate(withResults, isPremium),
         cached: true,
       });
     }
