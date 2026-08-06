@@ -48,13 +48,14 @@ export default function NRFITab() {
   const { scores, addParlayLeg } = useStore();
   const { currentSport } = useSport();
   const isNBA = currentSport === "nba";
+  const isNFL = currentSport === "nfl";
   const [games, setGames] = useState<NRFIGame[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedGame, setExpandedGame] = useState<string | null>(null);
   const [hasLoaded, setHasLoaded] = useState(false);
 
   useEffect(() => {
-    if (isNBA) return;
+    if (isNBA || isNFL) return;
     if (scores.length === 0 || hasLoaded) return;
     setLoading(true);
     analyzeNRFI(scores)
@@ -67,7 +68,7 @@ export default function NRFITab() {
         setLoading(false);
         setHasLoaded(true);
       });
-  }, [scores, hasLoaded, isNBA]);
+  }, [scores, hasLoaded, isNBA, isNFL]);
 
   // NBA Q1 analysis — show placeholder until Q1 engine is built
   if (isNBA) {
@@ -77,7 +78,7 @@ export default function NRFITab() {
           <div className="flex items-center gap-2 mb-3">
             <Shield className="w-5 h-5 text-orange-500" />
             <h2 className="text-sm font-bold text-silver uppercase tracking-wider">
-              Q1 Analysis
+              1st Quarter Analysis
             </h2>
           </div>
           <p className="text-xs text-mercury mb-2">
@@ -92,6 +93,37 @@ export default function NRFITab() {
             </p>
             <p className="text-[10px] text-mercury/50 mt-1">
               NBA Q1 projections based on pace, starters, and defensive matchups
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // NFL first-score analysis — same "not built yet" pattern as NBA above,
+  // rather than silently falling through to MLB's analyzeNRFI (which was the
+  // actual bug: NRFITab only ever checked isNBA, so an NFL visitor got the
+  // full MLB first-inning board instead of an empty/honest state).
+  if (isNFL) {
+    return (
+      <div className="space-y-3">
+        <div className="glass rounded-xl p-5 border border-orange-500/15">
+          <div className="flex items-center gap-2 mb-3">
+            <Shield className="w-5 h-5 text-orange-500" />
+            <h2 className="text-sm font-bold text-silver uppercase tracking-wider">
+              First Score Analysis
+            </h2>
+          </div>
+          <p className="text-xs text-mercury mb-2">
+            Which team scores first — analyzes opening drive tendencies,
+            defensive fast-start rates, and pace to project first-score
+            probability.
+          </p>
+          <div className="rounded-lg bg-gunmetal/30 p-4 text-center">
+            <Brain className="w-8 h-8 text-orange-500/30 mx-auto mb-2" />
+            <p className="text-sm text-mercury">Coming soon for NFL</p>
+            <p className="text-[10px] text-mercury/50 mt-1">
+              First-score projections based on drive charts and pace
             </p>
           </div>
         </div>

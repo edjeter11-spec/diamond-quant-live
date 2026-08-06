@@ -541,10 +541,27 @@ export default function WarRoom() {
   // feeds picks elsewhere, but its own record/stats aren't public-facing
   // (thin sample, mixes backtest and live numbers in ways a visitor could
   // easily misread as a proven track record). Watch it internally instead.
+  // NRFI (first-inning) and Dingers (home runs) are MLB-specific concepts —
+  // meaningless labels on the NBA/NFL tab bar. Rather than hide the tabs
+  // (which would shift every other tab's position when switching sports),
+  // relabel them to whatever that sport's early-game-scoring / big-play
+  // analogue is. The underlying tab components (NRFITab/DingersTab) already
+  // show a sport-appropriate placeholder — see the isNBA branch in NRFITab —
+  // this just keeps the tab BAR honest about what's inside.
+  const isNBA = currentSport === "nba";
+  const isNFL = currentSport === "nfl";
   const tabs = [
     { key: "dashboard" as const, icon: BarChart3, label: "Board" },
-    { key: "nrfi" as const, icon: Target, label: "NRFI" },
-    { key: "dingers" as const, icon: Flame, label: "Dingers" },
+    {
+      key: "nrfi" as const,
+      icon: Target,
+      label: isNBA ? "1st Qtr" : isNFL ? "1st Score" : "NRFI",
+    },
+    {
+      key: "dingers" as const,
+      icon: Flame,
+      label: isNBA ? "Threes" : isNFL ? "Anytime TD" : "Dingers",
+    },
     { key: "players" as const, icon: Search, label: "Players" },
     { key: "profile" as const, icon: UserCircle, label: "Profile" },
   ];

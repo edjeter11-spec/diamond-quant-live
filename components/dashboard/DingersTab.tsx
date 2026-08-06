@@ -12,6 +12,7 @@ import {
 import PlayerAvatar from "@/components/ui/PlayerAvatar";
 import TeamLogo from "@/components/ui/TeamLogo";
 import InfoTip from "@/components/ui/InfoTip";
+import { useSport } from "@/lib/sport-context";
 
 interface DingerCandidate {
   playerId: number;
@@ -77,12 +78,23 @@ function TabSkeleton() {
 }
 
 export default function DingersTab() {
+  const { currentSport } = useSport();
+  // Home-run probability is an MLB-only concept — this fetched /api/mlb-dingers
+  // unconditionally regardless of the active sport tab, so switching to NBA
+  // or NFL silently rendered MLB home-run picks. Gate it and show each
+  // sport's actual big-play analogue as a "coming soon" placeholder instead.
+  const isMlb = currentSport === "mlb";
   const [data, setData] = useState<DingersResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [expanded, setExpanded] = useState<number | null>(null);
 
   useEffect(() => {
+    if (!isMlb) {
+      setData(null);
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
     setLoading(true);
     fetch("/api/mlb-dingers")
@@ -100,7 +112,34 @@ export default function DingersTab() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [isMlb]);
+
+  if (!isMlb) {
+    const label = currentSport === "nba" ? "Threes" : "Anytime TD";
+    const desc =
+      currentSport === "nba"
+        ? "Ranking players by 3-point probability tonight."
+        : "Ranking players by anytime-touchdown probability this week.";
+    return (
+      <div className="space-y-3">
+        <div className="glass rounded-xl p-5 border border-amber/15">
+          <div className="flex items-center gap-2 mb-3">
+            <Zap className="w-5 h-5 text-amber" />
+            <h2 className="text-sm font-bold text-silver uppercase tracking-wider">
+              {label}
+            </h2>
+          </div>
+          <p className="text-xs text-mercury mb-2">{desc}</p>
+          <div className="rounded-lg bg-gunmetal/30 p-4 text-center">
+            <Zap className="w-8 h-8 text-amber/30 mx-auto mb-2" />
+            <p className="text-sm text-mercury">
+              Coming soon for {currentSport.toUpperCase()}
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (

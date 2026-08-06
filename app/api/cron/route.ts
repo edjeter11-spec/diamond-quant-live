@@ -1383,22 +1383,38 @@ export async function GET(req: Request) {
     // Both are self-gating: publish-daily no-ops if today's board already
     // went out, and post-results holds until every pick on the slate is
     // graded. That's what makes them safe on a 30-minute cron.
+    //
+    // Looped over every sport with a real grader, not just MLB. The NBA/NFL
+    // graders (lib/nba/prop-grader.ts, lib/nfl/prop-grader.ts) were built and
+    // wired into post-results' GRADERS dispatch table, but nothing ever
+    // called either endpoint with sport=nba/nfl — so a published NBA or NFL
+    // pick had no automated path to ever get graded or recapped. Both routes
+    // already self-gate on "nothing to publish"/"nothing to grade", so
+    // looping is safe even on a slate with zero games for that sport.
     let discordDaily: any = { published: null, recap: null };
+    const discordDailyBySport: Record<string, any> = {};
     if (process.env.BOT_API_URL) {
       const origin = new URL(req.url).origin;
       const headers = { "x-cron-secret": process.env.CRON_SECRET ?? "" };
 
-      // Publish today's board once there are picks to publish.
-      try {
-        const r = await fetch(`${origin}/api/publish-daily?sport=mlb`, {
-          method: "POST",
-          headers,
-          signal: AbortSignal.timeout(30000),
-        });
-        discordDaily.published = await r.json();
-      } catch (e) {
-        discordDaily.published = { ok: false, error: String(e) };
+      for (const s of ["mlb", "nba", "nfl"]) {
+        try {
+          const r = await fetch(`${origin}/api/publish-daily?sport=${s}`, {
+            method: "POST",
+            headers,
+            signal: AbortSignal.timeout(30000),
+          });
+          discordDailyBySport[s] = { published: await r.json() };
+        } catch (e) {
+          discordDailyBySport[s] = {
+            published: { ok: false, error: String(e) },
+          };
+        }
       }
+      // MLB keeps its own top-level key too — everything below this point
+      // (line alerts, edge scan, lineup watch, etc.) is MLB-specific and
+      // reads discordDaily directly.
+      discordDaily.published = discordDailyBySport.mlb?.published ?? null;
 
       // ── Off-market line alerts ──
       // Only fires when DK/FD actually disagree with the market, and only
@@ -1680,17 +1696,95 @@ export async function GET(req: Request) {
         discordDaily.propsClv = { ok: false, error: String(e) };
       }
 
-      // Recap yesterday's slate once it's fully final.
-      try {
-        const r = await fetch(`${origin}/api/post-results?sport=mlb`, {
-          method: "POST",
-          headers,
-          signal: AbortSignal.timeout(30000),
-        });
-        discordDaily.recap = await r.json();
-      } catch (e) {
-        discordDaily.recap = { ok: false, error: String(e) };
+      // Recap yesterday's slate once it's fully final — looped across every
+      // sport with a grader, same reasoning as publish-daily above. Before
+      // this, NBA/NFL manual_picks rows could be published (via the loop
+      // above) but had zero automated path to ever get graded or recapped,
+      // since post-results was only ever called with sport=mlb.
+      for (const s of ["mlb", "nba", "nfl"]) {
+        try {
+          const r = await fetch(`${origin}/api/post-results?sport=${s}`, {
+            method: "POST",
+            headers,
+            signal: AbortSignal.timeout(30000),
+          });
+          discordDailyBySport[s] = {
+            ...discordDailyBySport[s],
+            recap: await r.json(),
+          };
+        } catch (e) {
+          discordDailyBySport[s] = {
+            ...discordDailyBySport[s],
+            recap: { ok: false, error: String(e) },
+          };
+        }
       }
+      discordDaily.recap = discordDailyBySport.mlb?.recap ?? null;
+      discordDaily.bySport = discordDailyBySport;
+    }
+
+    // ── Stuck-prediction void sweep ──
+    //
+    // Every sport's prop_predictions grading loop above only resolves a
+    // 'pending' row by matching it against THAT DAY's live "completed games"
+    // fetch. A game that never reappears there — postponed, rained out, or
+    // simply a day the grading loop didn't run for that sport — leaves its
+    // predictions 'pending' forever, with nothing that will ever revisit
+    // them. scripts/audit-stuck-picks.mts found 1,069 rows exactly like this
+    // (MLB/NFL/NHL back to June; NBA had zero, confirming its ESPN-CDN path
+    // doesn't have this gap).
+    //
+    // Rather than rework each sport's dense per-block grading logic (risky
+    // this close to already-shipped changes), this is a separate, narrow
+    // safety net: anything still 'pending' after STALE_DAYS is voided —
+    // excluded from accuracy/brier stats, same treatment a sportsbook gives
+    // a cancelled game — rather than silently rotting as fake "still open"
+    // data forever. Applies to manual_picks and bot_picks the same way.
+    try {
+      const STALE_DAYS = 3;
+      const staleCutoff = new Date(Date.now() - STALE_DAYS * 86400_000)
+        .toISOString()
+        .slice(0, 10);
+      const { supabase: sbVoid } = await import("@/lib/supabase/client");
+      if (sbVoid) {
+        const [propsVoid, manualVoid, botVoid] = await Promise.all([
+          sbVoid
+            .from("prop_predictions")
+            .update({ status: "void", graded_at: new Date().toISOString() })
+            .eq("status", "pending")
+            .lt("game_date", staleCutoff)
+            .select("id"),
+          sbVoid
+            .from("manual_picks")
+            .update({
+              result: "void",
+              settled_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            })
+            .eq("status", "published")
+            .is("result", null)
+            .lt("slate_date", staleCutoff)
+            .select("id"),
+          sbVoid
+            .from("bot_picks")
+            .update({ result: "push", settled_at: new Date().toISOString() })
+            .eq("result", "pending")
+            .lt("slate_date", staleCutoff)
+            .select("id"),
+        ]);
+        const voided = {
+          propPredictions: propsVoid.data?.length ?? 0,
+          manualPicks: manualVoid.data?.length ?? 0,
+          // bot_picks' CHECK constraint doesn't allow 'void' — 'push' is the
+          // closest neutral result (0 stake impact) it accepts.
+          botPicks: botVoid.data?.length ?? 0,
+        };
+        if (voided.propPredictions + voided.manualPicks + voided.botPicks > 0) {
+          discordDaily.staleVoidSweep = voided;
+        }
+      }
+    } catch (e) {
+      discordDaily.staleVoidSweep = { ok: false, error: String(e) };
     }
 
     // ── Heartbeat ──

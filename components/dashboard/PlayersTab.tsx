@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import PlayerAvatar from "@/components/ui/PlayerAvatar";
 import TeamLogo from "@/components/ui/TeamLogo";
+import { useSport } from "@/lib/sport-context";
 
 interface SearchResult {
   id: number;
@@ -90,6 +91,15 @@ function TrendIcon({ trend }: { trend: "up" | "down" | "flat" }) {
 }
 
 export default function PlayersTab() {
+  const { currentSport } = useSport();
+  // Search/profile only exists against MLB data sources today (mlb-player-*
+  // routes). NBA/NFL have no equivalent endpoint yet — NBA's player-index has
+  // a different shape (bulk list, not a search-by-query API) and NFL has none
+  // at all. Rather than silently call the MLB routes regardless of the
+  // active sport tab (which served MLB players while browsing NBA/NFL — a
+  // real bug, not by design), gate the whole search/profile flow on MLB and
+  // show an honest "not built yet" state otherwise.
+  const isMlb = currentSport === "mlb";
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [searching, setSearching] = useState(false);
@@ -105,17 +115,29 @@ export default function PlayersTab() {
   // isn't empty on first visit. Real current-season stat leaders, not a
   // hardcoded list.
   useEffect(() => {
+    if (!isMlb) {
+      setPopular([]);
+      setPopularLoading(false);
+      // A player card loaded while on MLB shouldn't linger after switching
+      // to a sport with no search backend — it'd read as "this IS the NBA
+      // player" when it's actually stale MLB data.
+      setSelected(null);
+      setProfile(null);
+      setNotFound(false);
+      return;
+    }
+    setPopularLoading(true);
     fetch("/api/mlb-popular-players")
       .then((r) => r.json())
       .then((d) => setPopular(d.players ?? []))
       .catch(() => setPopular([]))
       .finally(() => setPopularLoading(false));
-  }, []);
+  }, [isMlb]);
 
   // Debounced typeahead search
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (query.trim().length < 2) {
+    if (!isMlb || query.trim().length < 2) {
       setResults([]);
       return;
     }
@@ -130,31 +152,35 @@ export default function PlayersTab() {
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [query]);
+  }, [query, isMlb]);
 
-  const loadProfile = useCallback((player: SearchResult) => {
-    setSelected(player);
-    setResults([]);
-    setQuery("");
-    setLoading(true);
-    setNotFound(false);
-    setProfile(null);
-    fetch(
-      `/api/mlb-player-profile?id=${player.id}&name=${encodeURIComponent(player.fullName)}`,
-    )
-      .then((r) => {
-        if (r.status === 404) {
-          setNotFound(true);
-          return null;
-        }
-        return r.json();
-      })
-      .then((d) => {
-        if (d) setProfile(d);
-      })
-      .catch(() => setNotFound(true))
-      .finally(() => setLoading(false));
-  }, []);
+  const loadProfile = useCallback(
+    (player: SearchResult) => {
+      if (!isMlb) return;
+      setSelected(player);
+      setResults([]);
+      setQuery("");
+      setLoading(true);
+      setNotFound(false);
+      setProfile(null);
+      fetch(
+        `/api/mlb-player-profile?id=${player.id}&name=${encodeURIComponent(player.fullName)}`,
+      )
+        .then((r) => {
+          if (r.status === 404) {
+            setNotFound(true);
+            return null;
+          }
+          return r.json();
+        })
+        .then((d) => {
+          if (d) setProfile(d);
+        })
+        .catch(() => setNotFound(true))
+        .finally(() => setLoading(false));
+    },
+    [isMlb],
+  );
 
   const clearSelection = () => {
     setSelected(null);
@@ -171,8 +197,13 @@ export default function PlayersTab() {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search any MLB player..."
-            className="w-full pl-9 pr-9 py-2.5 rounded-lg bg-gunmetal/50 border border-slate/30 text-base sm:text-sm text-silver placeholder:text-mercury/40 focus:outline-none focus:border-electric/40"
+            disabled={!isMlb}
+            placeholder={
+              isMlb
+                ? "Search any MLB player..."
+                : `Player search isn't built for ${currentSport.toUpperCase()} yet`
+            }
+            className="w-full pl-9 pr-9 py-2.5 rounded-lg bg-gunmetal/50 border border-slate/30 text-base sm:text-sm text-silver placeholder:text-mercury/40 focus:outline-none focus:border-electric/40 disabled:opacity-60 disabled:cursor-not-allowed"
           />
           {query && (
             <button
@@ -226,7 +257,18 @@ export default function PlayersTab() {
       </div>
 
       {/* Popular players — shown before search, or as a starting point */}
-      {!selected && (
+      {!selected && !isMlb && (
+        <div className="glass rounded-xl p-8 text-center">
+          <Search className="w-8 h-8 text-mercury/30 mx-auto mb-2" />
+          <p className="text-sm text-mercury">
+            Player search is coming soon for {currentSport.toUpperCase()}
+          </p>
+          <p className="text-[11px] text-mercury/50 mt-1">
+            Switch to MLB to search any active player
+          </p>
+        </div>
+      )}
+      {!selected && isMlb && (
         <div className="glass rounded-xl overflow-hidden">
           <div className="px-4 py-2.5 border-b border-slate/15">
             <h3 className="text-xs font-bold text-silver uppercase tracking-wider">
