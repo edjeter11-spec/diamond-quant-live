@@ -181,7 +181,17 @@ export function gradeLeg(
     if (/\bml\b|\bmoneyline\b/i.test(pickText))
       return gradeMoneyline(pickText, game);
     if (/\bover\b|\bunder\b/i.test(pickText)) return gradeTotal(pickText, game);
-    if (/[+\-]\d+(\.\d+)?/.test(pickText)) return gradeSpread(pickText, game);
+    // Deliberately NO bare-number → spread fallback here.
+    //
+    // It used to read: if (/[+\-]\d+/.test(pickText)) return gradeSpread(...).
+    // A moneyline logged as "Lakers -150" has no literal "ML" token, so it
+    // fell through to gradeSpread, whose regex grabs the first signed number
+    // — grading it as a 150-POINT spread and posting a guaranteed fabricated
+    // LOSS on a winning bet. Prices (-150, +240) and spreads (-3.5) are not
+    // distinguishable from a bare number, so guessing here converts "I don't
+    // know this market" into a definite, wrong win/loss. Leaving it pending
+    // is the honest failure — scripts/audit-stuck-picks.mts surfaces
+    // anything that stays that way.
   }
   // Player props, futures, derivatives → can't grade from scores alone
   return "pending";
@@ -218,16 +228,22 @@ export function gradeBet(
     for (const leg of legs) {
       const game = findGame(leg, completedGames);
       // Detect market from leg text (best-effort)
+      // Order matters: test the MOST specific pattern first. The player-prop
+      // check used to sit last, after `\bover`, so "LeBron James over 25.5
+      // points" matched `total` and was graded as a GAME TOTAL (homeScore +
+      // awayScore vs 25.5) — a near-certain fabricated WIN. A leg naming a
+      // stat category is a player prop regardless of whether it also says
+      // "over".
       let legMarket = "moneyline";
-      if (/\bML\b|\bMoneyline\b/i.test(leg)) legMarket = "moneyline";
-      else if (/\bover|under\b/i.test(leg)) legMarket = "total";
-      else if (/[+\-]\d+(\.\d+)?/.test(leg)) legMarket = "spread";
-      else if (
+      if (
         /points|rebounds|assists|strikeouts|hits|runs|total bases|home runs/i.test(
           leg,
         )
       )
         legMarket = "player_prop";
+      else if (/\bML\b|\bMoneyline\b/i.test(leg)) legMarket = "moneyline";
+      else if (/\bover|under\b/i.test(leg)) legMarket = "total";
+      else if (/[+\-]\d+(\.\d+)?/.test(leg)) legMarket = "spread";
       legResults.push(gradeLeg(legMarket, leg, game));
     }
 

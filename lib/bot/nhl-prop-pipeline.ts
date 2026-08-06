@@ -251,7 +251,11 @@ export async function gradeNHLPropPredictions(
               status: "graded",
               graded_at: new Date().toISOString(),
             })
-            .eq("id", pred.id);
+            .eq("id", pred.id)
+            // Only settle a row that is still pending — without this a retry or
+            // an overlapping cron run re-writes a settled outcome and re-feeds the
+            // brain from the same game twice.
+            .eq("status", "pending");
           continue;
         }
         const hit =
@@ -272,7 +276,11 @@ export async function gradeNHLPropPredictions(
             status: "graded",
             graded_at: new Date().toISOString(),
           })
-          .eq("id", pred.id);
+          .eq("id", pred.id)
+          // Only settle a row that is still pending — without this a retry or
+          // an overlapping cron run re-writes a settled outcome and re-feeds the
+          // brain from the same game twice.
+          .eq("status", "pending");
 
         newlyGraded.push({
           playerName: pred.player_name,

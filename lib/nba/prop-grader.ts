@@ -189,11 +189,13 @@ function statByLabel(
   return idx >= 0 ? stats[idx] : undefined;
 }
 
+// NaN, not 0, when the label is missing or unparseable — same reasoning as
+// the `?? NaN` on the other stats: a missing column must leave the pick
+// ungraded, not silently settle every threes-over as a 0-for loss.
 function threesMade(raw: string | undefined): number {
-  if (!raw) return 0;
-  const made = raw.split("-")[0];
-  const n = Number(made);
-  return Number.isFinite(n) ? n : 0;
+  if (!raw) return NaN;
+  const n = Number(raw.split("-")[0]);
+  return Number.isFinite(n) ? n : NaN;
 }
 
 /** Every player's final box-score line for one game (ESPN event id). Returns
@@ -219,11 +221,18 @@ export async function fetchGamePlayerLines(
       for (const a of group?.athletes ?? []) {
         if (a.didNotPlay) continue;
         const stats: string[] = a.stats ?? [];
+        // `?? NaN`, never `?? 0`. statByLabel returns undefined for a label
+        // it can't find, so if ESPN ever renames a column (REB -> TRB, say),
+        // `?? 0` would give EVERY player 0 rebounds and settle every
+        // rebounds-over as a confident LOSS with actualValue 0 — a
+        // whole-slate silent-loss generator that the downstream
+        // Number.isFinite check can't catch, because 0 is finite. NaN fails
+        // that check and the pick stays ungraded, which is the safe failure.
         out.push({
           name: a.athlete?.displayName ?? "",
-          points: Number(statByLabel(labels, stats, "PTS") ?? 0),
-          reboundsTotal: Number(statByLabel(labels, stats, "REB") ?? 0),
-          assists: Number(statByLabel(labels, stats, "AST") ?? 0),
+          points: Number(statByLabel(labels, stats, "PTS") ?? NaN),
+          reboundsTotal: Number(statByLabel(labels, stats, "REB") ?? NaN),
+          assists: Number(statByLabel(labels, stats, "AST") ?? NaN),
           threePointersMade: threesMade(statByLabel(labels, stats, "3PT")),
         });
       }

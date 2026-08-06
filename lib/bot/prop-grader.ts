@@ -28,12 +28,19 @@ export function gradePropPick(
   );
   if (!player || player.minutes < 5) return null;
 
-  const actual =
-    pick.market === "player_points"
-      ? player.pts
-      : pick.market === "player_rebounds"
-        ? player.reb
-        : player.ast;
+  // Explicit map with a null fallback. This used to end in `: player.ast`,
+  // so ANY market not named above — player_threes, player_steals,
+  // player_blocks, a typo — was silently graded against ASSISTS. A
+  // "threes over 2.5" on a 7-assist night posted as a confident WIN that had
+  // nothing to do with threes. An unknown market must produce NO result, not
+  // a wrong one. (lib/nba/prop-grader.ts already does this correctly.)
+  const STAT: Record<string, number | undefined> = {
+    player_points: player.pts,
+    player_rebounds: player.reb,
+    player_assists: player.ast,
+  };
+  const actual = STAT[pick.market];
+  if (typeof actual !== "number" || !Number.isFinite(actual)) return null;
 
   if (actual === pick.line)
     return {

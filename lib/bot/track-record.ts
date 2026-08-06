@@ -107,8 +107,9 @@ export async function logDailyPicks(
  */
 export async function settlePendingPicks(
   completedGames: CompletedGame[],
-): Promise<{ settled: number }> {
-  if (!supabaseAdmin || completedGames.length === 0) return { settled: 0 };
+): Promise<{ settled: number; failed: number }> {
+  if (!supabaseAdmin || completedGames.length === 0)
+    return { settled: 0, failed: 0 };
 
   const { data: pending } = await supabaseAdmin
     .from("daily_picks_log")
@@ -116,9 +117,10 @@ export async function settlePendingPicks(
     .eq("result", "pending")
     .limit(500);
 
-  if (!pending || pending.length === 0) return { settled: 0 };
+  if (!pending || pending.length === 0) return { settled: 0, failed: 0 };
 
   let settled = 0;
+  let failed = 0;
   for (const pick of pending) {
     // Match on the game field first (most reliable), falling back to the
     // pick text itself (covers rows where `game` wasn't populated).
@@ -138,7 +140,12 @@ export async function settlePendingPicks(
           ? 0
           : -stake;
 
-    await supabaseAdmin
+    // Check the error and only count a settlement that actually landed. This
+    // used to increment unconditionally with `error` never destructured, so a
+    // failed write returned "settled: N" to the caller and the failure left no
+    // trace anywhere — the pick silently stayed pending while the logs said
+    // it had been graded.
+    const { error: settleErr } = await supabaseAdmin
       .from("daily_picks_log")
       .update({
         result,
@@ -147,9 +154,17 @@ export async function settlePendingPicks(
       })
       .eq("id", pick.id)
       .eq("result", "pending"); // belt-and-suspenders: no-op if already settled
+    if (settleErr) {
+      console.error(
+        `daily_picks_log settle failed for ${pick.id}:`,
+        settleErr.message,
+      );
+      failed++;
+      continue;
+    }
     settled++;
   }
-  return { settled };
+  return { settled, failed };
 }
 
 /**

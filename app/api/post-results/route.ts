@@ -68,6 +68,14 @@ const GRADERS: Record<string, SportGrader> = {
 const BOT_API_URL = process.env.BOT_API_URL || "";
 const BOT_API_SECRET = process.env.BOT_API_SECRET || "";
 
+/** Lowercase + strip diacritics. Every name/team comparison in this file must
+ *  go through this: an exact-string check is what turned a real "Jeremy Peña"
+ *  loss into a void, because the box score spells it with ñ and the stored
+ *  pick doesn't. */
+function deaccent(s: string): string {
+  return (s ?? "").normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
+}
+
 /** Yesterday in ET — the slate that's actually finished. */
 function previousSlate(): string {
   const d = new Date();
@@ -188,7 +196,22 @@ async function recapBatch(
       .select("value")
       .eq("key", recapKey)
       .maybeSingle();
-    if (flag?.value) return { batchKey, alreadyPosted: true };
+    // A claim with a real messageId means the recap genuinely posted — never
+    // touch it. But a claim still marked `pending: true` means a previous run
+    // claimed the batch and then died before finishing (Vercel's 60s
+    // maxDuration, a thrown grader, a failed releaseClaim). Nothing expires
+    // those, so the batch was blocked FOREVER: every later tick read a truthy
+    // flag and returned alreadyPosted. That's what stranded the 2026-08-05
+    // parlay until it was cleared by hand. Treat a pending claim older than
+    // 15 minutes as abandoned and take it over.
+    const claimVal: any = flag?.value;
+    if (claimVal) {
+      const stale =
+        claimVal.pending === true &&
+        Date.now() - Date.parse(claimVal.claimedAt ?? 0) > 15 * 60_000;
+      if (!stale) return { batchKey, alreadyPosted: true };
+      await supabaseAdmin!.from("app_state").delete().eq("key", recapKey);
+    }
   }
 
   // Claim the recap BEFORE posting, using an INSERT rather than an upsert.
@@ -202,6 +225,11 @@ async function recapBatch(
   //
   // The row is deleted again if we end up not posting (nothing graded yet, or
   // the send failed), so a claim never permanently blocks a legitimate recap.
+  //
+  // `force=true` deliberately bypasses the whole claim mechanism — it exists
+  // so an admin can re-post a recap that went out wrong. Be aware that means
+  // it WILL post a duplicate to Discord if the original send succeeded; it is
+  // a manual override, not something cron should ever pass.
   if (!force) {
     const { error: claimErr } = await supabaseAdmin!.from("app_state").insert({
       key: recapKey,
@@ -239,17 +267,22 @@ async function recapBatch(
     // went out fine.
     if (p.market === "moneyline") {
       const [pickAway, pickHome] = String(p.game).split(" @ ");
-      const norm = (s: string) => (s ?? "").toLowerCase().trim();
-      const final = finals.find((f) => {
-        const h = norm(f.home),
-          a = norm(f.away);
-        return (
-          (h && norm(pickHome).includes(h)) ||
-          (h && h.includes(norm(pickHome))) ||
-          (a && norm(pickAway).includes(a)) ||
-          (a && a.includes(norm(pickAway)))
-        );
-      });
+      const norm = deaccent;
+      // Require BOTH sides of the matchup to line up, not either one. A
+      // one-sided match cross-matches teams that share a city or nickname
+      // (Chicago, New York, the several Rangers/Giants/Cardinals across
+      // leagues) and would grade a pick against the wrong game's score.
+      // Empty names can't match: `.includes("")` is always true, so a feed
+      // that returns blank team names would otherwise match every game.
+      const sideMatch = (pickSide: string, apiSide: string) => {
+        const p1 = norm(pickSide),
+          a1 = norm(apiSide);
+        if (!p1 || !a1) return false;
+        return p1.includes(a1) || a1.includes(p1);
+      };
+      const final = finals.find(
+        (f) => sideMatch(pickHome, f.home) && sideMatch(pickAway, f.away),
+      );
       // Game not in today's finals list — not over yet. Same "wait" path a
       // prop takes when its game hasn't finished.
       if (
@@ -319,13 +352,34 @@ async function recapBatch(
       // pick can't be graded and never will be. That's a void, which is how a
       // sportsbook treats a scratch too — stake back, excluded from the record
       // rather than counted as a loss.
-      const gameFinal = allLines.length > 0;
-      if (gameFinal && p.player_name) {
-        const played = allLines.some(
-          (l) =>
-            l.name.toLowerCase().trim() ===
-            String(p.player_name).toLowerCase().trim(),
+      //
+      // "FINAL" must mean THIS PICK'S game, not "some game on the slate".
+      // This previously read `allLines.length > 0` — but allLines is the
+      // concatenation of every final game's box score, so the instant ONE
+      // early game ended, every pick on the other 14 still-playing games
+      // looked final, wasn't found in the (partial) line set, and got voided.
+      // That mass-destroys real gradeable picks mid-slate, with no timer
+      // needed — a worse version of the staleness bug that voided four wins
+      // on 2026-07-30. Resolve the pick's own game and require IT to be done.
+      const pickGame = p.game ? String(p.game) : "";
+      const [pgAway, pgHome] = pickGame.split(" @ ");
+      const sideMatches = (pickSide: string, apiSide: string) => {
+        const p1 = deaccent(pickSide),
+          a1 = deaccent(apiSide);
+        if (!p1 || !a1) return false;
+        return p1.includes(a1) || a1.includes(p1);
+      };
+      const thisGameFinal =
+        !!pgHome &&
+        !!pgAway &&
+        finals.some(
+          (f) => sideMatches(pgHome, f.home) && sideMatches(pgAway, f.away),
         );
+      if (thisGameFinal && p.player_name) {
+        // Accent-insensitive, same as the graders — an exact-string check
+        // here is what turned a real Peña loss into a void.
+        const target = deaccent(String(p.player_name));
+        const played = allLines.some((l) => deaccent(l.name) === target);
         if (!played) {
           await supabaseAdmin!
             .from("manual_picks")

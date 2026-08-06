@@ -1037,7 +1037,14 @@ export async function GET(req: Request) {
                       status: "graded",
                       graded_at: new Date().toISOString(),
                     })
-                    .eq("id", pred.id);
+                    .eq("id", pred.id)
+                    // In-DB guard, not just the in-memory `pred.status` flag
+                    // below. That flag only dedups WITHIN one run — two
+                    // overlapping cron invocations each load their own
+                    // `pendingMlb` and would both grade the same row and both
+                    // call learnFromMLBResult, skewing brain weights off one
+                    // real outcome counted twice.
+                    .eq("status", "pending");
                   pred.status = "graded"; // dedup within this run
                   newlyGradedMlb.push({
                     ...pred,
@@ -1745,13 +1752,21 @@ export async function GET(req: Request) {
     // published pick destroys a real result: the first run of this sweep
     // voided four 2026-07-30 picks (+2.22u of genuine WINS) whose only
     // problem was that cron had never called post-results for them — the
-    // games were long final and perfectly gradeable. prop_predictions is
-    // internal brain-learning data where a stale row is just noise, but
-    // manual_picks IS the published record, so a wrong void there is worse
-    // than a row left pending. post-results now runs for every sport on
-    // every tick and will grade those legitimately; anything it genuinely
-    // can't resolve is caught by scripts/audit-stuck-picks.mts for a human
-    // to look at, not silently erased.
+    // games were long final and perfectly gradeable. manual_picks IS the
+    // published record, so a wrong void there is worse than a row left
+    // pending. post-results now runs for every sport on every tick and will
+    // grade those legitimately; anything it genuinely can't resolve is
+    // caught by scripts/audit-stuck-picks.mts for a human to look at.
+    //
+    // The remaining two sweeps are guarded on OUTCOME, not just age. An
+    // earlier version of this comment claimed prop_predictions was "internal
+    // brain-learning data where a stale row is just noise" — that was wrong:
+    // lib/bot/track-record.ts folds graded prop_predictions rows into the
+    // PUBLIC win/loss/profit totals on /results. So a row that already has a
+    // determined `result` must never be overwritten with a void, even if its
+    // `status` somehow lagged. Same for bot_picks: `push` is unrecoverable
+    // there (the .eq("result","pending") guard means it can never be
+    // re-graded), so it may only apply to rows with no outcome at all.
     try {
       const STALE_DAYS = 3;
       const staleCutoff = new Date(Date.now() - STALE_DAYS * 86400_000)
@@ -1764,12 +1779,19 @@ export async function GET(req: Request) {
             .from("prop_predictions")
             .update({ status: "void", graded_at: new Date().toISOString() })
             .eq("status", "pending")
+            // Never stamp a void over a row that already has an outcome —
+            // these feed the public record via track-record.ts.
+            .is("result", null)
+            .is("hit", null)
             .lt("game_date", staleCutoff)
             .select("id"),
           sbVoid
             .from("bot_picks")
             .update({ result: "push", settled_at: new Date().toISOString() })
             .eq("result", "pending")
+            // A settled score means it was gradeable — leave it for the
+            // settle path rather than laundering a real win into a 0u push.
+            .is("final_score", null)
             .lt("slate_date", staleCutoff)
             .select("id"),
         ]);

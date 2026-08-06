@@ -11,6 +11,7 @@ import {
   type AuditResult,
 } from "./nba-prop-brain";
 import { supabase } from "@/lib/supabase/client";
+import { etDateString } from "@/lib/sports-date";
 
 const PROP_TO_BOX: Record<string, string> = {
   player_points: "points",
@@ -48,9 +49,17 @@ function playerMatch(
   const aParts = a.split(" ");
   const bParts = b.split(" ");
   if (aParts.length >= 2 && bParts.length >= 2) {
+    // Surname must match AND the full first name must match.
+    //
+    // This used to compare only the first THREE letters of the first name,
+    // which collides on real NBA pairs: "Marcus Morris" vs "Markieff Morris"
+    // (mar===mar, morris===morris) graded one brother off the other's line.
+    // Same for Jaren/Jared, Jalen/Jaylen surname-sharers. A prefix match is
+    // fine for "will these ever be the same person" heuristics; it is not
+    // fine when the answer writes a win/loss into the record.
     return (
       aParts[aParts.length - 1] === bParts[bParts.length - 1] &&
-      aParts[0].slice(0, 3) === bParts[0].slice(0, 3)
+      aParts[0] === bParts[0]
     );
   }
   return false;
@@ -124,7 +133,11 @@ export async function auditCompletedGames(brain: NbaPropBrainState): Promise<{
   if (!supabase) return { updatedBrain: brain, graded: 0, hits: 0, misses: 0 };
 
   // 1. Find pending predictions
-  const today = new Date().toISOString().split("T")[0];
+  // ET, not UTC. toISOString() rolls to the next day at 00:00 UTC — 8pm ET —
+  // so between 8pm and midnight ET this asked for TOMORROW's date and matched
+  // nothing, meaning the evening slate (most of the NBA schedule) never
+  // graded on the same night it was played.
+  const today = etDateString();
   const { data: pending } = await supabase
     .from("prop_predictions")
     .select("*")
@@ -147,6 +160,8 @@ export async function auditCompletedGames(brain: NbaPropBrainState): Promise<{
   let totalGraded = 0,
     totalHits = 0,
     totalMisses = 0;
+  // Ids already settled during THIS invocation — see the filter note below.
+  const gradedThisRun = new Set<string>();
 
   // 3. For each finished game, fetch box score and grade predictions
   for (const gameId of finishedGameIds.slice(0, 5)) {
@@ -154,9 +169,22 @@ export async function auditCompletedGames(brain: NbaPropBrainState): Promise<{
     if (!boxScore || boxScore.length === 0) continue;
 
     // Find predictions that match this game (fuzzy match on team names in game_id or date)
+    //
+    // NOTE this deliberately does NOT filter by gameId — a prediction's
+    // game_id doesn't reliably correspond to the CDN's, so every pending row
+    // is offered to every box score and matched on the PLAYER instead. The
+    // cost is that without the `gradedThisRun` guard below, a player found in
+    // box score 1 was graded again against box scores 2-5, calling
+    // learnFromPropResult up to 5x for one real outcome and skewing the brain
+    // weights accordingly. The DB write is guarded on status="pending" too,
+    // but that only stops the duplicate WRITE, not the duplicate learning.
     const gamePredictions = pending.filter((p: any) => {
       // Match by date (all pending for today)
-      return p.game_date === today && p.status === "pending";
+      return (
+        p.game_date === today &&
+        p.status === "pending" &&
+        !gradedThisRun.has(p.id)
+      );
     });
 
     for (const pred of gamePredictions) {
@@ -170,8 +198,14 @@ export async function auditCompletedGames(brain: NbaPropBrainState): Promise<{
       );
       if (!boxPlayer) continue; // player not in this game's box score
 
-      const actualValue =
-        (boxPlayer as any)[statKey] ?? (boxPlayer as any)[statKeyAlt] ?? 0;
+      // `?? 0` here would settle a missing stat as a real 0 — e.g. a CDN
+      // shape change dropping `reboundsTotal` would post every rebounds-over
+      // as a confident LOSS. Missing means ungradeable, so skip the row and
+      // leave it pending rather than inventing an outcome.
+      const rawValue =
+        (boxPlayer as any)[statKey] ?? (boxPlayer as any)[statKeyAlt];
+      const actualValue = Number(rawValue);
+      if (rawValue == null || !Number.isFinite(actualValue)) continue;
       const hit =
         pred.predicted_side === "over"
           ? actualValue > pred.line
@@ -188,7 +222,14 @@ export async function auditCompletedGames(brain: NbaPropBrainState): Promise<{
           status: "graded",
           graded_at: new Date().toISOString(),
         })
-        .eq("id", pred.id);
+        .eq("id", pred.id)
+        // Only settle a row that is still pending — without this a retry or
+        // an overlapping cron run re-writes a settled outcome and re-feeds the
+        // brain from the same game twice.
+        .eq("status", "pending");
+
+      gradedThisRun.add(pred.id);
+      pred.status = "graded"; // keep the in-memory copy consistent too
 
       // Feed into brain learning
       updatedBrain = learnFromPropResult(updatedBrain, {
