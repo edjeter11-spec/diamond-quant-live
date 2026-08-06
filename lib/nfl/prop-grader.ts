@@ -41,16 +41,23 @@ const MARKET_STAT: Record<string, keyof NFLGameLog> = {
 };
 
 /** Last-name match, same forgiving approach the MLB/NBA graders use. */
+// Strip accents before comparing — an accented box-score name will never
+// .includes() an unaccented pick name. Same bug that silently voided a real
+// MLB pick ("Jeremy Peña" vs "Jeremy Pena"); see lib/mlb/prop-grader.ts.
+function stripAccents(s: string): string {
+  return s.normalize("NFKD").replace(/[̀-ͯ]/g, "");
+}
+
 function findPlayer(name: string, lines: PlayerLine[]): PlayerLine | null {
   const lastName = (n: string) =>
-    n.toLowerCase().trim().split(/\s+/).slice(-1)[0];
-  const target = name.toLowerCase().trim();
+    stripAccents(n).toLowerCase().trim().split(/\s+/).slice(-1)[0];
+  const target = stripAccents(name).toLowerCase().trim();
   const targetLast = lastName(name);
   return (
     lines.find(
       (p) =>
-        p.name.toLowerCase().trim() === target ||
-        p.name.toLowerCase().includes(targetLast),
+        stripAccents(p.name).toLowerCase().trim() === target ||
+        stripAccents(p.name).toLowerCase().includes(targetLast),
     ) ?? null
   );
 }

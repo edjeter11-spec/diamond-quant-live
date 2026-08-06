@@ -76,15 +76,28 @@ export async function fetchGamePlayerLines(
   }
 }
 
+// Strip accents/diacritics before comparing — "Jeremy Peña" (MLB Stats API's
+// real box-score name) vs "Jeremy Pena" (however the pick's name got typed
+// or synthesized upstream) failed BOTH directions of the old .includes()
+// check, since "peña" contains neither "pena" nor vice versa. That silently
+// voided a real pick — Peña went 0-for-5 (0 total bases, well under his 1.5
+// line — a genuine LOSS) and it posted to Discord as an unexplained white
+// circle instead. NFKD decomposes "é" into "e" + a combining accent mark,
+// which the diacritics regex then strips.
+function stripAccents(s: string): string {
+  return s.normalize("NFKD").replace(/[̀-ͯ]/g, "");
+}
+
 /** Last-name match, same forgiving approach the NBA grader uses. */
 function findPlayer(name: string, lines: PlayerLine[]): PlayerLine | null {
-  const last = (n: string) => n.toLowerCase().trim().split(/\s+/).slice(-1)[0];
+  const last = (n: string) =>
+    stripAccents(n).toLowerCase().trim().split(/\s+/).slice(-1)[0];
   const target = last(name);
   return (
     lines.find(
       (p) =>
-        p.name.toLowerCase().includes(target) ||
-        name.toLowerCase().includes(last(p.name)),
+        stripAccents(p.name).toLowerCase().includes(target) ||
+        stripAccents(name).toLowerCase().includes(last(p.name)),
     ) ?? null
   );
 }

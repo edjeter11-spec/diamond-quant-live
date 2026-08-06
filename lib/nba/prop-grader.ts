@@ -42,13 +42,21 @@ const MARKET_STAT: Record<string, keyof Omit<PlayerLine, "name">> = {
 };
 
 function normalizeName(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/\./g, "")
-    .replace(/'/g, "")
-    .replace(/\s+(jr|sr|ii|iii|iv)$/i, "")
-    .replace(/\s+/g, " ")
-    .trim();
+  return (
+    name
+      // Strip accents first — the NBA is full of them (Jokić, Dončić,
+      // Šengün) and an accented box-score name will never .includes() an
+      // unaccented pick name. Same bug that silently voided a real MLB
+      // pick ("Jeremy Peña" vs "Jeremy Pena") — see lib/mlb/prop-grader.ts.
+      .normalize("NFKD")
+      .replace(/[̀-ͯ]/g, "")
+      .toLowerCase()
+      .replace(/\./g, "")
+      .replace(/'/g, "")
+      .replace(/\s+(jr|sr|ii|iii|iv)$/i, "")
+      .replace(/\s+/g, " ")
+      .trim()
+  );
 }
 
 /** Last-name-plus-first-3 match, same forgiving approach the MLB grader uses. */
