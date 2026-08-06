@@ -27,7 +27,13 @@ import {
 // This just ensures we have fresh score data cached
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 120;
+// 300s, up from 120. This handler does a lot — scores, odds, pick
+// generation, settlement, prop grading for four sports, plus the publish and
+// recap fan-outs. At 120s it was being killed mid-flight, and the symptom was
+// not a clean error: the in-flight fetch received Vercel's HTML error page
+// and failed with `Unexpected token '<', "<!DOCTYPE"`, which is why the
+// 2026-08-06 board silently never posted to Discord.
+export const maxDuration = 300;
 
 export async function GET(req: Request) {
   // Lock down: Vercel Cron sends `Authorization: Bearer ${CRON_SECRET}`; internal/manual
@@ -1404,20 +1410,31 @@ export async function GET(req: Request) {
       const origin = new URL(req.url).origin;
       const headers = { "x-cron-secret": process.env.CRON_SECRET ?? "" };
 
-      for (const s of ["mlb", "nba", "nfl"]) {
-        try {
-          const r = await fetch(`${origin}/api/publish-daily?sport=${s}`, {
-            method: "POST",
-            headers,
-            signal: AbortSignal.timeout(30000),
-          });
-          discordDailyBySport[s] = { published: await r.json() };
-        } catch (e) {
-          discordDailyBySport[s] = {
-            published: { ok: false, error: String(e) },
-          };
-        }
-      }
+      // PARALLEL, not sequential.
+      //
+      // Three publishes at 30s each, plus three post-results below at 30s
+      // each, added up to 180s of new work inside a handler whose
+      // maxDuration is 120. Vercel killed the function mid-flight and the
+      // in-flight fetch received an HTML error page instead of JSON —
+      // "Unexpected token '<', \"<!DOCTYPE\"". That is exactly why the
+      // 2026-08-06 board never posted to Discord on its own, and it started
+      // the moment this loop was added. Running them concurrently keeps the
+      // whole group at roughly one call's latency.
+      const pubResults = await Promise.all(
+        ["mlb", "nba", "nfl"].map(async (s) => {
+          try {
+            const r = await fetch(`${origin}/api/publish-daily?sport=${s}`, {
+              method: "POST",
+              headers,
+              signal: AbortSignal.timeout(30000),
+            });
+            return [s, { published: await r.json() }] as const;
+          } catch (e) {
+            return [s, { published: { ok: false, error: String(e) } }] as const;
+          }
+        }),
+      );
+      for (const [s, v] of pubResults) discordDailyBySport[s] = v;
       // MLB keeps its own top-level key too — everything below this point
       // (line alerts, edge scan, lineup watch, etc.) is MLB-specific and
       // reads discordDaily directly.
@@ -1708,24 +1725,25 @@ export async function GET(req: Request) {
       // this, NBA/NFL manual_picks rows could be published (via the loop
       // above) but had zero automated path to ever get graded or recapped,
       // since post-results was only ever called with sport=mlb.
-      for (const s of ["mlb", "nba", "nfl"]) {
-        try {
-          const r = await fetch(`${origin}/api/post-results?sport=${s}`, {
-            method: "POST",
-            headers,
-            signal: AbortSignal.timeout(30000),
-          });
-          discordDailyBySport[s] = {
-            ...discordDailyBySport[s],
-            recap: await r.json(),
-          };
-        } catch (e) {
-          discordDailyBySport[s] = {
-            ...discordDailyBySport[s],
-            recap: { ok: false, error: String(e) },
-          };
-        }
-      }
+      // Parallel, same reason as the publish loop above — three sequential
+      // 30s calls here were half of what pushed this handler past its 120s
+      // maxDuration and got it killed mid-flight.
+      const recapResults = await Promise.all(
+        ["mlb", "nba", "nfl"].map(async (s) => {
+          try {
+            const r = await fetch(`${origin}/api/post-results?sport=${s}`, {
+              method: "POST",
+              headers,
+              signal: AbortSignal.timeout(30000),
+            });
+            return [s, await r.json()] as const;
+          } catch (e) {
+            return [s, { ok: false, error: String(e) }] as const;
+          }
+        }),
+      );
+      for (const [s, recap] of recapResults)
+        discordDailyBySport[s] = { ...discordDailyBySport[s], recap };
       discordDaily.recap = discordDailyBySport.mlb?.recap ?? null;
       discordDaily.bySport = discordDailyBySport;
     }

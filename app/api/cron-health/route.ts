@@ -47,6 +47,14 @@ export async function GET() {
     lastRunAt: hb.at,
     minutesAgo: ageMin,
     publishedToday: hb.publishedToday ?? false,
+    // Surface WHY a publish didn't happen. Without this the health endpoint
+    // said "healthy" with publishedToday:false and gave no hint that the
+    // publish call had actually errored — which is how a broken board went
+    // unnoticed for a full day.
+    publishError:
+      (hb as any).publishDetail?.ok === false
+        ? ((hb as any).publishDetail.error ?? "publish failed")
+        : undefined,
     // Named explicitly so whoever reads this at 9am knows where to look first
     // rather than re-deriving it from scratch, as I had to.
     message: stale
