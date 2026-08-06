@@ -5,6 +5,7 @@
 // ──────────────────────────────────────────────────────────
 
 import { projectProp, type ProjectionContext } from "./nba-prop-projector";
+import { etDateString } from "@/lib/sports-date";
 import { isPlayerInjured, getInjuryImpact } from "@/lib/nba/injuries";
 import {
   type NbaPropBrainState,
@@ -72,7 +73,9 @@ export async function commitPropProjections(
 ): Promise<{ committed: number; skipped: number }> {
   if (!supabase) return { committed: 0, skipped: 0 };
 
-  const today = new Date().toISOString().split("T")[0];
+  // ET, not UTC — ghost picks committed in the evening were keyed to
+  // tomorrow and then never found by the grader, which keys on the ET date.
+  const today = etDateString();
   let committed = 0;
   let skipped = 0;
 
@@ -193,7 +196,7 @@ export function generatePropBotPicks(
   predictions: PropPrediction[],
 ): PropBotPick[] {
   const picks: PropBotPick[] = [];
-  const today = new Date().toISOString().split("T")[0];
+  const today = etDateString();
 
   for (const pred of predictions) {
     // Check if brain has enough accuracy on this player

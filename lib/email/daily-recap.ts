@@ -5,6 +5,7 @@
 // isn't configured (code-ready for a later activation).
 
 import { supabaseAdmin } from "@/lib/supabase/server-auth";
+import { etDateString } from "@/lib/sports-date";
 
 interface RecapPayload {
   yesterdayRecord: { wins: number; losses: number; profitUnits: number };
@@ -79,7 +80,10 @@ export async function buildRecap(
   if (!supabaseAdmin) return null;
   const yesterday = new Date();
   yesterday.setUTCDate(yesterday.getUTCDate() - 1);
-  const yStr = yesterday.toISOString().split("T")[0];
+  // ET, not UTC. Built with toISOString() this was a day ahead between 8pm
+  // ET and midnight — so an evening send emailed subscribers a "yesterday"
+  // recap of games that were still in progress.
+  const yStr = etDateString(yesterday);
 
   const { data: yesterdayRows } = await supabaseAdmin
     .from("daily_picks_log")
@@ -105,7 +109,7 @@ export async function buildRecap(
   const { data: weekRows } = await supabaseAdmin
     .from("daily_picks_log")
     .select("result,profit_units")
-    .gte("pick_date", since.toISOString().split("T")[0])
+    .gte("pick_date", etDateString(since))
     .neq("result", "pending");
   const results7Days = {
     wins: (weekRows ?? []).filter((r) => r.result === "win").length,
@@ -118,7 +122,7 @@ export async function buildRecap(
   };
 
   // Tonight's parlay + pick count
-  const today = new Date().toISOString().split("T")[0];
+  const today = etDateString();
   const { data: parlay } = await supabaseAdmin
     .from("app_state")
     .select("value")

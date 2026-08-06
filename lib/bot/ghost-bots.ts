@@ -1,3 +1,4 @@
+import { etDateString } from "@/lib/sports-date";
 // ──────────────────────────────────────────────────────────
 // Ghost Bots — 3 Shadow Strategies Running in Parallel
 // Each uses different logic. Best performer becomes the Live Bot.
@@ -150,7 +151,7 @@ export function generateGhostPicks(
   oddsData: any[],
   system: GhostSystemState,
 ): GhostSystemState {
-  const today = new Date().toISOString().split("T")[0];
+  const today = etDateString();
   const updatedGhosts = system.ghosts.map((ghost) => {
     // Skip if already has picks today
     if (ghost.picks.filter((p) => p.date === today).length > 0) return ghost;

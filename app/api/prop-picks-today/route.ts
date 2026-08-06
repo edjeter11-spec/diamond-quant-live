@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { etDateString } from "@/lib/sports-date";
 import { cloudGet, cloudSet } from "@/lib/supabase/client";
 import { loadNbaPropBrainFromCloud } from "@/lib/bot/nba-prop-brain";
 import { projectProp } from "@/lib/bot/nba-prop-projector";
@@ -174,7 +175,7 @@ function getFallbackLines(player: (typeof NBA_STAR_FALLBACK)[0]) {
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const force = searchParams.get("force") === "true";
-  const today = new Date().toISOString().split("T")[0];
+  const today = etDateString();
   const cacheKey = `${CACHE_KEY_PREFIX}_${today}`;
 
   // Return cached if fresh and not forced
@@ -227,7 +228,7 @@ export async function GET(req: NextRequest) {
 
       for (const market of markets) {
         try {
-          const today = new Date().toISOString().split("T")[0];
+          const today = etDateString();
           const res = await fetch(
             `${baseUrl}/api/players?sport=basketball_nba&market=${market}`,
             {

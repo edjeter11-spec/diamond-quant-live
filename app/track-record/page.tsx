@@ -68,6 +68,35 @@ const MIN_SAMPLE = 30;
  * /api/results is the same source the board's record strip uses, so the two
  * can't disagree.
  */
+/** The API's authoritative roll-up, or null if it's unreachable.
+ *
+ *  `recent` is a 20-row display slice (api/results caps it) covering only
+ *  daily_picks_log. `overall` spans the whole window AND folds in
+ *  prop_predictions. The page used to compute its headline record from
+ *  `recent`, which meant the number labelled "All-time graded" was at most 20
+ *  picks from one table — and since MIN_SAMPLE is 30, `thin` was ALWAYS true
+ *  and the win rate was never displayed at all. */
+async function getOverall(days = 365): Promise<{
+  total: number;
+  wins: number;
+  losses: number;
+  pushes: number;
+  winRate: number;
+  profitUnits: number;
+} | null> {
+  try {
+    const r = await fetch(
+      `https://diamond-quant-live.vercel.app/api/results?days=${days}`,
+      { next: { revalidate: 300 } },
+    );
+    if (!r.ok) return null;
+    const d = await r.json();
+    return d?.overall ?? null;
+  } catch {
+    return null;
+  }
+}
+
 async function getRecentGraded(): Promise<PropPick[]> {
   try {
     const r = await fetch(
@@ -101,21 +130,39 @@ async function getStats() {
   // is unreachable — on its own it reports a record from a finished season
   // while the site publishes MLB daily, so the headline number described a
   // different sport than the picks underneath it.
-  const live = await getRecentGraded();
+  const [live, overall] = await Promise.all([
+    getRecentGraded(),
+    getOverall(365),
+  ]);
+  // Only fall back to the stale NBA blob when the API is genuinely
+  // unreachable (overall === null) — NOT when it returns an empty list. An
+  // empty-but-successful response used to be indistinguishable from a failed
+  // one here, so a quiet day served a finished-season NBA record under an
+  // "All-time" label.
   const history =
     live.length > 0
       ? live
-      : ((await cloudGet<PropPick[]>("prop_pick_history_nba", [])) ?? []);
-  const graded = history.filter(
-    (p) => p.result === "win" || p.result === "loss",
-  );
+      : overall === null
+        ? ((await cloudGet<PropPick[]>("prop_pick_history_nba", [])) ?? [])
+        : [];
+
+  // Headline record comes from the API's roll-up, which spans the whole
+  // window and includes prop_predictions — not from `history`, which is a
+  // 20-row display slice of daily_picks_log only.
+  const wins =
+    overall?.wins ?? history.filter((p) => p.result === "win").length;
+  const losses =
+    overall?.losses ?? history.filter((p) => p.result === "loss").length;
+  const pushes =
+    overall?.pushes ?? history.filter((p) => p.result === "push").length;
   // Pushes are excluded from the win-rate denominator (standard betting
   // convention), but that exclusion has to be visible or the W/L numbers
   // won't reconcile with the graded total. Counted here, surfaced in the UI.
-  const pushes = history.filter((p) => p.result === "push").length;
-  const wins = graded.filter((p) => p.result === "win").length;
-  const losses = graded.filter((p) => p.result === "loss").length;
-  const winRate = graded.length > 0 ? (wins / graded.length) * 100 : 0;
+  const decided = wins + losses;
+  const graded = history.filter(
+    (p) => p.result === "win" || p.result === "loss",
+  );
+  const winRate = decided > 0 ? (wins / decided) * 100 : 0;
 
   // Group by date
   const dailyMap = new Map<string, { wins: number; losses: number }>();
@@ -143,7 +190,11 @@ async function getStats() {
     losses,
     pushes,
     winRate,
-    totalGraded: graded.length,
+    // Decided picks across the FULL window, not `graded.length` (the 20-row
+    // display slice). This drives the MIN_SAMPLE gate — using the slice meant
+    // totalGraded could never exceed 20, `thin` was permanently true, and the
+    // win rate was never shown no matter how many picks had actually graded.
+    totalGraded: decided,
     daily,
     recent,
   };
@@ -280,8 +331,10 @@ export default async function TrackRecordPage() {
               above it, which is the thing actually being sold here. One quiet
               line, accurate, with the sample size attached. */}
           <div className="glass rounded-lg px-4 py-2.5 border border-slate/20 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-[11px]">
+            {/* "Last 12 months", not "All-time" — getOverall queries a 365-day
+                window, so claiming all-time would overstate the span. */}
             <span className="text-mercury/60 uppercase tracking-wide text-[9px]">
-              All-time graded
+              Graded (last 12 mo)
             </span>
             <span className="font-mono text-silver">
               {stats.totalGraded === 0

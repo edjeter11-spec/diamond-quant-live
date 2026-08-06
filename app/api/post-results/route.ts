@@ -464,6 +464,10 @@ async function recapBatch(
         sport,
         dateLabel,
         title,
+        // Idempotency key — the bot returns the original message_id instead
+        // of sending again if it sees this key twice. Covers the case where
+        // Discord accepted the send but our fetch timed out waiting.
+        batchKey,
         // Echoed back on a sweep so the recap can show the exact slip that
         // cashed — see buildResultsEmbed. Same key the admin panel writes.
         betslip_url:
@@ -476,7 +480,11 @@ async function recapBatch(
         legs: graded,
         unitsNet: Math.round(unitsNet * 100) / 100,
       }),
-      signal: AbortSignal.timeout(10000),
+      // 25s, not 10s. Discord's send regularly exceeds 10s under rate
+      // limiting, and a timeout here does NOT mean the post failed — see the
+      // catch block, which deliberately keeps the claim for exactly that
+      // reason.
+      signal: AbortSignal.timeout(25000),
     });
     const posted = await r.json();
     if (!posted.ok) {
@@ -500,8 +508,29 @@ async function recapBatch(
       messageId: posted.message_id,
     };
   } catch (e: any) {
-    // Release so a transient failure doesn't permanently suppress the recap.
-    await releaseClaim().catch(() => {});
-    return { batchKey, ok: false, error: String(e) };
+    // A TIMEOUT IS NOT A FAILURE TO POST.
+    //
+    // This used to release the claim on any throw. But the throw is usually
+    // AbortSignal.timeout firing on a SLOW response — Discord frequently
+    // accepts the message and replies late under rate limiting. Releasing
+    // then let the next tick re-claim and post the identical recap a second
+    // time, which is precisely the double-post the claim exists to prevent.
+    //
+    // So: leave the claim in place on a timeout/network error. It stays
+    // `pending: true`, and the 15-minute staleness rule at the top of this
+    // function reclaims it if the post genuinely never landed. That trades a
+    // possible 15-minute delay for never double-posting — the right way
+    // round for something users see.
+    const isTimeout =
+      e?.name === "TimeoutError" ||
+      e?.name === "AbortError" ||
+      /timeout|aborted/i.test(String(e?.message ?? e));
+    if (!isTimeout) await releaseClaim().catch(() => {});
+    return {
+      batchKey,
+      ok: false,
+      error: String(e),
+      claimHeld: isTimeout || undefined,
+    };
   }
 }

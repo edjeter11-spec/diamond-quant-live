@@ -4,6 +4,7 @@
 // ──────────────────────────────────────────────────────────
 
 import { sendDiscordAlert } from "@/lib/odds/sportsbooks";
+import { etDateString } from "@/lib/sports-date";
 
 interface RecapData {
   sport: string;
@@ -118,7 +119,7 @@ export async function buildAndSendRecap(webhookUrl: string, sport: string) {
     const botState = await cloudGet<any>(botKey, null);
     if (!botState) return;
 
-    const today = new Date().toISOString().split("T")[0];
+    const today = etDateString();
     const todayPicks = (botState.picks ?? []).filter(
       (p: any) => p.date === today,
     );
