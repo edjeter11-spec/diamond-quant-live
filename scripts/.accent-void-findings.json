@@ -1,0 +1,34 @@
+[
+  {
+    "id": "7eb0e843-d9b6-4512-b48d-118a1e3f2fb3",
+    "slate": "2026-07-30",
+    "pick": "Brandon Lowe Over 0.5 Hits",
+    "actual": 1,
+    "shouldBe": "win",
+    "profitUnits": 0.44
+  },
+  {
+    "id": "68ef5270-807e-4179-8c04-bbe8a224f894",
+    "slate": "2026-07-30",
+    "pick": "Sal Stewart Over 0.5 Hits",
+    "actual": 1,
+    "shouldBe": "win",
+    "profitUnits": 0.44
+  },
+  {
+    "id": "9a423853-cdc1-417a-87a0-1cbfbf8e7175",
+    "slate": "2026-07-30",
+    "pick": "Masyn Winn Over 0.5 Total Bases",
+    "actual": 1,
+    "shouldBe": "win",
+    "profitUnits": 0.5
+  },
+  {
+    "id": "d9eae8da-9b1f-4788-a6fb-a4e0d0b10592",
+    "slate": "2026-07-30",
+    "pick": "Elly De La Cruz Over 0.5 Runs",
+    "actual": 2,
+    "shouldBe": "win",
+    "profitUnits": 0.84
+  }
+]

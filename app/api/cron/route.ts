@@ -1739,7 +1739,19 @@ export async function GET(req: Request) {
     // safety net: anything still 'pending' after STALE_DAYS is voided —
     // excluded from accuracy/brier stats, same treatment a sportsbook gives
     // a cancelled game — rather than silently rotting as fake "still open"
-    // data forever. Applies to manual_picks and bot_picks the same way.
+    // data forever.
+    //
+    // manual_picks is DELIBERATELY EXCLUDED from this sweep. Voiding a
+    // published pick destroys a real result: the first run of this sweep
+    // voided four 2026-07-30 picks (+2.22u of genuine WINS) whose only
+    // problem was that cron had never called post-results for them — the
+    // games were long final and perfectly gradeable. prop_predictions is
+    // internal brain-learning data where a stale row is just noise, but
+    // manual_picks IS the published record, so a wrong void there is worse
+    // than a row left pending. post-results now runs for every sport on
+    // every tick and will grade those legitimately; anything it genuinely
+    // can't resolve is caught by scripts/audit-stuck-picks.mts for a human
+    // to look at, not silently erased.
     try {
       const STALE_DAYS = 3;
       const staleCutoff = new Date(Date.now() - STALE_DAYS * 86400_000)
@@ -1747,23 +1759,12 @@ export async function GET(req: Request) {
         .slice(0, 10);
       const { supabase: sbVoid } = await import("@/lib/supabase/client");
       if (sbVoid) {
-        const [propsVoid, manualVoid, botVoid] = await Promise.all([
+        const [propsVoid, botVoid] = await Promise.all([
           sbVoid
             .from("prop_predictions")
             .update({ status: "void", graded_at: new Date().toISOString() })
             .eq("status", "pending")
             .lt("game_date", staleCutoff)
-            .select("id"),
-          sbVoid
-            .from("manual_picks")
-            .update({
-              result: "void",
-              settled_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-            })
-            .eq("status", "published")
-            .is("result", null)
-            .lt("slate_date", staleCutoff)
             .select("id"),
           sbVoid
             .from("bot_picks")
@@ -1774,12 +1775,11 @@ export async function GET(req: Request) {
         ]);
         const voided = {
           propPredictions: propsVoid.data?.length ?? 0,
-          manualPicks: manualVoid.data?.length ?? 0,
           // bot_picks' CHECK constraint doesn't allow 'void' — 'push' is the
           // closest neutral result (0 stake impact) it accepts.
           botPicks: botVoid.data?.length ?? 0,
         };
-        if (voided.propPredictions + voided.manualPicks + voided.botPicks > 0) {
+        if (voided.propPredictions + voided.botPicks > 0) {
           discordDaily.staleVoidSweep = voided;
         }
       }
