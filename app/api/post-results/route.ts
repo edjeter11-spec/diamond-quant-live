@@ -156,6 +156,7 @@ export async function POST(req: NextRequest) {
         batchKey,
         batchPicks,
         allLines,
+        finals,
         slate,
         sport,
         force,
@@ -174,6 +175,7 @@ async function recapBatch(
   batchKey: string,
   picks: any[],
   allLines: PlayerLine[],
+  finals: Array<{ home: string; away: string; [k: string]: any }>,
   slate: string,
   sport: string,
   force: boolean,
@@ -220,6 +222,76 @@ async function recapBatch(
     if (p.result) {
       graded.push({ text: p.pick_text, result: p.result });
       unitsNet += Number(p.profit_units ?? 0);
+      continue;
+    }
+
+    // ── Moneyline picks — graded separately from props ──
+    //
+    // A moneyline row (market='moneyline') has no player_name/market_key —
+    // it's a team-vs-team bet, not a prop — so grader.gradeProp can never
+    // match it against box-score PLAYER lines. Before this branch existed,
+    // every moneyline pick sat as `ungraded++` forever: the void-fallback
+    // below only fires for player props (checks p.player_name), so a
+    // moneyline never voided either — it just held the whole batch's recap
+    // claim in `pending: true` indefinitely. That's exactly what happened to
+    // the 2026-08-05 mlb_parlay batch: 2 moneylines never graded, so the
+    // parlay recap never posted even though the props batch (same slate)
+    // went out fine.
+    if (p.market === "moneyline") {
+      const [pickAway, pickHome] = String(p.game).split(" @ ");
+      const norm = (s: string) => (s ?? "").toLowerCase().trim();
+      const final = finals.find((f) => {
+        const h = norm(f.home),
+          a = norm(f.away);
+        return (
+          (h && norm(pickHome).includes(h)) ||
+          (h && h.includes(norm(pickHome))) ||
+          (a && norm(pickAway).includes(a)) ||
+          (a && a.includes(norm(pickAway)))
+        );
+      });
+      // Game not in today's finals list — not over yet. Same "wait" path a
+      // prop takes when its game hasn't finished.
+      if (
+        !final ||
+        !Number.isFinite(final.homeScore) ||
+        !Number.isFinite(final.awayScore)
+      ) {
+        ungraded++;
+        continue;
+      }
+      const homeWon = final.homeScore > final.awayScore;
+      const awayWon = final.awayScore > final.homeScore;
+      const pushed = final.homeScore === final.awayScore;
+      const pickedTeam = String(p.pick_text ?? "").replace(/\s*ML$/i, "");
+      const pickedHome =
+        pickedTeam && norm(pickHome).includes(norm(pickedTeam));
+      const pickedAway =
+        pickedTeam && norm(pickAway).includes(norm(pickedTeam));
+      const won = (pickedHome && homeWon) || (pickedAway && awayWon);
+
+      const stake = Number(p.units ?? 1);
+      const result = pushed ? "push" : won ? "win" : "loss";
+      const profit = pushed
+        ? 0
+        : won
+          ? stake * (americanToDecimal(Number(p.odds ?? -110)) - 1)
+          : -stake;
+
+      await supabaseAdmin!
+        .from("manual_picks")
+        .update({
+          result,
+          actual_value: pickedHome ? final.homeScore : final.awayScore,
+          profit_units: Math.round(profit * 100) / 100,
+          settled_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", p.id)
+        .is("result", null);
+
+      unitsNet += profit;
+      graded.push({ text: p.pick_text, result });
       continue;
     }
 

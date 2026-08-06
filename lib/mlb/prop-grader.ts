@@ -146,9 +146,15 @@ export function gradeMlbProp(
 }
 
 /** Final games for an ET date, as {gamePk, teams} for box-score lookup. */
-export async function fetchFinalGames(
-  dateISO: string,
-): Promise<Array<{ gamePk: number; home: string; away: string }>> {
+export async function fetchFinalGames(dateISO: string): Promise<
+  Array<{
+    gamePk: number;
+    home: string;
+    away: string;
+    homeScore: number;
+    awayScore: number;
+  }>
+> {
   try {
     const res = await fetch(`${MLB_API}/schedule?sportId=1&date=${dateISO}`, {
       signal: AbortSignal.timeout(10000),
@@ -163,6 +169,12 @@ export async function fetchFinalGames(
         gamePk: g.gamePk,
         home: g?.teams?.home?.team?.name ?? "",
         away: g?.teams?.away?.team?.name ?? "",
+        // Scores ride along in the same payload — needed to grade moneyline
+        // picks (manual_picks rows with market='moneyline' have no
+        // player_name/market_key, so gradeMlbProp can't touch them at all;
+        // this feeds the separate moneyline-grading path in post-results).
+        homeScore: Number(g?.teams?.home?.score ?? NaN),
+        awayScore: Number(g?.teams?.away?.score ?? NaN),
       }));
   } catch {
     return [];

@@ -123,9 +123,15 @@ function espnYyyymmdd(dateISO: string): string {
  *  scoreboard (same endpoint app/api/cron/route.ts already uses for
  *  nbaCompletedGames). Returns ESPN event ids — the box-score fetch below
  *  needs these, not NBA's internal gameId format. */
-export async function fetchFinalGames(
-  dateISO: string,
-): Promise<Array<{ gameId: string; home: string; away: string }>> {
+export async function fetchFinalGames(dateISO: string): Promise<
+  Array<{
+    gameId: string;
+    home: string;
+    away: string;
+    homeScore: number;
+    awayScore: number;
+  }>
+> {
   try {
     const res = await fetch(
       `https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=${espnYyyymmdd(dateISO)}`,
@@ -133,7 +139,13 @@ export async function fetchFinalGames(
     );
     if (!res.ok) return [];
     const data = await res.json();
-    const out: Array<{ gameId: string; home: string; away: string }> = [];
+    const out: Array<{
+      gameId: string;
+      home: string;
+      away: string;
+      homeScore: number;
+      awayScore: number;
+    }> = [];
     for (const ev of data?.events ?? []) {
       const comp = ev.competitions?.[0];
       if (comp?.status?.type?.name !== "STATUS_FINAL") continue;
@@ -144,6 +156,10 @@ export async function fetchFinalGames(
         gameId: String(ev.id),
         home: home.team?.displayName ?? "",
         away: away.team?.displayName ?? "",
+        // Needed to grade moneyline manual_picks rows (no player_name/
+        // market_key, so gradeNbaProp can't touch them) — see post-results.
+        homeScore: Number(home.score ?? NaN),
+        awayScore: Number(away.score ?? NaN),
       });
     }
     return out;

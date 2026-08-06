@@ -111,9 +111,15 @@ function espnYyyymmdd(dateISO: string): string {
  *  in practice than it was for NBA's daily slate, but it's not guaranteed,
  *  so this fetches the actual date being graded rather than "whatever ESPN
  *  currently calls today". */
-export async function fetchFinalGames(
-  dateISO: string,
-): Promise<Array<{ gameId: string; home: string; away: string }>> {
+export async function fetchFinalGames(dateISO: string): Promise<
+  Array<{
+    gameId: string;
+    home: string;
+    away: string;
+    homeScore: number;
+    awayScore: number;
+  }>
+> {
   try {
     const res = await fetch(
       `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=${espnYyyymmdd(dateISO)}`,
@@ -131,6 +137,9 @@ export async function fetchFinalGames(
           gameId: String(ev.id),
           home: home?.team?.displayName ?? "",
           away: away?.team?.displayName ?? "",
+          // Needed to grade moneyline manual_picks rows — see post-results.
+          homeScore: Number(home?.score ?? NaN),
+          awayScore: Number(away?.score ?? NaN),
         };
       });
   } catch {
