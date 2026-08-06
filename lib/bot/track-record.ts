@@ -84,7 +84,22 @@ export async function logDailyPicks(
   }
   if (rows.length === 0) return { inserted: 0 };
 
-  const { error } = await supabaseAdmin.from("daily_picks_log").insert(rows);
+  // upsert + ignoreDuplicates, NOT a bare insert.
+  //
+  // The read-then-skip dedup above is a race: two overlapping cron runs both
+  // SELECT "not present" and both INSERT. The duplicates then settle
+  // independently and getTrackRecordStats sums profit_units across all of
+  // them, so one real pick contributes its win TWICE to the public record.
+  // Migration 014 adds the UNIQUE index on (pick_date, sport, category,
+  // pick_text) that makes this conflict target valid; with ignoreDuplicates
+  // the losing racer no-ops instead of erroring or double-writing.
+  //
+  // Safe before 014 is applied too: without the unique index there's simply
+  // no conflict to resolve and this behaves like the previous insert.
+  const { error } = await supabaseAdmin.from("daily_picks_log").upsert(rows, {
+    onConflict: "pick_date,sport,category,pick_text",
+    ignoreDuplicates: true,
+  });
   if (error) {
     console.error("logDailyPicks error:", error);
     return { inserted: 0 };
