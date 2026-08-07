@@ -150,6 +150,10 @@ export async function POST(req: NextRequest) {
 
     if (picks.length > 0) {
       const lines = picks.map((p, i) => {
+        // Moneylines carry no side/line — rendering one with the prop
+        // template printed "Minnesota Twins Over 0 moneyline" in Discord.
+        if (p.market === "moneyline")
+          return `**${i + 1}.** ${p.playerName} **ML** — ${fmtOdds(p.odds)} · ${p.bookmaker}  ⚡ *+${p.evPercentage?.toFixed(1)}% vs sharp line*`;
         const label = MARKET_LABEL[p.market] ?? p.label ?? p.market;
         const side = p.side === "over" ? "Over" : "Under";
         return `**${i + 1}.** ${p.playerName} **${side} ${p.line} ${label}** — ${fmtOdds(p.odds)} · ${p.bookmaker}`;
@@ -177,28 +181,39 @@ export async function POST(req: NextRequest) {
       } else {
         // One row per leg — a single row for the whole board couldn't record
         // per-pick outcomes.
-        const rows = picks.map((p) => ({
-          created_by: null,
-          source: "system",
-          sport,
-          game: p.team ?? null,
-          market: "player_prop",
-          market_key: p.market,
-          player_name: p.playerName,
-          line: p.line,
-          side: p.side,
-          odds: p.odds,
-          bookmaker: p.bookmaker,
-          pick_text: `${p.playerName} ${p.side === "over" ? "Over" : "Under"} ${p.line} ${MARKET_LABEL[p.market] ?? p.market}`,
-          units: 1,
-          confidence: "Lock",
-          status: "published",
-          slate_date: slate,
-          batch_key: batchKey,
-          published_at: new Date().toISOString(),
-          discord_channel_id: discordRes.channel_id,
-          discord_message_id: discordRes.message_id,
-        }));
+        // The board can now contain sharp-anchor MONEYLINES alongside props
+        // (see the edge-scan block in pinned-props). A moneyline has no
+        // player, side or line — formatting one with the prop template
+        // produced rows like "Minnesota Twins Over 0 moneyline", and storing
+        // it as market:"player_prop" would send it to the prop grader, which
+        // can never settle a team bet. Branch on the pick's own market.
+        const rows = picks.map((p) => {
+          const isMl = p.market === "moneyline";
+          return {
+            created_by: null,
+            source: "system",
+            sport,
+            game: p.team ?? null,
+            market: isMl ? "moneyline" : "player_prop",
+            market_key: isMl ? null : p.market,
+            player_name: isMl ? null : p.playerName,
+            line: isMl ? null : p.line,
+            side: isMl ? null : p.side,
+            odds: p.odds,
+            bookmaker: p.bookmaker,
+            pick_text: isMl
+              ? `${p.playerName} ML`
+              : `${p.playerName} ${p.side === "over" ? "Over" : "Under"} ${p.line} ${MARKET_LABEL[p.market] ?? p.market}`,
+            units: 1,
+            confidence: "Lock",
+            status: "published",
+            slate_date: slate,
+            batch_key: batchKey,
+            published_at: new Date().toISOString(),
+            discord_channel_id: discordRes.channel_id,
+            discord_message_id: discordRes.message_id,
+          };
+        });
         // Retry once — the board is already live in Discord, so failing to
         // log here leaves it permanently ungradeable. The claim is NOT
         // released on failure: releasing it would make the next tick re-post
