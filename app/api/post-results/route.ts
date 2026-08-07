@@ -375,7 +375,20 @@ async function recapBatch(
         finals.some(
           (f) => sideMatches(pgHome, f.home) && sideMatches(pgAway, f.away),
         );
-      if (thisGameFinal && p.player_name) {
+      // A prop's stored `game` is not trustworthy on its own: /api/players
+      // attributes some props to the wrong matchup (Bo Bichette, a Blue Jay,
+      // came through tagged "Mets @ Pirates" on 2026-08-07). Voiding off a
+      // wrong game would mark a pick unplayable while its REAL game was
+      // still in progress. Requiring the player to be absent from a
+      // FULLY-final slate removes the dependency on that field: if every
+      // game is done and he appears nowhere, he genuinely didn't play.
+      const wholeSlateFinal =
+        finals.length > 0 &&
+        finals.every(
+          (f) => Number.isFinite(f.homeScore) && Number.isFinite(f.awayScore),
+        ) &&
+        allLines.length > 0;
+      if (thisGameFinal && wholeSlateFinal && p.player_name) {
         // Accent-insensitive, same as the graders — an exact-string check
         // here is what turned a real Peña loss into a void.
         const target = deaccent(String(p.player_name));
