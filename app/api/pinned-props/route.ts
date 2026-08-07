@@ -78,7 +78,15 @@ const REFRESH_HOURS = 3;
 // (-4 to -6%) is what a NORMAL fair price looks like; below -5 the price is
 // genuinely off against us. The ranking (EV + beatsMarket bonus) still puts
 // the best-priced plays on top within the gate.
-const MIN_EV = -5;
+// -3.5, tightened from -5.
+//
+// -5 was chosen to keep the board from emptying, and it worked — by
+// publishing plays we ourselves priced as losers. On 2026-08-07 it put a
+// -3.1% and a -4.8% prop on the board while the sharp-anchor scanner had
+// three POSITIVE-EV moneylines available (now added above). "EV ≈ -vig is
+// normal" is true and is exactly the point: paying full vig with no edge is
+// a losing bet, and a short honest board beats a padded losing one.
+const MIN_EV = -3.5;
 
 // Minimum win probability (%) for a prop to reach the board.
 //
@@ -612,6 +620,55 @@ export async function GET(req: NextRequest) {
         if (picks.length >= TARGET) break;
         if (picks.some((x) => x.key === p.key)) continue;
         tryTake(p, true);
+      }
+    }
+
+    // ── Sharp-anchor moneylines (MLB) ──
+    //
+    // The props board can only ever be as good as the prop market, and on a
+    // normal day that market is efficient: every candidate prices at roughly
+    // -vig, so the "best" board is a set of -3% to -5% EV plays. On
+    // 2026-08-07 the entire 124-prop pool topped out at -2.5% while
+    // /api/edge-scan simultaneously found three genuinely POSITIVE-EV
+    // moneylines against Pinnacle's de-vigged fair price. Publishing the
+    // negative-EV props and ignoring the positive-EV moneylines was strictly
+    // the wrong call.
+    //
+    // These are the only picks in the app with a mathematically grounded
+    // edge (no in-house model involved — see the 449-pick backtest that put
+    // the moneyline model at -7.69% ROI), so they belong at the TOP of the
+    // board, not as filler. Failures are swallowed: a board of props alone
+    // is the previous behaviour, which is an acceptable fallback.
+    if (!isNBA && !isNFL) {
+      try {
+        const r = await fetch(`${baseUrl}/api/edge-scan?minEv=0.5`, {
+          signal: AbortSignal.timeout(15000),
+        });
+        if (r.ok) {
+          const d = await r.json();
+          for (const e of (d.edges ?? []).slice(0, 2)) {
+            picks.unshift({
+              key: `ml-${e.gameId}-${e.side}`,
+              playerName: e.side,
+              team: e.game,
+              side: "over",
+              line: 0,
+              market: "moneyline",
+              odds: e.price,
+              bookmaker: e.book,
+              fairProb: e.fairProb,
+              evPercentage: e.evPct,
+              // vs Pinnacle's de-vigged price, which IS the market check.
+              marketEv: e.evPct,
+              beatsMarket: true,
+              score: 100 + e.evPct, // always outranks a -EV prop
+              label: "Moneyline",
+              usesBrain: false,
+            });
+          }
+        }
+      } catch {
+        /* props-only board is a fine fallback */
       }
     }
 

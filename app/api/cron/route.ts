@@ -1393,15 +1393,12 @@ export async function GET(req: Request) {
     // data…" forever. Cheap: reuses the already-cached odds fetch.
     let oddsSnapshot: any = null;
     try {
-      const snapRes = await fetch(
-        `${selfOrigin}/api/sharp-money`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sport: "baseball_mlb" }),
-          signal: AbortSignal.timeout(25000),
-        },
-      );
+      const snapRes = await fetch(`${selfOrigin}/api/sharp-money`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sport: "baseball_mlb" }),
+        signal: AbortSignal.timeout(25000),
+      });
       oddsSnapshot = await snapRes.json();
     } catch (e) {
       oddsSnapshot = { ok: false, error: String(e) };
@@ -1759,7 +1756,6 @@ export async function GET(req: Request) {
       } catch (e) {
         discordDaily.propsClv = { ok: false, error: String(e) };
       }
-
     }
 
     // ── Stuck-prediction void sweep ──
