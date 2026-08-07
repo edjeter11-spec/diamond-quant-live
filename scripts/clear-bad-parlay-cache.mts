@@ -23,7 +23,6 @@ async function j(path: string) {
   return r.json();
 }
 
-
 const etToday = new Date().toLocaleDateString("en-CA", {
   timeZone: "America/New_York",
 });

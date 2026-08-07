@@ -53,6 +53,21 @@ export async function GET(req: Request) {
   const forceTrain = url.searchParams.get("forceTrain") === "true";
   const forceEvolve = url.searchParams.get("forceEvolve") === "true";
 
+  // Base URL for every internal fetch this handler makes.
+  //
+  // NOT `new URL(req.url).origin`. When Vercel's scheduler invokes this
+  // route, req.url carries the internal per-deployment host
+  // (diamond-quant-live-<hash>.vercel.app), which sits behind Vercel's
+  // deployment protection — so internal fetches to it came back as an HTML
+  // LOGIN PAGE. That is the `Unexpected token '<', "<!DOCTYPE"` that
+  // silently stopped the Discord board from ever auto-publishing, and it's
+  // why it only ever worked when triggered by hand (a manual call arrives on
+  // the public domain, so the origin was right).
+  const selfOrigin =
+    process.env.NODE_ENV === "development"
+      ? url.origin
+      : "https://diamond-quant-live.vercel.app";
+
   try {
     const games = await fetchTodayGames();
 
@@ -1379,7 +1394,7 @@ export async function GET(req: Request) {
     let oddsSnapshot: any = null;
     try {
       const snapRes = await fetch(
-        `${new URL(req.url).origin}/api/sharp-money`,
+        `${selfOrigin}/api/sharp-money`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1407,19 +1422,39 @@ export async function GET(req: Request) {
     let discordDaily: any = { published: null, recap: null };
     const discordDailyBySport: Record<string, any> = {};
     if (process.env.BOT_API_URL) {
-      const origin = new URL(req.url).origin;
+      const origin = selfOrigin;
       const headers = { "x-cron-secret": process.env.CRON_SECRET ?? "" };
 
-      // PARALLEL, not sequential.
+      // ── Yesterday's results recap FIRST, then today's board ──
       //
-      // Three publishes at 30s each, plus three post-results below at 30s
-      // each, added up to 180s of new work inside a handler whose
-      // maxDuration is 120. Vercel killed the function mid-flight and the
-      // in-flight fetch received an HTML error page instead of JSON —
-      // "Unexpected token '<', \"<!DOCTYPE\"". That is exactly why the
-      // 2026-08-06 board never posted to Discord on its own, and it started
-      // the moment this loop was added. Running them concurrently keeps the
-      // whole group at roughly one call's latency.
+      // Order matters in Discord: whatever posts last sits at the bottom of
+      // the channel, which is what readers see first. Publishing the board
+      // before the recap buried today's picks under yesterday's results.
+      // Recap, then publish, so the newest props are the newest message.
+      // Recap yesterday's slate once it's fully final — looped across every
+      // sport with a grader, same reasoning as publish-daily above. Before
+      // Parallel across sports — one call's latency instead of three.
+      const recapResults = await Promise.all(
+        ["mlb", "nba", "nfl"].map(async (s) => {
+          try {
+            const r = await fetch(`${origin}/api/post-results?sport=${s}`, {
+              method: "POST",
+              headers,
+              signal: AbortSignal.timeout(30000),
+            });
+            return [s, await r.json()] as const;
+          } catch (e) {
+            return [s, { ok: false, error: String(e) }] as const;
+          }
+        }),
+      );
+      for (const [s, recap] of recapResults)
+        discordDailyBySport[s] = { ...discordDailyBySport[s], recap };
+      discordDaily.recap = discordDailyBySport.mlb?.recap ?? null;
+
+      // Publish today's board LAST so it's the newest message in the channel
+      // (see the ordering note above the recap loop). Parallel across sports
+      // to keep the whole group at roughly one call's latency.
       const pubResults = await Promise.all(
         ["mlb", "nba", "nfl"].map(async (s) => {
           try {
@@ -1434,11 +1469,16 @@ export async function GET(req: Request) {
           }
         }),
       );
-      for (const [s, v] of pubResults) discordDailyBySport[s] = v;
+      // MERGE, don't overwrite — the recap loop above already populated
+      // discordDailyBySport[s].recap, and a bare assignment here would
+      // silently drop it now that publish runs second.
+      for (const [s, v] of pubResults)
+        discordDailyBySport[s] = { ...discordDailyBySport[s], ...v };
       // MLB keeps its own top-level key too — everything below this point
       // (line alerts, edge scan, lineup watch, etc.) is MLB-specific and
       // reads discordDaily directly.
       discordDaily.published = discordDailyBySport.mlb?.published ?? null;
+      discordDaily.bySport = discordDailyBySport;
 
       // ── Off-market line alerts ──
       // Only fires when DK/FD actually disagree with the market, and only
@@ -1720,32 +1760,6 @@ export async function GET(req: Request) {
         discordDaily.propsClv = { ok: false, error: String(e) };
       }
 
-      // Recap yesterday's slate once it's fully final — looped across every
-      // sport with a grader, same reasoning as publish-daily above. Before
-      // this, NBA/NFL manual_picks rows could be published (via the loop
-      // above) but had zero automated path to ever get graded or recapped,
-      // since post-results was only ever called with sport=mlb.
-      // Parallel, same reason as the publish loop above — three sequential
-      // 30s calls here were half of what pushed this handler past its 120s
-      // maxDuration and got it killed mid-flight.
-      const recapResults = await Promise.all(
-        ["mlb", "nba", "nfl"].map(async (s) => {
-          try {
-            const r = await fetch(`${origin}/api/post-results?sport=${s}`, {
-              method: "POST",
-              headers,
-              signal: AbortSignal.timeout(30000),
-            });
-            return [s, await r.json()] as const;
-          } catch (e) {
-            return [s, { ok: false, error: String(e) }] as const;
-          }
-        }),
-      );
-      for (const [s, recap] of recapResults)
-        discordDailyBySport[s] = { ...discordDailyBySport[s], recap };
-      discordDaily.recap = discordDailyBySport.mlb?.recap ?? null;
-      discordDaily.bySport = discordDailyBySport;
     }
 
     // ── Stuck-prediction void sweep ──
