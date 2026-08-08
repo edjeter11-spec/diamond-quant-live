@@ -115,7 +115,23 @@ export async function buildAndSendRecap(webhookUrl: string, sport: string) {
   try {
     const { cloudGet } = await import("@/lib/supabase/client");
 
-    const botKey = sport === "nba" ? "smart_bot_nba" : "smart_bot";
+    // Explicit per-sport map, NOT `sport === "nba" ? ... : "smart_bot"`.
+    // That ternary sent every non-NBA sport to MLB's state, so calling this
+    // with "nfl" would have read MLB's picks and posted them under an NFL
+    // heading. An unknown sport now returns instead of silently mislabeling
+    // another sport's slate.
+    // NOTE: nothing writes smart_bot_nfl yet — the NFL pipeline commits and
+    // grades prop predictions but has no smart_bot state — so an "nfl" recap
+    // is a deliberate no-op rather than a wrong-sport post. The key is listed
+    // so that whenever that state does start being written, this recap picks
+    // it up without another edit here.
+    const BOT_KEY: Record<string, string> = {
+      mlb: "smart_bot",
+      nba: "smart_bot_nba",
+      nfl: "smart_bot_nfl",
+    };
+    const botKey = BOT_KEY[sport];
+    if (!botKey) return;
     const botState = await cloudGet<any>(botKey, null);
     if (!botState) return;
 

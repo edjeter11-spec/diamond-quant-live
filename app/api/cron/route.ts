@@ -21,7 +21,7 @@ import {
   type LoggedPick,
 } from "@/lib/bot/track-record";
 
-// This endpoint is called by Vercel Cron every 30 min
+// This endpoint is called by Vercel Cron every 15 min (see vercel.json)
 // It checks for finished games and logs results
 // The actual Brain learning happens client-side when users open the app
 // This just ensures we have fresh score data cached
@@ -719,13 +719,31 @@ export async function GET(req: Request) {
     }
 
     // ── Daily Discord Recap (send once when games are finishing) ──
+    //
+    // This is the LEGACY per-user webhook recap (user_preferences.discord_webhook),
+    // separate from the main channel recap that /api/post-results posts.
+    //
+    // The gate used to be `final > 0`, where `final` counts MLB finals only —
+    // but the block sent an NBA recap too. Out of baseball season that meant
+    // `final` is 0 every night, so NBA subscribers got nothing; and NFL was
+    // never sent at all. Each sport now gates on its OWN finals.
+    //
+    // NBA is absent here because nbaCompletedGames is computed further down
+    // this handler; rather than reorder the pipeline, NBA gates on the same
+    // late-night ET window and lets buildAndSendRecap no-op when it finds
+    // nothing graded — the same way it already behaves for an empty slate.
     const hour = new Date().getUTCHours(); // UTC
-    if (final > 0 && hour >= 3 && hour <= 7) {
+    if (hour >= 3 && hour <= 7) {
       // ~11PM-3AM ET = games finishing
+      const recapSports = [
+        ...(final > 0 ? ["mlb"] : []),
+        "nba",
+        ...(nflCompletedGames.length > 0 ? ["nfl"] : []),
+      ];
       try {
         // Check user preferences for Discord webhooks
         const { supabase: sb } = await import("@/lib/supabase/client");
-        if (sb) {
+        if (sb && recapSports.length > 0) {
           const { data: prefs } = await sb
             .from("user_preferences")
             .select("discord_webhook")
@@ -735,14 +753,9 @@ export async function GET(req: Request) {
           await Promise.all(
             (prefs ?? []).flatMap((pref: any) =>
               pref.discord_webhook
-                ? [
-                    buildAndSendRecap(pref.discord_webhook, "mlb").catch(
-                      () => {},
-                    ),
-                    buildAndSendRecap(pref.discord_webhook, "nba").catch(
-                      () => {},
-                    ),
-                  ]
+                ? recapSports.map((s) =>
+                    buildAndSendRecap(pref.discord_webhook, s).catch(() => {}),
+                  )
                 : [],
             ),
           );
@@ -1508,7 +1521,7 @@ export async function GET(req: Request) {
       // Only fires when DK/FD actually disagree with the market, and only
       // once per (game, book, market, line) per day — an off-market line
       // persists across many cron runs, so without the dedupe key this would
-      // re-alert every 30 minutes until the book corrected.
+      // re-alert on every 15-minute tick until the book corrected.
       try {
         const sm = await fetch(`${origin}/api/sharp-money?sport=baseball_mlb`, {
           signal: AbortSignal.timeout(20000),
