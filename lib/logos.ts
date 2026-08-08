@@ -87,16 +87,17 @@ const NBA_TEAM_IDS: Record<string, number> = {
 };
 
 // Get team logo URL
-export function getTeamLogo(
-  abbrev: string,
-  sport: "mlb" | "nba" = "mlb",
-): string {
+export function getTeamLogo(abbrev: string, sport: string = "mlb"): string {
   const upper = (abbrev || "").toUpperCase();
   if (sport === "nba") {
     const id = NBA_TEAM_IDS[upper];
     if (id) return `https://cdn.nba.com/logos/nba/${id}/primary/L/logo.svg`;
     return "";
   }
+  // Only MLB remains — anything else must NOT fall through to the MLB table.
+  // NHL and NFL abbreviations collide with MLB ones (TOR, BOS, PIT, PHI...),
+  // so an unguarded lookup served a Blue Jays crest for the Maple Leafs.
+  if (sport !== "mlb") return "";
   const id = MLB_TEAM_IDS[upper];
   if (id) return `https://www.mlbstatic.com/team-logos/${id}.svg`;
   return "";
@@ -121,14 +122,26 @@ export function getMlbLogoFallback(abbrev: string): string {
 // Get team logo from full name
 export function getTeamLogoByName(
   teamName: string,
-  sport: "mlb" | "nba" = "mlb",
+  sport: string = "mlb",
 ): string {
   const abbrev = teamNameToAbbrev(teamName, sport);
   return getTeamLogo(abbrev, sport);
 }
 
-// Convert full team name to abbreviation
-export function teamNameToAbbrev(name: string, sport: "mlb" | "nba"): string {
+// Convert full team name to abbreviation.
+//
+// Only MLB and NBA have maps here. Anything else MUST return "" rather than
+// falling through to the MLB table: both maps contain bare CITY keys
+// ("toronto", "boston", "pittsburgh", "philadelphia", "colorado", "texas"),
+// so an NHL or NFL name substring-matches the wrong league's team. On the
+// NHL tab that rendered "Toronto Maple Leafs" as TOR/Blue Jays, "Boston
+// Bruins" as BOS/Red Sox and "Pittsburgh Penguins" as PIT/Pirates — real
+// NHL games wearing MLB identities, which read as MLB data leaking into the
+// NHL tab. Callers cast currentSport to "mlb" | "nba", so the type system
+// does not catch this; the runtime guard has to.
+export function teamNameToAbbrev(name: string, sport: string): string {
+  if (sport !== "mlb" && sport !== "nba") return "";
+
   const upper = name.toUpperCase().trim();
   // If already a valid abbreviation, return it
   if (sport === "nba" && NBA_TEAM_IDS[upper]) return upper;

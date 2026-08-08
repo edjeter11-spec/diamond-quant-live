@@ -24,13 +24,18 @@ export default function TeamLogo({
   const [primaryError, setPrimaryError] = useState(false);
   const [fallbackError, setFallbackError] = useState(false);
 
-  // Resolve to a canonical abbreviation first so any downstream lookup is consistent.
-  const abbrev = teamNameToAbbrev(team || "", currentSport as "mlb" | "nba");
+  // Resolve to a canonical abbreviation first so any downstream lookup is
+  // consistent. No `as "mlb" | "nba"` cast — that lied to these functions on
+  // the NHL/NFL tabs, and because MLB/NHL/NFL share abbreviations (TOR, BOS,
+  // PIT, PHI) and the MLB name map has bare city keys, the Maple Leafs were
+  // rendered with a Blue Jays crest and the Bruins with a Red Sox one. The
+  // logo helpers now return "" for sports they have no map for, which falls
+  // through to the text badge below.
+  const abbrev = teamNameToAbbrev(team || "", currentSport);
 
   // Primary URL — try abbrev; if that fails, try by name.
-  let primary = getTeamLogo(abbrev || team, currentSport as "mlb" | "nba");
-  if (!primary)
-    primary = getTeamLogoByName(team, currentSport as "mlb" | "nba");
+  let primary = getTeamLogo(abbrev || team, currentSport);
+  if (!primary) primary = getTeamLogoByName(team, currentSport);
 
   // MLB has a second URL (ESPN CDN) to fall back to before we give up on images
   const fallback =

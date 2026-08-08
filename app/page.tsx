@@ -620,11 +620,17 @@ export default function WarRoom() {
           id: g.id,
           homeTeam: g.homeTeam,
           awayTeam: g.awayTeam,
+          // No cast — teamNameToAbbrev only has MLB/NBA maps and returns ""
+          // for any other sport. Casting currentSport to "mlb" | "nba" told
+          // it NHL/NFL names were MLB, and the MLB map's bare city keys then
+          // matched them: "Toronto Maple Leafs" -> TOR (Blue Jays), "Boston
+          // Bruins" -> BOS (Red Sox). The fallback below (last word, 3 chars)
+          // gives LEA/BRU instead — imperfect, but the right league.
           homeAbbrev:
-            teamNameToAbbrev(g.homeTeam ?? "", currentSport as "mlb" | "nba") ||
+            teamNameToAbbrev(g.homeTeam ?? "", currentSport) ||
             (g.homeTeam?.split(" ").pop()?.slice(0, 3).toUpperCase() ?? ""),
           awayAbbrev:
-            teamNameToAbbrev(g.awayTeam ?? "", currentSport as "mlb" | "nba") ||
+            teamNameToAbbrev(g.awayTeam ?? "", currentSport) ||
             (g.awayTeam?.split(" ").pop()?.slice(0, 3).toUpperCase() ?? ""),
           homeScore: 0,
           awayScore: 0,
