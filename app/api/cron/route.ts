@@ -1749,10 +1749,28 @@ export async function GET(req: Request) {
       try {
         const log = (await cloudGet<any[]>("props_clv_log", [])) ?? [];
         const now = Date.now();
-        const dueSoon = log.filter((e) => {
-          if (e.close || e.missed) return false;
-          return true; // gameTime isn't logged on the entry; resolve via a fresh fetch below
-        });
+
+        // Age out entries that can never resolve. The closer is found by
+        // re-fetching the entry's market and matching player+line; once that
+        // prop stops being offered (game played, line pulled) no future tick
+        // can ever match it. Without this cutoff those entries stayed open
+        // forever and every tick re-fetched their whole market on their
+        // behalf — pure wasted Odds API credits, growing without bound.
+        // 36h comfortably covers same-day close capture plus any cron gap.
+        const MAX_OPEN_MS = 36 * 60 * 60 * 1000;
+        let agedOut = 0;
+        for (const e of log) {
+          if (e.close || e.missed) continue;
+          const posted = e.postedAt ? Date.parse(e.postedAt) : NaN;
+          if (Number.isFinite(posted) && now - posted > MAX_OPEN_MS) {
+            e.missed = true;
+            agedOut++;
+          }
+        }
+
+        const dueSoon = log.filter((e) => !e.close && !e.missed);
+        let dirty = agedOut > 0;
+
         if (dueSoon.length > 0) {
           const marketsNeeded = [
             ...new Set(dueSoon.map((e) => e.market as string)),
@@ -1767,7 +1785,6 @@ export async function GET(req: Request) {
             freshByMarket.set(m, Array.isArray(d?.props) ? d.props : []);
           }
 
-          let dirty = false;
           for (const entry of log) {
             if (entry.close || entry.missed) continue;
             const props = freshByMarket.get(entry.market) ?? [];
@@ -1795,8 +1812,13 @@ export async function GET(req: Request) {
               dirty = true;
             }
           }
-          if (dirty) await cloudSet("props_clv_log", log);
         }
+
+        // Outside the dueSoon branch: age-outs must persist even on a tick
+        // where nothing was due, or they'd be recomputed forever. slice(-500)
+        // mirrors the writer in pinned-props — without it this path could
+        // grow the blob back past the cap the writer enforces.
+        if (dirty) await cloudSet("props_clv_log", log.slice(-500));
       } catch (e) {
         discordDaily.propsClv = { ok: false, error: String(e) };
       }

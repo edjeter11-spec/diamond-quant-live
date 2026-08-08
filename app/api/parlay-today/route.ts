@@ -399,7 +399,16 @@ export async function GET(req: NextRequest) {
 
             propCandidates.push({
               id: `prop-${key}-${prop.playerName}`,
-              game: prop.playerName,
+              // The real matchup, NOT the player's name. This value is stored
+              // on manual_picks.game by publish-daily, and post-results parses
+              // it as "Away @ Home" to decide whether the leg's game is final.
+              // With a player name here that check can never be true, so a
+              // scratched/DNP player is never voided — the leg pends forever
+              // and its recap never posts. prop.team is already "Away @ Home"
+              // (see app/api/players/route.ts, which parses it the same way).
+              // Falling back to the player name preserves the old behaviour
+              // only when the matchup genuinely isn't known.
+              game: prop.team || prop.playerName,
               pick: `${prop.playerName} ${favourOver ? "Over" : "Under"} ${prop.line} ${label}`,
               market: "player_prop",
               odds: best.price,

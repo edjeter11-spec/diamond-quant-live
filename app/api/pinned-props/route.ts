@@ -772,6 +772,15 @@ export async function GET(req: NextRequest) {
         const clvLog = (await cloudGet<any[]>("props_clv_log", [])) ?? [];
         const existingIds = new Set(clvLog.map((e) => e.id));
         for (const p of board.picks) {
+          // Props only. The sharp-anchor moneylines on this board have no
+          // player/line, and the closer pass resolves entries by re-fetching
+          // /api/players?market=<market> — which has no "moneyline" market and
+          // can never match them. Logged moneylines therefore stayed pending
+          // forever, and every cron tick re-fetched a market for them,
+          // burning Odds API calls for a closer that cannot exist.
+          // Moneyline CLV is already captured by its own block in cron.
+          if (p.market === "moneyline" || !p.playerName || p.line == null)
+            continue;
           const id = `${today}|${p.key}`;
           if (existingIds.has(id)) continue;
           clvLog.push({
