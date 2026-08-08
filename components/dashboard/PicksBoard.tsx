@@ -110,7 +110,17 @@ export default function PicksBoard() {
     // empty, so they never got replaced at all: the NBA tab showed MLB
     // moneylines and totals indefinitely.
     setModelPicks([]);
-    const analysisUrl = isNBA ? "/api/nba-analysis" : "/api/bot-analysis";
+    // Only MLB and NBA have a model-analysis route. `isNBA ? nba : mlb` sent
+    // NFL and NHL to /api/bot-analysis, which is MLB — that is what put
+    // "Athletics/Boston Red Sox Over 9.5" in LOCKS on the NHL tab, directly
+    // under a correct "No NHL games scheduled today". No route means no
+    // picks, not another sport's picks.
+    const ANALYSIS_URL: Record<string, string> = {
+      mlb: "/api/bot-analysis",
+      nba: "/api/nba-analysis",
+    };
+    const analysisUrl = ANALYSIS_URL[currentSport];
+    if (!analysisUrl) return;
     fetch(analysisUrl)
       .then((r) => r.json())
       .then((data) => {
@@ -156,7 +166,9 @@ export default function PicksBoard() {
       .catch(() => {
         setModelPicks([]);
       });
-  }, [isNBA]); // re-fetch when sport changes
+    // currentSport, not isNBA — MLB, NFL and NHL are all "not NBA", so this
+    // never re-ran when switching among them.
+  }, [currentSport]);
 
   // Fetch props progressively — render as each market lands rather than
   // waiting for the slowest one. Feels instant on phone + desktop.
@@ -179,21 +191,27 @@ export default function PicksBoard() {
             url: "/api/players?market=player_assists&sport=basketball_nba",
           },
         ]
-      : [
-          {
-            key: "pitcher_strikeouts",
-            url: "/api/players?market=pitcher_strikeouts",
-          },
-          { key: "batter_hits", url: "/api/players?market=batter_hits" },
-          {
-            key: "batter_home_runs",
-            url: "/api/players?market=batter_home_runs",
-          },
-          {
-            key: "batter_total_bases",
-            url: "/api/players?market=batter_total_bases",
-          },
-        ];
+      : currentSport === "mlb"
+        ? [
+            {
+              key: "pitcher_strikeouts",
+              url: "/api/players?market=pitcher_strikeouts",
+            },
+            { key: "batter_hits", url: "/api/players?market=batter_hits" },
+            {
+              key: "batter_home_runs",
+              url: "/api/players?market=batter_home_runs",
+            },
+            {
+              key: "batter_total_bases",
+              url: "/api/players?market=batter_total_bases",
+            },
+          ]
+        : // NFL props have their own component (NFLPlayerProps); NHL has no
+          // props pipeline. Previously both fell into the MLB branch above and
+          // fetched strikeouts/hits/home runs, which is where MLB props came
+          // from on non-baseball tabs.
+          [];
 
     let firstLanded = false;
     const fetches = markets.map((m) =>
@@ -216,7 +234,9 @@ export default function PicksBoard() {
     return () => {
       cancelled = true;
     };
-  }, [isNBA]);
+    // currentSport, not isNBA — otherwise MLB/NFL/NHL never re-fetch between
+    // each other and one sport's props linger on another's tab.
+  }, [currentSport]);
 
   // Build lookup: team name → game status from scores
   const gameStatusMap = useMemo(() => {
