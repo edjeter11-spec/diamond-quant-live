@@ -22,11 +22,23 @@ export async function GET() {
   const pending = log.filter((e) => !e.close && !e.missed);
   const missed = log.filter((e) => e.missed);
 
-  // Positive delta = our entry fair prob was LOWER than the closer, i.e. the
-  // market moved toward us after we posted — the board called it before the
-  // market did. Negative = the market moved away — we posted on a number
-  // that got worse, which is what "stale by 4pm" looks like.
-  const deltas = closed.map((e) => e.entryFairProb - e.closeFairProb);
+  // Sign convention, stated once so the verdict below can't drift from it:
+  //
+  //   delta = closeFairProb - entryFairProb
+  //
+  // POSITIVE = the market's fair prob ROSE after we posted, i.e. it moved
+  // TOWARD our side — we got the number before the market did. That is good
+  // CLV. NEGATIVE = the market moved away from us; we posted a number that
+  // got worse by first pitch, which is what "posted too early / stale board"
+  // looks like.
+  //
+  // This was previously computed as entryFairProb - closeFairProb while the
+  // comment described the opposite meaning, and the verdict then tested
+  // `avgDelta < 0` for the GOOD case — so a board losing to the close would
+  // have been reported as beating it. beatClosePct was always right
+  // (entry < close), which is how the disagreement showed up: 0% beat the
+  // close alongside an "average" the verdict would have called good.
+  const deltas = closed.map((e) => e.closeFairProb - e.entryFairProb);
   const avg = (xs: number[]) =>
     xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null;
   const avgDelta = avg(deltas);
@@ -59,9 +71,12 @@ export async function GET() {
       })),
     verdict:
       closed.length < 20
-        ? `Too early — ${closed.length} closed picks, need ~20+ for the average to mean anything.`
-        : (avgDelta ?? 0) < 0
+        ? `Too early — ${closed.length} closed picks, need ~20+ for the average to mean anything.` +
+          (closed.length >= 5 && (avgDelta ?? 0) < 0
+            ? ` Early read is unfavourable though: ${beatClose}/${closed.length} beat the close, average ${avgDelta!.toFixed(2)} pts against us.`
+            : "")
+        : (avgDelta ?? 0) > 0
           ? "Board beats the close on average — the picks find real value before the market catches up."
-          : "Board is NOT beating the close — post later, when consensus has sharpened.",
+          : "Board is NOT beating the close — the market moves away from these picks after posting. Post later, when consensus has sharpened.",
   });
 }
