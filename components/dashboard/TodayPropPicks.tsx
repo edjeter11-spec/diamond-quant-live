@@ -323,6 +323,17 @@ export default function TodayPropPicks({
   useEffect(() => {
     let cancelled = false;
 
+    // Drop the previous sport's board immediately on switch. Without this,
+    // `pinned` held the OLD sport's picks while the new fetch was in flight —
+    // and for a sport with no slate (NBA in August) the fetch returns an
+    // empty board, so nothing ever replaced them: the NBA tab rendered MLB
+    // moneylines and strikeout props indefinitely. Resetting the failure and
+    // waiting flags too, so a stale banner can't carry over either.
+    setPinned(null);
+    setPinnedFailed(false);
+    setNotYet(null);
+    setServerLocked(0);
+
     // Retry before giving up. A single failed fetch used to drop straight to
     // the local ranking, which silently showed DIFFERENT picks on that device
     // — the phone-vs-desktop mismatch. One flaky request on mobile shouldn't
@@ -353,6 +364,18 @@ export default function TodayPropPicks({
           // How many the server withheld for this viewer. Authoritative —
           // the client can't compute it, because it never sees them.
           setServerLocked(typeof d.locked === "number" ? d.locked : 0);
+          setPinnedFailed(false);
+          return;
+        }
+        // A successful response with an empty board and nothing considered
+        // means there is no slate for this sport today (NBA/NFL out of
+        // season) — a real answer, not a failure. Retrying wastes three
+        // round-trips and then shows a false error; worse, the fallback
+        // board it produced was built from whatever propsData happened to
+        // be loaded, which is how MLB picks ended up under the NBA tab.
+        if (d?.ok && Array.isArray(d.picks) && d.considered === 0) {
+          setNotYet(null);
+          setPinned([]);
           setPinnedFailed(false);
           return;
         }

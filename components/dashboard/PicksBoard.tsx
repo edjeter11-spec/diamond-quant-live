@@ -104,6 +104,12 @@ export default function PicksBoard() {
 
   // Fetch 3-model analysis and convert to picks
   useEffect(() => {
+    // Clear before refetching. These picks feed LOCKS/LONGSHOTS, and without
+    // the reset the previous sport's picks stayed on screen for the whole
+    // fetch — and for a sport with no slate (NBA in August) the response is
+    // empty, so they never got replaced at all: the NBA tab showed MLB
+    // moneylines and totals indefinitely.
+    setModelPicks([]);
     const analysisUrl = isNBA ? "/api/nba-analysis" : "/api/bot-analysis";
     fetch(analysisUrl)
       .then((r) => r.json())
