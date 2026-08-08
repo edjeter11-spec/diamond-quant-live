@@ -1422,19 +1422,34 @@ export async function GET(req: Request) {
       const origin = selfOrigin;
       const headers = { "x-cron-secret": process.env.CRON_SECRET ?? "" };
 
-      // ── Yesterday's results recap FIRST, then today's board ──
+      // ── Results recap FIRST, then today's board ──
       //
       // Order matters in Discord: whatever posts last sits at the bottom of
       // the channel, which is what readers see first. Publishing the board
       // before the recap buried today's picks under yesterday's results.
       // Recap, then publish, so the newest props are the newest message.
-      // Recap yesterday's slate once it's fully final — looped across every
-      // sport with a grader, same reasoning as publish-daily above. Before
-      // Parallel across sports — one call's latency instead of three.
-      const recapResults = await Promise.all(
-        ["mlb", "nba", "nfl"].map(async (s) => {
+      //
+      // Grade BOTH today's slate and yesterday's, every sport, every tick.
+      // post-results defaults to previousSlate() (yesterday ET), but the ET
+      // sports day doesn't roll until 4am — so a slate whose games all
+      // finished by ~11pm ET would otherwise wait 5+ hours for its recap.
+      // Adding today's slate lets the recap post the SAME NIGHT, as soon as
+      // its last game is final. This is safe: post-results holds a batch
+      // until every pick in it is graded (so an in-progress today never posts
+      // early), and the atomic app_state claim means grading the same slate
+      // from two ticks can't double-post.
+      const et = etDateString();
+      const recapTargets = ["mlb", "nba", "nfl"].flatMap((s) => [
+        { s, slate: et }, // today — posts as soon as its games finish
+        { s, slate: undefined }, // yesterday (previousSlate default)
+      ]);
+      const recapRaw = await Promise.all(
+        recapTargets.map(async ({ s, slate }) => {
           try {
-            const r = await fetch(`${origin}/api/post-results?sport=${s}`, {
+            const url = slate
+              ? `${origin}/api/post-results?sport=${s}&slate=${slate}`
+              : `${origin}/api/post-results?sport=${s}`;
+            const r = await fetch(url, {
               method: "POST",
               headers,
               signal: AbortSignal.timeout(30000),
@@ -1445,8 +1460,20 @@ export async function GET(req: Request) {
           }
         }),
       );
-      for (const [s, recap] of recapResults)
-        discordDailyBySport[s] = { ...discordDailyBySport[s], recap };
+      // Collapse the two slates per sport into one recap summary. Prefer the
+      // one that actually did something (posted a recap) over one that found
+      // nothing to grade, so the heartbeat reflects real activity.
+      const recapBySport: Record<string, any[]> = {};
+      for (const [s, recap] of recapRaw) (recapBySport[s] ??= []).push(recap);
+      for (const [s, recaps] of Object.entries(recapBySport)) {
+        const posted = recaps.find((r) =>
+          r?.batches?.some((b: any) => b?.posted),
+        );
+        discordDailyBySport[s] = {
+          ...discordDailyBySport[s],
+          recap: posted ?? recaps[0],
+        };
+      }
       discordDaily.recap = discordDailyBySport.mlb?.recap ?? null;
 
       // Publish today's board LAST so it's the newest message in the channel
