@@ -101,6 +101,16 @@ const OVER_DISPLAY_BOOST = 1.0;
 // We force Over side and never render an Under suggestion.
 const OVER_ONLY_MARKETS = new Set(["batter_home_runs"]);
 
+/** 15 -> "3pm", 10 -> "10am". Returns null for a missing/invalid hour so the
+ *  caller can fall back to wording that doesn't quote a time. */
+function formatHourET(h: number | undefined): string | null {
+  if (typeof h !== "number" || !Number.isFinite(h)) return null;
+  const hour = ((Math.trunc(h) % 24) + 24) % 24;
+  const suffix = hour < 12 ? "am" : "pm";
+  const display = hour % 12 === 0 ? 12 : hour % 12;
+  return `${display}${suffix}`;
+}
+
 function americanImplied(odds: number): number {
   if (!odds) return 0.5;
   return odds > 0
@@ -303,6 +313,12 @@ export default function TodayPropPicks({
   const [pinned, setPinned] = useState<PropPick[] | null>(null);
   const [pinnedFailed, setPinnedFailed] = useState(false);
   const [serverLocked, setServerLocked] = useState(0);
+  // The board deliberately doesn't exist yet today — the server holds off
+  // pinning until ~3h before the first game so picks are made on confirmed
+  // lineups. That is NOT a failure, and must not be reported as one.
+  const [notYet, setNotYet] = useState<{ buildsAtHourET?: number } | null>(
+    null,
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -321,7 +337,18 @@ export default function TodayPropPicks({
         });
         const d = await r.json();
         if (cancelled) return;
+        // Pre-lineup window: an intentional empty board, not a failed fetch.
+        // Retrying can't help (the server will keep returning this until the
+        // build hour), and falling back to a locally-ranked board would show
+        // exactly the lineup-blind picks the server is deliberately avoiding.
+        if (d?.ok && d.notYet) {
+          setNotYet({ buildsAtHourET: d.buildsAtHourET });
+          setPinned([]);
+          setPinnedFailed(false);
+          return;
+        }
         if (d?.ok && Array.isArray(d.picks) && d.picks.length) {
+          setNotYet(null);
           setPinned(d.picks as PropPick[]);
           // How many the server withheld for this viewer. Authoritative —
           // the client can't compute it, because it never sees them.
@@ -486,6 +513,40 @@ export default function TodayPropPicks({
   }
 
   if (picks.length === 0) {
+    // Pre-lineup window. Checked BEFORE the brain/empty fallbacks below:
+    // the server is deliberately withholding the board until lineups are
+    // confirmed, so showing projected or locally-ranked picks here would
+    // display exactly the lineup-blind numbers the gate exists to prevent.
+    if (notYet) {
+      return (
+        <div className="glass rounded-xl overflow-hidden border border-purple/15">
+          <div className="px-3 sm:px-4 py-2.5 border-b border-purple/15 bg-gradient-to-r from-purple/10 to-transparent flex items-center gap-2">
+            <Users className="w-4 h-4 text-purple" />
+            <div className="flex-1">
+              <h2 className="text-xs sm:text-sm font-bold text-silver uppercase tracking-wider">
+                Today&apos;s Player Props
+              </h2>
+              <p className="text-[9px] text-mercury/60 mt-0.5">
+                Locks in around{" "}
+                {formatHourET(notYet.buildsAtHourET) ?? "game time"} ET
+              </p>
+            </div>
+            <Clock className="w-3.5 h-3.5 text-mercury/50" />
+          </div>
+          <div className="px-3 sm:px-4 py-6 text-center">
+            <p className="text-xs text-mercury/70">
+              Waiting on confirmed starting lineups.
+            </p>
+            <p className="text-[10px] text-mercury/50 mt-1.5 max-w-xs mx-auto leading-relaxed">
+              Picks are made a few hours before first pitch, so they price real
+              lineups instead of morning guesses. Check back around{" "}
+              {formatHourET(notYet.buildsAtHourET) ?? "game time"} ET.
+            </p>
+          </div>
+        </div>
+      );
+    }
+
     // NBA fallback: render brain-projected picks when no live odds posted yet
     if (sport === "nba" && brainPicks.length > 0) {
       return (
@@ -678,7 +739,18 @@ export default function TodayPropPicks({
                 included) but "edge" claims we're beating the market, and with
                 fairProb coming from market devig we can't support that. State
                 the count and leave it. */}
-            {picks.length} picks · {overCount} Over{overCount !== 1 ? "s" : ""}
+            {notYet ? (
+              <span className="text-mercury/70">
+                Board locks in around{" "}
+                {formatHourET(notYet.buildsAtHourET) ?? "game time"} ET, once
+                starting lineups are confirmed
+              </span>
+            ) : (
+              <>
+                {picks.length} picks · {overCount} Over
+                {overCount !== 1 ? "s" : ""}
+              </>
+            )}
             {pinnedFailed && (
               // Say it out loud. Silently swapping in a locally-ranked board
               // is what made the phone and desktop disagree in the first place.
