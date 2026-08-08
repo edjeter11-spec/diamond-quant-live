@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cloudGet, cloudSet } from "@/lib/supabase/client";
+import { etDateString } from "@/lib/sports-date";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -41,14 +42,14 @@ interface PinnedParlay {
   playbookText?: string;
 }
 
-// ET date (sports day). After midnight ET, counts as the next day.
-function etDateString(d = new Date()): string {
-  const et = new Date(
-    d.toLocaleString("en-US", { timeZone: "America/New_York" }),
-  );
-  return `${et.getFullYear()}-${String(et.getMonth() + 1).padStart(2, "0")}-${String(et.getDate()).padStart(2, "0")}`;
-}
-
+// Sports day helpers come from lib/sports-date — do NOT re-implement them.
+//
+// This file used to ship its own etDateString that rolled at MIDNIGHT ET,
+// while every other path in the app rolls at 4am. Between 12am and 4am that
+// minted a `parlay_today_<next calendar day>` key and pinned a parlay built
+// from overnight lines for tomorrow's games; at the 4:15am slate roll,
+// publish-daily would then publish that midnight-built ticket under the old
+// slate date — a parlay of next-day games that could never be graded.
 function etDateOf(iso: string): string {
   return etDateString(new Date(iso));
 }

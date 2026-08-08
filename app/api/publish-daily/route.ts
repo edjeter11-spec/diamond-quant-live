@@ -275,7 +275,29 @@ export async function POST(req: NextRequest) {
         signal: AbortSignal.timeout(20000),
       });
       const d = await r.json();
-      legs = d?.legs ?? [];
+      // Only publish a parlay whose games are on TODAY'S slate.
+      //
+      // parlay-today picks `targetDay` = today if any game is today, else the
+      // earliest FUTURE day with candidates. /api/odds has no same-day filter,
+      // so on an NFL Friday that resolves to Sunday — and we'd store those
+      // Sunday legs under Friday's slate_date. post-results only ever grades
+      // one day back, so Friday's slate would never find Sunday's finals: the
+      // rows sit pending forever (manual_picks is excluded from the stale-void
+      // sweep) and the recap never posts. Saturday would then publish ANOTHER
+      // Sunday parlay, and Sunday a third — three overlapping tickets.
+      //
+      // Publishing nothing on a non-game day is the correct behaviour; the
+      // props board already does exactly this via its today-only event filter.
+      if (d?.date && d.date !== slate) {
+        await releaseClaim(parlayBatchKey);
+        out.parlay = {
+          ok: false,
+          error: `Parlay is for ${d.date}, not today's slate (${slate}) — not publishing`,
+        };
+        legs = [];
+      } else {
+        legs = d?.legs ?? [];
+      }
       totalOdds = d?.totalOdds ?? 0;
       playbookText = d?.playbookText ?? "";
       // Today's slip link, if an admin pasted one. Keyed per sport per ET day,

@@ -61,6 +61,13 @@ const FREE_PICKS = 2;
 const MAX_UNDERS = 3;
 const REFRESH_HOURS = 3;
 
+// How long before the day's first game the board is allowed to build.
+//
+// Confirmed lineups post 2-4h out, and prop prices sharpen through the day,
+// so building earlier than this prices against soft, lineup-blind numbers.
+// 3h lands just inside the lineup window for all three sports.
+const LINEUP_LEAD_HOURS = 3;
+
 // Minimum true EV (%) for a prop to reach the board.
 //
 // Was -8, set back when fairProb was de-vigged MARKET consensus — comparing
@@ -71,14 +78,8 @@ const REFRESH_HOURS = 3;
 // real comparison and a negative number means we genuinely think the price is
 // bad. Publishing those was the mechanism behind 54.6% wins and -6.03 units.
 //
-// -5 (was -2): fairProb is now the projection SHRUNK 75% toward consensus
-// (see W_BRAIN), which pulled every EV down ~8-10 points — the -2 floor was
-// calibrated against the raw projection's inflated numbers and would empty
-// the board under honest ones. Against a mostly-market fair prob, EV ≈ -vig
-// (-4 to -6%) is what a NORMAL fair price looks like; below -5 the price is
-// genuinely off against us. The ranking (EV + beatsMarket bonus) still puts
-// the best-priced plays on top within the gate.
-// -3.5, tightened from -5.
+// -3.5, tightened from -5 (which was itself relaxed from -2 when fairProb
+// became the projection shrunk 75% toward consensus — see W_BRAIN).
 //
 // -5 was chosen to keep the board from emptying, and it worked — by
 // publishing plays we ourselves priced as losers. On 2026-08-07 it put a
@@ -179,13 +180,54 @@ function americanImplied(odds: number): number {
  */
 const firstPitchCache = new Map<string, { at: number; hour: number | null }>();
 
+/** ESPN scoreboard paths for the sports that aren't MLB. */
+const ESPN_SCOREBOARD: Record<string, string> = {
+  nba: "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard",
+  nfl: "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard",
+};
+
 async function getFirstPitchHourET(sport: string): Promise<number | null> {
-  if (sport !== "mlb") return null;
   const day = etDateString();
   const hit = firstPitchCache.get(day);
   // Cache for an hour — a schedule doesn't move, and this runs on every
   // board request.
   if (hit && Date.now() - hit.at < 3_600_000) return hit.hour;
+
+  // NBA / NFL via ESPN. Without this the function returned null for every
+  // non-MLB sport, which meant those boards had NO earliest-build floor and
+  // NO pre-game lock: the 3h window kept rolling after tip-off, so picks
+  // could change mid-game (site diverging from what Discord published), and
+  // once games were live /api/players returned no pre-match props at all —
+  // so the evening window pinned an EMPTY board.
+  if (sport === "nba" || sport === "nfl") {
+    try {
+      const url = `${ESPN_SCOREBOARD[sport]}?dates=${day.replace(/-/g, "")}`;
+      const r = await fetch(url, { signal: AbortSignal.timeout(6000) });
+      if (!r.ok) return null;
+      const d = await r.json();
+      const times = (d?.events ?? [])
+        .map((e: any) =>
+          new Date(e?.date ?? e?.competitions?.[0]?.date).getTime(),
+        )
+        .filter((t: number) => Number.isFinite(t));
+      if (!times.length) {
+        firstPitchCache.set(day, { at: Date.now(), hour: null });
+        return null;
+      }
+      const hour = Number(
+        new Date(Math.min(...times)).toLocaleString("en-US", {
+          timeZone: "America/New_York",
+          hour: "2-digit",
+          hour12: false,
+        }),
+      );
+      const out = Number.isFinite(hour) ? hour : null;
+      firstPitchCache.set(day, { at: Date.now(), hour: out });
+      return out;
+    } catch {
+      return null;
+    }
+  }
 
   try {
     const r = await fetch(
@@ -447,11 +489,10 @@ export async function GET(req: NextRequest) {
   // first pitch is the board that gets graded — which is also the only version
   // of a track record that means anything.
   let windowIdx = Math.floor(hourET / REFRESH_HOURS);
-  // getFirstPitchHourET returns null for anything other than "mlb", which
-  // falls through to the plain rolling REFRESH_HOURS window below — the same
-  // fallback NBA already runs on. NFL games are Sun/Mon/Thu rather than
-  // daily, but that's exactly the "no freeze" case this null already covers;
-  // nothing about the freeze logic needs to change for a third sport.
+  // getFirstPitchHourET now covers all three sports (MLB via statsapi,
+  // NBA/NFL via ESPN). It returns null only when the schedule fetch FAILS or
+  // the sport has no games today — see the null branch below, which must not
+  // fork the day's board.
   const firstPitchHourET = await getFirstPitchHourET(
     isNBA ? "nba" : isNFL ? "nfl" : "mlb",
   );
@@ -468,18 +509,39 @@ export async function GET(req: NextRequest) {
     const lockedWindow = Math.floor(firstPitchHourET / REFRESH_HOURS) - 1;
     if (windowIdx > lockedWindow) windowIdx = Math.max(0, lockedWindow);
 
-    // Don't PIN before lineups have had a chance to confirm.
+    // Don't BUILD the board before lineups have had a chance to confirm.
     //
     // Confirmed lineups post 2-4h before first pitch, and prop consensus
-    // sharpens through the day as more money and information hits the
-    // market — a board built at 10am on a 7pm slate is pricing against a
-    // soft, lineup-blind number. Floor the window to first-pitch-minus-3h so
-    // the earliest possible pin already has lineups in view. This only
-    // DELAYS which window gets pinned; it never un-freezes a board that's
-    // already locked above.
-    const earliestWindow = Math.floor((firstPitchHourET - 3) / REFRESH_HOURS);
-    if (windowIdx < earliestWindow)
-      windowIdx = Math.min(lockedWindow, Math.max(0, earliestWindow));
+    // sharpens through the day as money and information hit the market — a
+    // board built at 7am for a 7pm slate is pricing against a soft,
+    // lineup-blind number.
+    //
+    // This used to clamp `windowIdx` to floor((fp-3)/REFRESH). That was a
+    // NO-OP: floor((fp-3)/3) === floor(fp/3)-1 === lockedWindow for every
+    // first-pitch hour, so it only renamed the cache key while the board
+    // still pinned at the first request of the day. The gate has to be on
+    // the CLOCK, not the window index.
+    //
+    // Returning an unpinned empty board (rather than pinning an early one)
+    // is what makes "picks are chosen shortly before games start" true:
+    // nothing is written to the blob, so no early board can be published or
+    // cached. Callers already render the empty state.
+    const buildFromHourET = firstPitchHourET - LINEUP_LEAD_HOURS;
+    if (hourET < buildFromHourET) {
+      return NextResponse.json({
+        ok: true,
+        sport,
+        date: today,
+        picks: [],
+        locked: 0,
+        isPremium,
+        considered: 0,
+        qualified: 0,
+        notYet: true,
+        buildsAtHourET: buildFromHourET,
+        message: `Board builds around ${buildFromHourET}:00 ET, once lineups are confirmed.`,
+      });
+    }
   }
   // v2: bumped when MLB projections landed. A board pinned by the previous
   // deploy was built from market-devig probabilities, so without this bump it
