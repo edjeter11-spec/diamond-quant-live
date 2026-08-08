@@ -22,8 +22,31 @@ export const dynamic = "force-dynamic";
 // upstreams don't move faster than that.
 // ──────────────────────────────────────────────────────────
 
-const CACHE_KEY = "ticker_feed_mlb";
 const TTL = 15 * 60 * 1000;
+
+// Per-sport so the NBA/NFL tabs don't scroll baseball roster moves. The
+// ticker was hardcoded to MLB and rendered on every tab, so out of baseball
+// season — or just on the NBA tab in August — the banner read as MLB while
+// everything under it was another sport.
+//
+// Only MLB has a free transactions feed (statsapi). ESPN's news endpoint is
+// the same shape for every sport, so NBA/NFL/NHL run news-only rather than
+// showing nothing.
+const SPORTS = {
+  mlb: { espn: "baseball/mlb", label: "MLB", transactions: true },
+  nba: { espn: "basketball/nba", label: "NBA", transactions: false },
+  nfl: { espn: "football/nfl", label: "NFL", transactions: false },
+  nhl: { espn: "hockey/nhl", label: "NHL", transactions: false },
+} as const;
+
+type SportKey = keyof typeof SPORTS;
+
+function resolveSport(raw: string | null): SportKey {
+  const s = (raw ?? "mlb").toLowerCase();
+  return (Object.keys(SPORTS) as SportKey[]).includes(s as SportKey)
+    ? (s as SportKey)
+    : "mlb";
+}
 
 // Roster moves worth a bettor's attention. "Assigned" and "Status Change" are
 // the bulk of the feed and are almost entirely minor-league churn — a Double-A
@@ -87,10 +110,11 @@ async function fetchTransactions(): Promise<TickerItem[]> {
   }
 }
 
-async function fetchNews(): Promise<TickerItem[]> {
+async function fetchNews(sport: SportKey): Promise<TickerItem[]> {
+  const { espn, label } = SPORTS[sport];
   try {
     const r = await fetch(
-      "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/news?limit=10",
+      `https://site.api.espn.com/apis/site/v2/sports/${espn}/news?limit=10`,
       { signal: AbortSignal.timeout(8000) },
     );
     if (!r.ok) return [];
@@ -103,18 +127,24 @@ async function fetchNews(): Promise<TickerItem[]> {
         // Fantasy columns and depth charts aren't news to a bettor.
         .filter((h) => !/^fantasy /i.test(h))
         .slice(0, 6)
-        .map((h) => ({ type: "news" as const, text: `MLB: ${h}` }))
+        .map((h) => ({ type: "news" as const, text: `${label}: ${h}` }))
     );
   } catch {
     return [];
   }
 }
 
-export async function GET() {
-  const cached = getCached(CACHE_KEY, TTL) as { items: TickerItem[] } | null;
+export async function GET(req: Request) {
+  const sport = resolveSport(new URL(req.url).searchParams.get("sport"));
+  const cacheKey = `ticker_feed_${sport}`;
+
+  const cached = getCached(cacheKey, TTL) as { items: TickerItem[] } | null;
   if (cached?.items?.length) return NextResponse.json(cached);
 
-  const [moves, news] = await Promise.all([fetchTransactions(), fetchNews()]);
+  const [moves, news] = await Promise.all([
+    SPORTS[sport].transactions ? fetchTransactions() : Promise.resolve([]),
+    fetchNews(sport),
+  ]);
 
   // Interleave so the ticker alternates rather than showing eight trades then
   // six headlines — a run of one kind reads as a stuck feed.
@@ -124,11 +154,11 @@ export async function GET() {
     if (news[i]) items.push(news[i]);
   }
 
-  const payload = { items, updatedAt: new Date().toISOString() };
+  const payload = { items, sport, updatedAt: new Date().toISOString() };
   // Don't cache an empty result — both upstreams failing is a transient
   // outage, not an answer, and a 15-minute empty cache would leave the banner
   // back on its idle message for no reason.
-  if (items.length > 0) setCache(CACHE_KEY, payload);
+  if (items.length > 0) setCache(cacheKey, payload);
 
   return NextResponse.json(payload);
 }

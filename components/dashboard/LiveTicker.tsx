@@ -2,19 +2,27 @@
 
 import { useEffect, useState } from "react";
 import { useStore } from "@/lib/store";
+import { useSport } from "@/lib/sport-context";
 import { AlertTriangle, TrendingUp, Zap, Newspaper } from "lucide-react";
 
 export default function LiveTicker() {
   const { oddsData, scores } = useStore();
+  // Follows the active tab. This used to be hardcoded to MLB while the
+  // banner rendered on every tab, so the NBA and NFL tabs scrolled baseball
+  // roster moves and MLB headlines above non-baseball content.
+  const { currentSport } = useSport();
 
-  // Real MLB trades, roster moves and headlines, used when there's nothing
-  // live to scroll. The banner used to loop "Scanning markets for edges…",
-  // which is both dull and not quite true — nothing is scanning, there just
-  // aren't any alerts. Off-hours that was the only thing a visitor ever saw.
+  // Trades, roster moves and headlines for the CURRENT sport, used when
+  // there's nothing live to scroll. The banner used to loop "Scanning markets
+  // for edges…", which is both dull and not quite true — nothing is scanning,
+  // there just aren't any alerts. Off-hours that was all a visitor ever saw.
   const [feed, setFeed] = useState<Array<{ type: string; text: string }>>([]);
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/ticker-feed")
+    // Clear immediately on a tab switch so the previous sport's headlines
+    // don't linger under the new tab while the next fetch is in flight.
+    setFeed([]);
+    fetch(`/api/ticker-feed?sport=${currentSport}`)
       .then((r) => r.json())
       .then((d) => {
         if (!cancelled && Array.isArray(d?.items)) setFeed(d.items);
@@ -23,7 +31,7 @@ export default function LiveTicker() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [currentSport]);
 
   // Live scores get their own dedicated, always-first entries — a real
   // scrolling scoreboard rather than one alert buried among arbs/EV lines.
