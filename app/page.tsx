@@ -233,28 +233,40 @@ export default function WarRoom() {
 
   const fetchData = useCallback(async () => {
     setRefreshing(true);
-    const isNBA = currentSport === "nba";
     const sportKey = config.oddsApiKey;
     const cacheKey = `dq_sport_cache_${currentSport}`;
     try {
-      // Scores load first — unblocks the UI immediately
-      const scoresP = isNBA
-        ? fetch("/api/nba-scores")
-            .then((r) => r.json())
-            .catch(() => ({ games: [] }))
-        : fetch("/api/scores")
-            .then((r) => r.json())
-            .catch(() => ({ games: [] }));
+      // Scores load first — unblocks the UI immediately.
+      //
+      // Routed per sport, NOT `isNBA ? nba : mlb`. That ternary is a
+      // two-sport assumption in a four-sport app: on the NFL and NHL tabs it
+      // took the else-branch and fetched /api/scores and /api/analysis, which
+      // are MLB — so the NFL tab rendered a 15-game MLB slate under "GAMES".
+      const SCORES_URL: Record<string, string> = {
+        mlb: "/api/scores",
+        nba: "/api/nba-scores",
+        nfl: "/api/nfl-scores",
+        nhl: "/api/nhl-scores",
+      };
+      const scoresP = fetch(SCORES_URL[currentSport] ?? "/api/scores")
+        .then((r) => r.json())
+        .catch(() => ({ games: [] }));
       const oddsP = fetch(`/api/odds?sport=${sportKey}`)
         .then((r) => r.json())
         .catch(() => ({ games: [] }));
-      const analysisP = isNBA
-        ? fetch("/api/nba-analysis")
+      // Only MLB and NBA have a model-analysis route. NFL/NHL resolve to an
+      // empty set rather than falling through to MLB's — an empty analysis
+      // section is correct; another sport's picks is not.
+      const ANALYSIS_URL: Record<string, string> = {
+        mlb: "/api/analysis",
+        nba: "/api/nba-analysis",
+      };
+      const analysisUrl = ANALYSIS_URL[currentSport];
+      const analysisP = analysisUrl
+        ? fetch(analysisUrl)
             .then((r) => r.json())
             .catch(() => ({ analyses: [] }))
-        : fetch("/api/analysis")
-            .then((r) => r.json())
-            .catch(() => ({ analyses: [] }));
+        : Promise.resolve({ analyses: [] });
 
       const scoresRes = await scoresP;
       const scoreGames = scoresRes.games ?? [];
@@ -274,8 +286,11 @@ export default function WarRoom() {
       let oddsGames = oddsRes.games ?? [];
       setIsDemo(false);
 
-      // Backup only for MLB
-      if (!isNBA) {
+      // Backup only for MLB. Was gated on `!isNBA`, so on the NFL and NHL
+      // tabs an empty odds response restored the MLB backup — filling those
+      // tabs with baseball games. The store is MLB-only and unkeyed by sport,
+      // so it must be read and written only when MLB is the active sport.
+      if (currentSport === "mlb") {
         if (oddsGames.length === 0) {
           const backup = getOddsBackup();
           if (backup && backup.age < 30) {
@@ -288,7 +303,8 @@ export default function WarRoom() {
 
       setOddsData(oddsGames);
       setAnalyses(analysisRes.analyses ?? []);
-      if (!isNBA) snapshotOdds(oddsGames);
+      // Same reasoning as the backup above — the snapshot store is MLB-only.
+      if (currentSport === "mlb") snapshotOdds(oddsGames);
 
       // Robust game matching
       const matchMap = matchGames(scoreGames, oddsGames);
