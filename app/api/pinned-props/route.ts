@@ -451,6 +451,22 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const sport = (searchParams.get("sport") ?? "mlb").toLowerCase();
   const force = searchParams.get("force") === "true";
+  // Only these three have a props pipeline. Without this guard an unknown
+  // sport fell through the isNBA/isNFL ternaries to baseball_mlb and got an
+  // MLB board back under its own name — /api/pinned-props?sport=nhl was
+  // already returning MLB's build hour. Refuse rather than mislabel.
+  if (!["mlb", "nba", "nfl"].includes(sport)) {
+    return NextResponse.json({
+      ok: true,
+      sport,
+      date: etDateString(),
+      picks: [],
+      locked: 0,
+      considered: 0,
+      qualified: 0,
+      message: `No player props pipeline for ${sport.toUpperCase()}.`,
+    });
+  }
   const isNBA = sport === "nba";
   const isNFL = sport === "nfl";
   const today = etDateString();

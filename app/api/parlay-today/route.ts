@@ -163,8 +163,22 @@ async function attachResults(
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const sport = (searchParams.get("sport") ?? "mlb").toLowerCase() as
-    "nba" | "mlb" | "nfl";
+  const rawSport = (searchParams.get("sport") ?? "mlb").toLowerCase();
+  // Only these three have a parlay pipeline. An unknown sport used to fall
+  // through the isNBA/isNFL ternaries to baseball_mlb, so
+  // /api/parlay-today?sport=nhl returned MLB legs — "Jake Bennett Over 17.5
+  // Outs" rendered under LOCKS on the NHL tab. Same failure the NBA parlay
+  // had when it published Brewers/Mariners in August. Refuse instead.
+  if (!["mlb", "nba", "nfl"].includes(rawSport)) {
+    return NextResponse.json({
+      ok: true,
+      sport: rawSport,
+      date: etDateString(),
+      legs: [],
+      message: `No parlay pipeline for ${rawSport.toUpperCase()}.`,
+    });
+  }
+  const sport = rawSport as "nba" | "mlb" | "nfl";
   const force = searchParams.get("force") === "true";
   const isNBA = sport === "nba";
   const isNFL = sport === "nfl";
