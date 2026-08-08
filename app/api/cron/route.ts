@@ -1566,13 +1566,26 @@ export async function GET(req: Request) {
               },
               body: JSON.stringify({
                 sport: "mlb",
+                // Send the RAW numbers and let the bot format them. The bot
+                // owns presentation (book display names, plain-English
+                // phrasing); duplicating that here meant Discord showed
+                // "williamhill_us h2h" and "de-vigged fair price", which is
+                // jargon to everyone who isn't us.
                 items: freshE.map((e) => ({
                   game_id: e.gameId,
+                  kind: "edge",
                   bookmaker: e.book,
-                  market: "h2h",
+                  market: "moneyline",
                   game: e.game,
+                  side: e.side,
+                  price: e.price,
+                  sharpPrice: e.pinnaclePrice,
+                  evPct: e.evPct,
+                  fairProb: e.fairProb,
+                  commence: e.commence,
+                  // Kept for older bot builds that render `ourLine`/`note`.
                   ourLine: `${e.side} ${e.price > 0 ? "+" : ""}${e.price}`,
-                  note: `+${e.evPct}% EV vs Pinnacle fair ${e.fairProb}% (Pin ${e.pinnaclePrice > 0 ? "+" : ""}${e.pinnaclePrice})`,
+                  note: `+${e.evPct}% EV vs sharp price`,
                 })),
               }),
               signal: AbortSignal.timeout(15000),
@@ -1674,11 +1687,15 @@ export async function GET(req: Request) {
                 sport: "mlb",
                 items: freshS.map((s) => ({
                   game_id: String(s.gamePk),
-                  bookmaker: "lineup",
-                  market: "h2h",
+                  kind: "lineup",
                   game: s.game,
+                  player: s.player,
+                  team: s.team,
+                  usualSlot: s.usualSlot,
+                  commence: s.commence,
+                  // Kept for older bot builds.
                   ourLine: `${s.player} SITTING`,
-                  note: `${s.note} — check the line before the book moves it`,
+                  note: s.note,
                 })),
               }),
               signal: AbortSignal.timeout(15000),
