@@ -328,6 +328,31 @@ async function recapBatch(
       continue;
     }
 
+    // A row that is neither a moneyline nor a gradeable player prop — e.g. a
+    // game TOTAL or spread that leaked into a parlay — has null player_name /
+    // market_key. Passing that to gradeProp reaches findPlayer(null) →
+    // null.normalize() → TypeError, which throws AFTER the recap claim is
+    // taken: the batch 500s, the claim goes stale, the next tick reclaims and
+    // crashes again — an infinite crash loop that also kills every later
+    // batch in the cron loop. Skip-and-void it instead so the recap can
+    // proceed. (The moneyline branch above already handled market:"moneyline".)
+    if (!p.player_name || !p.market_key) {
+      await supabaseAdmin!
+        .from("manual_picks")
+        .update({
+          result: "void",
+          settled_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", p.id)
+        .is("result", null);
+      graded.push({ text: p.pick_text, result: "void" });
+      console.error(
+        `post-results: ungradeable non-prop row voided — market=${p.market} pick=${p.pick_text}`,
+      );
+      continue;
+    }
+
     const g = grader.gradeProp(
       {
         playerName: p.player_name,

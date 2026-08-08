@@ -18,15 +18,30 @@ export const maxDuration = 60;
 // Idempotent per (slate, sport, kind): re-running won't double-post.
 // ──────────────────────────────────────────────────────────
 
+// MUST stay identical to pinned-props' MARKET_LABEL. attachResults there
+// joins graded results back to board picks by reconstructing pick_text as
+// `${player} ${Over|Under} ${line} ${MARKET_LABEL[market]}` — so if this map
+// drifts (e.g. it was MLB-only, missing every NBA/NFL key), an NBA pick's
+// stored pick_text ("... player_points") never matches the reconstruction
+// ("... Points") and every graded NBA/NFL board pick renders "pending"
+// forever. Includes NBA + NFL keys for that reason.
 const MARKET_LABEL: Record<string, string> = {
+  pitcher_strikeouts: "Ks",
   batter_hits: "Hits",
   batter_total_bases: "Total Bases",
+  batter_home_runs: "HR",
   batter_rbis: "RBIs",
   batter_runs_scored: "Runs",
-  batter_home_runs: "HR",
   batter_stolen_bases: "Steals",
-  pitcher_strikeouts: "Ks",
   pitcher_outs: "Outs",
+  player_points: "Points",
+  player_rebounds: "Rebounds",
+  player_assists: "Assists",
+  player_pass_yds: "Pass Yds",
+  player_pass_tds: "Pass TDs",
+  player_rush_yds: "Rush Yds",
+  player_receptions: "Receptions",
+  player_reception_yds: "Rec Yds",
 };
 
 function fmtOdds(n: number): string {
@@ -139,6 +154,9 @@ export async function POST(req: NextRequest) {
     let picks: any[] = [];
     try {
       const r = await fetch(`${baseUrl}/api/pinned-props?sport=${sport}`, {
+        // Full board, not the free-gated 2 — see the cron-secret bypass in
+        // pinned-props. Without this Discord posts only 2 of 3 picks.
+        headers: { "x-cron-secret": process.env.CRON_SECRET ?? "" },
         signal: AbortSignal.timeout(20000),
       });
       const d = await r.json();

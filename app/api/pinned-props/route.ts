@@ -417,7 +417,15 @@ export async function GET(req: NextRequest) {
   // gets a truncated board — the withheld picks are never serialised, so
   // there's nothing to recover from the network tab.
   const viewer = await getUserFromRequest(req);
-  const isPremium = !!viewer?.isPremium;
+  // The internal publish-daily fetch carries the cron secret and no user, so
+  // it would otherwise be treated as a free viewer and receive only
+  // FREE_PICKS. That meant Discord posted — and grading logged — just 2 of a
+  // 3-pick board, and premium site users' third pick showed "pending"
+  // forever with no row to grade. The cron secret is a full-board bypass:
+  // it's the SERVER building the canonical board, not a user viewing it.
+  const cronSecret =
+    req.headers.get("x-cron-secret") === process.env.CRON_SECRET;
+  const isPremium = cronSecret || !!viewer?.isPremium;
 
   // Which refresh window are we in? Same board for everyone inside it.
   const hourET = Number(

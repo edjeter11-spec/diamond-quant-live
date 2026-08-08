@@ -90,6 +90,9 @@ function stripAccents(s: string): string {
 
 /** Last-name match, same forgiving approach the NBA grader uses. */
 function findPlayer(name: string, lines: PlayerLine[]): PlayerLine | null {
+  // Guard: a total/spread row carries a null name; without this the
+  // stripAccents(null) below throws and crashes the whole recap batch.
+  if (!name) return null;
   const last = (n: string) =>
     stripAccents(n).toLowerCase().trim().split(/\s+/).slice(-1)[0];
   const target = last(name);

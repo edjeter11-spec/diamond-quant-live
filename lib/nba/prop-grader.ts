@@ -61,6 +61,9 @@ function normalizeName(name: string): string {
 
 /** Last-name-plus-first-3 match, same forgiving approach the MLB grader uses. */
 function findPlayer(name: string, lines: PlayerLine[]): PlayerLine | null {
+  // Guard: a total/spread row carries a null name; without this the
+  // stripAccents(null) below throws and crashes the whole recap batch.
+  if (!name) return null;
   const target = normalizeName(name);
   const exact = lines.find((p) => normalizeName(p.name) === target);
   if (exact) return exact;

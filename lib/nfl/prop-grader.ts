@@ -49,6 +49,9 @@ function stripAccents(s: string): string {
 }
 
 function findPlayer(name: string, lines: PlayerLine[]): PlayerLine | null {
+  // Guard: a total/spread row carries a null name; without this the
+  // stripAccents(null) below throws and crashes the whole recap batch.
+  if (!name) return null;
   const lastName = (n: string) =>
     stripAccents(n).toLowerCase().trim().split(/\s+/).slice(-1)[0];
   const target = stripAccents(name).toLowerCase().trim();
