@@ -14,6 +14,7 @@ import {
   Plus,
   Check,
   AlertTriangle,
+  Zap,
 } from "lucide-react";
 import { americanToDecimal } from "@/lib/model/kelly";
 import { useStore } from "@/lib/store";
@@ -811,15 +812,21 @@ export default function TodayPropPicks({
                       size={28}
                     />
                   </div>
-                  {/* Side icon — smaller, secondary on mobile */}
+                  {/* Side icon — smaller, secondary on mobile. Moneylines
+                      have no over/under, so they get a distinct sharp-edge
+                      badge instead of an up/down arrow. */}
                   <div
                     className={`hidden sm:flex w-7 h-7 rounded-lg items-center justify-center flex-shrink-0 ${
-                      p.side === "over"
-                        ? "bg-neon/10 text-neon"
-                        : "bg-amber/10 text-amber"
+                      p.market === "moneyline"
+                        ? "bg-gold/10 text-gold"
+                        : p.side === "over"
+                          ? "bg-neon/10 text-neon"
+                          : "bg-amber/10 text-amber"
                     }`}
                   >
-                    {p.side === "over" ? (
+                    {p.market === "moneyline" ? (
+                      <Zap className="w-4 h-4" />
+                    ) : p.side === "over" ? (
                       <ArrowUpRight className="w-4 h-4" />
                     ) : (
                       <ArrowDownRight className="w-4 h-4" />
@@ -845,27 +852,41 @@ export default function TodayPropPicks({
                           = PUSH
                         </span>
                       )}
-                      {result === "live" && actual != null && (
-                        <span className="ml-1.5 text-[10px] font-bold text-electric">
-                          LIVE {actual}
-                        </span>
-                      )}
+                      {result === "live" &&
+                        actual != null &&
+                        p.market !== "moneyline" && (
+                          <span className="ml-1.5 text-[10px] font-bold text-electric">
+                            LIVE {actual}
+                          </span>
+                        )}
                     </p>
                     {/* Pick — bold, mobile gets inline side icon for hierarchy */}
                     <p
-                      className={`text-xs font-bold leading-tight mt-0.5 flex items-center gap-1 ${p.side === "over" ? "text-neon" : "text-amber"}`}
+                      className={`text-xs font-bold leading-tight mt-0.5 flex items-center gap-1 ${p.market === "moneyline" ? "text-gold" : p.side === "over" ? "text-neon" : "text-amber"}`}
                     >
-                      {p.side === "over" ? (
-                        <ArrowUpRight className="w-3.5 h-3.5 sm:hidden" />
+                      {p.market === "moneyline" ? (
+                        <>
+                          <Zap className="w-3.5 h-3.5 sm:hidden" />
+                          Moneyline
+                        </>
                       ) : (
-                        <ArrowDownRight className="w-3.5 h-3.5 sm:hidden" />
+                        <>
+                          {p.side === "over" ? (
+                            <ArrowUpRight className="w-3.5 h-3.5 sm:hidden" />
+                          ) : (
+                            <ArrowDownRight className="w-3.5 h-3.5 sm:hidden" />
+                          )}
+                          {p.side === "over" ? "OVER" : "UNDER"} {p.line}{" "}
+                          {p.label}
+                        </>
                       )}
-                      {p.side === "over" ? "OVER" : "UNDER"} {p.line} {p.label}
-                      {actual != null && boxRow?.gameStatus === "final" && (
-                        <span className="ml-1 text-mercury/70 font-normal">
-                          (final: {actual})
-                        </span>
-                      )}
+                      {actual != null &&
+                        boxRow?.gameStatus === "final" &&
+                        p.market !== "moneyline" && (
+                          <span className="ml-1 text-mercury/70 font-normal">
+                            (final: {actual})
+                          </span>
+                        )}
                     </p>
                     {/* Inline-wrap on both breakpoints — the mobile flex-col
                         variant forced an extra stacked line per row, which
@@ -884,7 +905,9 @@ export default function TodayPropPicks({
                           the right rail speak for the price. */}
                       <div className="flex items-center gap-1.5 min-w-0">
                         <span className="text-[10px] text-mercury/60 truncate">
-                          {p.bookmaker} · {p.fairProb}% to hit
+                          {p.market === "moneyline"
+                            ? `${p.bookmaker} · ${p.fairProb}% to win`
+                            : `${p.bookmaker} · ${p.fairProb}% to hit`}
                         </span>
                       </div>
                       <div className="flex items-center gap-1 flex-wrap">

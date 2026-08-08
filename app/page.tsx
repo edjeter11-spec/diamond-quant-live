@@ -200,6 +200,35 @@ export default function WarRoom() {
   useEffect(() => {
     hydrate();
     registerServiceWorker();
+
+    // Warm the lazy tab chunks once the browser is idle, so switching tabs
+    // is instant instead of triggering a cold download on first tap (the
+    // "slow when switching tabs" symptom). These are the same dynamic
+    // imports declared above; calling them here just primes the module cache
+    // — React still renders them lazily. Guarded to idle time so it never
+    // competes with first paint.
+    const warm = () => {
+      import("@/components/dashboard/NRFITab");
+      import("@/components/dashboard/DingersTab");
+      import("@/components/dashboard/PlayersTab");
+    };
+    const ric = (
+      window as unknown as {
+        requestIdleCallback?: (
+          cb: () => void,
+          o?: { timeout: number },
+        ) => number;
+      }
+    ).requestIdleCallback;
+    if (ric) {
+      const id = ric(warm, { timeout: 4000 });
+      return () =>
+        (
+          window as unknown as { cancelIdleCallback?: (id: number) => void }
+        ).cancelIdleCallback?.(id);
+    }
+    const t = setTimeout(warm, 2000);
+    return () => clearTimeout(t);
   }, [hydrate]);
 
   const fetchData = useCallback(async () => {

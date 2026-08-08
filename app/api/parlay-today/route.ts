@@ -98,6 +98,9 @@ function toAmericanParlay(legs: ParlayLeg[]): number {
 // up front (rather than picking the highest-EV leg regardless of price and
 // letting the product multiply out to +700+) keeps the final number sane.
 const MIN_LEG_ODDS = -260; // don't include heavy chalk that adds no payout
+// Minimum true EV for a leg. Matches the props board's floor — a parlay that
+// multiplies -5% legs is worse than a shorter honest ticket.
+const MIN_LEG_EV = -3.5;
 const MAX_LEG_ODDS = 180; // don't include a longshot that blows up the parlay
 const TARGET_MAX_AMERICAN = 150;
 
@@ -430,7 +433,14 @@ export async function GET(req: NextRequest) {
         // Props may be priced higher than game lines — see MAX_PROP_LEG_ODDS.
         const ceiling =
           c.market === "player_prop" ? MAX_PROP_LEG_ODDS : MAX_LEG_ODDS;
-        return c.odds <= ceiling;
+        if (c.odds > ceiling) return false;
+        // EV floor. A parlay MULTIPLIES its legs, so a clearly-negative leg
+        // drags the whole ticket — and the props board already rejects
+        // anything below -3.5%. Without this the "MEDIUM confidence" pass
+        // above let Lock-tagged props onto the ticket at -5% EV (Lindor,
+        // Arraez on 2026-08-08). Moneylines from the sharp scanner are
+        // genuinely +EV and keep their own (implicitly higher) bar.
+        return (c.evPercentage ?? -99) >= MIN_LEG_EV;
       })
       .sort((a, b) => scorePick(b) - scorePick(a));
 
