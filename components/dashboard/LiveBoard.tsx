@@ -34,8 +34,23 @@ export default function LiveBoard() {
   const load = async () => {
     setLoading(true);
     try {
-      const scoreUrl = isNBA ? "/api/nba-scores" : "/api/scores";
-      const oddsUrl = `/api/odds?sport=${isNBA ? "basketball_nba" : "baseball_mlb"}`;
+      // Per-sport, not `isNBA ? nba : mlb`. That two-sport ternary meant the
+      // NFL and NHL tabs fetched MLB scores and MLB odds, so this board
+      // rendered baseball under a non-baseball tab.
+      const SCORES: Record<string, string> = {
+        mlb: "/api/scores",
+        nba: "/api/nba-scores",
+        nfl: "/api/nfl-scores",
+        nhl: "/api/nhl-scores",
+      };
+      const ODDS_KEY: Record<string, string> = {
+        mlb: "baseball_mlb",
+        nba: "basketball_nba",
+        nfl: "americanfootball_nfl",
+        nhl: "icehockey_nhl",
+      };
+      const scoreUrl = SCORES[currentSport] ?? "/api/scores";
+      const oddsUrl = `/api/odds?sport=${ODDS_KEY[currentSport] ?? "baseball_mlb"}`;
       // Scores get the cache-buster (they're free and genuinely change every
       // pitch). Odds deliberately do NOT: `?_=${Date.now()}` made every URL
       // unique, which defeated the CDN, Next fetch cache and browser cache all
@@ -89,7 +104,10 @@ export default function LiveBoard() {
     load();
     const id = setInterval(load, 30 * 1000); // refresh every 30s for live
     return () => clearInterval(id);
-  }, [isNBA]);
+    // currentSport, not isNBA — keyed on isNBA this never re-ran when
+    // switching between MLB, NFL and NHL (all three are "not NBA"), so the
+    // board kept whichever slate it loaded first.
+  }, [currentSport]);
 
   const timeAgo = (iso: string) => {
     const ms = Date.now() - new Date(iso).getTime();
@@ -108,7 +126,7 @@ export default function LiveBoard() {
           </span>
           <div className="flex-1">
             <h2 className="text-sm font-bold text-silver">
-              Live Games — {isNBA ? "NBA" : "MLB"}
+              Live Games — {currentSport.toUpperCase()}
             </h2>
             <p className="text-[10px] text-mercury/60">
               Odds + scores update every 30s
@@ -146,7 +164,9 @@ export default function LiveBoard() {
       ) : (
         <div className="space-y-2">
           {games.map((g) => {
-            const isMLB = !isNBA;
+            // Innings/outs are MLB-only. `!isNBA` was true for NFL and NHL
+            // too, so a hockey game rendered as "▲1 · 0 outs".
+            const isMLB = currentSport === "mlb";
             const periodTxt = isMLB
               ? `${g.inningHalf === "top" ? "▲" : "▼"}${g.inning ?? 1}${g.outs !== undefined ? ` · ${g.outs} out${g.outs !== 1 ? "s" : ""}` : ""}`
               : `${g.periodLabel || `Q${g.period ?? 1}`}${g.timeRemaining ? ` · ${g.timeRemaining}` : ""}`;

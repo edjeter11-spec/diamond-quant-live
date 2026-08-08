@@ -3,12 +3,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { Zap, Trophy, RefreshCw } from "lucide-react";
 import { useStore } from "@/lib/store";
+import { useSport } from "@/lib/sport-context";
 import type { ArbitrageOpportunity } from "@/lib/model/types";
 
 const formatOdds = (odds: number) => (odds > 0 ? `+${odds}` : `${odds}`);
 
 export default function ArbBoard() {
   const { oddsData } = useStore();
+  const { currentSport } = useSport();
   const [refreshTick, setRefreshTick] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const [fallbackArbs, setFallbackArbs] = useState<
@@ -30,19 +32,24 @@ export default function ArbBoard() {
     (async () => {
       setRefreshing(true);
       try {
-        const [nbaRes, mlbRes] = await Promise.all([
-          fetch("/api/odds?sport=basketball_nba")
-            .then((r) => r.json())
-            .catch(() => ({ games: [] })),
-          fetch("/api/odds?sport=baseball_mlb")
-            .then((r) => r.json())
-            .catch(() => ({ games: [] })),
-        ]);
+        // The active sport only. This used to fetch NBA and MLB unconditionally
+        // and merge them, so the NFL and NHL tabs displayed baseball arbs —
+        // and even on the NBA tab it mixed in MLB games.
+        const ODDS_KEY: Record<string, string> = {
+          mlb: "baseball_mlb",
+          nba: "basketball_nba",
+          nfl: "americanfootball_nfl",
+          nhl: "icehockey_nhl",
+        };
+        const res = await fetch(
+          `/api/odds?sport=${ODDS_KEY[currentSport] ?? "baseball_mlb"}`,
+        )
+          .then((r) => r.json())
+          .catch(() => ({ games: [] }));
         if (cancelled) return;
-        const merged: ArbitrageOpportunity[] = [
-          ...(nbaRes.games ?? []).flatMap((g: any) => g.arbitrage ?? []),
-          ...(mlbRes.games ?? []).flatMap((g: any) => g.arbitrage ?? []),
-        ];
+        const merged: ArbitrageOpportunity[] = (res.games ?? []).flatMap(
+          (g: any) => g.arbitrage ?? [],
+        );
         setFallbackArbs(merged);
       } finally {
         if (!cancelled) setRefreshing(false);
@@ -51,7 +58,9 @@ export default function ArbBoard() {
     return () => {
       cancelled = true;
     };
-  }, [oddsData.length, refreshTick]);
+    // currentSport included so switching tabs refetches rather than leaving
+    // the previous sport's arbs on screen.
+  }, [oddsData.length, refreshTick, currentSport]);
 
   // Auto-refresh every 60s
   useEffect(() => {
