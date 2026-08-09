@@ -81,6 +81,9 @@ function devig(pa: number, pb: number): [number, number] {
   return [Math.pow(pa, k), Math.pow(pb, k)];
 }
 
+/** Largest believable moneyline edge vs Pinnacle's de-vigged price (%). */
+const MAX_SANE_EV = 8;
+
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   // Below ~1.5% the morning-vs-now line noise swamps the signal; default
@@ -126,8 +129,39 @@ export async function GET(req: NextRequest) {
   const edges: any[] = [];
   const anchors: any[] = [];
   let anchored = 0;
+  let skippedStarted = 0;
+  let skippedInsane = 0;
 
-  for (const game of sharp) {
+  // Only games that have NOT started.
+  //
+  // There was no time filter here at all, and that produced fake edges large
+  // enough to poison the whole board. Once a game is underway US books post
+  // IN-PLAY prices while this still de-vigs Pinnacle's number for the same
+  // game id, so a team losing 5-0 shows a huge "edge":
+  //
+  //   Yankees  US +1000 vs Pinnacle +260  -> "+164.3% EV"
+  //   Red Sox  US  +525 vs Pinnacle +298  -> "+36.3% EV"
+  //
+  // Nothing is being beaten there — the two prices describe different game
+  // states. Real MLB moneyline edges are ~1-3%; anything near these numbers
+  // is definitionally a bug. These were ranked score = 100 + evPct, so they
+  // went straight to the TOP of the published board.
+  //
+  // 5-minute buffer: commence_time from the odds feed drifts a minute or two
+  // from the official first pitch, and a line in the final minutes before a
+  // start is already unreliable.
+  const cutoff = Date.now() + 5 * 60 * 1000;
+  const preGame = sharp.filter((g) => {
+    const t = Date.parse(g.commence_time);
+    if (!Number.isFinite(t)) return false; // unknown start time — don't guess
+    if (t <= cutoff) {
+      skippedStarted++;
+      return false;
+    }
+    return true;
+  });
+
+  for (const game of preGame) {
     const pin = game.bookmakers.find((b) => b.key === "pinnacle");
     const h2h = pin?.markets.find((m) => m.key === "h2h");
     const home = h2h?.outcomes.find((o) => o.name === game.home_team);
@@ -167,6 +201,18 @@ export async function GET(req: NextRequest) {
       }
       if (!best) continue;
       const ev = (fair[side] * best.price - 1) * 100;
+      // Upper sanity bound, mirroring MAX_EV on the props board.
+      //
+      // A liquid MLB moneyline priced 8%+ better than Pinnacle's de-vigged
+      // number does not happen — every instance during development was bad
+      // data (in-play prices, a stale line, a mismatched game), never a real
+      // edge. The pre-game filter above removes the known cause; this is the
+      // backstop so the NEXT bad-data mode degrades to a short board instead
+      // of a confident garbage pick at the top of it.
+      if (ev > MAX_SANE_EV) {
+        skippedInsane++;
+        continue;
+      }
       if (ev >= minEv) {
         edges.push({
           gameId: game.id,
@@ -193,6 +239,10 @@ export async function GET(req: NextRequest) {
     devig: "power",
     minEv,
     gamesAnchored: anchored,
+    // Surfaced, not swallowed: a sudden jump in either counter is the signal
+    // that the upstream feed has gone wrong again.
+    skippedInPlay: skippedStarted,
+    skippedImplausible: skippedInsane,
     edges,
     ...(wantAll ? { anchors } : {}),
     note:
