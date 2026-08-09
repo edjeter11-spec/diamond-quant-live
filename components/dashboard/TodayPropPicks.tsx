@@ -701,7 +701,13 @@ export default function TodayPropPicks({
   // count for the live-ranking path, which never leaves the browser anyway.
   const visible = picks;
   const lockedCount = serverLocked;
-  const overCount = picks.filter((p) => p.side === "over").length;
+  // Moneylines carry a dummy side:"over" (the PinnedProp shape requires a
+  // side; a team ML has none), so counting them here reported "2 Overs" on a
+  // board of one ML and one prop. Count props only, and report the ML count
+  // separately so the header stops calling a team moneyline a player prop.
+  const mlCount = picks.filter((p) => p.market === "moneyline").length;
+  const propOnly = picks.filter((p) => p.market !== "moneyline");
+  const overCount = propOnly.filter((p) => p.side === "over").length;
 
   // Running W/L tally across all visible picks — updates live as games grade.
   const tally = visible.reduce(
@@ -754,7 +760,13 @@ export default function TodayPropPicks({
         <Users className="w-4 h-4 text-purple" />
         <div className="flex-1">
           <h2 className="text-xs sm:text-sm font-bold text-silver uppercase tracking-wider flex items-center gap-1.5">
-            Today&apos;s Player Props
+            {/* "Today's Board" when sharp moneylines are mixed in — calling a
+                team ML a player prop is what made the board look broken. */}
+            {mlCount > 0 && propOnly.length > 0
+              ? "Today's Board"
+              : mlCount > 0
+                ? "Today's Sharp Moneylines"
+                : "Today's Player Props"}
             <InfoTip term="EV" />
           </h2>
           <p className="text-[9px] text-mercury/60 mt-0.5">
@@ -770,8 +782,21 @@ export default function TodayPropPicks({
               </span>
             ) : (
               <>
-                {picks.length} picks · {overCount} Over
-                {overCount !== 1 ? "s" : ""}
+                {/* Moneylines are counted and named separately — the board
+                    mixes them in deliberately, but a team ML is not a prop
+                    and the header must not imply it is. */}
+                {mlCount > 0 && (
+                  <>
+                    {mlCount} moneyline{mlCount !== 1 ? "s" : ""}
+                    {propOnly.length > 0 ? " · " : ""}
+                  </>
+                )}
+                {propOnly.length > 0 && (
+                  <>
+                    {propOnly.length} prop{propOnly.length !== 1 ? "s" : ""} ·{" "}
+                    {overCount} Over{overCount !== 1 ? "s" : ""}
+                  </>
+                )}
               </>
             )}
             {pinnedFailed && (
