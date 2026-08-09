@@ -167,25 +167,59 @@ export async function POST(req: NextRequest) {
     }
 
     if (picks.length > 0) {
-      const lines = picks.map((p, i) => {
-        // Moneylines carry no side/line — rendering one with the prop
-        // template printed "Minnesota Twins Over 0 moneyline" in Discord.
-        if (p.market === "moneyline")
-          return `**${i + 1}.** ${p.playerName} **ML** — ${fmtOdds(p.odds)} · ${p.bookmaker}  ⚡ *+${p.evPercentage?.toFixed(1)}% vs sharp line*`;
-        const label = MARKET_LABEL[p.market] ?? p.label ?? p.market;
-        const side = p.side === "over" ? "Over" : "Under";
-        return `**${i + 1}.** ${p.playerName} **${side} ${p.line} ${label}** — ${fmtOdds(p.odds)} · ${p.bookmaker}`;
-      });
+      // Group by type before rendering. The board deliberately mixes
+      // sharp-anchor moneylines in with player props (they're the only picks
+      // with a positive-EV edge, so they belong at the top), but the post was
+      // titled "TODAY'S PLAYER PROPS" and numbered them in one list — so a
+      // team moneyline read as a player prop: "Red Sox ML" under player props.
+      // Same picks, honestly labelled.
+      const mlPicks = picks.filter((p) => p.market === "moneyline");
+      const propPicks = picks.filter((p) => p.market !== "moneyline");
+
+      const sections: string[] = [];
+      if (mlPicks.length > 0) {
+        sections.push(
+          "**⚡ SHARP-PRICED MONEYLINES**\n" +
+            mlPicks
+              .map(
+                (p, i) =>
+                  `**${i + 1}.** ${p.playerName} **ML** — ${fmtOdds(p.odds)} · ${p.bookmaker}  *+${p.evPercentage?.toFixed(1)}% vs the sharp line*`,
+              )
+              .join("\n"),
+        );
+      }
+      if (propPicks.length > 0) {
+        sections.push(
+          "**🎯 PLAYER PROPS**\n" +
+            propPicks
+              .map((p, i) => {
+                const label = MARKET_LABEL[p.market] ?? p.label ?? p.market;
+                const side = p.side === "over" ? "Over" : "Under";
+                return `**${i + 1}.** ${p.playerName} **${side} ${p.line} ${label}** — ${fmtOdds(p.odds)} · ${p.bookmaker}`;
+              })
+              .join("\n"),
+        );
+      }
+
       const probs = picks
         .map((p) => `**${Math.round(p.fairProb)}%**`)
         .join(", ");
 
+      // Title reflects what's actually inside rather than always claiming
+      // player props.
+      const title =
+        mlPicks.length > 0 && propPicks.length > 0
+          ? "🎯 TODAY'S BOARD"
+          : mlPicks.length > 0
+            ? "⚡ TODAY'S SHARP MONEYLINES"
+            : "🎯 TODAY'S PLAYER PROPS";
+
       const discordRes = await postPickToDiscord({
         id: batchKey,
         sport,
-        game: "🎯 TODAY'S PLAYER PROPS",
-        market: `${picks.length} Picks · Locked In`,
-        pick_text: lines.join("\n"),
+        game: title,
+        market: `${picks.length} Pick${picks.length === 1 ? "" : "s"} · Locked In`,
+        pick_text: sections.join("\n\n"),
         units: 1,
         confidence: "Lock",
         writeup: `Today's board is locked. We have these at ${probs}.\n\nSame picks for everyone — no cherry-picking after the fact. Grade goes up tomorrow, win or lose.`,

@@ -188,7 +188,15 @@ const ESPN_SCOREBOARD: Record<string, string> = {
 
 async function getFirstPitchHourET(sport: string): Promise<number | null> {
   const day = etDateString();
-  const hit = firstPitchCache.get(day);
+  // Keyed by SPORT AND DAY. Keying on the day alone made all three sports
+  // share one entry, and cron publishes mlb/nba/nfl in parallel — so whichever
+  // resolved first won the cache for the others. Out of basketball/football
+  // season NBA and NFL have no games, cache hour:null, and MLB then read that
+  // null and skipped its lineup gate entirely: the board pinned at the 4am
+  // tick for a 12pm first pitch, ~8h before any lineup was confirmed. That is
+  // why picks were published at 4:15am despite the gate being correct.
+  const cacheKey = `${sport}_${day}`;
+  const hit = firstPitchCache.get(cacheKey);
   // Cache for an hour — a schedule doesn't move, and this runs on every
   // board request.
   if (hit && Date.now() - hit.at < 3_600_000) return hit.hour;
@@ -211,7 +219,7 @@ async function getFirstPitchHourET(sport: string): Promise<number | null> {
         )
         .filter((t: number) => Number.isFinite(t));
       if (!times.length) {
-        firstPitchCache.set(day, { at: Date.now(), hour: null });
+        firstPitchCache.set(cacheKey, { at: Date.now(), hour: null });
         return null;
       }
       const hour = Number(
@@ -222,7 +230,7 @@ async function getFirstPitchHourET(sport: string): Promise<number | null> {
         }),
       );
       const out = Number.isFinite(hour) ? hour : null;
-      firstPitchCache.set(day, { at: Date.now(), hour: out });
+      firstPitchCache.set(cacheKey, { at: Date.now(), hour: out });
       return out;
     } catch {
       return null;
@@ -241,7 +249,7 @@ async function getFirstPitchHourET(sport: string): Promise<number | null> {
       .map((g: any) => new Date(g.gameDate).getTime())
       .filter((t: number) => Number.isFinite(t));
     if (!times.length) {
-      firstPitchCache.set(day, { at: Date.now(), hour: null });
+      firstPitchCache.set(cacheKey, { at: Date.now(), hour: null });
       return null;
     }
     const earliest = new Date(Math.min(...times));
@@ -253,7 +261,7 @@ async function getFirstPitchHourET(sport: string): Promise<number | null> {
       }),
     );
     const out = Number.isFinite(hour) ? hour : null;
-    firstPitchCache.set(day, { at: Date.now(), hour: out });
+    firstPitchCache.set(cacheKey, { at: Date.now(), hour: out });
     return out;
   } catch {
     return null;
@@ -735,6 +743,11 @@ export async function GET(req: NextRequest) {
           for (const e of (d.edges ?? []).slice(0, 2)) {
             picks.unshift({
               key: `ml-${e.gameId}-${e.side}`,
+              // The TEAM, not a player. Consumers must branch on
+              // market === "moneyline" before rendering this as a player prop
+              // — publish-daily and TodayPropPicks already do. `side`/`line`
+              // are structurally meaningless here and exist only because the
+              // PinnedProp shape requires them; nothing may render them.
               playerName: e.side,
               team: e.game,
               side: "over",
