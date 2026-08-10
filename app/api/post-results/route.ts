@@ -488,8 +488,23 @@ async function recapBatch(
   });
 
   // Title mirrors the pick post it's settling, so the pair reads as a set.
+  //
+  // "PLAYER PROPS" was hardcoded for every non-parlay batch, but the props
+  // batch also carries sharp-anchor MONEYLINES (see the edge-scan block in
+  // pinned-props). So a recap settling "Arizona Diamondbacks ML" was headed
+  // PLAYER PROPS — a team bet announced as a player prop. Derive the title
+  // from what the batch actually settled, matching the section split in
+  // publish-daily.
   const isParlay = batchKey.includes("_parlay_");
-  const title = isParlay ? "PARLAY OF THE DAY" : "PLAYER PROPS";
+  const mlCount = picks.filter((p) => p.market === "moneyline").length;
+  const propCount = picks.length - mlCount;
+  const title = isParlay
+    ? "PARLAY OF THE DAY"
+    : mlCount > 0 && propCount > 0
+      ? "TODAY'S BOARD"
+      : mlCount > 0
+        ? "SHARP MONEYLINES"
+        : "PLAYER PROPS";
 
   try {
     const r = await fetch(`${BOT_API_URL}/results/post`, {
