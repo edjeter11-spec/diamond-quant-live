@@ -313,10 +313,15 @@ export async function getTrackRecordStats(days: number = 30): Promise<{
   // safe and doesn't invent pushes that didn't happen).
   const propBucket = bucket();
   try {
+    // Exclude synthetic-line rows (see lib/bot/nfl-prop-pipeline.ts header —
+    // grep `nfl-v1-synth`). They're graded against a line the projector
+    // invented; folding them into the public track record would puff the
+    // number by scoring the model against itself.
     const { data: propRows } = await supabaseAdmin
       .from("prop_predictions")
       .select("sport,game_date,result,hit,odds_at_pick,status")
       .eq("status", "graded")
+      .neq("brain_version", "nfl-v1-synth")
       .gte("game_date", sinceDate);
 
     for (const r of propRows ?? []) {

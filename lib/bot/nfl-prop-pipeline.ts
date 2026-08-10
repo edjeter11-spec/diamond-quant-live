@@ -6,6 +6,29 @@
 //  3. Commit predictions where line deviation suggests edge
 //  4. After games end, fetch box scores, grade via prop-grader
 //  5. Append to prop_pick_history_nfl
+//
+// ⚠️ DATA-INTEGRITY WARNING — verified against The Odds API on 2026-08-09:
+//   Our current plan (5 rotating keys, ~500 req/mo each) returns ZERO
+//   outcomes for player_pass_yds, player_pass_tds, player_rush_yds,
+//   player_receptions, and player_reception_yds — those markets are gated
+//   behind a paid tier. The ONLY player-prop market that returns real book
+//   lines on our plan is `player_anytime_td` (24 outcomes on Patriots@SEA).
+//
+//   Everything below that uses `Math.max(0.5, Math.round(baseline * 2) / 2 - 0.5)`
+//   for a "line" is grading the model against a line it made up from the
+//   season average. Those rows are marked `synthetic: true` so nothing
+//   downstream mistakes them for real market picks. They exist only for
+//   internal calibration; they must NEVER be published to Discord, added
+//   to a parlay, or graded into a public accuracy stat.
+//
+//   Path to fixing this properly:
+//     (a) upgrade the Odds API plan to a tier that includes NFL prop
+//         markets (~$59/mo Startup upward), OR
+//     (b) scrape DK/FD prop pages via Playwright (fragile, plan-B), OR
+//     (c) ship ONLY anytime_td until (a) or (b) — the honest option
+//         through Week 1 of the 2026 season.
+//
+//   See NFL research memo, "Season-start punch list", items #1 and #5.
 // ──────────────────────────────────────────────────────────
 
 import { supabase } from "@/lib/supabase/client";
@@ -204,7 +227,10 @@ export async function commitNFLPropProjections(
         odds_at_pick: odds,
         ev_edge: Math.round(evEdge * 100) / 100,
         status: "pending",
-        brain_version: "nfl-v1",
+        // TAG says the line is synthetic (see file header). This is what
+        // downstream publish/grade filters MUST match on to skip these rows.
+        // grep-able: `nfl-v1-synth` is the marker.
+        brain_version: "nfl-v1-synth",
         factors: proj.factors.slice(0, 5).map((f) => ({
           name: f.name,
           value: Math.round(f.contribution * 100) / 100,

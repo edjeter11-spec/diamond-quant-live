@@ -38,12 +38,17 @@ export async function GET(req: NextRequest) {
         .limit(20);
       recent = data ?? [];
 
+      // Exclude synthetic NFL rows (`brain_version: nfl-v1-synth`). Those
+      // are graded against a line the projector made up because the Odds API
+      // plan gates real NFL prop markets — see lib/bot/nfl-prop-pipeline.ts
+      // header. Publishing their "results" would be lying to the reader.
       const { data: propData } = await supabaseAdmin
         .from("prop_predictions")
         .select(
           "game_date,sport,player_name,prop_type,line,predicted_side,result,hit,actual_value,odds_at_pick,graded_at",
         )
         .eq("status", "graded")
+        .neq("brain_version", "nfl-v1-synth")
         .order("graded_at", { ascending: false })
         .limit(20);
       recentProps = propData ?? [];

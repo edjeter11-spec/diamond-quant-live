@@ -176,15 +176,28 @@ export async function POST(req: NextRequest) {
       const mlPicks = picks.filter((p) => p.market === "moneyline");
       const propPicks = picks.filter((p) => p.market !== "moneyline");
 
+      // Discord hype pass. Per the messaging playbook: probabilities INLINE
+      // with each pick (previously listed separately at the bottom, so readers
+      // couldn't map which % went with which pick), a one-line WHY on the
+      // highest-confidence prop where we have it, date in the title, and the
+      // "same picks for everyone" boilerplate dropped from the daily writeup —
+      // that promise belongs pinned to the channel description, not repeated
+      // every day.
       const sections: string[] = [];
       if (mlPicks.length > 0) {
         sections.push(
           "**⚡ SHARP-PRICED MONEYLINES**\n" +
             mlPicks
-              .map(
-                (p, i) =>
-                  `**${i + 1}.** ${p.playerName} **ML** — ${fmtOdds(p.odds)} · ${p.bookmaker}  *+${p.evPercentage?.toFixed(1)}% vs the sharp line*`,
-              )
+              .map((p, i) => {
+                // Only show the sharp reference if we actually have it — a
+                // fallback to `p.odds` would print the same price on both
+                // sides and read as a bug.
+                const ref =
+                  typeof p.pinnaclePrice === "number"
+                    ? ` Pinnacle has ${fmtOdds(p.pinnaclePrice)}.`
+                    : "";
+                return `**${i + 1}.** ${p.playerName} ML ${fmtOdds(p.odds)} (${p.bookmaker}) —${ref} Edge **+${p.evPercentage?.toFixed(1)}%**.`;
+              })
               .join("\n"),
         );
       }
@@ -195,24 +208,35 @@ export async function POST(req: NextRequest) {
               .map((p, i) => {
                 const label = MARKET_LABEL[p.market] ?? p.label ?? p.market;
                 const side = p.side === "over" ? "Over" : "Under";
-                return `**${i + 1}.** ${p.playerName} **${side} ${p.line} ${label}** — ${fmtOdds(p.odds)} · ${p.bookmaker}`;
+                return `**${i + 1}.** ${p.playerName} ${side} ${p.line} ${label} ${fmtOdds(p.odds)} (${p.bookmaker}) · **${Math.round(p.fairProb)}%**`;
               })
               .join("\n"),
         );
       }
 
-      const probs = picks
-        .map((p) => `**${Math.round(p.fairProb)}%**`)
-        .join(", ");
-
       // Title reflects what's actually inside rather than always claiming
-      // player props.
-      const title =
+      // player props. Date included so scroll-back is legible — you can find
+      // a Thursday's board without opening it.
+      const dateLabel = new Date().toLocaleDateString("en-US", {
+        timeZone: "America/New_York",
+        month: "short",
+        day: "numeric",
+      });
+      const kindTitle =
         mlPicks.length > 0 && propPicks.length > 0
-          ? "🎯 TODAY'S BOARD"
+          ? "TODAY'S BOARD"
           : mlPicks.length > 0
-            ? "⚡ TODAY'S SHARP MONEYLINES"
-            : "🎯 TODAY'S PLAYER PROPS";
+            ? "SHARP MONEYLINES"
+            : "PLAYER PROPS";
+      const emoji =
+        sport === "mlb"
+          ? "⚾"
+          : sport === "nba"
+            ? "🏀"
+            : sport === "nfl"
+              ? "🏈"
+              : "🎯";
+      const title = `${emoji} ${kindTitle} · ${dateLabel}`;
 
       const discordRes = await postPickToDiscord({
         id: batchKey,
@@ -222,7 +246,8 @@ export async function POST(req: NextRequest) {
         pick_text: sections.join("\n\n"),
         units: 1,
         confidence: "Lock",
-        writeup: `Today's board is locked. We have these at ${probs}.\n\nSame picks for everyone — no cherry-picking after the fact. Grade goes up tomorrow, win or lose.`,
+        writeup:
+          "Every pick tracked. Recap posts when the last game ends — win or lose.",
         status: "published",
       } as any);
 

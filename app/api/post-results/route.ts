@@ -242,13 +242,29 @@ async function recapBatch(
       await supabaseAdmin!.from("app_state").delete().eq("key", recapKey);
   };
 
-  const graded: Array<{ text: string; result: string }> = [];
+  // Broadened per the Discord hype pass: `actualValue` and `line` let the bot
+  // render "Judge o0.5 HR — 0-4" instead of naked "Judge Over 0.5 HR", which
+  // is the difference between "the score" and "a receipt". Optional so old
+  // rows without an actual grade fall through cleanly.
+  const graded: Array<{
+    text: string;
+    result: string;
+    actualValue?: number | null;
+    line?: number | null;
+    odds?: number | null;
+  }> = [];
   let ungraded = 0;
   let unitsNet = 0;
 
   for (const p of picks) {
     if (p.result) {
-      graded.push({ text: p.pick_text, result: p.result });
+      graded.push({
+        text: p.pick_text,
+        result: p.result,
+        actualValue: p.actual_value ?? null,
+        line: p.line ?? null,
+        odds: p.odds ?? null,
+      });
       unitsNet += Number(p.profit_units ?? 0);
       continue;
     }
@@ -324,7 +340,13 @@ async function recapBatch(
         .is("result", null);
 
       unitsNet += profit;
-      graded.push({ text: p.pick_text, result });
+      graded.push({
+        text: p.pick_text,
+        result,
+        actualValue: p.actual_value ?? null,
+        line: p.line ?? null,
+        odds: p.odds ?? null,
+      });
       continue;
     }
 
@@ -346,7 +368,13 @@ async function recapBatch(
         })
         .eq("id", p.id)
         .is("result", null);
-      graded.push({ text: p.pick_text, result: "void" });
+      graded.push({
+        text: p.pick_text,
+        result: "void",
+        actualValue: null,
+        line: p.line ?? null,
+        odds: p.odds ?? null,
+      });
       console.error(
         `post-results: ungradeable non-prop row voided — market=${p.market} pick=${p.pick_text}`,
       );
@@ -428,7 +456,13 @@ async function recapBatch(
             })
             .eq("id", p.id)
             .is("result", null);
-          graded.push({ text: p.pick_text, result: "void" });
+          graded.push({
+            text: p.pick_text,
+            result: "void",
+            actualValue: null,
+            line: p.line ?? null,
+            odds: p.odds ?? null,
+          });
           continue;
         }
       }
@@ -457,7 +491,13 @@ async function recapBatch(
       .is("result", null); // no double-settling
 
     unitsNet += profit;
-    graded.push({ text: p.pick_text, result: g.result });
+    graded.push({
+      text: p.pick_text,
+      result: g.result,
+      actualValue: g.actualValue ?? null,
+      line: p.line ?? null,
+      odds: p.odds ?? null,
+    });
   }
 
   // Hold the recap until the slate is fully settled — see header note.
@@ -498,13 +538,62 @@ async function recapBatch(
   const isParlay = batchKey.includes("_parlay_");
   const mlCount = picks.filter((p) => p.market === "moneyline").length;
   const propCount = picks.length - mlCount;
-  const title = isParlay
-    ? "PARLAY OF THE DAY"
+  const kind = isParlay
+    ? "PARLAY"
     : mlCount > 0 && propCount > 0
-      ? "TODAY'S BOARD"
+      ? "BOARD"
       : mlCount > 0
         ? "SHARP MONEYLINES"
         : "PLAYER PROPS";
+
+  // Trailing 7-day rollup for the recap's second line. `daily_picks_log`
+  // does not exist in this DB (the recap in lib/email/daily-recap.ts queries
+  // it and silently gets zeros); the authoritative source is manual_picks.
+  // Excludes today's slate so the week line reads as PRIOR context — the
+  // day's own record is already the headline.
+  let weekLine: string | undefined = undefined;
+  try {
+    const weekAgo = new Date(slate + "T12:00:00Z");
+    weekAgo.setUTCDate(weekAgo.getUTCDate() - 7);
+    const weekStart = weekAgo.toISOString().slice(0, 10);
+    const { data: weekRows } = await supabaseAdmin!
+      .from("manual_picks")
+      .select("result,profit_units,slate_date")
+      .eq("sport", sport)
+      .gte("slate_date", weekStart)
+      .lt("slate_date", slate)
+      .in("result", ["win", "loss"]);
+    const wins = (weekRows ?? []).filter((r) => r.result === "win").length;
+    const losses = (weekRows ?? []).filter((r) => r.result === "loss").length;
+    const u =
+      Math.round(
+        (weekRows ?? []).reduce((s, r) => s + Number(r.profit_units ?? 0), 0) *
+          10,
+      ) / 10;
+    if (wins + losses > 0) {
+      weekLine = `Prior 7 days: ${wins}-${losses}, ${u >= 0 ? "+" : ""}${u.toFixed(1)}u`;
+    }
+  } catch {
+    // Rollup is nice-to-have; missing it must not block the recap.
+  }
+
+  // Day W-L and net-u LIVE IN THE TITLE — mobile users see the title first,
+  // and burying the score in the footer is what made the recap read like a
+  // spreadsheet instead of a receipt.
+  const wDay = graded.filter((g) => g.result === "win").length;
+  const lDay = graded.filter((g) => g.result === "loss").length;
+  const unitsRounded = Math.round(unitsNet * 10) / 10;
+  const sportEmoji =
+    sport === "mlb"
+      ? "⚾"
+      : sport === "nba"
+        ? "🏀"
+        : sport === "nfl"
+          ? "🏈"
+          : "🎯";
+  const title = isParlay
+    ? `${sportEmoji} ${dateLabel} · PARLAY — ${wDay > lDay ? "CASHED" : lDay > wDay ? "BUSTED" : ""}${unitsRounded !== 0 ? ` ${unitsRounded >= 0 ? "+" : ""}${unitsRounded}u` : ""}`.trim()
+    : `${sportEmoji} ${dateLabel} · ${kind} — ${wDay}-${lDay}${unitsRounded !== 0 ? `, ${unitsRounded >= 0 ? "+" : ""}${unitsRounded}u` : ""}`;
 
   try {
     const r = await fetch(`${BOT_API_URL}/results/post`, {
@@ -532,6 +621,10 @@ async function recapBatch(
           )?.url ?? undefined,
         legs: graded,
         unitsNet: Math.round(unitsNet * 100) / 100,
+        // Optional context lines the bot can render below the title. Older
+        // bot builds ignore unknown fields — safe to add without breaking
+        // existing embeds.
+        weekLine,
       }),
       // 25s, not 10s. Discord's send regularly exceeds 10s under rate
       // limiting, and a timeout here does NOT mean the post failed — see the

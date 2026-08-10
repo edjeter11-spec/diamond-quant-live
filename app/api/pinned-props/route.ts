@@ -281,6 +281,10 @@ interface PinnedProp {
   line: number;
   market: string;
   odds: number;
+  /** Sharp reference price (Pinnacle) for moneyline picks. Only set on
+   *  moneylines from the edge-scan; undefined on player props. Rendered
+   *  inline in the Discord post so "+3% edge" is visibly grounded. */
+  pinnaclePrice?: number;
   bookmaker: string;
   fairProb: number;
   evPercentage: number;
@@ -766,6 +770,10 @@ export async function GET(req: NextRequest) {
               line: 0,
               market: "moneyline",
               odds: e.price,
+              // Kept so the Discord post can say "Pinnacle has -125" — the
+              // reference price is the whole reason the edge exists, and
+              // hiding it makes the "+3% edge" number look asserted.
+              pinnaclePrice: e.pinnaclePrice,
               bookmaker: e.book,
               fairProb: e.fairProb,
               evPercentage: e.evPct,
