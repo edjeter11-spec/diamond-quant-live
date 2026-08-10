@@ -49,13 +49,20 @@ export default function NRFITab() {
   const { currentSport } = useSport();
   const isNBA = currentSport === "nba";
   const isNFL = currentSport === "nfl";
+  // ALLOWLIST, not a list of exclusions. Every guard here was written as
+  // "if (isNBA) ..." then later "if (isNBA || isNFL) ...", and NHL was never
+  // added — so hockey fell through to analyzeNRFI() and rendered the full MLB
+  // first-inning board (BET NRFI/YRFI, pitcher grades) under a tab labelled
+  // "NRFI". Gating on isMLB means a sport that isn't explicitly handled gets
+  // the honest empty state instead of baseball.
+  const isMLB = currentSport === "mlb";
   const [games, setGames] = useState<NRFIGame[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedGame, setExpandedGame] = useState<string | null>(null);
   const [hasLoaded, setHasLoaded] = useState(false);
 
   useEffect(() => {
-    if (isNBA || isNFL) return;
+    if (!isMLB) return;
     if (scores.length === 0 || hasLoaded) return;
     setLoading(true);
     analyzeNRFI(scores)
@@ -124,6 +131,35 @@ export default function NRFITab() {
             <p className="text-sm text-mercury">Coming soon for NFL</p>
             <p className="text-[10px] text-mercury/50 mt-1">
               First-score projections based on drive charts and pace
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Catch-all for any sport without a first-scoring-play engine (NHL today,
+  // and anything added later). Placed AFTER the NBA/NFL blocks so their
+  // tailored copy still wins, and before the MLB board so nothing can fall
+  // through to baseball again.
+  if (!isMLB) {
+    return (
+      <div className="space-y-3">
+        <div className="glass rounded-xl p-5 border border-orange-500/15">
+          <div className="flex items-center gap-2 mb-3">
+            <Shield className="w-5 h-5 text-orange-500" />
+            <h2 className="text-sm font-bold text-silver uppercase tracking-wider">
+              First Goal Analysis
+            </h2>
+          </div>
+          <p className="text-xs text-mercury mb-2">
+            Which team scores first — will analyze goalie form, opening-shift
+            matchups and pace to project first-goal probability.
+          </p>
+          <div className="rounded-lg bg-gunmetal/30 p-4 text-center">
+            <Brain className="w-8 h-8 text-orange-500/30 mx-auto mb-2" />
+            <p className="text-sm text-mercury">
+              Coming soon for {currentSport.toUpperCase()}
             </p>
           </div>
         </div>

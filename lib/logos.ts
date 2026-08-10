@@ -384,19 +384,20 @@ const NBA_ABBREV_TO_FULL: Record<string, string> = {
   WSH: "Washington Wizards",
 };
 
-export function getFullTeamName(
-  abbrev: string,
-  sport: "mlb" | "nba" = "mlb",
-): string {
+export function getFullTeamName(abbrev: string, sport: string = "mlb"): string {
   if (sport === "nba") return NBA_ABBREV_TO_FULL[abbrev] ?? abbrev;
+  // Only MLB has a map beyond NBA — anything else must return the abbrev
+  // rather than expanding through the MLB table. NHL and NFL share codes with
+  // MLB (TOR, BOS, PIT, PHI, WSH...), so the old `return MLB_...` fallthrough
+  // rendered "Toronto Blue Jays" for the Maple Leafs on the NHL tab. Same
+  // defect that was fixed in teamNameToAbbrev/getTeamLogo; it was never
+  // applied here.
+  if (sport !== "mlb") return abbrev;
   return MLB_ABBREV_TO_FULL[abbrev] ?? abbrev;
 }
 
 // Get just the mascot/nickname from abbreviation (e.g. "NYY" → "Yankees")
-export function getTeamNickname(
-  abbrev: string,
-  sport: "mlb" | "nba" = "mlb",
-): string {
+export function getTeamNickname(abbrev: string, sport: string = "mlb"): string {
   const full = getFullTeamName(abbrev, sport);
   if (full === abbrev) return abbrev;
   // Last word, or last two for "Red Sox", "White Sox", "Blue Jays", "Trail Blazers"

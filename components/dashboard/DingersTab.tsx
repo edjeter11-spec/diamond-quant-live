@@ -115,11 +115,18 @@ export default function DingersTab() {
   }, [isMlb]);
 
   if (!isMlb) {
-    const label = currentSport === "nba" ? "Threes" : "Anytime TD";
+    // Per-sport map. This was `nba ? "Threes" : "Anytime TD"`, so the NHL tab
+    // rendered football copy — "Anytime TD" and "anytime-touchdown
+    // probability this week" — under a hockey tab.
+    const label =
+      { nba: "Threes", nfl: "Anytime TD", nhl: "Goal Scorers" }[currentSport] ??
+      "Big Plays";
     const desc =
-      currentSport === "nba"
-        ? "Ranking players by 3-point probability tonight."
-        : "Ranking players by anytime-touchdown probability this week.";
+      {
+        nba: "Ranking players by 3-point probability tonight.",
+        nfl: "Ranking players by anytime-touchdown probability this week.",
+        nhl: "Ranking skaters by anytime-goal probability tonight.",
+      }[currentSport] ?? "Ranking players by scoring probability.";
     return (
       <div className="space-y-3">
         <div className="glass rounded-xl p-5 border border-amber/15">

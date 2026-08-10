@@ -57,7 +57,11 @@ export default function WeatherBadge({
   sport,
 }: {
   team?: string;
-  sport: "mlb" | "nba";
+  // Plain string, not "mlb" | "nba" — callers were casting currentSport to
+  // satisfy that type, which was false for nfl/nhl. The `sport !== "mlb"`
+  // guard below is correct for every sport, so widening the type just stops
+  // the cast from hiding real mismatches elsewhere.
+  sport: string;
 }) {
   const [weather, setWeather] = useState<Weather | null>(null);
   const [loaded, setLoaded] = useState(false);

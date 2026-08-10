@@ -91,6 +91,10 @@ export default function GameCard({ game, oddsInfo }: GameCardProps) {
   const { currentSport } = useSport();
   const isSelected = selectedGameId === game.id;
   const isNBA = game.isNBA || currentSport === "nba";
+  // Pitchers, innings/outs and ballpark weather are MLB-only. They were gated
+  // on `!isNBA`, which is also true for NFL and NHL — so a hockey card showed
+  // "PitcherFace TBD" under each team and a live game rendered as "▼2 · 1 out".
+  const isMLB = !game.isNBA && currentSport === "mlb";
 
   const formatTime = (iso: string) => {
     try {
@@ -105,15 +109,12 @@ export default function GameCard({ game, oddsInfo }: GameCardProps) {
 
   const formatOdds = (odds: number) => (odds > 0 ? `+${odds}` : `${odds}`);
 
-  // Full names for desktop, abbreviations for mobile
-  const awayFull = getFullTeamName(
-    game.awayAbbrev,
-    currentSport as "mlb" | "nba",
-  );
-  const homeFull = getFullTeamName(
-    game.homeAbbrev,
-    currentSport as "mlb" | "nba",
-  );
+  // Full names for desktop, abbreviations for mobile.
+  // No `as "mlb" | "nba"` cast — it was false on the NFL/NHL tabs and hid the
+  // fact that getFullTeamName fell through to the MLB table, expanding a
+  // hockey "TOR" into "Toronto Blue Jays".
+  const awayFull = getFullTeamName(game.awayAbbrev, currentSport);
+  const homeFull = getFullTeamName(game.homeAbbrev, currentSport);
 
   return (
     <button
@@ -135,12 +136,11 @@ export default function GameCard({ game, oddsInfo }: GameCardProps) {
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-danger opacity-75" />
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-danger" />
               </span>
-              {isNBA ? (
-                <span className="text-xs font-semibold text-danger uppercase tracking-wider">
-                  {game.periodLabel || `Q${game.period}`}
-                  {game.timeRemaining ? ` ${game.timeRemaining}` : ""}
-                </span>
-              ) : (
+              {/* Innings and outs are baseball. This was `isNBA ? period :
+                  innings`, so NFL and NHL took the else-branch and a live
+                  hockey game rendered as "▼ 2 · 1 out". Only MLB gets the
+                  inning display; every other sport uses period/clock. */}
+              {isMLB ? (
                 <>
                   <span className="text-xs font-semibold text-danger uppercase tracking-wider">
                     {game.inningHalf === "top" ? "▲" : "▼"} {game.inning}
@@ -149,6 +149,12 @@ export default function GameCard({ game, oddsInfo }: GameCardProps) {
                     {game.outs} out{game.outs !== 1 ? "s" : ""}
                   </span>
                 </>
+              ) : (
+                <span className="text-xs font-semibold text-danger uppercase tracking-wider">
+                  {game.periodLabel ||
+                    (game.period ? `Q${game.period}` : "LIVE")}
+                  {game.timeRemaining ? ` ${game.timeRemaining}` : ""}
+                </span>
               )}
             </div>
           ) : game.status === "final" ? (
@@ -163,10 +169,7 @@ export default function GameCard({ game, oddsInfo }: GameCardProps) {
           )}
         </div>
         <div className="flex items-center gap-2">
-          <WeatherBadge
-            team={game.homeAbbrev}
-            sport={currentSport as "mlb" | "nba"}
-          />
+          <WeatherBadge team={game.homeAbbrev} sport={currentSport} />
           <GameEdgeBadge
             homeAbbrev={game.homeAbbrev}
             awayAbbrev={game.awayAbbrev}
@@ -202,7 +205,7 @@ export default function GameCard({ game, oddsInfo }: GameCardProps) {
                 <span className="sm:hidden">{game.awayAbbrev}</span>
                 <span className="hidden sm:inline">{awayFull}</span>
               </p>
-              {!isNBA && (
+              {isMLB && (
                 <div className="hidden sm:block">
                   <PitcherFace
                     name={game.awayPitcher}
@@ -250,7 +253,7 @@ export default function GameCard({ game, oddsInfo }: GameCardProps) {
                 <span className="sm:hidden">{game.homeAbbrev}</span>
                 <span className="hidden sm:inline">{homeFull}</span>
               </p>
-              {!isNBA && (
+              {isMLB && (
                 <div className="hidden sm:block">
                   <PitcherFace
                     name={game.homePitcher}
@@ -284,7 +287,7 @@ export default function GameCard({ game, oddsInfo }: GameCardProps) {
       </div>
 
       {/* Footer — desktop only; mobile hides venue for density */}
-      {(game.venue || (!isNBA && game.weather)) && (
+      {(game.venue || (isMLB && game.weather)) && (
         <div className="hidden sm:flex items-center gap-3 px-4 py-2 border-t border-slate/30 text-[11px] text-mercury/60">
           {game.venue ? (
             <div className="flex items-center gap-1 truncate">
@@ -292,7 +295,7 @@ export default function GameCard({ game, oddsInfo }: GameCardProps) {
               <span className="truncate">{game.venue}</span>
             </div>
           ) : null}
-          {!isNBA && game.weather && (
+          {isMLB && game.weather && (
             <div className="flex items-center gap-1 flex-shrink-0">
               <Cloud className="w-3 h-3" />
               {game.weather.temp}° {game.weather.wind}

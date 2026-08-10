@@ -1473,9 +1473,22 @@ function PickCard({
           <p className="text-xs sm:text-sm font-mono font-bold text-silver">
             {formatOdds(pick.odds)}
           </p>
-          <p className="text-[9px] sm:text-[10px] font-mono text-neon font-semibold flex items-center justify-end gap-0.5">
+          {/* Sign and colour both follow the number. The "+" was hardcoded
+              and the colour was unconditionally green, so a negative-EV pick
+              rendered as a green "+-2.3%". honestify() deliberately keeps
+              picks down to -3.0% EV, so this is reachable — and the expanded
+              view of the SAME card already renders it correctly in red,
+              which made one card contradict itself. */}
+          <p
+            className={`text-[9px] sm:text-[10px] font-mono font-semibold flex items-center justify-end gap-0.5 ${
+              pick.evPercentage >= 0 ? "text-neon" : "text-danger"
+            }`}
+          >
             <InfoTip term="EV">
-              <span>+{pick.evPercentage.toFixed(1)}%</span>
+              <span>
+                {pick.evPercentage >= 0 ? "+" : ""}
+                {pick.evPercentage.toFixed(1)}%
+              </span>
             </InfoTip>
           </p>
           {unitSize && (
@@ -1589,8 +1602,15 @@ function PickCard({
               );
             })()}
             <div className="text-center p-1.5 rounded bg-gunmetal/40">
-              <p className="text-sm font-bold font-mono text-neon">
-                +{pick.evPercentage.toFixed(1)}%
+              {/* Same fix as the collapsed row — a negative edge must not
+                  read as a green "+-2.3%". */}
+              <p
+                className={`text-sm font-bold font-mono ${
+                  pick.evPercentage >= 0 ? "text-neon" : "text-danger"
+                }`}
+              >
+                {pick.evPercentage >= 0 ? "+" : ""}
+                {pick.evPercentage.toFixed(1)}%
               </p>
               <p className="text-[8px] text-mercury uppercase">EV Edge</p>
             </div>

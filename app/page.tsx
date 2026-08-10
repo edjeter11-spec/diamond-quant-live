@@ -597,15 +597,24 @@ export default function WarRoom() {
   const isNFL = currentSport === "nfl";
   const tabs = [
     { key: "dashboard" as const, icon: BarChart3, label: "Board" },
+    // Per-sport maps rather than `isNBA ? a : isNFL ? b : <MLB>` chains — the
+    // trailing else was MLB, so the NHL tabs were literally labelled "NRFI"
+    // and "Dingers" (baseball terms) over hockey content.
     {
       key: "nrfi" as const,
       icon: Target,
-      label: isNBA ? "1st Qtr" : isNFL ? "1st Score" : "NRFI",
+      label:
+        { mlb: "NRFI", nba: "1st Qtr", nfl: "1st Score", nhl: "1st Goal" }[
+          currentSport
+        ] ?? "First Score",
     },
     {
       key: "dingers" as const,
       icon: Flame,
-      label: isNBA ? "Threes" : isNFL ? "Anytime TD" : "Dingers",
+      label:
+        { mlb: "Dingers", nba: "Threes", nfl: "Anytime TD", nhl: "Goals" }[
+          currentSport
+        ] ?? "Big Plays",
     },
     { key: "players" as const, icon: Search, label: "Players" },
     { key: "profile" as const, icon: UserCircle, label: "Profile" },
