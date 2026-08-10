@@ -740,7 +740,19 @@ export async function GET(req: NextRequest) {
         });
         if (r.ok) {
           const d = await r.json();
-          for (const e of (d.edges ?? []).slice(0, 2)) {
+          // Apply the SAME probability floor props get (MIN_PROB). Moneylines
+          // bypassed it entirely, so a +275 longshot at 27% to win could lead
+          // the board on +1.3% EV — technically positive-EV, but a headline
+          // pick that loses ~3 nights in 4 reads as broken no matter how sound
+          // the pricing. That is the exact reasoning behind MIN_PROB on the
+          // props side; there is no reason moneylines should be exempt.
+          // Sorted by EV within the qualifying set, so we still take the best
+          // priced of the plays that are more likely than not.
+          const mlEdges = (d.edges ?? [])
+            .filter((e: any) => Number(e.fairProb) >= MIN_PROB)
+            .sort((a: any, b: any) => b.evPct - a.evPct)
+            .slice(0, 2);
+          for (const e of mlEdges) {
             picks.unshift({
               key: `ml-${e.gameId}-${e.side}`,
               // The TEAM, not a player. Consumers must branch on
