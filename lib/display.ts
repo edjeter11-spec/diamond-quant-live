@@ -1,6 +1,9 @@
 // Display-time helpers for beautifying sport-specific text.
 
-export type Sport = "mlb" | "nba";
+// All four sports the app ships, matching lib/sport-context.ts. This was
+// `"mlb" | "nba"`, which is why every caller passed `currentSport as any` —
+// and that cast is what let the NBA-only "RL" rewrite silently skip NFL/NHL.
+export type Sport = "mlb" | "nba" | "nfl" | "nhl";
 
 /**
  * Replace generic market abbreviations with sport-specific language.
@@ -16,8 +19,11 @@ export function formatPickLabel(pick: string, sport: Sport): string {
   out = out
     .replace(/^GM[:\s-]+ML\b/i, "Moneyline")
     .replace(/^G[:\s-]+ML\b/i, "Moneyline");
-  // NBA-specific: "RL" (run-line leftover) → "Spread"
-  if (sport === "nba") out = out.replace(/\s+RL\s*(?=[-+]?\d|$)/i, " Spread ");
+  // "RL" (run line) is a BASEBALL term, so every non-MLB sport should read
+  // "Spread". This was gated on `sport === "nba"` only, so an NFL or NHL
+  // spread pick kept the baseball wording. Callers pass `currentSport as any`,
+  // which defeated the Sport type and hid it.
+  if (sport !== "mlb") out = out.replace(/\s+RL\s*(?=[-+]?\d|$)/i, " Spread ");
   return out;
 }
 

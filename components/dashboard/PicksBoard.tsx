@@ -49,6 +49,11 @@ import { getConfidenceTier } from "@/lib/ui/confidence-tier";
 
 interface Pick {
   id: string;
+  /** Upstream game id, carried explicitly. The line-movement badge used to
+   *  recover it with `id.split("-")[0]`, but model ids are built as
+   *  `model-${gameId}-${pick}` so that always returned the literal "model"
+   *  and the badge never rendered. */
+  gameId?: string;
   game: string;
   pick: string;
   market: string;
@@ -130,6 +135,7 @@ export default function PicksBoard() {
           for (const p of game.picks) {
             picks.push({
               id: `model-${game.gameId}-${p.pick}`,
+              gameId: String(game.gameId),
               game: `${game.awayTeam} @ ${game.homeTeam}`,
               pick: p.pick,
               market: p.market,
@@ -339,7 +345,7 @@ export default function PicksBoard() {
             kellyStake: bet.kellyStake,
             reasoning: generateReasons(bet),
             aiTip: generateAITip(bet),
-            history: generateHistory(bet),
+            history: generateHistory(bet, currentSport),
             commenceTime: game.commenceTime,
             isSuspicious: bet.isSuspicious ?? false,
             warning: bet.warning,
@@ -439,7 +445,15 @@ export default function PicksBoard() {
               "Monitor line movement for direction",
             ].filter(Boolean),
             aiTip: `Game total at ${line.total}. Watch which direction sharp money moves this.`,
-            history: ["League average is ~8.5 runs per game"],
+            // Baseball's league average was hardcoded here regardless of tab.
+            history: [
+              {
+                mlb: "League average is ~8.5 runs per game",
+                nba: "League average is ~225 points per game",
+                nfl: "League average is ~44 points per game",
+                nhl: "League average is ~6.2 goals per game",
+              }[currentSport] ?? "Priced against market consensus",
+            ],
             commenceTime: game.commenceTime,
             gameStatus: status as Pick["gameStatus"],
             dayLabel,
@@ -717,8 +731,13 @@ export default function PicksBoard() {
     dayLabel: string;
     hasPositiveEv?: boolean;
   } | null>(null);
-  // Which parlay leg has its rationale open (one at a time, like the props rows)
-  const [expandedLeg, setExpandedLeg] = useState<number | null>(null);
+  // Which parlay leg has its rationale open (one at a time, like the props
+  // rows). Keyed by the leg's own text, NOT its index: legs are replaced
+  // wholesale when /api/parlay-today returns for a different sport or a new
+  // slate, so an index-keyed panel stayed open and re-attached to whatever
+  // pick now occupies that position — the rationale shown belonged to a
+  // different bet than the one clicked.
+  const [expandedLeg, setExpandedLeg] = useState<string | null>(null);
   useEffect(() => {
     let cancelled = false;
     fetch(`/api/parlay-today?sport=${currentSport}`)
@@ -901,7 +920,9 @@ export default function PicksBoard() {
                 accurate whatever the source. */}
             <div className="p-2.5 sm:p-3 space-y-1.5">
               {parlayLegs.map((leg, i) => {
-                const isOpen = expandedLeg === i;
+                // Identity, not position — see the expandedLeg declaration.
+                const legKey = `${leg.pick}|${leg.game}`;
+                const isOpen = expandedLeg === legKey;
                 const hasWhy = (leg.reasoning?.length ?? 0) > 0;
                 // `leg.game` holds the player's name on prop legs.
                 const legHit =
@@ -924,7 +945,7 @@ export default function PicksBoard() {
                         : null;
                 return (
                   <div
-                    key={i}
+                    key={legKey}
                     className={`rounded-lg ${
                       settledStyle ??
                       (legHit !== undefined
@@ -935,7 +956,7 @@ export default function PicksBoard() {
                     <button
                       type="button"
                       onClick={() =>
-                        hasWhy && setExpandedLeg(isOpen ? null : i)
+                        hasWhy && setExpandedLeg(isOpen ? null : legKey)
                       }
                       aria-expanded={isOpen}
                       className={`w-full flex items-center gap-2 px-2.5 py-1.5 text-left ${
@@ -1160,7 +1181,7 @@ export default function PicksBoard() {
                         className="flex-shrink-0"
                       />
                       <p className="text-xs sm:text-sm font-medium text-silver truncate flex-1">
-                        {formatPickLabel(pick.pick, currentSport as any)}
+                        {formatPickLabel(pick.pick, currentSport)}
                       </p>
                       <span className="text-xs font-mono font-bold text-silver">
                         {formatOdds(pick.odds)}
@@ -1224,14 +1245,31 @@ export default function PicksBoard() {
       {combinedPicks.length === 0 && allEV.length === 0 && (
         <div className="glass rounded-xl p-8 text-center">
           <Activity className="w-8 h-8 text-mercury/20 mx-auto mb-3" />
-          <p className="text-sm text-mercury font-semibold">
-            Odds feed temporarily unavailable
-          </p>
-          <p className="text-xs text-mercury/50 mt-1 mb-4 max-w-md mx-auto">
-            Monthly Odds API quota has been reached. Live picks will return
-            automatically when credits refresh, or sooner if a new key is added.
-            Scores and brain projections still update.
-          </p>
+          {/* Distinguish "no games today" from "the feed is down". Off-season
+              NBA/NFL/NHL are legitimately empty, and blaming a quota outage
+              there is simply wrong — scores.length tells us which it is. */}
+          {scores.length === 0 ? (
+            <>
+              <p className="text-sm text-mercury font-semibold">
+                No {currentSport.toUpperCase()} games today
+              </p>
+              <p className="text-xs text-mercury/50 mt-1 mb-4 max-w-md mx-auto">
+                Picks appear here once a slate is scheduled and books post
+                lines.
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-mercury font-semibold">
+                Odds feed temporarily unavailable
+              </p>
+              <p className="text-xs text-mercury/50 mt-1 mb-4 max-w-md mx-auto">
+                Monthly Odds API quota has been reached. Live picks will return
+                automatically when credits refresh, or sooner if a new key is
+                added. Scores and brain projections still update.
+              </p>
+            </>
+          )}
           <button
             onClick={() => window.dispatchEvent(new CustomEvent("dq-refresh"))}
             className="inline-flex items-center gap-1.5 px-4 py-2 bg-neon/10 border border-neon/25 text-neon text-xs font-semibold rounded-lg hover:bg-neon/20 transition-colors"
@@ -1292,7 +1330,12 @@ function PickCard({
   }, [menuOpen]);
 
   // Demote Sharp tag if the underlying game has TBD pitcher (input incomplete).
+  // MLB only — there is no starting pitcher in basketball, football or hockey,
+  // but this had no sport gate, so any non-MLB game string containing "TBD"
+  // rendered a badge reading "Pitcher TBD — model input incomplete" and
+  // suppressed the Sharp tag on a sport that has no pitchers.
   const isPitcherTBD = useMemo(() => {
+    if (currentSport !== "mlb") return false;
     if (!pick.game) return false;
     if (pick.game.includes("TBD")) return true;
     // Match by team in scores feed
@@ -1306,7 +1349,7 @@ function PickCard({
     return scoreGame
       ? scoreGame.homePitcher === "TBD" || scoreGame.awayPitcher === "TBD"
       : false;
-  }, [pick.game, scores]);
+  }, [pick.game, scores, currentSport]);
   const showSharp = pick.isSharp && !isPitcherTBD;
 
   // Unit-size suggestion (1u = 1% of bankroll, scaled by edge, capped 0.5–5u).
@@ -1428,7 +1471,7 @@ function PickCard({
             )}
             {/* Line movement badge — shows when line moved ≥0.5pt recently */}
             <LineMovementBadge
-              gameId={pick.id.split("-")[0]}
+              gameId={pick.gameId ?? pick.id.split("-")[0]}
               market={pick.market}
             />
 
@@ -1450,7 +1493,7 @@ function PickCard({
               className="flex-shrink-0"
             />
             <p className="text-xs sm:text-sm font-medium text-silver truncate">
-              {formatPickLabel(pick.pick, currentSport as any)}
+              {formatPickLabel(pick.pick, currentSport)}
             </p>
           </div>
           <p className="text-[9px] sm:text-[10px] text-mercury/60 truncate flex items-center gap-1">
@@ -1827,308 +1870,6 @@ function PickCard({
 }
 
 // ──────────────────────────────────────────────────────────
-function PropSection({
-  title,
-  subtitle,
-  icon: Icon,
-  iconColor,
-  props,
-  loading,
-  expandedPick,
-  setExpanded,
-  addParlayLeg,
-  sport,
-  market: marketOverride,
-}: {
-  title: string;
-  subtitle: string;
-  icon: any;
-  iconColor: string;
-  props: any[];
-  loading: boolean;
-  expandedPick: string | null;
-  setExpanded: (id: string | null) => void;
-  addParlayLeg: any;
-  sport?: "mlb" | "nba";
-  market?: string;
-}) {
-  const market = marketOverride ?? title.toLowerCase().replace(/\s/g, "_");
-  const { scores } = useStore();
-
-  // Build player → team lookup from scores (pitchers are listed per team)
-  const playerTeamMap = useMemo(() => {
-    const map = new Map<string, { team: string; abbrev: string }>();
-    for (const s of scores) {
-      if (s.homePitcher && s.homePitcher !== "TBD") {
-        map.set(s.homePitcher.toLowerCase(), {
-          team: s.homeTeam,
-          abbrev: s.homeAbbrev,
-        });
-      }
-      if (s.awayPitcher && s.awayPitcher !== "TBD") {
-        map.set(s.awayPitcher.toLowerCase(), {
-          team: s.awayTeam,
-          abbrev: s.awayAbbrev,
-        });
-      }
-    }
-    return map;
-  }, [scores]);
-
-  function getPlayerTeam(
-    playerName: string,
-    gameStr: string,
-  ): { playerTeam: string; opponent: string } {
-    // Try pitcher lookup first
-    const found = playerTeamMap.get(playerName.toLowerCase());
-    if (found) {
-      const teams = gameStr.split(" @ ");
-      const opponent =
-        teams.find((t) => !t.includes(found.team.split(" ").pop() ?? "???")) ??
-        teams[1] ??
-        "";
-      return {
-        playerTeam: found.abbrev,
-        opponent: opponent.split(" ").pop() ?? "",
-      };
-    }
-    // Fallback: can't determine — show game matchup
-    const parts = gameStr.split(" @ ");
-    return {
-      playerTeam: parts[0]?.split(" ").pop()?.slice(0, 3).toUpperCase() ?? "?",
-      opponent: parts[1]?.split(" ").pop() ?? "",
-    };
-  }
-
-  const fmt = (o: number) => (o > 0 ? `+${o}` : `${o}`);
-
-  return (
-    <div className="glass rounded-xl overflow-hidden">
-      <div className="px-3 sm:px-4 py-2.5 border-b border-slate/30 flex items-center gap-2">
-        <Icon className={`w-4 h-4 ${iconColor}`} />
-        <div className="flex-1">
-          <h2 className="text-xs sm:text-sm font-bold text-silver uppercase tracking-wider">
-            {title}
-          </h2>
-          <p className="text-[9px] text-mercury/60">{subtitle}</p>
-        </div>
-        {props.length > 0 && (
-          <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-gunmetal text-mercury">
-            {props.length}
-          </span>
-        )}
-      </div>
-      {loading ? (
-        <div
-          className="divide-y divide-slate/10"
-          aria-label="Loading props"
-          role="status"
-        >
-          {[0, 1, 2].map((i) => (
-            <div
-              key={i}
-              className="px-3 sm:px-4 py-2.5 flex items-center gap-2 animate-pulse"
-            >
-              <div className="w-7 h-7 rounded-full bg-slate/20 flex-shrink-0" />
-              <div className="flex-1 min-w-0 space-y-1.5">
-                <div className="h-3 w-2/3 bg-slate/20 rounded" />
-                <div className="h-2.5 w-1/3 bg-slate/15 rounded" />
-              </div>
-              <div className="h-4 w-10 bg-slate/20 rounded" />
-            </div>
-          ))}
-        </div>
-      ) : props.length === 0 ? (
-        <div className="px-4 py-5 text-center">
-          <p className="text-xs text-mercury/50">
-            No {title.toLowerCase()} props posted yet
-          </p>
-        </div>
-      ) : (
-        <div className="divide-y divide-slate/10">
-          {props.slice(0, 5).map((p: any, i: number) => {
-            const pid = `${market}-${p.playerName}-${i}`;
-            const open = expandedPick === pid;
-            return (
-              <div key={i}>
-                <button
-                  onClick={() => setExpanded(open ? null : pid)}
-                  className="w-full px-3 sm:px-4 py-2.5 flex items-center gap-2 hover:bg-gunmetal/20 text-left"
-                >
-                  <div className="flex-1 min-w-0">
-                    {(() => {
-                      const { playerTeam, opponent } = getPlayerTeam(
-                        p.playerName,
-                        p.team ?? "",
-                      );
-                      return (
-                        <>
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-electric/15 text-electric font-bold flex-shrink-0">
-                              {playerTeam}
-                            </span>
-                            <p className="text-xs sm:text-sm font-medium text-silver truncate">
-                              {p.playerName}
-                            </p>
-                          </div>
-                          <p className="text-[9px] text-mercury/50">
-                            {p.gameTime && (
-                              <>
-                                {new Date(p.gameTime).toLocaleString("en-US", {
-                                  hour: "numeric",
-                                  minute: "2-digit",
-                                })}{" "}
-                                —{" "}
-                              </>
-                            )}
-                            vs {opponent}
-                          </p>
-                        </>
-                      );
-                    })()}
-                  </div>
-                  <span className="text-sm font-bold font-mono text-electric flex-shrink-0">
-                    {p.line}
-                  </span>
-                  {typeof p.bestOver?.price === "number" &&
-                  Number.isFinite(p.bestOver.price) ? (
-                    <span className="text-[10px] font-mono text-neon bg-neon/10 px-1 py-0.5 rounded">
-                      O{fmt(p.bestOver.price)}
-                    </span>
-                  ) : (
-                    <span className="text-[10px] font-mono text-mercury/40 bg-gunmetal/40 px-1 py-0.5 rounded">
-                      O —
-                    </span>
-                  )}
-                  {typeof p.bestUnder?.price === "number" &&
-                  Number.isFinite(p.bestUnder.price) ? (
-                    <span className="text-[10px] font-mono text-purple bg-purple/10 px-1 py-0.5 rounded">
-                      U{fmt(p.bestUnder.price)}
-                    </span>
-                  ) : (
-                    <span className="text-[10px] font-mono text-mercury/40 bg-gunmetal/40 px-1 py-0.5 rounded">
-                      U —
-                    </span>
-                  )}
-                  <ChevronDown
-                    className={`w-3.5 h-3.5 text-mercury/40 transition-transform ${open ? "rotate-180" : ""}`}
-                  />
-                </button>
-                {open && (
-                  <div className="px-3 sm:px-4 pb-3 animate-slide-up space-y-2">
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
-                      {(p.books ?? []).map((b: any, bi: number) => (
-                        <div
-                          key={bi}
-                          className="flex items-center justify-between px-2 py-1.5 rounded bg-bunker/50 border border-slate/15 text-[10px]"
-                        >
-                          <span className="text-mercury truncate mr-1">
-                            {b.bookmaker?.split(" ").pop()?.slice(0, 6)}
-                          </span>
-                          <div className="flex gap-1 flex-shrink-0 font-mono">
-                            <button
-                              onClick={() =>
-                                addParlayLeg({
-                                  game: p.playerName,
-                                  market: "player_prop",
-                                  pick: `${p.playerName} Over ${p.line}`,
-                                  odds: b.overPrice,
-                                  fairProb: (p.fairOverProb ?? 50) / 100,
-                                  bookmaker: b.bookmaker,
-                                })
-                              }
-                              className="text-neon/80 hover:text-neon"
-                            >
-                              O{fmt(b.overPrice)}
-                            </button>
-                            <button
-                              onClick={() =>
-                                addParlayLeg({
-                                  game: p.playerName,
-                                  market: "player_prop",
-                                  pick: `${p.playerName} Under ${p.line}`,
-                                  odds: b.underPrice,
-                                  fairProb: (p.fairUnderProb ?? 50) / 100,
-                                  bookmaker: b.bookmaker,
-                                })
-                              }
-                              className="text-purple/80 hover:text-purple"
-                            >
-                              U{fmt(b.underPrice)}
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="flex items-center gap-2 px-1">
-                      <span className="text-[9px] text-neon">
-                        O {p.fairOverProb}%
-                      </span>
-                      <div className="flex-1 h-1.5 bg-gunmetal rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-gradient-to-r from-neon to-electric rounded-full"
-                          style={{ width: `${p.fairOverProb}%` }}
-                        />
-                      </div>
-                      <span className="text-[9px] text-purple">
-                        {p.fairUnderProb}% U
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-2 gap-1.5">
-                      <button
-                        onClick={() =>
-                          addParlayLeg({
-                            game: p.playerName,
-                            market: "player_prop",
-                            pick: `${p.playerName} Over ${p.line}`,
-                            odds: p.bestOver?.price ?? -110,
-                            fairProb: (p.fairOverProb ?? 50) / 100,
-                            bookmaker: p.bestOver?.bookmaker ?? "",
-                          })
-                        }
-                        className="flex items-center justify-center gap-1 py-1.5 rounded bg-neon/10 border border-neon/20 text-neon text-[11px] font-semibold"
-                      >
-                        <ArrowUpRight className="w-3 h-3" /> Over {p.line}
-                      </button>
-                      <button
-                        onClick={() =>
-                          addParlayLeg({
-                            game: p.playerName,
-                            market: "player_prop",
-                            pick: `${p.playerName} Under ${p.line}`,
-                            odds: p.bestUnder?.price ?? -110,
-                            fairProb: (p.fairUnderProb ?? 50) / 100,
-                            bookmaker: p.bestUnder?.bookmaker ?? "",
-                          })
-                        }
-                        className="flex items-center justify-center gap-1 py-1.5 rounded bg-purple/10 border border-purple/20 text-purple text-[11px] font-semibold"
-                      >
-                        <ArrowDownRight className="w-3 h-3" /> Under {p.line}
-                      </button>
-                    </div>
-                    {sport && (
-                      <PropDetail
-                        sport={sport}
-                        playerName={p.playerName}
-                        market={market}
-                        line={p.line}
-                        side={
-                          (p.fairOverProb ?? 0) >= (p.fairUnderProb ?? 0)
-                            ? "over"
-                            : "under"
-                        }
-                      />
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
 
 // ──────────────────────────────────────────────────────────
 // Copy note for both helpers below: these describe GAME LINES, whose
@@ -2177,18 +1918,67 @@ function generateAITip(bet: any): string {
   return `Slightly better price at ${bet.bookmaker} than the rest of the market.`;
 }
 
-function generateHistory(bet: any): string[] {
-  if (bet.market === "moneyline")
-    return [
-      "Factors: pitching, hitting, bullpen, defense, recent form",
-      "Weights shift by inning — bullpen dominates late",
-      "Home field advantage: ~54% baseline",
-    ];
-  if (bet.market === "total")
-    return [
-      "Considers: starter matchup, park factors, weather",
-      "Wind and temperature impact scoring projections",
-      "Umpire run-scoring index used as adjustment",
-    ];
+// Sport-aware. These strings used to be unconditionally baseball, and they're
+// fed from oddsData for WHATEVER tab is active — so expanding an NBA total
+// explained itself with "starter matchup, park factors, weather" and an NBA
+// moneyline cited bullpens. NBA has a live odds feed, so this was visible.
+// Anything without a tailored list falls back to the generic consensus line
+// rather than borrowing baseball's.
+function generateHistory(bet: any, sport: string = "mlb"): string[] {
+  const BY_SPORT: Record<string, { moneyline: string[]; total: string[] }> = {
+    mlb: {
+      moneyline: [
+        "Factors: pitching, hitting, bullpen, defense, recent form",
+        "Weights shift by inning — bullpen dominates late",
+        "Home field advantage: ~54% baseline",
+      ],
+      total: [
+        "Considers: starter matchup, park factors, weather",
+        "Wind and temperature impact scoring projections",
+        "Umpire run-scoring index used as adjustment",
+      ],
+    },
+    nba: {
+      moneyline: [
+        "Factors: offensive/defensive rating, pace, rest, injuries",
+        "Back-to-backs and travel weigh on the second night",
+        "Home court advantage: ~60% baseline",
+      ],
+      total: [
+        "Considers: pace, shooting efficiency, rest",
+        "Injuries to primary creators move totals most",
+        "Blowout risk trims garbage-time scoring",
+      ],
+    },
+    nfl: {
+      moneyline: [
+        "Factors: EPA per play, trenches, turnovers, rest",
+        "Divisional games trend closer than the spread implies",
+        "Home field advantage: ~57% baseline",
+      ],
+      total: [
+        "Considers: pace, pass rate, weather, injuries",
+        "Wind above ~15mph suppresses passing totals",
+        "Dome games carry the highest baselines",
+      ],
+    },
+    nhl: {
+      moneyline: [
+        "Factors: goaltending, expected goals, special teams, rest",
+        "Starting goalie confirmation moves the line most",
+        "Home ice advantage: ~55% baseline",
+      ],
+      total: [
+        "Considers: goalie matchup, shot volume, pace",
+        "Back-to-backs often mean a backup in net",
+        "Empty-net goals inflate late scoring",
+      ],
+    },
+  };
+  const set = BY_SPORT[sport];
+  if (set) {
+    if (bet.market === "moneyline") return set.moneyline;
+    if (bet.market === "total") return set.total;
+  }
   return ["Based on de-vigged market consensus across all books"];
 }
