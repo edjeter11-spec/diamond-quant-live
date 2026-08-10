@@ -115,8 +115,13 @@ export default function LiveTicker() {
   // "banner cuts out" — it wasn't stopping, it had nothing new to show.
   // Live scores and alerts still lead; news fills the rest.
   if (feed.length > 0) {
+    // Cap news at 8 items. Measured on production: appending the full ~14-
+    // item feed built an 11,499px strip that took 168s per loop at the
+    // constant 70px/s speed — a headline near the end waits ~2.5 min to
+    // reappear, which reads as "the ticker is stuck". Trim to the freshest
+    // 8; recap loop stays under ~90s at typical widths.
     combined.push(
-      ...feed.map((f) => ({ type: "news" as const, text: f.text })),
+      ...feed.slice(0, 8).map((f) => ({ type: "news" as const, text: f.text })),
     );
   }
   if (combined.length === 0) {

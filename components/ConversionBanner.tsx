@@ -27,12 +27,29 @@ export default function ConversionBanner() {
   }, []);
 
   useEffect(() => {
-    fetch("/api/prop-history?sport=nba&limit=200")
+    // Was hardcoded to NBA which has no in-season data right now, so a
+    // stale/hypothetical number could headline the top of the page. Ask
+    // /api/results for the actual trailing 30-day rollup used by the rest
+    // of the site. If it's losing, we DON'T show a number — the honest
+    // fallback ("Pro unlocks everything") beats a number that contradicts
+    // the streak banner right below it. That was the credibility tell the
+    // audit flagged.
+    fetch("/api/results?days=30")
       .then((r) => r.json())
       .then((d) => {
-        if (d.ok && d.stats?.graded > 0) {
-          setStats({ winRate: d.stats.winRate, recent: d.stats.graded });
-        }
+        const o = d?.overall ?? {};
+        const graded = Number(o.wins ?? 0) + Number(o.losses ?? 0);
+        if (graded < MIN_SAMPLE) return;
+        const winRate = Math.round(Number(o.winRate ?? 0) * 10) / 10;
+        const profitUnits = Number(o.profitUnits ?? 0);
+        // Only headline when BOTH numbers hold up. A 58% win-rate that lost
+        // 11.7u (the current live state) is exactly what the audit called
+        // out — win-rate looks pro, wallet is red, and the two together read
+        // as a lie. Show nothing rather than lie. 55% is the -110 breakeven
+        // line + a few points of visual margin; profit must also be positive
+        // for the number to earn the headline.
+        if (winRate < 55 || profitUnits <= 0) return;
+        setStats({ winRate, recent: graded });
       })
       .catch(() => {});
   }, []);

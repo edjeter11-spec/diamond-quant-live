@@ -801,11 +801,22 @@ export default function PicksBoard() {
 
   // Today's Slate — two cross-market buckets. Props (TodayPropPicks)
   // and NRFI/YRFI (on the /nrfi tab) are their own components.
+  //
+  // Subtitles react to what's actually in each bucket. When today's slate is
+  // over and every remaining pick's dayLabel is "Tomorrow", the fixed
+  // "highest-confidence plays TODAY" copy contradicts the rows right below
+  // it — audit flagged this specifically. Same for longshots.
+  const locksAllTomorrow =
+    topLocks.length > 0 && topLocks.every((p) => p.dayLabel === "Tomorrow");
+  const longshotsAllTomorrow =
+    longshots.length > 0 && longshots.every((p) => p.dayLabel === "Tomorrow");
   const sections = [
     {
       key: "locks",
       title: "LOCKS",
-      subtitle: "Our highest-confidence plays today",
+      subtitle: locksAllTomorrow
+        ? "Tomorrow's early looks — full board locks at game time"
+        : "Our highest-confidence plays today",
       icon: Trophy,
       iconColor: "text-gold",
       bg: "bg-gold/5",
@@ -815,7 +826,9 @@ export default function PicksBoard() {
     {
       key: "longshots",
       title: "LONGSHOTS",
-      subtitle: "Plus-money underdogs worth a look",
+      subtitle: longshotsAllTomorrow
+        ? "Tomorrow's plus-money looks"
+        : "Plus-money underdogs worth a look",
       icon: Zap,
       iconColor: "text-amber",
       bg: "bg-amber/5",
@@ -1112,9 +1125,15 @@ export default function PicksBoard() {
 
       {/* ═══ MARKET SECTIONS ═══ */}
       {sections.map((sec) => {
-        // Default-collapsed for lower-signal sections; user can expand
+        // Default-collapsed for lower-signal sections when they have content
+        // to hide. LONGSHOTS is one of only two market sections on the MLB
+        // board — collapsed with content looked like a dead placeholder and
+        // the audit called it out. If a lower-signal section is EMPTY, still
+        // collapse it (it has nothing to show anyway); if it has picks, let
+        // it open so the reader can see them.
         const defaultCollapsed =
-          sec.key === "longshots" || sec.key === "unders";
+          (sec.key === "longshots" || sec.key === "unders") &&
+          sec.picks.length === 0;
         const isCollapsed = collapsedSections[sec.key] ?? defaultCollapsed;
         return (
           <div key={sec.key} className="glass rounded-xl overflow-hidden">

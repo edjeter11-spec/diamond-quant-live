@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Radio, RefreshCw, Clock, TrendingUp } from "lucide-react";
+import { RefreshCw, Clock, TrendingUp } from "lucide-react";
 import { useSport } from "@/lib/sport-context";
 import TeamLogo from "@/components/ui/TeamLogo";
 
@@ -116,6 +116,14 @@ export default function LiveBoard() {
     return `${Math.floor(s / 60)}m ago`;
   };
 
+  // Collapse the whole component when there's nothing live and we're not
+  // mid-load. The audit measured this: 240px of empty card ("No live games
+  // right now" + Radio icon + copy) sat above the fold on nights nothing
+  // was on, pushing LOCKS below the first scroll on mobile. Nothing to
+  // show is a real answer — render nothing. The header returns as soon as
+  // a game goes live; the 30s polling loop above keeps running either way.
+  if (!loading && games.length === 0) return null;
+
   return (
     <div className="space-y-3">
       <div className="glass rounded-xl overflow-hidden border border-danger/20">
@@ -149,17 +157,6 @@ export default function LiveBoard() {
         <div className="glass rounded-xl p-6 flex items-center justify-center gap-2">
           <RefreshCw className="w-4 h-4 text-danger animate-spin" />
           <span className="text-sm text-mercury">Loading live games...</span>
-        </div>
-      ) : games.length === 0 ? (
-        <div className="glass rounded-xl p-8 text-center">
-          <Radio className="w-10 h-10 text-mercury/30 mx-auto mb-3" />
-          <p className="text-sm text-silver font-semibold">
-            No live games right now
-          </p>
-          <p className="text-[11px] text-mercury/60 mt-1.5 max-w-sm mx-auto">
-            Live odds + scores appear here the second a game tips off. Tonight's
-            slate refreshes automatically.
-          </p>
         </div>
       ) : (
         <div className="space-y-2">
