@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useStore } from "@/lib/store";
 import { useSport } from "@/lib/sport-context";
 import { AlertTriangle, TrendingUp, Zap, Newspaper } from "lucide-react";
@@ -96,42 +96,90 @@ export default function LiveTicker() {
     ...liveScores.map((s) => ({ type: "live" as const, text: s.text })),
     ...alerts,
   ];
-  // Nothing live? Show real news rather than a placeholder. Only fall back to
-  // a static line if the feed itself is unavailable, so the banner is never
-  // empty.
+  // News ALWAYS joins the strip — it is not a fallback for an empty banner.
+  //
+  // This used to be `if (combined.length === 0)`, so a single +EV alert
+  // suppressed all 14 news headlines. The padding below then repeated that one
+  // alert to fill the strip, producing 9,052px of the SAME sentence scrolling
+  // at 82px/s. Nothing changed on screen for the full 110s loop, which is the
+  // "banner cuts out" — it wasn't stopping, it had nothing new to show.
+  // Live scores and alerts still lead; news fills the rest.
+  if (feed.length > 0) {
+    combined.push(
+      ...feed.map((f) => ({ type: "news" as const, text: f.text })),
+    );
+  }
   if (combined.length === 0) {
-    if (feed.length > 0) {
-      combined.push(
-        ...feed.map((f) => ({ type: "news" as const, text: f.text })),
-      );
-    } else {
-      combined.push({
-        type: "ev",
-        text: "Quant Betting — no live alerts right now",
-      });
-    }
+    combined.push({
+      type: "ev",
+      text: "Quant Betting — no live alerts right now",
+    });
   }
 
-  // Repeat until the strip is comfortably wider than any phone, then double
-  // for the seamless loop.
+  // De-dupe. Live scores and EV alerts are derived from the same oddsData, so
+  // the same matchup could appear twice in a row.
+  const seenText = new Set<string>();
+  const unique = combined.filter((c) => {
+    if (seenText.has(c.text)) return false;
+    seenText.add(c.text);
+    return true;
+  });
+
+  // Repeat only until the strip is wide enough to cover the viewport twice,
+  // then double for the seamless -50% loop.
   //
-  // The keyframe translates -50%, which only loops seamlessly if the rendered
-  // content is exactly twice the visible width. With one or two short items on
-  // a 375px screen the doubled strip was still narrower than the viewport, so
-  // it scrolled fully off-screen and the banner appeared to vanish a few
-  // seconds after load. Padding the list first keeps -50% correct at every
-  // width.
-  const MIN_ITEMS = 8;
-  const padded: typeof combined = [];
-  while (padded.length < MIN_ITEMS && combined.length > 0) {
-    padded.push(...combined);
-  }
+  // The keyframe translates -50%, which only loops seamlessly if the strip is
+  // at least as wide as the window; on a 375px phone a one-item strip scrolled
+  // fully off-screen and the banner really did vanish. But padding to a fixed
+  // MIN_ITEMS=8 over-corrected: with real content that built a 9,000px strip
+  // whose tail took ~2 minutes to come around. Repeat based on measured need,
+  // capped low, so the loop stays short and varied.
+  const MIN_REPEATS = unique.length >= 6 ? 1 : unique.length >= 3 ? 2 : 4;
+  const padded: typeof unique = [];
+  for (let i = 0; i < MIN_REPEATS; i++) padded.push(...unique);
   const tickerItems = [...padded, ...padded];
+
+  // Constant scroll SPEED rather than constant duration.
+  //
+  // ~70px/s is a comfortable reading pace: a 1,000px headline takes ~14s to
+  // cross, and the whole loop stays proportional to how much there is to say.
+  // Measured after layout because only the DOM knows the rendered width
+  // (fonts, gaps and icon sizes all feed into it).
+  const PX_PER_SEC = 70;
+  const contentRef = useRef<HTMLDivElement | null>(null);
+  const [durationSec, setDurationSec] = useState<number | null>(null);
+
+  useLayoutEffect(() => {
+    const el = contentRef.current;
+    if (!el) return;
+    const measure = () => {
+      // scrollWidth covers BOTH copies; one loop travels half of it (-50%).
+      const half = el.scrollWidth / 2;
+      if (half > 0) setDurationSec(Math.round(half / PX_PER_SEC));
+    };
+    measure();
+    // Re-measure when the strip changes size — a font swap or an orientation
+    // change would otherwise leave the old duration and a wrong speed.
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [tickerItems.length, currentSport]);
 
   return (
     <div className="safe-top w-full bg-bunker border-b border-slate/50 overflow-hidden">
       <div className="ticker-wrap">
-        <div className="ticker-content py-2 gap-12">
+        <div
+          ref={contentRef}
+          className="ticker-content py-2 gap-12"
+          // Duration is derived from the measured strip width so the SPEED is
+          // constant (see PX_PER_SEC). It was a hardcoded 110s in CSS, which
+          // means speed changed with content length — a short strip crawled
+          // and a long one had a ~2min cycle. A CSS animation cannot know its
+          // own width, so it has to be set here.
+          style={
+            durationSec ? { animationDuration: `${durationSec}s` } : undefined
+          }
+        >
           {tickerItems.map((alert, i) => (
             <span
               key={i}

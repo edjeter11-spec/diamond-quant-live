@@ -108,6 +108,25 @@ select:focus-visible {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+
+  /* The ticker is CONTENT, not decoration, so it can't just be frozen.
+     The blanket rule above ran its animation once in 0.01ms, which snapped
+     the strip straight to translateX(-50%) and left it parked there — on a
+     phone with Reduce Motion enabled (a very common setting) the banner
+     looked permanently broken/blank. Stop the animation entirely, reset the
+     transform so the strip sits at its natural position, and let the user
+     scroll it horizontally instead. */
+  .ticker-content {
+    animation: none !important;
+    transform: none !important;
+  }
+  .ticker-wrap {
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .ticker-wrap::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 /* Mobile: drop heavy glass blur for battery + perf */
@@ -208,10 +227,16 @@ select:focus-visible {
   }
   .ticker-content {
     display: inline-flex;
-    /* 40s was too fast to actually read a headline before it left the screen,
-       and the strip got longer when real news replaced the one-line
-       placeholder — same duration over more content means faster scroll. */
-    animation: ticker-scroll 110s linear infinite;
+    /* Duration here is only a FALLBACK for the first paint (and for SSR/no-JS).
+       LiveTicker overrides it inline with a value derived from the measured
+       strip width, so scroll SPEED stays constant instead of the duration.
+       A fixed duration meant a short strip crawled while a long one raced —
+       and at 110s over a 9,000px strip a headline took ~2 minutes to come
+       back around, which read as the banner being stuck. */
+    animation: ticker-scroll 60s linear infinite;
+    /* Promote to its own layer: without this the long strip repaints on the
+       main thread every frame, which is what makes it stutter on a phone. */
+    will-change: transform;
   }
   .ticker-content:hover {
     animation-play-state: paused;
