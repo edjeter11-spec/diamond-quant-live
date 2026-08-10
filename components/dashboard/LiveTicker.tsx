@@ -75,9 +75,19 @@ export default function LiveTicker() {
     if (game.evBets?.length > 0) {
       const best = game.evBets[0];
       if (best.evPercentage > 5) {
+        // `pick` on a totals/spread bet already names both teams
+        // ("Houston Astros/San Diego Padres Under 8.5"), so prefixing `game`
+        // printed the matchup TWICE and made this the widest item on the
+        // strip at 1,086px. Only prefix when the pick doesn't already say it.
+        const pick = String(best.pick ?? "");
+        const gameName = String(best.game ?? "");
+        const [away, home] = gameName.split(" @ ");
+        const pickNamesTeams =
+          (!!away && pick.includes(away)) || (!!home && pick.includes(home));
+        const label = pickNamesTeams ? pick : `${gameName} ${pick}`;
         alerts.push({
           type: "ev",
-          text: `+EV ALERT: ${best.game} ${best.pick} @ ${best.bookmaker} (${best.odds > 0 ? "+" : ""}${best.odds}) — ${best.evPercentage.toFixed(1)}% edge`,
+          text: `+EV ALERT: ${label} @ ${best.bookmaker} (${best.odds > 0 ? "+" : ""}${best.odds}) — ${best.evPercentage.toFixed(1)}% edge`,
           priority: 2,
         });
       }
