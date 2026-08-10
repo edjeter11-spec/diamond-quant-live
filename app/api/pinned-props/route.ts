@@ -2,6 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { cloudGet, cloudSet } from "@/lib/supabase/client";
 import { etDateString } from "@/lib/sports-date";
 import { getUserFromRequest } from "@/lib/supabase/server-auth";
+// Shared with parlay-today so the two endpoints can never drift again — the
+// 2026-08-10 4am publish went out because parlay-today had NO gate at all
+// while pinned-props did. See lib/lineup-gate.ts header.
+import {
+  checkLineupGate,
+  getFirstPitchHourET,
+  LINEUP_LEAD_HOURS,
+} from "@/lib/lineup-gate";
 
 /**
  * Truncate the board for non-subscribers and report what was withheld, so the
@@ -61,12 +69,7 @@ const FREE_PICKS = 2;
 const MAX_UNDERS = 3;
 const REFRESH_HOURS = 3;
 
-// How long before the day's first game the board is allowed to build.
-//
-// Confirmed lineups post 2-4h out, and prop prices sharpen through the day,
-// so building earlier than this prices against soft, lineup-blind numbers.
-// 3h lands just inside the lineup window for all three sports.
-const LINEUP_LEAD_HOURS = 3;
+// LINEUP_LEAD_HOURS moved to lib/lineup-gate.ts so parlay-today shares it.
 
 // Minimum true EV (%) for a prop to reach the board.
 //
@@ -178,95 +181,6 @@ function americanImplied(odds: number): number {
  * normal rolling window, so a flaky upstream degrades to today's behaviour
  * instead of freezing the board at whatever window happened to be current.
  */
-const firstPitchCache = new Map<string, { at: number; hour: number | null }>();
-
-/** ESPN scoreboard paths for the sports that aren't MLB. */
-const ESPN_SCOREBOARD: Record<string, string> = {
-  nba: "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard",
-  nfl: "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard",
-};
-
-async function getFirstPitchHourET(sport: string): Promise<number | null> {
-  const day = etDateString();
-  // Keyed by SPORT AND DAY. Keying on the day alone made all three sports
-  // share one entry, and cron publishes mlb/nba/nfl in parallel — so whichever
-  // resolved first won the cache for the others. Out of basketball/football
-  // season NBA and NFL have no games, cache hour:null, and MLB then read that
-  // null and skipped its lineup gate entirely: the board pinned at the 4am
-  // tick for a 12pm first pitch, ~8h before any lineup was confirmed. That is
-  // why picks were published at 4:15am despite the gate being correct.
-  const cacheKey = `${sport}_${day}`;
-  const hit = firstPitchCache.get(cacheKey);
-  // Cache for an hour — a schedule doesn't move, and this runs on every
-  // board request.
-  if (hit && Date.now() - hit.at < 3_600_000) return hit.hour;
-
-  // NBA / NFL via ESPN. Without this the function returned null for every
-  // non-MLB sport, which meant those boards had NO earliest-build floor and
-  // NO pre-game lock: the 3h window kept rolling after tip-off, so picks
-  // could change mid-game (site diverging from what Discord published), and
-  // once games were live /api/players returned no pre-match props at all —
-  // so the evening window pinned an EMPTY board.
-  if (sport === "nba" || sport === "nfl") {
-    try {
-      const url = `${ESPN_SCOREBOARD[sport]}?dates=${day.replace(/-/g, "")}`;
-      const r = await fetch(url, { signal: AbortSignal.timeout(6000) });
-      if (!r.ok) return null;
-      const d = await r.json();
-      const times = (d?.events ?? [])
-        .map((e: any) =>
-          new Date(e?.date ?? e?.competitions?.[0]?.date).getTime(),
-        )
-        .filter((t: number) => Number.isFinite(t));
-      if (!times.length) {
-        firstPitchCache.set(cacheKey, { at: Date.now(), hour: null });
-        return null;
-      }
-      const hour = Number(
-        new Date(Math.min(...times)).toLocaleString("en-US", {
-          timeZone: "America/New_York",
-          hour: "2-digit",
-          hour12: false,
-        }),
-      );
-      const out = Number.isFinite(hour) ? hour : null;
-      firstPitchCache.set(cacheKey, { at: Date.now(), hour: out });
-      return out;
-    } catch {
-      return null;
-    }
-  }
-
-  try {
-    const r = await fetch(
-      `https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${day}`,
-      { signal: AbortSignal.timeout(6000) },
-    );
-    if (!r.ok) return null;
-    const d = await r.json();
-    const games = d?.dates?.[0]?.games ?? [];
-    const times = games
-      .map((g: any) => new Date(g.gameDate).getTime())
-      .filter((t: number) => Number.isFinite(t));
-    if (!times.length) {
-      firstPitchCache.set(cacheKey, { at: Date.now(), hour: null });
-      return null;
-    }
-    const earliest = new Date(Math.min(...times));
-    const hour = Number(
-      earliest.toLocaleString("en-US", {
-        timeZone: "America/New_York",
-        hour: "2-digit",
-        hour12: false,
-      }),
-    );
-    const out = Number.isFinite(hour) ? hour : null;
-    firstPitchCache.set(cacheKey, { at: Date.now(), hour: out });
-    return out;
-  } catch {
-    return null;
-  }
-}
 
 function americanToDecimal(odds: number): number {
   return odds > 0 ? 1 + odds / 100 : 1 + 100 / Math.abs(odds);

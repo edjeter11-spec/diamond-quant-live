@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cloudGet, cloudSet } from "@/lib/supabase/client";
 import { etDateString } from "@/lib/sports-date";
+// Same lineup gate the props board uses. 2026-08-10 4:09 AM ET publish
+// happened because this endpoint had NO gate — pinned-props waited, this
+// didn't. Now both share lib/lineup-gate.ts so drift can't happen again.
+import { checkLineupGate } from "@/lib/lineup-gate";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -191,6 +195,28 @@ export async function GET(req: NextRequest) {
     if (cached?.legs?.length) {
       const withResults = await attachResults(cached, sport);
       return NextResponse.json({ ok: true, ...withResults, cached: true });
+    }
+  }
+
+  // Lineup gate — refuse to BUILD a fresh parlay before confirmed lineups
+  // have posted. Nothing is written; publish-daily reads `legs: []` and skips
+  // the parlay for this tick, then tries again next cron. When forced (admin
+  // rebuild), the gate is bypassed on purpose.
+  //
+  // The old shape was "no gate" — that pinned two moneylines on morning-blind
+  // numbers at 4:09 AM ET on 2026-08-10 and posted them straight to Discord.
+  if (!force) {
+    const gate = await checkLineupGate(sport, today);
+    if (gate.waiting) {
+      return NextResponse.json({
+        ok: true,
+        sport,
+        date: today,
+        legs: [],
+        notYet: true,
+        buildsAtHourET: gate.buildsAtHourET,
+        message: `Parlay locks in around ${gate.buildsAtHourET}:00 ET, once lineups are confirmed.`,
+      });
     }
   }
 
