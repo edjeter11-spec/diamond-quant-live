@@ -18,6 +18,16 @@ import { getPositionalDefRank } from "@/lib/nba/position-defense";
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
 
+// Response is identical for every viewer today (NBA prop-of-the-day board).
+// Prior config had no edge headers; every visitor ran the whole projector
+// or at least the cloudGet. On production this endpoint measured 1.55s
+// per request under MISS conditions — biggest cold-load hit by far.
+// 2 minutes at the edge with 5 min SWR is invisible to any user (the picks
+// themselves don't change intra-window) and eliminates the per-visitor round.
+const EDGE_HEADERS = {
+  "Cache-Control": "public, s-maxage=120, stale-while-revalidate=300",
+};
+
 export interface PropPickOfDay {
   playerName: string;
   team: string;
@@ -184,7 +194,10 @@ export async function GET(req: NextRequest) {
     if (cached?.generatedAt) {
       const age = Date.now() - new Date(cached.generatedAt).getTime();
       if (age < CACHE_TTL_MS && cached.picks?.length > 0) {
-        return NextResponse.json({ ok: true, ...cached, cached: true });
+        return NextResponse.json(
+          { ok: true, ...cached, cached: true },
+          { headers: EDGE_HEADERS },
+        );
       }
     }
   }
@@ -670,7 +683,10 @@ export async function GET(req: NextRequest) {
     };
 
     if (top4.length > 0) await cloudSet(cacheKey, result);
-    return NextResponse.json({ ok: true, ...result, cached: false });
+    return NextResponse.json(
+      { ok: true, ...result, cached: false },
+      { headers: EDGE_HEADERS },
+    );
   } catch (error: any) {
     console.error("prop-picks-today error:", error);
     return NextResponse.json({

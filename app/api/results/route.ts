@@ -2,8 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { getTrackRecordStats } from "@/lib/bot/track-record";
 import { supabaseAdmin } from "@/lib/supabase/server-auth";
 
+// Route reads `?days=` and executes DB queries — must run per-request.
+// But nothing is user-personalized, so the RESPONSE is safe to edge-cache.
+// Prior config was `dynamic:"force-dynamic"` + `revalidate:300`; the two
+// conflict, and `force-dynamic` won — every request hit our server (verified
+// against production: cache=MISS on every call). Reworked to explicit edge
+// headers on each response below so both CDN and browsers cache correctly.
 export const dynamic = "force-dynamic";
-export const revalidate = 300;
+const EDGE_HEADERS = {
+  "Cache-Control": "public, s-maxage=300, stale-while-revalidate=600",
+};
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -15,12 +23,15 @@ export async function GET(req: NextRequest) {
   try {
     const stats = await getTrackRecordStats(days);
     if (!stats)
-      return NextResponse.json({
-        ok: true,
-        days,
-        recent: [],
-        message: "No track record yet",
-      });
+      return NextResponse.json(
+        {
+          ok: true,
+          days,
+          recent: [],
+          message: "No track record yet",
+        },
+        { headers: EDGE_HEADERS },
+      );
 
     // Also fetch last 20 settled picks for a details table
     let recent: any[] = [];
@@ -54,13 +65,16 @@ export async function GET(req: NextRequest) {
       recentProps = propData ?? [];
     }
 
-    return NextResponse.json({
-      ok: true,
-      days,
-      ...stats,
-      recent,
-      recentProps,
-    });
+    return NextResponse.json(
+      {
+        ok: true,
+        days,
+        ...stats,
+        recent,
+        recentProps,
+      },
+      { headers: EDGE_HEADERS },
+    );
   } catch (e: any) {
     console.error("results error:", e);
     return NextResponse.json({

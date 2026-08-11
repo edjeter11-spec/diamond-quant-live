@@ -138,8 +138,17 @@ export async function GET(req: Request) {
   const sport = resolveSport(new URL(req.url).searchParams.get("sport"));
   const cacheKey = `ticker_feed_${sport}`;
 
+  // Vercel edge caches this for 60s with 5min stale-while-revalidate. Prior
+  // config was max-age=0 must-revalidate → every visitor hit our server.
+  // News moves in minutes, not seconds; 60s is invisible to any user and
+  // erases the per-visitor round trip on cold load.
+  const edgeHeaders = {
+    "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300",
+  };
+
   const cached = getCached(cacheKey, TTL) as { items: TickerItem[] } | null;
-  if (cached?.items?.length) return NextResponse.json(cached);
+  if (cached?.items?.length)
+    return NextResponse.json(cached, { headers: edgeHeaders });
 
   const [moves, news] = await Promise.all([
     SPORTS[sport].transactions ? fetchTransactions() : Promise.resolve([]),
@@ -160,5 +169,10 @@ export async function GET(req: Request) {
   // back on its idle message for no reason.
   if (items.length > 0) setCache(cacheKey, payload);
 
-  return NextResponse.json(payload);
+  // Only add edge headers when we have real content. An empty result at the
+  // edge would freeze the banner idle for 60s across every visitor.
+  return NextResponse.json(
+    payload,
+    items.length > 0 ? { headers: edgeHeaders } : undefined,
+  );
 }
