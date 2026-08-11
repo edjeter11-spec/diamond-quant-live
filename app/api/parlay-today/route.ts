@@ -396,6 +396,15 @@ export async function GET(req: NextRequest) {
             if (!prop.playerName || !prop.line) continue;
             const gameDay = prop.gameTime ? etDateOf(prop.gameTime) : today;
             if (gameDay !== targetDay) continue;
+            // Bullpen-game tell — same filter pinned-props applies. A pitcher
+            // K line under 4.5 means the "starter" is a reliever spot-starting
+            // 2-3 innings; any prop on him is a workload lottery ticket, not
+            // a repeatable edge. Would otherwise leak into parlay legs the
+            // same way it leaked into today's Drew Anderson U3.5 Ks on the
+            // props board.
+            if (key === "pitcher_strikeouts" && Number(prop.line) < 4.5)
+              continue;
+            if (key === "pitcher_outs" && Number(prop.line) < 12) continue;
             const overProb = prop.fairOverProb ?? 50;
             const underProb = prop.fairUnderProb ?? 50;
             const favourOver = overProb >= underProb;
