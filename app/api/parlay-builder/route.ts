@@ -165,19 +165,36 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  // Build candidate legs — take the SIDE with the higher fair prob, priced
-  // at the best available book. Filter out obvious junk (missing price,
-  // missing fair prob).
+  // Build candidate legs. HR-type markets (batter_home_runs) are ALWAYS "Yes
+  // to hit one" — nobody parlays "will he NOT hit multiple HRs" at -20000
+  // even if that's the model's highest probability. Same for anytime-TD.
+  // For those markets, force the Over side. For everything else (K props,
+  // yards) let the model pick the higher-prob side.
+  const OVER_ONLY = new Set(["batter_home_runs"]);
+  const isOverOnly = OVER_ONLY.has(market);
+  // For OVER_ONLY markets also cap the line — a HR parlay shouldn't include
+  // 1.5+ HR lines even on the over side (implied prob so small the ticket
+  // pays nothing meaningful either way).
+  const LINE_CAP = isOverOnly ? 0.5 : Infinity;
+  // And clamp the odds themselves: any leg shorter than -400 is chalk that
+  // shrinks the payout without meaningfully changing the outcome — a parlay
+  // suggestion of -20000 legs is a bug in disguise, not a bet.
+  const MIN_ODDS = isOverOnly ? -400 : -600;
+
   const candidates: Leg[] = [];
   for (const p of props) {
+    if (!p.playerName || !Number.isFinite(Number(p.line))) continue;
+    if (Number(p.line) > LINE_CAP) continue;
+
     const overP = Number(p.fairOverProb ?? 0);
     const underP = Number(p.fairUnderProb ?? 0);
-    const goOver = overP >= underP;
+    const goOver = isOverOnly ? true : overP >= underP;
     const side: "over" | "under" = goOver ? "over" : "under";
     const best = goOver ? p.bestOver : p.bestUnder;
     const fair = goOver ? overP : underP;
     if (!best?.price || !Number.isFinite(fair)) continue;
-    if (!p.playerName || !Number.isFinite(Number(p.line))) continue;
+    if (Number(best.price) < MIN_ODDS) continue;
+
     candidates.push({
       player: p.playerName,
       team: p.team,
