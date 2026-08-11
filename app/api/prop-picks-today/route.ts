@@ -208,11 +208,14 @@ export async function GET(req: NextRequest) {
     const weights = brain?.weights;
     if (!weights) {
       // 200 with empty picks — UI shows empty state instead of red error.
-      return NextResponse.json({
-        ok: true,
-        picks: [],
-        message: "Brain not yet trained",
-      });
+      return NextResponse.json(
+        {
+          ok: true,
+          picks: [],
+          message: "Brain not yet trained",
+        },
+        { headers: EDGE_HEADERS },
+      );
     }
 
     const allProjections: Array<PropPickOfDay & { score: number }> = [];
@@ -549,12 +552,18 @@ export async function GET(req: NextRequest) {
       // Safety net: if we STILL have no teams (both sources failed), skip the
       // fallback entirely — better to show 0 picks than picks from wrong teams.
       if (teamsPlayingToday.size === 0) {
-        // Return empty picks rather than projecting players who aren't playing
-        return NextResponse.json({
-          ok: true,
-          picks: [],
-          message: "No NBA games scheduled today",
-        });
+        // Return empty picks rather than projecting players who aren't playing.
+        // Empty in NBA offseason is the STABLE answer — cache it at the edge
+        // so every visitor doesn't repeat the schedule fetch that just told
+        // us the same thing.
+        return NextResponse.json(
+          {
+            ok: true,
+            picks: [],
+            message: "No NBA games scheduled today",
+          },
+          { headers: EDGE_HEADERS },
+        );
       }
 
       // Strict: only players whose team is playing today. No "show everyone"
