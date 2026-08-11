@@ -214,10 +214,27 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  // Ranking: TRUE EV (fair × decimal payout − 1). Same math the pinned board
-  // uses. This surfaces "cheap longshots the model likes" over "chalk with no
-  // edge" — both matter, EV picks the right blend.
+  // Ranking rule depends on market shape.
+  //
+  // HR-type markets (single-event Yes/No, high dispersion, everyone at
+  // long odds): the honest answer to "3-leg HR parlay" is "the 3 guys most
+  // likely to actually go yard." An EV-first sort surfaces the LONGEST
+  // long-shots the model likes even 1% more than the book — first deploy
+  // returned three +900 legs at 9% each. That's a lottery ticket, not what
+  // was asked for. Sort by fair probability, EV as tiebreaker.
+  //
+  // Everything else (K props, yards, etc.) is symmetric enough that EV is
+  // the right primary — the pinned board uses the same logic.
   candidates.sort((a, b) => {
+    if (isOverOnly) {
+      const dp = b.fairProb - a.fairProb;
+      if (Math.abs(dp) > 0.01) return dp;
+      // tiebreak by EV
+      return (
+        (b.fairProb / 100) * decimalPayout(b.odds) -
+        (a.fairProb / 100) * decimalPayout(a.odds)
+      );
+    }
     const evA = (a.fairProb / 100) * decimalPayout(a.odds) - 1;
     const evB = (b.fairProb / 100) * decimalPayout(b.odds) - 1;
     return evB - evA;
