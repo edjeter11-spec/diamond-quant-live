@@ -5,6 +5,7 @@ import { etDateString } from "@/lib/sports-date";
 // happened because this endpoint had NO gate — pinned-props waited, this
 // didn't. Now both share lib/lineup-gate.ts so drift can't happen again.
 import { checkLineupGate } from "@/lib/lineup-gate";
+import { isBullpenPitcherProp } from "@/lib/prop-filters";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -396,15 +397,10 @@ export async function GET(req: NextRequest) {
             if (!prop.playerName || !prop.line) continue;
             const gameDay = prop.gameTime ? etDateOf(prop.gameTime) : today;
             if (gameDay !== targetDay) continue;
-            // Bullpen-game tell — same filter pinned-props applies. A pitcher
-            // K line under 4.5 means the "starter" is a reliever spot-starting
-            // 2-3 innings; any prop on him is a workload lottery ticket, not
-            // a repeatable edge. Would otherwise leak into parlay legs the
-            // same way it leaked into today's Drew Anderson U3.5 Ks on the
-            // props board.
-            if (key === "pitcher_strikeouts" && Number(prop.line) < 4.5)
-              continue;
-            if (key === "pitcher_outs" && Number(prop.line) < 12) continue;
+            // Bullpen-game tell shared with pinned-props via
+            // lib/prop-filters.ts, so both routes apply the exact same
+            // thresholds and can't drift again.
+            if (isBullpenPitcherProp(key, Number(prop.line))) continue;
             const overProb = prop.fairOverProb ?? 50;
             const underProb = prop.fairUnderProb ?? 50;
             const favourOver = overProb >= underProb;

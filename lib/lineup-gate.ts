@@ -108,6 +108,21 @@ export function currentHourET(): number {
   );
 }
 
+/** Wall-clock ET time expressed as fractional hours since midnight
+ *  (13.5 = 1:30pm). Used by checkLineupGate to handle first-pitch times that
+ *  wrap through midnight — a raw hour compare `currentHourET() < -3` is
+ *  always false, so an early-morning first pitch would skip the gate. */
+function nowMinutesSinceMidnightET(): number {
+  const parts = new Date().toLocaleString("en-US", {
+    timeZone: "America/New_York",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  const [h, m] = parts.split(":").map((s) => Number(s.trim()));
+  return h * 60 + (Number.isFinite(m) ? m : 0);
+}
+
 export interface LineupGateResult {
   /** True if we should NOT build the board yet — lineups haven't confirmed. */
   waiting: boolean;
@@ -124,6 +139,13 @@ export interface LineupGateResult {
  * resolve first pitch (unknown sport, upstream failure) this returns
  * `waiting: false` — degrading to "build now" rather than freezing the
  * board forever on a schedule outage.
+ *
+ * Comparison in MINUTES not hours. Prior code did `currentHourET() < buildsAtHourET`
+ * with both sides as 0-23 integers — but for a very early first pitch (12am/1am
+ * ET, e.g. international series or SNF spilling past midnight), buildsAtHourET
+ * goes negative (e.g. 1 - 3 = -2). `currentHourET() < -2` is ALWAYS false, so
+ * the gate never fires and the board would build any time of day. Comparing in
+ * absolute minutes handles the negative correctly.
  */
 export async function checkLineupGate(
   sport: string,
@@ -134,8 +156,15 @@ export async function checkLineupGate(
     return { waiting: false, buildsAtHourET: null, firstPitchHourET: null };
   }
   const buildsAtHourET = firstPitchHourET - LINEUP_LEAD_HOURS;
+  const buildsAtMinutes = buildsAtHourET * 60;
+  const nowMinutes = nowMinutesSinceMidnightET();
+  // Waiting only when both sides are on today's clock. If buildsAtMinutes is
+  // negative it refers to yesterday's calendar day (a 12am-1am ET first pitch
+  // whose lineup window opened at 9-10pm PREVIOUS day), so we're already past
+  // it — not waiting.
+  const waiting = buildsAtMinutes >= 0 && nowMinutes < buildsAtMinutes;
   return {
-    waiting: currentHourET() < buildsAtHourET,
+    waiting,
     buildsAtHourET,
     firstPitchHourET,
   };

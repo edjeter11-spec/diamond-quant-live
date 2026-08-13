@@ -10,6 +10,7 @@ import {
   getFirstPitchHourET,
   LINEUP_LEAD_HOURS,
 } from "@/lib/lineup-gate";
+import { isBullpenPitcherProp } from "@/lib/prop-filters";
 
 /**
  * Truncate the board for non-subscribers and report what was withheld, so the
@@ -586,21 +587,10 @@ export async function GET(req: NextRequest) {
     // result of ranking the market's own de-vigged opinion against the market's
     // own price. Fewer honest picks beat five bad ones, so a short board (or an
     // empty one) is a valid, truthful output.
-    // Bullpen-game tell. A real MLB starter's Ks line is 5.5-8.5; a line of
-    // 3.5 or 4 means the book knows the "starter" is a reliever making a spot
-    // start (2-3 IP) or an opener piggybacked by long relief. Case in point,
-    // 2026-08-11: Drew Anderson opened for the Tigers with a 3.5 K line — he
-    // is a 41-game reliever with 3 starts on the year at 10.4 K/9, so the
-    // projector saw "high K/9" and priced Under 3.5 without knowing he'd
-    // pitch two innings. Same tell for `pitcher_outs` — a real starter's outs
-    // line is 15.5+; anything under 12 is a bullpen game and unpublishable.
-    const isBullpenPitcherProp = (p: PinnedProp) => {
-      if (p.market === "pitcher_strikeouts" && p.line < 4.5) return true;
-      if (p.market === "pitcher_outs" && p.line < 12) return true;
-      return false;
-    };
+    // Bullpen-game tell imported from lib/prop-filters.ts so parlay-today
+    // shares the exact same thresholds. See that module's header.
     const qualified = (p: PinnedProp) =>
-      !isBullpenPitcherProp(p) &&
+      !isBullpenPitcherProp(p.market, p.line) &&
       p.evPercentage >= MIN_EV &&
       p.evPercentage <= MAX_EV &&
       p.fairProb >= MIN_PROB;

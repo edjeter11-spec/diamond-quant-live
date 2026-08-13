@@ -59,6 +59,12 @@ const MARKET_LABEL: Record<string, string> = {
   player_points: "Points",
   player_rebounds: "Rebounds",
   player_assists: "Assists",
+  player_pass_yds: "Pass Yds",
+  player_pass_tds: "Pass TDs",
+  player_rush_yds: "Rush Yds",
+  player_receptions: "Receptions",
+  player_reception_yds: "Rec Yds",
+  player_anytime_td: "Anytime TD",
 };
 
 function normSport(input: string | null): "mlb" | "nba" | "nfl" | null {
@@ -86,6 +92,21 @@ function normMarket(sport: string, market: string | null): string {
     if (m === "reb" || m === "rebounds") return "player_rebounds";
     if (m === "ast" || m === "assists") return "player_assists";
     return m || "player_points";
+  }
+  if (sport === "nfl") {
+    // Alias table for the bot-detector shorthands and common variants.
+    if (["td", "tds", "anytime_td", "touchdown"].includes(m))
+      return "player_anytime_td";
+    if (["pass_yds", "passing_yards", "pass_yards"].includes(m))
+      return "player_pass_yds";
+    if (["pass_tds", "passing_tds"].includes(m)) return "player_pass_tds";
+    if (["rush_yds", "rushing_yards", "rush_yards"].includes(m))
+      return "player_rush_yds";
+    if (["receptions", "catches", "targets"].includes(m))
+      return "player_receptions";
+    if (["receiving_yds", "rec_yds", "receiving_yards"].includes(m))
+      return "player_reception_yds";
+    return m || "player_anytime_td";
   }
   return m;
 }
@@ -115,18 +136,20 @@ export async function GET(req: NextRequest) {
   if (!force) {
     const gate = await checkLineupGate(sport);
     if (gate.waiting) {
-      return NextResponse.json(
-        {
-          ok: true,
-          sport,
-          market,
-          legs: [],
-          notYet: true,
-          buildsAtHourET: gate.buildsAtHourET,
-          message: `Parlays lock in around ${gate.buildsAtHourET}:00 ET once lineups are confirmed. Ask me again then.`,
-        },
-        { headers: EDGE_HEADERS },
-      );
+      // Deliberately NOT edge-cached. A 90s cache on this response would keep
+      // returning "waiting" for up to 90s AFTER the gate flips open — users
+      // asking at 3:00:30 PM would still see "wait until 3:00 PM." The other
+      // responses cache because their content is stable within 90s; this one
+      // isn't.
+      return NextResponse.json({
+        ok: true,
+        sport,
+        market,
+        legs: [],
+        notYet: true,
+        buildsAtHourET: gate.buildsAtHourET,
+        message: `Parlays lock in around ${gate.buildsAtHourET}:00 ET once lineups are confirmed. Ask me again then.`,
+      });
     }
   }
 
@@ -165,12 +188,12 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  // Build candidate legs. HR-type markets (batter_home_runs) are ALWAYS "Yes
-  // to hit one" — nobody parlays "will he NOT hit multiple HRs" at -20000
-  // even if that's the model's highest probability. Same for anytime-TD.
-  // For those markets, force the Over side. For everything else (K props,
-  // yards) let the model pick the higher-prob side.
-  const OVER_ONLY = new Set(["batter_home_runs"]);
+  // Build candidate legs. Yes/No event markets (batter_home_runs,
+  // player_anytime_td) are ALWAYS "Yes to happen" — nobody parlays "will he
+  // NOT hit multiple HRs" at -20000 even if that's the model's highest
+  // probability. For those markets, force the Over/Yes side. For everything
+  // else (K props, yards) let the model pick the higher-prob side.
+  const OVER_ONLY = new Set(["batter_home_runs", "player_anytime_td"]);
   const isOverOnly = OVER_ONLY.has(market);
   // For OVER_ONLY markets also cap the line — a HR parlay shouldn't include
   // 1.5+ HR lines even on the over side (implied prob so small the ticket
@@ -255,6 +278,12 @@ export async function GET(req: NextRequest) {
   const combinedDec = picked.reduce((s, l) => s * decimalPayout(l.odds), 1);
   const combinedProb = picked.reduce((s, l) => s * (l.fairProb / 100), 1) * 100;
 
+  // Narrowing signal for the caller. If a user asked for 5 legs but only 3
+  // candidates cleared the guards, the response returns 3 with no explanation
+  // otherwise — the bot's title would then say "3-Leg Parlay" with no hint
+  // that a smaller ticket was substituted. Surface `requestedLegs` and a
+  // `narrowedFromRequest` flag so the bot can tell the reader.
+  const narrowedFromRequest = picked.length < legs;
   return NextResponse.json(
     {
       ok: true,
@@ -262,6 +291,8 @@ export async function GET(req: NextRequest) {
       market,
       marketLabel: MARKET_LABEL[market] ?? market,
       legs: picked,
+      requestedLegs: legs,
+      narrowedFromRequest,
       combinedAmerican: decimalToAmerican(combinedDec),
       combinedDecimal: Math.round(combinedDec * 100) / 100,
       // Rough — assumes independence. Fine for a chat answer, not for a
