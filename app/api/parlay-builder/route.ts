@@ -199,10 +199,14 @@ export async function GET(req: NextRequest) {
   // 1.5+ HR lines even on the over side (implied prob so small the ticket
   // pays nothing meaningful either way).
   const LINE_CAP = isOverOnly ? 0.5 : Infinity;
-  // And clamp the odds themselves: any leg shorter than -400 is chalk that
-  // shrinks the payout without meaningfully changing the outcome — a parlay
-  // suggestion of -20000 legs is a bug in disguise, not a bet.
-  const MIN_ODDS = isOverOnly ? -400 : -600;
+  // Clamp legs to prices that actually pay if the parlay hits. -400 already
+  // needs +125 to overcome the vig; below that the leg contributes almost
+  // nothing to the payout but still adds a way to lose. Prior config allowed
+  // -600 for non-HR markets, which produced 4-leg RBI parlays of Under 0.5
+  // at -300 to -528 (combined +156 for what looked like a 32% shot — a
+  // coin-flip event paying you a coin-flip). -250 keeps the door open for
+  // one heavy leg but blocks the "chalk stack" pattern.
+  const MIN_ODDS = isOverOnly ? -400 : -250;
 
   const candidates: Leg[] = [];
   for (const p of props) {

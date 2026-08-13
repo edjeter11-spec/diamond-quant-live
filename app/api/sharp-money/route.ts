@@ -272,6 +272,18 @@ export async function GET(req: Request) {
 // ── POST — snapshot current odds into history ────────────
 
 export async function POST(req: Request) {
+  // AUTH: this endpoint burns Odds API credits (fetchOdds below hits a paid
+  // upstream) and writes to odds_history. Unauth'd would let any script
+  // drain the same quota that has already been exhausted twice on this
+  // project. Only the cron may call it — same pattern as /api/publish-daily.
+  const cronSecret = req.headers.get("x-cron-secret");
+  if (!cronSecret || cronSecret !== process.env.CRON_SECRET) {
+    return NextResponse.json(
+      { ok: false, error: "unauthorized" },
+      { status: 401 },
+    );
+  }
+
   const body = await req.json().catch(() => ({}));
   const sport = body.sport || "baseball_mlb";
 

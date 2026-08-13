@@ -11,46 +11,79 @@
 
 // Sport-aware deep link URLs (web; app schemes intentionally omitted —
 // most users open web and the book's site handles app-handoff).
-const DEEP_LINKS: Record<string, { mlb: string; nba: string }> = {
+//
+// All four sports now covered per book. Prior shape was `{ mlb, nba }` and
+// callers passed `currentSport as "mlb" | "nba"` — that lied for nfl/nhl
+// and the function silently fell back to MLB. Result: an NFL preseason
+// visitor clicking "DraftKings" on a Bills pick opened the MLB landing.
+// The type below no longer allows the fallback to hide the gap.
+type DeepLinkEntry = {
+  mlb: string;
+  nba: string;
+  nfl: string;
+  nhl: string;
+};
+
+const DEEP_LINKS: Record<string, DeepLinkEntry> = {
   draftkings: {
     mlb: "https://sportsbook.draftkings.com/leagues/baseball/mlb",
     nba: "https://sportsbook.draftkings.com/leagues/basketball/nba",
+    nfl: "https://sportsbook.draftkings.com/leagues/football/nfl",
+    nhl: "https://sportsbook.draftkings.com/leagues/hockey/nhl",
   },
   fanduel: {
     mlb: "https://sportsbook.fanduel.com/baseball/mlb",
     nba: "https://sportsbook.fanduel.com/basketball/nba",
+    nfl: "https://sportsbook.fanduel.com/football/nfl",
+    nhl: "https://sportsbook.fanduel.com/hockey/nhl",
   },
   betmgm: {
     mlb: "https://sports.betmgm.com/en/sports/baseball-23/betting/usa-9/mlb-75",
     nba: "https://sports.betmgm.com/en/sports/basketball-7/betting/usa-9/nba-6004",
+    nfl: "https://sports.betmgm.com/en/sports/football-11/betting/usa-9/nfl-35",
+    nhl: "https://sports.betmgm.com/en/sports/ice-hockey-15/betting/usa-9/nhl-34",
   },
   fanatics: {
     mlb: "https://sportsbook.fanatics.com/baseball/mlb",
     nba: "https://sportsbook.fanatics.com/basketball/nba",
+    nfl: "https://sportsbook.fanatics.com/football/nfl",
+    nhl: "https://sportsbook.fanatics.com/hockey/nhl",
   },
   hardrockbet: {
     mlb: "https://app.hardrock.bet/sports/baseball/mlb",
     nba: "https://app.hardrock.bet/sports/basketball/nba",
+    nfl: "https://app.hardrock.bet/sports/football/nfl",
+    nhl: "https://app.hardrock.bet/sports/hockey/nhl",
   },
   betrivers: {
     mlb: "https://www.betrivers.com/sports/baseball/mlb",
     nba: "https://www.betrivers.com/sports/basketball/nba",
+    nfl: "https://www.betrivers.com/sports/football/nfl",
+    nhl: "https://www.betrivers.com/sports/hockey/nhl",
   },
   espnbet: {
     mlb: "https://espnbet.com/sport/baseball/organization/mlb",
     nba: "https://espnbet.com/sport/basketball/organization/nba",
+    nfl: "https://espnbet.com/sport/football/organization/nfl",
+    nhl: "https://espnbet.com/sport/hockey/organization/nhl",
   },
   pointsbetus: {
     mlb: "https://www.pointsbet.com/sports/baseball/MLB",
     nba: "https://www.pointsbet.com/sports/basketball/NBA",
+    nfl: "https://www.pointsbet.com/sports/football/NFL",
+    nhl: "https://www.pointsbet.com/sports/hockey/NHL",
   },
   bovada: {
     mlb: "https://www.bovada.lv/sports/baseball/mlb",
     nba: "https://www.bovada.lv/sports/basketball/nba",
+    nfl: "https://www.bovada.lv/sports/football/nfl",
+    nhl: "https://www.bovada.lv/sports/hockey/nhl",
   },
   williamhill_us: {
     mlb: "https://www.caesars.com/sportsbook-and-casino/sports/baseball/mlb",
     nba: "https://www.caesars.com/sportsbook-and-casino/sports/basketball/nba",
+    nfl: "https://www.caesars.com/sportsbook-and-casino/sports/football/nfl",
+    nhl: "https://www.caesars.com/sportsbook-and-casino/sports/hockey/nhl",
   },
 };
 
@@ -117,18 +150,27 @@ function resolveBookKey(bookmakerKey: string): string {
 
 /**
  * Get a deep link to a sportsbook.
- * - Defaults to MLB section (maintains backward compat with existing callers)
- * - Pass `sport` to direct to the correct sport's landing page
- * - Appends affiliate code automatically when NEXT_PUBLIC_AFFILIATE_<BOOK> is set
+ * - Defaults to MLB when `sport` isn't passed — legacy callers.
+ * - Pass `sport` to direct to the correct sport's landing page.
+ * - Appends affiliate code automatically when NEXT_PUBLIC_AFFILIATE_<BOOK> is set.
+ *
+ * `sport` widened from `"mlb" | "nba"` to `string` so callers passing
+ * `currentSport` no longer need `as "mlb" | "nba"` casts that were lying
+ * for nfl/nhl. Unknown sport OR a sport we don't have a URL for returns "" —
+ * caller should hide the button rather than send the user to the wrong page.
+ * Same defensive pattern as teamNameToAbbrev.
  */
 export function getDeepLink(
   bookmakerKey: string,
-  opts?: { sport?: "mlb" | "nba"; ev?: number },
+  opts?: { sport?: string; ev?: number },
 ): string {
   const bookKey = resolveBookKey(bookmakerKey);
   if (!bookKey) return "";
-  const sport = opts?.sport ?? "mlb";
-  const base = DEEP_LINKS[bookKey]?.[sport] ?? DEEP_LINKS[bookKey]?.mlb ?? "";
+  const sport = (opts?.sport ?? "mlb") as keyof DeepLinkEntry;
+  const entry = DEEP_LINKS[bookKey];
+  if (!entry) return "";
+  const base = entry[sport];
+  if (!base) return ""; // Sport we don't map — hide the button.
   return appendAffiliate(base, bookKey, { ev: opts?.ev });
 }
 

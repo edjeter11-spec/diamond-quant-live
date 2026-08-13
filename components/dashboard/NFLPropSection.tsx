@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { etDateString } from "@/lib/sports-date";
 import {
   Trophy,
   RefreshCw,
@@ -51,8 +52,13 @@ export default function NFLPropSection({
       return;
     }
     setLoading(true);
-    // Fetch today's pending NFL prop predictions
-    const today = new Date().toISOString().split("T")[0];
+    // Fetch today's pending NFL prop predictions.
+    // etDateString() — NOT new Date().toISOString(). Prop rows are stamped
+    // with the ET sports date; comparing against a UTC date made picks
+    // disappear between 8pm ET (midnight UTC) and 4am ET every night — the
+    // exact SNF/MNF prime-time window. Verified today with preseason NFL
+    // games live.
+    const today = etDateString();
     fetch(`/api/prop-history?sport=nfl&limit=50`)
       .then((r) => r.json())
       .then((d) => {

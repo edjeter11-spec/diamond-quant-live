@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { isAllowedOrigin } from "@/lib/supabase/server-auth";
+import { checkIpRateLimit } from "@/lib/ip-rate-limit";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -9,6 +11,28 @@ const GEMINI_KEY = process.env.GEMINI_API_KEY || "";
 const MODELS = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"];
 
 export async function POST(req: Request) {
+  // Same guard pair as game-summary-ai. This route can hit Gemini THREE
+  // times per call (fallback across MODELS), so the abuse cost is higher.
+  // Tighter IP limit — 10/min per IP is plenty for real users uploading a
+  // slip image every so often.
+  if (!isAllowedOrigin(req)) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+  const rl = checkIpRateLimit(req, {
+    limit: 10,
+    windowMs: 60_000,
+    key: "scan-slip",
+  });
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: "rate limited" },
+      {
+        status: 429,
+        headers: { "Retry-After": String(Math.ceil(rl.retryAfterMs / 1000)) },
+      },
+    );
+  }
+
   if (!GEMINI_KEY) {
     return NextResponse.json(
       { error: "Gemini API key not configured" },

@@ -6,6 +6,8 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getCached, setCache } from "@/lib/odds/server-cache";
+import { isAllowedOrigin } from "@/lib/supabase/server-auth";
+import { checkIpRateLimit } from "@/lib/ip-rate-limit";
 
 const GEMINI_KEY = process.env.GEMINI_API_KEY ?? "";
 const GEMINI_URL =
@@ -14,6 +16,29 @@ const GEMINI_URL =
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
+  // Guards: this route calls Gemini and the cache key is caller-controlled
+  // (`gameId ?? game`), so an attacker can trivially force cache misses.
+  // Origin check blocks off-site loops; IP rate-limit blocks single-source
+  // hammering. Nothing here should block a real user — the site pings this
+  // maybe a few times per game view.
+  if (!isAllowedOrigin(req)) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+  const rl = checkIpRateLimit(req, {
+    limit: 30,
+    windowMs: 60_000,
+    key: "game-summary-ai",
+  });
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: "rate limited" },
+      {
+        status: 429,
+        headers: { "Retry-After": String(Math.ceil(rl.retryAfterMs / 1000)) },
+      },
+    );
+  }
+
   const body = await req.json().catch(() => null);
   if (!body)
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });

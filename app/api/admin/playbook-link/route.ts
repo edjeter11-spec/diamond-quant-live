@@ -140,10 +140,23 @@ export async function POST(req: NextRequest) {
               l.odds ? ` — ${Number(l.odds) > 0 ? "+" : ""}${l.odds}` : ""
             }`,
         );
+        // Sport-aware emoji — must match publish-daily's parlayEmoji map, or
+        // an admin editing an NBA parlay's slip link will flip its title to
+        // a baseball icon and back.
+        const parlayEmoji =
+          sport === "mlb"
+            ? "⚾"
+            : sport === "nba"
+              ? "🏀"
+              : sport === "nfl"
+                ? "🏈"
+                : sport === "nhl"
+                  ? "🏒"
+                  : "🎯";
         const res = await editPickInDiscord({
           id: parlayBatchKey,
           sport,
-          game: "⚾ PARLAY OF THE DAY",
+          game: `${parlayEmoji} PARLAY OF THE DAY`,
           market: `${legs.length}-Leg`,
           pick_text: lines.join("\n"),
           units: 1,

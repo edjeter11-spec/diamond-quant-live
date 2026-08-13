@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Snowflake, RefreshCw, ChevronDown, Zap, Brain } from "lucide-react";
+import { etDateString } from "@/lib/sports-date";
 
 interface NHLPick {
   playerName: string;
@@ -41,7 +42,9 @@ export default function NHLPropSection({
       return;
     }
     setLoading(true);
-    const today = new Date().toISOString().split("T")[0];
+    // etDateString() — see the NFL twin. UTC would hide NHL picks from
+    // 8pm ET (midnight UTC) onward every night, which is puck-drop hour.
+    const today = etDateString();
     fetch(`/api/prop-history?sport=nhl&limit=50`)
       .then((r) => r.json())
       .then((d) => {

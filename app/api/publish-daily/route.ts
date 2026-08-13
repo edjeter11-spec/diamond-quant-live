@@ -100,6 +100,28 @@ export async function POST(req: NextRequest) {
   const releaseClaim = async (key: string) => {
     await supabaseAdmin!.from("app_state").delete().eq("key", claimKey(key));
   };
+  // Mark a claim as SUCCEEDED. Prior code left the row as {pending: true}
+  // forever after a successful publish, which built up 15+ orphaned "pending"
+  // rows over a week. `alreadyDone` also checks for manual_picks rows so
+  // guard-day behavior is unchanged, but the stuck-claim audit now shows
+  // the real state and a retract+republish path could actually read the
+  // claim without seeing stale pending.
+  const markClaimDone = async (
+    key: string,
+    detail: { messageId?: string | null; rowCount?: number | null } = {},
+  ) => {
+    await supabaseAdmin!
+      .from("app_state")
+      .update({
+        value: {
+          pending: false,
+          publishedAt: new Date().toISOString(),
+          messageId: detail.messageId ?? null,
+          rowCount: detail.rowCount ?? null,
+        },
+      })
+      .eq("key", claimKey(key));
+  };
   const alreadyDone = async (key: string) => {
     // Belt and suspenders: an existing claim OR existing rows both mean done.
     const [{ data: claimRow }, { data: rows }] = await Promise.all([
@@ -313,6 +335,13 @@ export async function POST(req: NextRequest) {
               warning: `Posted but failed to log after retry: ${insErr.message}`,
             }
           : { ok: true, posted: true, logged: rows.length };
+        // Mark the claim done — see markClaimDone header. Runs on either
+        // branch (logged OR posted-but-log-failed) because the Discord post
+        // is what the claim is protecting against duplicating.
+        await markClaimDone(batchKey, {
+          messageId: discordRes.message_id,
+          rowCount: insErr ? null : rows.length,
+        });
       }
     } else if (!out.props) {
       // Nothing to publish — release so a later tick with a real board can.
@@ -380,10 +409,23 @@ export async function POST(req: NextRequest) {
         .map((l) => `**${Math.round(l.fairProb)}%**`)
         .join(", ");
 
+      // Sport-aware emoji, same map as the daily-board post above uses.
+      // Prior string was hardcoded "⚾ PARLAY OF THE DAY" — NBA/NFL/NHL
+      // parlays posted with a baseball icon.
+      const parlayEmoji =
+        sport === "mlb"
+          ? "⚾"
+          : sport === "nba"
+            ? "🏀"
+            : sport === "nfl"
+              ? "🏈"
+              : sport === "nhl"
+                ? "🏒"
+                : "🎯";
       const discordRes = await postPickToDiscord({
         id: parlayBatchKey,
         sport,
-        game: "⚾ PARLAY OF THE DAY",
+        game: `${parlayEmoji} PARLAY OF THE DAY`,
         market: `${legs.length}-Leg · ${fmtOdds(totalOdds)}`,
         pick_text: lines.join("\n"),
         units: 1,
@@ -477,6 +519,12 @@ export async function POST(req: NextRequest) {
               warning: `Posted but failed to log: ${insErr.message}`,
             }
           : { ok: true, posted: true, logged: rows.length };
+        // Twin of the props path — flip claim to done so scripts and future
+        // republish attempts see the true state.
+        await markClaimDone(parlayBatchKey, {
+          messageId: discordRes.message_id,
+          rowCount: insErr ? null : rows.length,
+        });
       }
     } else if (!out.parlay) {
       // Nothing to publish — release so a later tick with real legs can.

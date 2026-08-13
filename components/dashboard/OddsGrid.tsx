@@ -123,11 +123,11 @@ export default function OddsGrid({ gameId }: OddsGridProps) {
               >
                 <td className="px-4 py-2.5">
                   {getDeepLink(line.bookmakerKey || line.bookmaker, {
-                    sport: currentSport as "mlb" | "nba",
+                    sport: currentSport,
                   }) ? (
                     <a
                       href={getDeepLink(line.bookmakerKey || line.bookmaker, {
-                        sport: currentSport as "mlb" | "nba",
+                        sport: currentSport,
                       })}
                       target="_blank"
                       rel="noopener noreferrer"

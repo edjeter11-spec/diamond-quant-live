@@ -1773,12 +1773,12 @@ function PickCard({
           {/* Action buttons — primary inline, secondary in overflow */}
           <div className="flex gap-1.5 relative">
             {getDeepLink(pick.bookmaker, {
-              sport: currentSport as "mlb" | "nba",
+              sport: currentSport,
               ev: pick.evPercentage,
             }) && (
               <a
                 href={getDeepLink(pick.bookmaker, {
-                  sport: currentSport as "mlb" | "nba",
+                  sport: currentSport,
                   ev: pick.evPercentage,
                 })}
                 target="_blank"

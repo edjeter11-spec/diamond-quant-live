@@ -1408,7 +1408,12 @@ export async function GET(req: Request) {
     try {
       const snapRes = await fetch(`${selfOrigin}/api/sharp-money`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          // Sharp-money POST now requires the cron secret — without this
+          // the auth guard I added returns 401 and no snapshot is recorded.
+          "x-cron-secret": process.env.CRON_SECRET ?? "",
+        },
         body: JSON.stringify({ sport: "baseball_mlb" }),
         signal: AbortSignal.timeout(25000),
       });
