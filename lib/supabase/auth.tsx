@@ -93,7 +93,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [preferences, setPreferences] = useState<UserPreferences | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Fetch profile + preferences (with retry for new signups where trigger hasn't finished)
+  // Fetch profile + preferences (with retry for new signups where trigger
+  // hasn't finished, AND for transient AbortErrors — the Supabase client has
+  // an 8s timeout and cold Vercel regions occasionally exceed that on the
+  // first profile read of a session).
   const fetchProfile = useCallback(async (userId: string, attempt = 0) => {
     if (!supabase) return;
     try {
@@ -106,12 +109,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           .single(),
       ]);
 
+      // AbortError: the wrapping timeoutFetch (lib/supabase/client.ts) fired
+      // an 8s abort. Real, transient, retriable. Retry once with a small
+      // backoff before giving up — otherwise the user is silently treated as
+      // logged out (profile null → isAdmin/isPremium false → gated UI hidden,
+      // which reads as "nothing is loading"). No console.error for the FIRST
+      // abort; the retry either lands the profile or logs on the second miss.
+      const isAbort =
+        profileRes.error?.message?.toLowerCase().includes("abort") ||
+        profileRes.error?.name === "AbortError";
+      if (isAbort && attempt < 2) {
+        setTimeout(() => fetchProfile(userId, attempt + 1), 500);
+        return;
+      }
+
       // A permission error is NOT a missing row — retrying can't fix it, and
       // silently treating it as "no profile" is how a column-grant regression
       // took the whole admin panel down without a single visible error
       // (migration 011 revoked SELECT on columns that `select("*")` needs;
       // profile stayed null, so `isAdmin` was false for everyone). Log it so
       // the next one is diagnosable from the console instead of by inference.
+      // Also log an abort that survived its retry — that's a real problem
+      // rather than a routine cold-start blip.
       if (profileRes.error) {
         console.error(
           "user_profiles read failed:",

@@ -16,6 +16,12 @@ const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 // wraps every request the SDK makes in a hard timeout so callers' own
 // try/catch (cloudGet/cloudSet already have one) actually gets a chance to
 // fall back instead of hanging the whole route.
+//
+// Timeouts differ by environment: the client (browser) has a longer window
+// so a cold Vercel region + first user_profiles read of the session doesn't
+// silently abort and leave the user looking logged-out. Server routes keep
+// the tighter 8s — those must fail fast to give cron/publish paths room.
+// The old shared 8s ate the user's profile call on every cold visit.
 function timeoutFetch(timeoutMs: number): typeof fetch {
   return (input, init) => {
     const controller = new AbortController();
@@ -26,10 +32,13 @@ function timeoutFetch(timeoutMs: number): typeof fetch {
   };
 }
 
+const CLIENT_TIMEOUT_MS = 15000;
+const SERVER_TIMEOUT_MS = 8000;
+
 export const supabase =
   SUPABASE_URL && SUPABASE_KEY
     ? createClient(SUPABASE_URL, SUPABASE_KEY, {
-        global: { fetch: timeoutFetch(8000) },
+        global: { fetch: timeoutFetch(CLIENT_TIMEOUT_MS) },
       })
     : null;
 
@@ -40,7 +49,7 @@ const supabaseWriter =
   typeof window === "undefined" && SUPABASE_URL && SERVICE_KEY
     ? createClient(SUPABASE_URL, SERVICE_KEY, {
         auth: { persistSession: false, autoRefreshToken: false },
-        global: { fetch: timeoutFetch(8000) },
+        global: { fetch: timeoutFetch(SERVER_TIMEOUT_MS) },
       })
     : supabase;
 
