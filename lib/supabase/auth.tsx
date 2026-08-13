@@ -9,6 +9,7 @@ import {
   createContext,
   useContext,
   useEffect,
+  useRef,
   useState,
   useCallback,
   type ReactNode,
@@ -168,6 +169,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Listen for auth changes
   // Fire the complimentary-access check once per session — no-op unless
   // the user's email is in COMP_ACCESS_EMAILS (server-side env list).
+  //
+  // Reads `user` via a ref so this callback is STABLE across renders.
+  // Prior [fetchProfile, user] deps made ensureComp change identity whenever
+  // user updated (which happened as a side effect of ensureComp itself via
+  // fetchProfile), invalidating the subscribing useEffect below, which tore
+  // down the auth listener mid-flight and aborted every in-flight request
+  // — 1000+ TypeError: Failed to fetch in a few seconds. The ref pattern
+  // reads latest user without hooking the effect graph.
+  const userRef = useRef<User | null>(null);
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
+
   const ensureComp = useCallback(
     async (accessToken: string | undefined) => {
       if (!accessToken) return;
@@ -180,13 +194,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           },
         });
         const data = await res.json();
-        if (data?.compGranted && !data?.alreadySet && user) {
+        const u = userRef.current;
+        if (data?.compGranted && !data?.alreadySet && u) {
           // Refresh profile so is_admin/is_premium propagate immediately
-          fetchProfile(user.id);
+          fetchProfile(u.id);
         }
       } catch {}
     },
-    [fetchProfile, user],
+    [fetchProfile],
   );
 
   useEffect(() => {
@@ -222,7 +237,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     return () => subscription.unsubscribe();
-  }, [fetchProfile, ensureComp]);
+    // DELIBERATELY EMPTY DEPS. ensureComp is memoized on [fetchProfile, user],
+    // and ensureComp calls fetchProfile which mutates user → ensureComp
+    // reference changes → this effect used to re-run → old subscription torn
+    // down mid-flight → in-flight Supabase queries + /api/auth/ensure-comp
+    // POSTs got aborted → next auth-state tick fired more of them → 1000+
+    // TypeError: Failed to fetch in a few seconds. This is the "app doesn't
+    // seem to be working" report tonight.
+    //
+    // We only want to subscribe ONCE per mount. fetchProfile and ensureComp
+    // are stable within a session (both useCallback), and reading them here
+    // via closure is safe — React never garbage-collects the closure while
+    // the subscription is alive.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── Sign in with email/password ──
   const signInWithEmail = useCallback(
