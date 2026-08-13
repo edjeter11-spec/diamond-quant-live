@@ -6,9 +6,23 @@
 
 import { createClient } from "@supabase/supabase-js";
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
-const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+// Sanitize every env read at module scope. Vercel's env store on this project
+// has historically kept trailing `\n` characters in copy-pasted values (see
+// project memory `project_f1cardvault_env_newline.md`). Server scripts
+// already strip; the client bundle did not — a raw
+// `https://grbswzfizblkekrzhadw.supabase.co\n` shipped, every browser fetch
+// resolved to an invalid hostname, and the whole personalized surface
+// (profile, isAdmin, isPremium) silently failed. That's exactly the "nothing
+// is loading" report from the user tonight.
+//
+// Both TRIM and internal-`\n` strip: a token can contain any whitespace that
+// leaked from the env editor, and none of it belongs in a URL/API-key value.
+const cleanEnv = (v: string | undefined): string =>
+  (v ?? "").replace(/[\r\n\t]+/g, "").trim();
+
+const SUPABASE_URL = cleanEnv(process.env.NEXT_PUBLIC_SUPABASE_URL);
+const SUPABASE_KEY = cleanEnv(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+const SERVICE_KEY = cleanEnv(process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 // The Supabase JS SDK's default fetch has no timeout — when the DB/schema
 // cache is degraded (observed: "PGRST002 ... Retrying" looping) a single
