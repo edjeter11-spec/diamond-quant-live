@@ -58,37 +58,145 @@ export default function AdminPage() {
     if (!supabase) return;
     setLoading(true);
 
-    const [usersRes, invitesRes, brainRes, eloRes] = await Promise.all([
+    // Stats sources verified against the DB (2026-08-16):
+    //  - Brain games:      prop_predictions rows where status='graded'.
+    //                      The `brain` app_state key exists but has no
+    //                      totalGamesProcessed / pitcherMemory, so the
+    //                      panel used to show 0/0 while 1176 MLB rows were
+    //                      graded. `smart_bot` is the current-generation
+    //                      state (57 picks; no pitcherMemory either).
+    //  - Elo:              elo_mlb + elo_nba, both live under-populated
+    //                      today (9 teams / 7 games MLB, 4 / 11 NBA) — the
+    //                      display now sums BOTH so a first-timer sees the
+    //                      real footprint instead of MLB-only.
+    //  - Invites:          user_profiles.invite_code / invited_by. The
+    //                      dedicated `invites` table is empty; the actual
+    //                      truth lives inline on user_profiles.
+    // 14 days of published picks — feeds the new "Grading Health" card so
+    // an admin can answer "is grading actually running / are we winning"
+    // without leaving the panel. Cron heartbeat surfaces the last time the
+    // whole pipeline ran, which is the fastest way to spot "recap silently
+    // stopped firing".
+    const since14 = new Date(Date.now() - 14 * 24 * 3600 * 1000)
+      .toISOString()
+      .slice(0, 10);
+    const [
+      usersRes,
+      brainCountRes,
+      smartBotRes,
+      eloMlbRes,
+      eloNbaRes,
+      picks14Res,
+      heartbeatRes,
+    ] = await Promise.all([
       supabase
         .from("user_profiles")
         .select("*")
         .order("created_at", { ascending: false }),
+      // Cheap count query — head:true means the server doesn't return rows,
+      // just the count in the range header.
       supabase
-        .from("invites")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(50),
-      supabase.from("app_state").select("value").eq("key", "brain").single(),
-      supabase.from("app_state").select("value").eq("key", "elo_mlb").single(),
+        .from("prop_predictions")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "graded"),
+      supabase
+        .from("app_state")
+        .select("value")
+        .eq("key", "smart_bot")
+        .maybeSingle(),
+      supabase
+        .from("app_state")
+        .select("value")
+        .eq("key", "elo_mlb")
+        .maybeSingle(),
+      supabase
+        .from("app_state")
+        .select("value")
+        .eq("key", "elo_nba")
+        .maybeSingle(),
+      supabase
+        .from("manual_picks")
+        .select("slate_date,result,profit_units")
+        .gte("slate_date", since14)
+        .order("slate_date", { ascending: false })
+        .limit(500),
+      supabase
+        .from("app_state")
+        .select("value")
+        .eq("key", "cron_heartbeat")
+        .maybeSingle(),
     ]);
 
     setUsers((usersRes.data ?? []) as UserRow[]);
-    setInvites((invitesRes.data ?? []) as InviteRow[]);
+    // `invites` count now comes from user_profiles inline. Rows kept as an
+    // empty array to preserve the UI shape without inventing invite rows.
+    setInvites([] as InviteRow[]);
 
-    const brain = brainRes.data?.value as any;
-    const elo = eloRes.data?.value as any;
+    const smartBot = smartBotRes.data?.value as any;
+    const eloMlb = eloMlbRes.data?.value as any;
+    const eloNba = eloNbaRes.data?.value as any;
+    const usersRows = usersRes.data ?? [];
+    const invitedCount = usersRows.filter((u: any) => u.invited_by).length;
+
+    // Grading health — pulls from the same manual_picks table the recap
+    // reads from. If wins+losses = 0, grading is dead. If pending count
+    // hasn't dropped in a day, grading is stalled.
+    const picks14 = (picks14Res.data ?? []) as Array<{
+      slate_date: string;
+      result: string | null;
+      profit_units: number | null;
+    }>;
+    const wins14 = picks14.filter((p) => p.result === "win").length;
+    const losses14 = picks14.filter((p) => p.result === "loss").length;
+    const pending14 = picks14.filter((p) => !p.result).length;
+    const units14 = picks14.reduce(
+      (s, p) => s + Number(p.profit_units ?? 0),
+      0,
+    );
+    // "Stuck" = pending row on a slate that's already >3 days in the past.
+    // Today's + yesterday's pending are normal (games still running).
+    const stuckCutoff = new Date(Date.now() - 3 * 24 * 3600 * 1000)
+      .toISOString()
+      .slice(0, 10);
+    const stuck14 = picks14.filter(
+      (p) => !p.result && p.slate_date < stuckCutoff,
+    ).length;
+    const decided = wins14 + losses14;
+    const winRate14 = decided > 0 ? (wins14 / decided) * 100 : null;
+
+    // Cron heartbeat — minutes since the pipeline last ran.
+    const hbAt = (heartbeatRes.data?.value as any)?.at;
+    const heartbeatMinutesAgo = hbAt
+      ? Math.round((Date.now() - Date.parse(hbAt)) / 60000)
+      : null;
+
     setStats({
-      totalUsers: usersRes.data?.length ?? 0,
-      activeUsers: (usersRes.data ?? []).filter((u: any) => {
-        const lastActive = new Date(u.last_active).getTime();
+      totalUsers: usersRows.length,
+      activeUsers: usersRows.filter((u: any) => {
+        const lastActive = u.last_active
+          ? new Date(u.last_active).getTime()
+          : 0;
         return Date.now() - lastActive < 7 * 24 * 60 * 60 * 1000;
       }).length,
-      brainGames: brain?.totalGamesProcessed ?? 0,
-      brainPitchers: Object.keys(brain?.pitcherMemory ?? {}).length,
-      eloTeams: Object.keys(elo?.teams ?? {}).length,
-      eloGames: elo?.totalGamesProcessed ?? 0,
-      invitesUsed: (invitesRes.data ?? []).filter((i: any) => i.used_by).length,
-      invitesTotal: invitesRes.data?.length ?? 0,
+      // Real "games the brain has learned from" — every graded prop prediction.
+      brainGames: brainCountRes.count ?? 0,
+      brainPitchers: Object.keys(smartBot?.pitcherMemory ?? {}).length,
+      eloTeams:
+        Object.keys(eloMlb?.teams ?? {}).length +
+        Object.keys(eloNba?.teams ?? {}).length,
+      eloGames:
+        (eloMlb?.totalGamesProcessed ?? 0) + (eloNba?.totalGamesProcessed ?? 0),
+      invitesUsed: invitedCount,
+      // "Total created" = every user who holds an invite code.
+      invitesTotal: usersRows.filter((u: any) => u.invite_code).length,
+      // New grading-health block
+      wins14,
+      losses14,
+      pending14,
+      stuck14,
+      units14: Math.round(units14 * 10) / 10,
+      winRate14,
+      heartbeatMinutesAgo,
     });
 
     setLoading(false);
@@ -344,6 +452,96 @@ export default function AdminPage() {
         {/* Stats Tab */}
         {tab === "stats" && stats && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Grading Health — the single card that answers "is it working
+                and is it winning". Colour flips red when stuck picks appear
+                or when the cron heartbeat is older than 30 min. Sits FIRST
+                so it's the first thing you see on the stats tab. */}
+            <div
+              className={`sm:col-span-2 rounded-xl border p-4 ${
+                stats.stuck14 > 0 ||
+                (stats.heartbeatMinutesAgo != null &&
+                  stats.heartbeatMinutesAgo > 30)
+                  ? "bg-[#2a0f14] border-[#ff5c7a]/40"
+                  : "bg-[#0a0e17] border-[#232a3d]/50"
+              }`}
+            >
+              <div className="flex items-center gap-2 mb-3">
+                <Activity className="w-4 h-4 text-[#2ee6a6]" />
+                <h3 className="text-sm font-bold text-white">
+                  Grading Health · Last 14 days
+                </h3>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs text-[#8e9ab5]">
+                <div>
+                  <div className="text-[10px] uppercase tracking-wide text-[#8e9ab5]/70">
+                    Record
+                  </div>
+                  <div className="text-lg font-mono text-white">
+                    {stats.wins14}-{stats.losses14}
+                    {stats.winRate14 != null && (
+                      <span className="text-xs text-[#8e9ab5] ml-1">
+                        ({stats.winRate14.toFixed(1)}%)
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase tracking-wide text-[#8e9ab5]/70">
+                    Units
+                  </div>
+                  <div
+                    className={`text-lg font-mono ${
+                      stats.units14 >= 0 ? "text-[#2ee6a6]" : "text-[#ff5c7a]"
+                    }`}
+                  >
+                    {stats.units14 >= 0 ? "+" : ""}
+                    {stats.units14}u
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase tracking-wide text-[#8e9ab5]/70">
+                    Pending
+                  </div>
+                  <div className="text-lg font-mono text-white">
+                    {stats.pending14}
+                    {stats.stuck14 > 0 && (
+                      <span className="text-xs text-[#ff5c7a] ml-1">
+                        ({stats.stuck14} stuck &gt;3d)
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase tracking-wide text-[#8e9ab5]/70">
+                    Cron
+                  </div>
+                  <div
+                    className={`text-lg font-mono ${
+                      stats.heartbeatMinutesAgo == null ||
+                      stats.heartbeatMinutesAgo > 30
+                        ? "text-[#ff5c7a]"
+                        : "text-white"
+                    }`}
+                  >
+                    {stats.heartbeatMinutesAgo != null
+                      ? `${stats.heartbeatMinutesAgo}m ago`
+                      : "unknown"}
+                  </div>
+                </div>
+              </div>
+              {stats.wins14 + stats.losses14 === 0 && (
+                <p className="text-[11px] text-[#ff5c7a] mt-3">
+                  No graded picks in 14 days — grading may be stopped.
+                </p>
+              )}
+              {stats.stuck14 > 0 && (
+                <p className="text-[11px] text-[#ff5c7a] mt-3">
+                  {stats.stuck14} pick(s) pending on slates older than 3 days —
+                  box-score fetch or the grader may be failing.
+                </p>
+              )}
+            </div>
+
             <div className="rounded-xl bg-[#0a0e17] border border-[#232a3d]/50 p-4">
               <div className="flex items-center gap-2 mb-3">
                 <Brain className="w-4 h-4 text-[#a855f7]" />
