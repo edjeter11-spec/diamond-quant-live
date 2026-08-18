@@ -108,6 +108,55 @@ export async function logDailyPicks(
 }
 
 /**
+ * Void pending picks whose games were postponed/cancelled and will never
+ * reach "final". Without this, `settlePendingPicks` (which only matches
+ * against completed games) never touches these rows — they sat as
+ * "pending" in daily_picks_log forever, with no win/loss/push and no
+ * alert anywhere. Marked "void" (not loss), 0 profit, same idempotent
+ * eq("result","pending") guard as settlement.
+ */
+export async function voidCancelledPicks(
+  cancelledGames: CompletedGame[],
+): Promise<{ voided: number; failed: number }> {
+  if (!supabaseAdmin || cancelledGames.length === 0)
+    return { voided: 0, failed: 0 };
+
+  const { data: pending } = await supabaseAdmin
+    .from("daily_picks_log")
+    .select("*")
+    .eq("result", "pending")
+    .limit(500);
+
+  if (!pending || pending.length === 0) return { voided: 0, failed: 0 };
+
+  let voided = 0;
+  let failed = 0;
+  for (const pick of pending) {
+    const game =
+      findGame(pick.game ?? "", cancelledGames) ??
+      findGame(pick.pick_text ?? "", cancelledGames);
+    if (!game) continue;
+
+    const { error } = await supabaseAdmin
+      .from("daily_picks_log")
+      .update({
+        result: "void",
+        settled_at: new Date().toISOString(),
+        profit_units: 0,
+      })
+      .eq("id", pick.id)
+      .eq("result", "pending");
+    if (error) {
+      console.error(`daily_picks_log void failed for ${pick.id}:`, error.message);
+      failed++;
+    } else {
+      voided++;
+    }
+  }
+  return { voided, failed };
+}
+
+/**
  * Grade pending picks whose games have finished.
  *
  * Uses the same abbreviation/last-name-aware matcher (`findGame`) and

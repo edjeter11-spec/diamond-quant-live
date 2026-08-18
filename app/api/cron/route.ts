@@ -17,6 +17,7 @@ import { cloudGet, cloudSet } from "@/lib/supabase/client";
 import {
   logDailyPicks,
   settlePendingPicks,
+  voidCancelledPicks,
   etDateString,
   type LoggedPick,
 } from "@/lib/bot/track-record";
@@ -89,6 +90,20 @@ export async function GET(req: Request) {
         awayScore: g.teams?.away?.score ?? 0,
         homePitcher: g.teams?.home?.probablePitcher?.fullName ?? "TBD",
         awayPitcher: g.teams?.away?.probablePitcher?.fullName ?? "TBD",
+      }));
+
+    // Postponed/cancelled games never reach "final" — without voiding their
+    // picks separately, they sat "pending" in daily_picks_log forever (see
+    // voidCancelledPicks doc comment).
+    const cancelledGames = games
+      .filter((g: any) => getGameStatus(g) === "cancelled")
+      .map((g: any) => ({
+        homeTeam: g.teams?.home?.team?.name,
+        awayTeam: g.teams?.away?.team?.name,
+        homeAbbrev: g.teams?.home?.team?.abbreviation ?? "",
+        awayAbbrev: g.teams?.away?.team?.abbreviation ?? "",
+        homeScore: 0,
+        awayScore: 0,
       }));
 
     // ── NBA Prop Brain: Post-Game Audit ──
@@ -348,6 +363,15 @@ export async function GET(req: Request) {
       trackSettled = settled;
     } catch (e) {
       console.error("track settle error:", e);
+    }
+
+    // ── Track Record: void picks on postponed/cancelled games ──
+    let trackVoided = 0;
+    try {
+      const { voided } = await voidCancelledPicks(cancelledGames);
+      trackVoided = voided;
+    } catch (e) {
+      console.error("track void error:", e);
     }
 
     // ── User Bets: auto-settle every user's pending bets ──
@@ -1964,7 +1988,7 @@ export async function GET(req: Request) {
         completedToday: completedGames.length,
       },
       nbaProps: { ...nbaAudit, ghostCommitted: nbaGhostCommitted },
-      trackRecord: { settled: trackSettled },
+      trackRecord: { settled: trackSettled, voided: trackVoided },
       userBets: userBetsSettled,
       botSettle,
       pickGen,

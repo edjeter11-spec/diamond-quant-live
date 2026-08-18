@@ -377,7 +377,7 @@ export default async function TrackRecordPage() {
             brain has actually surfaced and that have since been graded — not a
             backtest or simulation.
           </p>
-          <ProfitChart sport="nba" />
+          <ProfitChart sport="mlb" />
           {/* Same MIN_SAMPLE threshold as the tiles above, not a separate number. */}
           {stats.totalGraded > 0 && thin && (
             <p className="text-[10px] text-amber/70 mt-2 text-center">

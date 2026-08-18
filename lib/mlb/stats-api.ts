@@ -143,11 +143,28 @@ export async function fetchStandings(): Promise<any> {
 }
 
 // Parse game status
-export function getGameStatus(game: MLBGame): "pre" | "live" | "final" {
+export function getGameStatus(
+  game: MLBGame,
+): "pre" | "live" | "final" | "cancelled" {
   const code = game.status.statusCode;
   if (code === "F" || code === "O" || code === "DR") return "final";
   if (code === "I" || code === "MA" || code === "MF") return "live";
+  if (isCancelledOrPostponed(game)) return "cancelled";
   return "pre";
+}
+
+// Games that will never reach "final" today — rained out, postponed with no
+// same-day makeup, or outright cancelled. Without this, picks tied to these
+// games matched nothing in `completedGames` (final-only) and sat as
+// "pending" in daily_picks_log forever: no win, no loss, no push, no alert.
+// MLB's statusCode for these isn't stable/documented, so match on the
+// human-readable detailedState instead (Postponed / Cancelled / Suspended
+// without a same-day resumption all read this way).
+export function isCancelledOrPostponed(game: MLBGame): boolean {
+  const s = (game.status.detailedState || "").toLowerCase();
+  return (
+    s.includes("postponed") || s.includes("cancelled") || s.includes("canceled")
+  );
 }
 
 // Format team abbreviation from full name

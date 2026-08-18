@@ -81,13 +81,14 @@ WHERE email = 'you@example.com';
 
 ## 6. Cron verification
 
-`vercel.json` has a 30-min cron on `/api/cron`. It handles:
+`vercel.json` has a 15-min cron on `/api/cron`. It handles:
 
 - Completed-game logging
 - NBA prop brain settlement
 - Daily smart-picks generation (7-11 UTC window)
 - Daily Discord recap (3-7 UTC window)
-- Track-record settlement of daily picks
+- Track-record settlement of daily picks (wins/losses/pushes, plus voiding
+  picks on postponed/cancelled games so they don't sit "pending" forever)
 - Weekly NBA brain evolution (Sunday 0-2 UTC)
 
 Check it ran by looking at Vercel → Functions → Logs for `/api/cron`.
