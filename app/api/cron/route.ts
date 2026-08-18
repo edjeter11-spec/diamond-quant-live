@@ -1456,10 +1456,21 @@ export async function GET(req: Request) {
       // until every pick in it is graded (so an in-progress today never posts
       // early), and the atomic app_state claim means grading the same slate
       // from two ticks can't double-post.
+      // Sweep TODAY plus the previous 4 slates, not just today+yesterday.
+      // A pick that misses grading inside a 2-day window (transient box-score
+      // fetch failure, or the findPlayer bug fixed 2026-08-17) was stranded
+      // FOREVER, and a stranded pick holds its whole batch's recap — that's
+      // how 4 picks blocked 3 nights of recaps on 08-13..08-15. Sweeping 5
+      // days is idempotent and near-free: post-results exits per batch on the
+      // already-posted marker, so a settled slate costs one app_state read.
       const et = etDateString();
+      const priorSlates = [1, 2, 3, 4].map((d) => {
+        const t = new Date(Date.now() - d * 24 * 3600 * 1000);
+        return etDateString(t);
+      });
       const recapTargets = ["mlb", "nba", "nfl"].flatMap((s) => [
         { s, slate: et }, // today — posts as soon as its games finish
-        { s, slate: undefined }, // yesterday (previousSlate default)
+        ...priorSlates.map((slate) => ({ s, slate })),
       ]);
       const recapRaw = await Promise.all(
         recapTargets.map(async ({ s, slate }) => {

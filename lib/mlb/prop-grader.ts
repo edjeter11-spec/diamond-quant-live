@@ -89,19 +89,50 @@ function stripAccents(s: string): string {
 }
 
 /** Last-name match, same forgiving approach the NBA grader uses. */
+// Normalize a name for comparison: accents stripped, punctuation (hyphens,
+// periods, apostrophes) collapsed to spaces, lowercased. "Hao-Yu Lee" and
+// "Hao Yu Lee" compare equal; "J.P. Crawford" and "JP Crawford" compare equal.
+function normName(s: string): string {
+  return stripAccents(s)
+    .toLowerCase()
+    .replace(/[-.']/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function findPlayer(name: string, lines: PlayerLine[]): PlayerLine | null {
   // Guard: a total/spread row carries a null name; without this the
   // stripAccents(null) below throws and crashes the whole recap batch.
   if (!name) return null;
-  const last = (n: string) =>
-    stripAccents(n).toLowerCase().trim().split(/\s+/).slice(-1)[0];
-  const target = last(name);
+
+  // Exact match first — the vast majority of picks resolve here.
+  const target = normName(name);
+  const exact = lines.find((p) => normName(p.name) === target);
+  if (exact) return exact;
+
+  // Fallback: STRICT last-name equality plus first-name first-3 agreement,
+  // same shape the NBA grader uses. The old code did substring matching on
+  // the last name across the WHOLE slate's players — so "Davis Martin"
+  // matched any "Martínez" (stripAccents("martinez").includes("martin") is
+  // true), "Hao-Yu Lee" matched "Jung Hoo Lee", "Logan Webb" matched any
+  // other Webb. When the wrong player was the wrong TYPE (batter for a
+  // pitcher prop) gradeProp returned null and the pick sat ungraded forever,
+  // which held its whole batch's recap: this stranded 4 picks and blocked
+  // 3 nights of recaps on 2026-08-13..15. When the wrong player was the
+  // right type it would have silently graded the WRONG player's stats.
+  const tParts = target.split(" ");
+  if (tParts.length < 2) return null;
+  const tFirst = tParts[0];
+  const tLast = tParts[tParts.length - 1];
   return (
-    lines.find(
-      (p) =>
-        stripAccents(p.name).toLowerCase().includes(target) ||
-        stripAccents(name).toLowerCase().includes(last(p.name)),
-    ) ?? null
+    lines.find((p) => {
+      const parts = normName(p.name).split(" ");
+      if (parts.length < 2) return false;
+      return (
+        parts[parts.length - 1] === tLast &&
+        parts[0].slice(0, 3) === tFirst.slice(0, 3)
+      );
+    }) ?? null
   );
 }
 

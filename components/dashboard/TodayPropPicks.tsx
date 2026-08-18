@@ -22,6 +22,7 @@ import { usePremium } from "@/lib/hooks/usePremium";
 import { fetchWithAuth } from "@/lib/supabase/fetch-with-auth";
 import InfoTip from "@/components/ui/InfoTip";
 import PlayerAvatar from "@/components/ui/PlayerAvatar";
+import TeamLogo from "@/components/ui/TeamLogo";
 import PropDetail from "@/components/dashboard/PropDetail";
 
 interface RawProp {
@@ -923,14 +924,22 @@ export default function TodayPropPicks({
                   className={`w-full px-3 sm:px-4 py-2 sm:py-2.5 min-h-[44px] sm:min-h-0 flex items-center gap-2.5 hover:bg-gunmetal/20 active:bg-slate/50 active:scale-[0.98] transition-all text-left touch-manipulation ${rowTint}`}
                 >
                   {/* Player photo — 28px both breakpoints; the 40px mobile
-                      variant was inflating every row's height */}
+                      variant was inflating every row's height.
+                      Moneylines carry a TEAM in playerName, so they render
+                      the team crest — PlayerAvatar would show person-style
+                      initials ("KR" for Kansas City Royals), which is the
+                      "no logo next to the Royals" bug. */}
                   <div className="flex-shrink-0">
-                    <PlayerAvatar
-                      name={p.playerName}
-                      playerId={p.playerId}
-                      sport={sport}
-                      size={28}
-                    />
+                    {p.market === "moneyline" ? (
+                      <TeamLogo team={p.playerName} size={28} />
+                    ) : (
+                      <PlayerAvatar
+                        name={p.playerName}
+                        playerId={p.playerId}
+                        sport={sport}
+                        size={28}
+                      />
+                    )}
                   </div>
                   {/* Side icon — smaller, secondary on mobile. Moneylines
                       have no over/under, so they get a distinct sharp-edge
