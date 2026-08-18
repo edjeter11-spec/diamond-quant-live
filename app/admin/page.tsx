@@ -265,8 +265,14 @@ export default function AdminPage() {
             </p>
           </div>
           <Link
+            href="/admin/board"
+            className="ml-auto text-xs bg-[#facc15]/10 text-[#facc15] border border-[#facc15]/30 rounded-lg px-3 py-1.5 hover:bg-[#facc15]/20 transition-colors"
+          >
+            Best Board
+          </Link>
+          <Link
             href="/admin/picks"
-            className="ml-auto text-xs bg-[#4cc9ff]/10 text-[#4cc9ff] border border-[#4cc9ff]/30 rounded-lg px-3 py-1.5 hover:bg-[#4cc9ff]/20 transition-colors"
+            className="text-xs bg-[#4cc9ff]/10 text-[#4cc9ff] border border-[#4cc9ff]/30 rounded-lg px-3 py-1.5 hover:bg-[#4cc9ff]/20 transition-colors"
           >
             Create Pick
           </Link>

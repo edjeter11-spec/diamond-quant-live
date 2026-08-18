@@ -147,7 +147,10 @@ export async function voidCancelledPicks(
       .eq("id", pick.id)
       .eq("result", "pending");
     if (error) {
-      console.error(`daily_picks_log void failed for ${pick.id}:`, error.message);
+      console.error(
+        `daily_picks_log void failed for ${pick.id}:`,
+        error.message,
+      );
       failed++;
     } else {
       voided++;
