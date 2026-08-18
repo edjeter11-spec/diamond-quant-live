@@ -442,29 +442,42 @@ async function recapBatch(
         ) &&
         allLines.length > 0;
       if (thisGameFinal && wholeSlateFinal && p.player_name) {
-        // Accent-insensitive, same as the graders — an exact-string check
-        // here is what turned a real Peña loss into a void.
+        // The pick's game is final and gradeProp STILL returned null. That
+        // covers two cases, and both are permanent — waiting cannot fix
+        // either, and an ungraded pick holds its whole batch's recap:
+        //   1. Player absent from every final boxscore — scratch/bench.
+        //   2. Player IS in a final boxscore but has no gradeable stat —
+        //      dressed but never batted (PA=0), or the stat block for this
+        //      market is missing. (Hao-Yu Lee, 2026-08-14: in the boxscore,
+        //      zero plate appearances, stranded for 3 days under the old
+        //      absent-only rule.)
+        // A sportsbook voids both: stake back, excluded from the record.
+        // The `played` distinction is kept only for the log line.
         const target = deaccent(String(p.player_name));
         const played = allLines.some((l) => deaccent(l.name) === target);
-        if (!played) {
-          await supabaseAdmin!
-            .from("manual_picks")
-            .update({
-              result: "void",
-              settled_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-            })
-            .eq("id", p.id)
-            .is("result", null);
-          graded.push({
-            text: p.pick_text,
+        console.log(
+          `post-results: voiding ungradeable pick "${p.pick_text}" — ` +
+            (played
+              ? "player in final boxscore but no gradeable stat (no PA / missing block)"
+              : "player absent from all final boxscores (scratch)"),
+        );
+        await supabaseAdmin!
+          .from("manual_picks")
+          .update({
             result: "void",
-            actualValue: null,
-            line: p.line ?? null,
-            odds: p.odds ?? null,
-          });
-          continue;
-        }
+            settled_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", p.id)
+          .is("result", null);
+        graded.push({
+          text: p.pick_text,
+          result: "void",
+          actualValue: null,
+          line: p.line ?? null,
+          odds: p.odds ?? null,
+        });
+        continue;
       }
       ungraded++;
       continue;
