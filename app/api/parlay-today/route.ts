@@ -375,7 +375,11 @@ export async function GET(req: NextRequest) {
             // Ks / Hits / Total Bases were even fetched, so "best value today"
             // could never be an RBI, run, steal or HR prop no matter how the
             // model priced it.
-            { key: "pitcher_strikeouts", label: "Ks" },
+            //
+            // pitcher_strikeouts BENCHED (2026-08-20) — same evidence as the
+            // pinned board: published K picks 4-14 (-11.3u), model 48.0% on
+            // 250 graded K predictions. A parlay leg from a coin-flip-or-
+            // worse model poisons the whole ticket.
             { key: "batter_hits", label: "Hits" },
             { key: "batter_total_bases", label: "Total Bases" },
             { key: "batter_home_runs", label: "HR" },

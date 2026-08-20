@@ -144,13 +144,23 @@ const MARKET_LABEL: Record<string, string> = {
   player_reception_yds: "Rec Yds",
 };
 
+// pitcher_strikeouts is BENCHED from the public board (2026-08-20).
+// Not a hunch — measured on our own graded history:
+//   published K picks:  4-14 (22%), -11.3u — the ENTIRE board deficit
+//     (board overall was -10.4u; every other market nets ~+0.9u combined)
+//   model K predictions: 48.0% hit rate across 250 graded rows — worse
+//     than a coin flip, vs 57.6% on 505 batter_hits rows
+// The K projector is systematically overconfident (calibration drifts
+// -10 to -19 points in every probability bucket). Until the K model is
+// re-fit against that history, publishing its picks is donating units.
+// pitcher_outs stays: 65.9% on 41 graded — small sample but not broken.
 const MLB_MARKETS = [
-  "pitcher_strikeouts",
   "batter_hits",
   "batter_total_bases",
   "batter_home_runs",
   "batter_rbis",
   "batter_runs_scored",
+  "pitcher_outs",
 ];
 const NBA_MARKETS = ["player_points", "player_rebounds", "player_assists"];
 // Attempt-count markets (player_pass_attempts, player_rush_attempts) are
@@ -589,8 +599,17 @@ export async function GET(req: NextRequest) {
     // empty one) is a valid, truthful output.
     // Bullpen-game tell imported from lib/prop-filters.ts so parlay-today
     // shares the exact same thresholds. See that module's header.
+    //
+    // MAX_PROP_ODDS: published plus-money props are 0-4 all-time (-4.0u).
+    // A prop priced above +120 with fairProb >= 50 means our model strongly
+    // disagrees with the book, and the measured calibration says that
+    // disagreement is usually the MODEL being wrong (it overestimates by
+    // 10-19 points in every bucket). Longshot props stay available in the
+    // admin Best Board pool; they just don't get published.
+    const MAX_PROP_ODDS = 120;
     const qualified = (p: PinnedProp) =>
       !isBullpenPitcherProp(p.market, p.line) &&
+      p.odds <= MAX_PROP_ODDS &&
       p.evPercentage >= MIN_EV &&
       p.evPercentage <= MAX_EV &&
       p.fairProb >= MIN_PROB;
