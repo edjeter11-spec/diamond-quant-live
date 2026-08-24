@@ -1659,9 +1659,23 @@ export async function GET(req: Request) {
               ? `edge_alerts_${etDateString()}`
               : `edge_alerts_${scanSport}_${etDateString()}`;
           const seenE = new Set((await cloudGet<string[]>(edgeKey, [])) ?? []);
-          const freshE = edges.filter(
-            (e) => !seenE.has(`${e.gameId}|${e.side}|${e.book}`),
-          );
+          // Alert relevance window: only games starting within 48h. The NFL
+          // feed prices next week's slate days ahead, and a "sharp edge"
+          // ping 11 days before kickoff is noise — the line moves a hundred
+          // times before it matters. Far-out edges still show on the admin
+          // Best Board via edge-scan directly; this gates only the Discord
+          // ping. Dedupe is per-day, so a still-standing edge re-alerts once
+          // it enters the window. MLB unaffected in practice — its feed
+          // rarely prices beyond ~36h out.
+          const ALERT_WINDOW_MS = 48 * 3600 * 1000;
+          const freshE = edges.filter((e) => {
+            const t = Date.parse(e.commence);
+            return (
+              Number.isFinite(t) &&
+              t - Date.now() <= ALERT_WINDOW_MS &&
+              !seenE.has(`${e.gameId}|${e.side}|${e.book}`)
+            );
+          });
           if (freshE.length === 0) {
             edgeAlertStatus[scanSport] = { count: 0 };
             continue;
