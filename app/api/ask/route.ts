@@ -77,7 +77,7 @@ export async function GET(req: NextRequest) {
       " ",
     )
     .replace(
-      /\b(is|are|does|do|will|can|should|get|gets|getting|got|a|an|the|to|for|on|tonight|today|hit|hits|hitting|dinger|dingers|hr|rbi|rbis|run|runs|score|scores|tb|bases|ks?|outs?|innings?|over|under|favou?red|favorite|likely|odds|chance|chances|prop|line|bet|play|thoughts?|about|what|how|think)\b/gi,
+      /\b(is|are|does|do|will|can|should|get|gets|getting|got|a|an|the|to|for|on|tonight|today|hit|hits|hitting|dinger|dingers|hr|rbi|rbis|run|runs|score|scores|tb|bases|ks?|outs?|innings?|over|under|favou?red|favorite|likely|odds|chance|chances|prop|line|bet|play|thoughts?|about|what|how|think|hows|how's|looking|look|looks|doing|going|feeling|feel|vibes?|man|rn|ngl)\b/gi,
       " ",
     )
     .replace(/[?.!,]/g, " ")
@@ -94,12 +94,23 @@ export async function GET(req: NextRequest) {
   if (nameGuess) attempts.push(nameGuess);
   for (let i = 1; i < words.length && i <= 4; i++)
     attempts.push(words.slice(i).join(" "));
+  // Names LEAD as often as they trail ("hows aaron judge looking tonight"),
+  // so front-only dropping misses them whenever an unanticipated filler word
+  // trails the name. Try the leading 2-3 words and front-drops with the last
+  // word shaved too. Dedup below keeps the search-count bounded either way.
+  if (words.length >= 3) attempts.push(words.slice(0, 2).join(" "));
+  if (words.length >= 4) attempts.push(words.slice(0, 3).join(" "));
+  for (let i = 0; i < words.length - 2 && i <= 3; i++)
+    attempts.push(words.slice(i, -1).join(" "));
   if (words.length >= 2) attempts.push(words.slice(-2).join(" "));
   if (words.length >= 1) attempts.push(words[words.length - 1]);
 
   let player: any = null;
+  const tried = new Set<string>();
   for (const attempt of attempts) {
     if (attempt.trim().length < 3) continue;
+    if (tried.has(attempt)) continue;
+    tried.add(attempt);
     const search = await j(
       `${SITE}/api/mlb-player-search?q=${encodeURIComponent(attempt)}`,
     );

@@ -141,7 +141,11 @@ export async function GET(req: NextRequest) {
         ? "no NFL picks published today"
         : "published",
     last7dRecord: record?.record
-      ? { ...record.record, winRatePct: record.winRate ?? null }
+      ? {
+          ...record.record,
+          winRatePct: record.winRate ?? null,
+          unitsNet: record.unitsNet ?? null,
+        }
       : null,
     sharpEdgesVsPinnacle: {
       mlb: mlbEdges,
@@ -163,8 +167,9 @@ Answer using ONLY the data below. Hard rules:
 - Distinguish clearly between an OFFICIAL board pick (published, with a price) and a model read that did NOT make the board — a good probability at a bad price is not a pick.
 - If they ask about a player and playerLookup is null, say you couldn't match the name and ask them to try the full name.
 - When you cite a pick or edge, always include the book and price.
+- If they ask how we're doing / the record / this week: lead with last7dRecord as "W-L, +X.Xu over the last 7 days" (unitsNet is units won/lost).
 - Be direct and a little sharp, like a numbers guy at the table — no hype, no "lock of the century", no guarantees. One short honest caveat max, not a lecture.
-- Discord markdown allowed (** bold **, bullet lines). Under 150 words. No greeting, no sign-off.
+- Discord markdown allowed (** bold **, bullet lines). Under 150 words, at most 4 bullets. ALWAYS finish with a complete sentence — never stop mid-list.
 
 DATA:
 ${JSON.stringify(context)}`;
@@ -175,7 +180,7 @@ ${JSON.stringify(context)}`;
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.5, maxOutputTokens: 1200 },
+        generationConfig: { temperature: 0.5, maxOutputTokens: 2048 },
       }),
       signal: AbortSignal.timeout(20000),
     });
