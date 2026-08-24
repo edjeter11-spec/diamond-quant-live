@@ -699,6 +699,14 @@ export async function GET(req: NextRequest) {
           // Sorted by EV within the qualifying set, so we still take the best
           // priced of the plays that are more likely than not.
           const mlEdges = (d.edges ?? [])
+            // TODAY'S slate only — same contract as every prop on the board.
+            // The NFL feed prices next week's games days ahead, and without
+            // this filter the Aug 24 "board" led with Week 1 moneylines for
+            // games 11 days out, presented exactly like tonight's plays.
+            .filter((e: any) => {
+              const t = Date.parse(e.commence);
+              return Number.isFinite(t) && etDateString(new Date(t)) === today;
+            })
             .filter((e: any) => Number(e.fairProb) >= MIN_PROB)
             .sort((a: any, b: any) => b.evPct - a.evPct)
             .slice(0, 2);
