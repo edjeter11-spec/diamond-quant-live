@@ -7,8 +7,11 @@ export const maxDuration = 30;
 
 const GEMINI_KEY = process.env.GEMINI_API_KEY || "";
 
-// Try models in order — fall back if one is unavailable/deprecated
-const MODELS = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"];
+// Try models in order — fall back if one is unavailable/deprecated.
+// 2.0-flash and 1.5-flash were RETIRED by Google (404 as of Aug 2026), so
+// they were dead weight in this list; 3.6-flash is current, 2.5-flash
+// still answers and stays as the fallback.
+const MODELS = ["gemini-3.6-flash", "gemini-2.5-flash"];
 
 export async function POST(req: Request) {
   // Same guard pair as game-summary-ai. This route can hit Gemini THREE

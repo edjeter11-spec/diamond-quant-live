@@ -10,8 +10,13 @@ import { isAllowedOrigin } from "@/lib/supabase/server-auth";
 import { checkIpRateLimit } from "@/lib/ip-rate-limit";
 
 const GEMINI_KEY = process.env.GEMINI_API_KEY ?? "";
+// gemini-2.0-flash was RETIRED by Google (404s as of Aug 2026), which made
+// this route silently return {summary:null} on every call — the client
+// hides the section on null, so game previews just vanished with no error
+// anywhere. 3.6-flash thinking tokens count against maxOutputTokens, hence
+// the larger budget for the same 2-3 sentence output.
 const GEMINI_URL =
-  "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
+  "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent";
 
 export const dynamic = "force-dynamic";
 
@@ -86,7 +91,7 @@ Write a 2-3 sentence preview that: (1) highlights the most important matchup fac
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.65, maxOutputTokens: 175 },
+        generationConfig: { temperature: 0.65, maxOutputTokens: 700 },
       }),
     });
 

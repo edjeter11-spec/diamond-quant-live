@@ -29,8 +29,13 @@ export const maxDuration = 30;
 
 const SITE = "https://diamond-quant-live.vercel.app";
 const GEMINI_KEY = process.env.GEMINI_API_KEY ?? "";
+// gemini-2.0-flash was RETIRED by Google (404s as of Aug 2026) — that
+// outage was silent everywhere it was used because every caller degrades
+// to null on error. 3.6-flash is the current flash tier; its thinking
+// tokens count against maxOutputTokens, so budgets need ~3x headroom over
+// the visible answer length.
 const GEMINI_URL =
-  "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
+  "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent";
 
 const j = async (u: string, ms = 12000) => {
   try {
@@ -170,7 +175,7 @@ ${JSON.stringify(context)}`;
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.5, maxOutputTokens: 350 },
+        generationConfig: { temperature: 0.5, maxOutputTokens: 1200 },
       }),
       signal: AbortSignal.timeout(20000),
     });
