@@ -1621,81 +1621,110 @@ export async function GET(req: Request) {
       // is usually gone by the time anyone taps the notification. Deduped per
       // (game, side, book) per day like the line alerts above.
       try {
+        // Sports to scan. MLB every tick as before. NFL added for the season
+        // (2026-08-24) but ONLY on days the NFL actually has games — the scan
+        // costs 2 Odds API credits per sport per tick, and burning ~192
+        // credits on an empty NFL Tuesday helps nobody. Game-day detection
+        // reuses the lineup gate's cached first-pitch lookup (ESPN, 1h TTL),
+        // so this adds no extra upstream calls on quiet days.
+        const scanSports: Array<"mlb" | "nfl"> = ["mlb"];
+        try {
+          const { getFirstPitchHourET } = await import("@/lib/lineup-gate");
+          if ((await getFirstPitchHourET("nfl")) !== null)
+            scanSports.push("nfl");
+        } catch {}
+
         // all=1 → every game's current Pinnacle fair prob rides along, which
-        // the CLV tracker below uses to snapshot closers. Same 2 credits.
-        const es = await fetch(`${origin}/api/edge-scan?minEv=2&all=1`, {
-          signal: AbortSignal.timeout(20000),
-        });
-        const esData = await es.json();
-        const edges: any[] = Array.isArray(esData?.edges) ? esData.edges : [];
-        const anchors: any[] = Array.isArray(esData?.anchors)
-          ? esData.anchors
-          : [];
-        if (edges.length > 0) {
-          const edgeKey = `edge_alerts_${etDateString()}`;
+        // the CLV tracker below uses to snapshot closers. Anchors from every
+        // scanned sport pool into one list — Odds API game ids are globally
+        // unique, so the CLV matcher below can't cross-wire sports.
+        const anchors: any[] = [];
+        const edgeAlertStatus: Record<string, unknown> = {};
+        for (const scanSport of scanSports) {
+          const es = await fetch(
+            `${origin}/api/edge-scan?minEv=2&all=1&sport=${scanSport}`,
+            { signal: AbortSignal.timeout(20000) },
+          );
+          const esData = await es.json();
+          const edges: any[] = Array.isArray(esData?.edges) ? esData.edges : [];
+          if (Array.isArray(esData?.anchors)) anchors.push(...esData.anchors);
+          if (edges.length === 0) {
+            edgeAlertStatus[scanSport] = { count: 0 };
+            continue;
+          }
+          // MLB keeps its historical key shape (continuity with the existing
+          // dedupe sets); other sports get a sport-scoped key.
+          const edgeKey =
+            scanSport === "mlb"
+              ? `edge_alerts_${etDateString()}`
+              : `edge_alerts_${scanSport}_${etDateString()}`;
           const seenE = new Set((await cloudGet<string[]>(edgeKey, [])) ?? []);
           const freshE = edges.filter(
             (e) => !seenE.has(`${e.gameId}|${e.side}|${e.book}`),
           );
-          if (freshE.length > 0) {
-            const r = await fetch(`${process.env.BOT_API_URL}/alert`, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "x-bot-secret": process.env.BOT_API_SECRET ?? "",
-              },
-              body: JSON.stringify({
-                sport: "mlb",
-                // Send the RAW numbers and let the bot format them. The bot
-                // owns presentation (book display names, plain-English
-                // phrasing); duplicating that here meant Discord showed
-                // "williamhill_us h2h" and "de-vigged fair price", which is
-                // jargon to everyone who isn't us.
-                items: freshE.map((e) => ({
-                  game_id: e.gameId,
-                  kind: "edge",
-                  bookmaker: e.book,
-                  market: "moneyline",
-                  game: e.game,
-                  side: e.side,
-                  price: e.price,
-                  sharpPrice: e.pinnaclePrice,
-                  evPct: e.evPct,
-                  fairProb: e.fairProb,
-                  commence: e.commence,
-                  // Kept for older bot builds that render `ourLine`/`note`.
-                  ourLine: `${e.side} ${e.price > 0 ? "+" : ""}${e.price}`,
-                  note: `+${e.evPct}% EV vs sharp price`,
-                })),
-              }),
-              signal: AbortSignal.timeout(15000),
-            });
-            discordDaily.edgeAlerts = { sent: r.ok, count: freshE.length };
-            if (r.ok) {
-              await cloudSet(edgeKey, [
-                ...seenE,
-                ...freshE.map((e) => `${e.gameId}|${e.side}|${e.book}`),
-              ]);
-              // Log every SENT alert for CLV grading below. The alert price
-              // is the entry price; the last Pinnacle fair before first pitch
-              // is the closer.
-              const log = (await cloudGet<any[]>("edge_clv_log", [])) ?? [];
-              for (const e of freshE)
-                log.push({
-                  id: `${e.gameId}|${e.side}|${e.book}`,
-                  at: new Date().toISOString(),
-                  commence: e.commence,
-                  game: e.game,
-                  side: e.side,
-                  book: e.book,
-                  price: e.decimalPrice,
-                  alertEv: e.evPct,
-                  alertFair: e.fairProb,
-                });
-              await cloudSet("edge_clv_log", log.slice(-300));
-            }
+          if (freshE.length === 0) {
+            edgeAlertStatus[scanSport] = { count: 0 };
+            continue;
+          }
+          const r = await fetch(`${process.env.BOT_API_URL}/alert`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-bot-secret": process.env.BOT_API_SECRET ?? "",
+            },
+            body: JSON.stringify({
+              sport: scanSport,
+              // Send the RAW numbers and let the bot format them. The bot
+              // owns presentation (book display names, plain-English
+              // phrasing); duplicating that here meant Discord showed
+              // "williamhill_us h2h" and "de-vigged fair price", which is
+              // jargon to everyone who isn't us.
+              items: freshE.map((e) => ({
+                game_id: e.gameId,
+                kind: "edge",
+                bookmaker: e.book,
+                market: "moneyline",
+                game: e.game,
+                side: e.side,
+                price: e.price,
+                sharpPrice: e.pinnaclePrice,
+                evPct: e.evPct,
+                fairProb: e.fairProb,
+                commence: e.commence,
+                // Kept for older bot builds that render `ourLine`/`note`.
+                ourLine: `${e.side} ${e.price > 0 ? "+" : ""}${e.price}`,
+                note: `+${e.evPct}% EV vs sharp price`,
+              })),
+            }),
+            signal: AbortSignal.timeout(15000),
+          });
+          edgeAlertStatus[scanSport] = { sent: r.ok, count: freshE.length };
+          if (r.ok) {
+            await cloudSet(edgeKey, [
+              ...seenE,
+              ...freshE.map((e) => `${e.gameId}|${e.side}|${e.book}`),
+            ]);
+            // Log every SENT alert for CLV grading below. The alert price
+            // is the entry price; the last Pinnacle fair before first pitch
+            // is the closer. Sport-agnostic: NFL alerts get the same CLV
+            // scoreboard treatment as MLB.
+            const log = (await cloudGet<any[]>("edge_clv_log", [])) ?? [];
+            for (const e of freshE)
+              log.push({
+                id: `${e.gameId}|${e.side}|${e.book}`,
+                at: new Date().toISOString(),
+                commence: e.commence,
+                game: e.game,
+                side: e.side,
+                book: e.book,
+                price: e.decimalPrice,
+                alertEv: e.evPct,
+                alertFair: e.fairProb,
+              });
+            await cloudSet("edge_clv_log", log.slice(-300));
           }
         }
+        discordDaily.edgeAlerts = edgeAlertStatus;
 
         // ── CLV capture ──
         // The scoreboard that tells us within ~50 alerts whether the scanner

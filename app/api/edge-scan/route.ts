@@ -33,7 +33,19 @@ export const maxDuration = 30;
 // public board.
 // ──────────────────────────────────────────────────────────
 
-const BASE = "https://api.the-odds-api.com/v4/sports/baseball_mlb/odds";
+// Sport-parameterized (2026-08-24, NFL-season prep). This scanner is the
+// only CLV-proven +EV source in the app, and it was hardcoded to MLB —
+// meaning the NFL launch would have had zero sharp-anchor coverage even
+// though Pinnacle prices NFL more heavily than any other US sport.
+// Unknown sports 400 rather than silently scanning baseball.
+const SPORT_KEYS: Record<string, string> = {
+  mlb: "baseball_mlb",
+  nfl: "americanfootball_nfl",
+  nba: "basketball_nba",
+  nhl: "icehockey_nhl",
+};
+const baseFor = (sportKey: string) =>
+  `https://api.the-odds-api.com/v4/sports/${sportKey}/odds`;
 
 // Books whose lag we monetise. Wider than the 3-book display list on purpose:
 // an off-market price at ANY legal US book is actionable here, because the
@@ -94,6 +106,18 @@ export async function GET(req: NextRequest) {
   // is captured for alerts whose edge has since evaporated, which is exactly
   // the case that must be recorded honestly rather than dropped.
   const wantAll = searchParams.get("all") === "1";
+
+  const sport = (searchParams.get("sport") ?? "mlb").toLowerCase();
+  const sportKey = SPORT_KEYS[sport];
+  if (!sportKey)
+    return NextResponse.json(
+      {
+        ok: false,
+        error: `sport must be one of ${Object.keys(SPORT_KEYS).join(", ")}`,
+      },
+      { status: 400 },
+    );
+  const BASE = baseFor(sportKey);
 
   const apiKey = getApiKey();
   if (!apiKey)
@@ -235,6 +259,7 @@ export async function GET(req: NextRequest) {
   edges.sort((a, b) => b.evPct - a.evPct);
   return NextResponse.json({
     ok: true,
+    sport,
     anchor: "pinnacle",
     devig: "power",
     minEv,

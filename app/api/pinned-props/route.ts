@@ -674,11 +674,20 @@ export async function GET(req: NextRequest) {
     // the moneyline model at -7.69% ROI), so they belong at the TOP of the
     // board, not as filler. Failures are swallowed: a board of props alone
     // is the previous behaviour, which is an acceptable fallback.
-    if (!isNBA && !isNFL) {
+    // Extended to NFL for the season (edge-scan is sport-parameterized now).
+    // NFL prop markets are gated to a paid Odds API tier, so at kickoff the
+    // NFL board's ONLY honest picks are these sharp-anchor moneylines —
+    // which is fine: they're the one CLV-proven source in the app, and
+    // Pinnacle prices NFL deeper than any US sport. NBA/NHL stay off until
+    // their seasons get the same verification.
+    if (sport === "mlb" || sport === "nfl") {
       try {
-        const r = await fetch(`${baseUrl}/api/edge-scan?minEv=0.5`, {
-          signal: AbortSignal.timeout(15000),
-        });
+        const r = await fetch(
+          `${baseUrl}/api/edge-scan?minEv=0.5&sport=${sport}`,
+          {
+            signal: AbortSignal.timeout(15000),
+          },
+        );
         if (r.ok) {
           const d = await r.json();
           // Apply the SAME probability floor props get (MIN_PROB). Moneylines
