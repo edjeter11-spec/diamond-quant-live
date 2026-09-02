@@ -1668,12 +1668,16 @@ export async function GET(req: Request) {
           // it enters the window. MLB unaffected in practice — its feed
           // rarely prices beyond ~36h out.
           const ALERT_WINDOW_MS = 48 * 3600 * 1000;
+          // Key carries market + point now that the scanner returns spreads
+          // and totals: "Over" at 44.5 and "Over" at 47.5 are different bets.
+          const edgeId = (e: any) =>
+            `${e.gameId}|${e.market ?? "moneyline"}|${e.side}|${e.point ?? ""}|${e.book}`;
           const freshE = edges.filter((e) => {
             const t = Date.parse(e.commence);
             return (
               Number.isFinite(t) &&
               t - Date.now() <= ALERT_WINDOW_MS &&
-              !seenE.has(`${e.gameId}|${e.side}|${e.book}`)
+              !seenE.has(edgeId(e))
             );
           });
           if (freshE.length === 0) {
@@ -1697,7 +1701,9 @@ export async function GET(req: Request) {
                 game_id: e.gameId,
                 kind: "edge",
                 bookmaker: e.book,
-                market: "moneyline",
+                market: e.market ?? "moneyline",
+                point: e.point ?? null,
+                label: e.label ?? `${e.side} ML`,
                 game: e.game,
                 side: e.side,
                 price: e.price,
@@ -1714,16 +1720,18 @@ export async function GET(req: Request) {
           });
           edgeAlertStatus[scanSport] = { sent: r.ok, count: freshE.length };
           if (r.ok) {
-            await cloudSet(edgeKey, [
-              ...seenE,
-              ...freshE.map((e) => `${e.gameId}|${e.side}|${e.book}`),
-            ]);
+            await cloudSet(edgeKey, [...seenE, ...freshE.map(edgeId)]);
             // Log every SENT alert for CLV grading below. The alert price
             // is the entry price; the last Pinnacle fair before first pitch
             // is the closer. Sport-agnostic: NFL alerts get the same CLV
-            // scoreboard treatment as MLB.
+            // scoreboard treatment as MLB. Moneylines only — the anchors the
+            // close-capture matches against are h2h fair probs keyed by
+            // team, so a spread/total entry would sit with no close forever
+            // and drag the scoreboard's completeness stat down.
             const log = (await cloudGet<any[]>("edge_clv_log", [])) ?? [];
-            for (const e of freshE)
+            for (const e of freshE.filter(
+              (x) => (x.market ?? "moneyline") === "moneyline",
+            ))
               log.push({
                 id: `${e.gameId}|${e.side}|${e.book}`,
                 at: new Date().toISOString(),

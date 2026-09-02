@@ -153,10 +153,10 @@ export async function GET(req: NextRequest) {
     for (const e of edges.edges) {
       rows.push({
         source: "sharp-ml",
-        pick: `${e.side} ML`,
+        pick: e.label ?? `${e.side} ML`,
         game: e.game ?? "",
-        market: "moneyline",
-        line: null,
+        market: e.market ?? "moneyline",
+        line: e.point ?? null,
         side: null,
         odds: e.price ?? null,
         bookmaker: e.book ?? null,

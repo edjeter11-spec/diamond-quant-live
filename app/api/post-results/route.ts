@@ -281,7 +281,13 @@ async function recapBatch(
     // the 2026-08-05 mlb_parlay batch: 2 moneylines never graded, so the
     // parlay recap never posted even though the props batch (same slate)
     // went out fine.
-    if (p.market === "moneyline") {
+    // Spreads and totals (sharp-anchor picks since 2026-09-02) settle off the
+    // same final score — margin vs the stored line, or combined points vs it.
+    if (
+      p.market === "moneyline" ||
+      p.market === "spread" ||
+      p.market === "total"
+    ) {
       const [pickAway, pickHome] = String(p.game).split(" @ ");
       const norm = deaccent;
       // Require BOTH sides of the matchup to line up, not either one. A
@@ -309,15 +315,50 @@ async function recapBatch(
         ungraded++;
         continue;
       }
-      const homeWon = final.homeScore > final.awayScore;
-      const awayWon = final.awayScore > final.homeScore;
-      const pushed = final.homeScore === final.awayScore;
-      const pickedTeam = String(p.pick_text ?? "").replace(/\s*ML$/i, "");
+      // pick_text: "Team ML" | "Team -3.5" | "Away @ Home Over 47.5".
+      const pickedTeam = String(p.pick_text ?? "")
+        .replace(/\s*ML$/i, "")
+        .replace(/\s[+-]?\d+(?:\.\d+)?$/, "");
       const pickedHome =
-        pickedTeam && norm(pickHome).includes(norm(pickedTeam));
+        p.market !== "total" &&
+        pickedTeam &&
+        norm(pickHome).includes(norm(pickedTeam));
       const pickedAway =
-        pickedTeam && norm(pickAway).includes(norm(pickedTeam));
-      const won = (pickedHome && homeWon) || (pickedAway && awayWon);
+        p.market !== "total" &&
+        pickedTeam &&
+        norm(pickAway).includes(norm(pickedTeam));
+
+      let won = false;
+      let pushed = false;
+      let actualValue: number;
+      if (p.market === "total") {
+        const total = final.homeScore + final.awayScore;
+        const line = Number(p.line);
+        actualValue = total;
+        pushed = total === line;
+        won = p.side === "under" ? total < line : total > line;
+      } else if (p.market === "spread") {
+        const margin = pickedHome
+          ? final.homeScore - final.awayScore
+          : final.awayScore - final.homeScore;
+        const covered = margin + Number(p.line);
+        actualValue = margin;
+        pushed = covered === 0;
+        won = covered > 0;
+      } else {
+        const homeWon = final.homeScore > final.awayScore;
+        const awayWon = final.awayScore > final.homeScore;
+        pushed = final.homeScore === final.awayScore;
+        won = Boolean((pickedHome && homeWon) || (pickedAway && awayWon));
+        actualValue = pickedHome ? final.homeScore : final.awayScore;
+      }
+      // A spread/moneyline whose team didn't match either side can't be
+      // graded against this game — leave it pending rather than call it a
+      // loss on a name mismatch.
+      if (p.market !== "total" && !pickedHome && !pickedAway) {
+        ungraded++;
+        continue;
+      }
 
       const stake = Number(p.units ?? 1);
       const result = pushed ? "push" : won ? "win" : "loss";
@@ -331,7 +372,7 @@ async function recapBatch(
         .from("manual_picks")
         .update({
           result,
-          actual_value: pickedHome ? final.homeScore : final.awayScore,
+          actual_value: actualValue,
           profit_units: Math.round(profit * 100) / 100,
           settled_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
@@ -549,7 +590,10 @@ async function recapBatch(
   // from what the batch actually settled, matching the section split in
   // publish-daily.
   const isParlay = batchKey.includes("_parlay_");
-  const mlCount = picks.filter((p) => p.market === "moneyline").length;
+  const mlCount = picks.filter(
+    (p) =>
+      p.market === "moneyline" || p.market === "spread" || p.market === "total",
+  ).length;
   const propCount = picks.length - mlCount;
   const kind = isParlay
     ? "PARLAY"

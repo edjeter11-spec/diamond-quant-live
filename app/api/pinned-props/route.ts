@@ -707,22 +707,38 @@ export async function GET(req: NextRequest) {
               const t = Date.parse(e.commence);
               return Number.isFinite(t) && etDateString(new Date(t)) === today;
             })
-            .filter((e: any) => Number(e.fairProb) >= MIN_PROB)
+            // MIN_PROB is a longshot guard: it exists so a +275 dog at 27%
+            // can't headline the board. A spread or total is ~50/50 by
+            // construction (Pinnacle's main line), so the same floor would
+            // exclude essentially every one of them for no reason — those
+            // get a looser sanity floor that only rejects off-main alt lines.
+            .filter((e: any) => {
+              const m = e.market ?? "moneyline";
+              return Number(e.fairProb) >= (m === "moneyline" ? MIN_PROB : 45);
+            })
             .sort((a: any, b: any) => b.evPct - a.evPct)
-            .slice(0, 2);
+            .slice(0, 3);
           for (const e of mlEdges) {
+            const market: string = e.market ?? "moneyline";
             picks.unshift({
-              key: `ml-${e.gameId}-${e.side}`,
-              // The TEAM, not a player. Consumers must branch on
-              // market === "moneyline" before rendering this as a player prop
-              // — publish-daily and TodayPropPicks already do. `side`/`line`
-              // are structurally meaningless here and exist only because the
-              // PinnedProp shape requires them; nothing may render them.
-              playerName: e.side,
+              key: `${market}-${e.gameId}-${e.side}-${e.point ?? 0}`,
+              // A TEAM (moneyline/spread) or the matchup (total), not a
+              // player. Consumers must branch on market before rendering
+              // this as a player prop — publish-daily and TodayPropPicks do.
+              // For a moneyline `side`/`line` are structurally meaningless
+              // and exist only because the PinnedProp shape requires them;
+              // for a spread `line` is the point; for a total `side` is
+              // over/under and `line` the number.
+              playerName: market === "total" ? e.game : e.side,
               team: e.game,
-              side: "over",
-              line: 0,
-              market: "moneyline",
+              side:
+                market === "total"
+                  ? String(e.side).toLowerCase() === "under"
+                    ? "under"
+                    : "over"
+                  : "over",
+              line: typeof e.point === "number" ? e.point : 0,
+              market,
               odds: e.price,
               // Kept so the Discord post can say "Pinnacle has -125" — the
               // reference price is the whole reason the edge exists, and
@@ -735,7 +751,12 @@ export async function GET(req: NextRequest) {
               marketEv: e.evPct,
               beatsMarket: true,
               score: 100 + e.evPct, // always outranks a -EV prop
-              label: "Moneyline",
+              label:
+                market === "spread"
+                  ? "Spread"
+                  : market === "total"
+                    ? "Total"
+                    : "Moneyline",
               usesBrain: false,
             });
           }

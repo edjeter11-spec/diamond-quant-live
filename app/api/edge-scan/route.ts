@@ -62,7 +62,32 @@ const US_BOOKS = [
   "fanatics",
 ];
 
-type Outcome = { name: string; price: number }; // decimal odds
+type Outcome = { name: string; price: number; point?: number }; // decimal odds
+
+// Odds API market key → the name every consumer of this scanner uses
+// (manual_picks.market, the board, the bot). Spreads and totals were added
+// 2026-09-02 for the NFL season: the sharp-anchor method is market-agnostic
+// (de-vig Pinnacle's two-way price, compare US books at the SAME number),
+// and for football the spread and total ARE the market — a moneyline-only
+// scan would have ignored two-thirds of Pinnacle's NFL pricing. A point
+// mismatch (Pinnacle -3.5, DK -3) is never compared: different numbers are
+// different bets and can't be priced against each other without a push
+// chart, so the scan simply skips that book for that side.
+const MARKET_NAME: Record<string, "moneyline" | "spread" | "total"> = {
+  h2h: "moneyline",
+  spreads: "spread",
+  totals: "total",
+};
+const ALL_MARKETS = Object.keys(MARKET_NAME);
+
+const signed = (n: number) => (n > 0 ? `+${n}` : `${n}`);
+function edgeLabel(market: string, side: string, point?: number) {
+  if (market === "spread" && typeof point === "number")
+    return `${side} ${signed(point)}`;
+  if (market === "total" && typeof point === "number")
+    return `${side} ${point}`;
+  return `${side} ML`;
+}
 type Game = {
   id: string;
   commence_time: string;
@@ -119,6 +144,14 @@ export async function GET(req: NextRequest) {
     );
   const BASE = baseFor(sportKey);
 
+  // markets=h2h restricts to moneylines (cheaper: Odds API bills per
+  // market per region). Default scans all three.
+  const marketsParam = (searchParams.get("markets") ?? ALL_MARKETS.join(","))
+    .split(",")
+    .map((m) => m.trim())
+    .filter((m) => m in MARKET_NAME);
+  const marketKeys = marketsParam.length ? marketsParam : ["h2h"];
+
   const apiKey = getApiKey();
   if (!apiKey)
     return NextResponse.json(
@@ -128,10 +161,13 @@ export async function GET(req: NextRequest) {
 
   const fetchOdds = async (params: string): Promise<Game[] | null> => {
     try {
-      const r = await fetch(`${BASE}/?apiKey=${apiKey}&markets=h2h&${params}`, {
-        signal: AbortSignal.timeout(15000),
-        cache: "no-store",
-      });
+      const r = await fetch(
+        `${BASE}/?apiKey=${apiKey}&markets=${marketKeys.join(",")}&${params}`,
+        {
+          signal: AbortSignal.timeout(15000),
+          cache: "no-store",
+        },
+      );
       return r.ok ? await r.json() : null;
     } catch {
       return null;
@@ -185,75 +221,109 @@ export async function GET(req: NextRequest) {
     return true;
   });
 
+  // Same point or nothing. `undefined === undefined` covers moneylines.
+  const samePoint = (a?: number, b?: number) =>
+    (a == null && b == null) || (a != null && b != null && a === b);
+
   for (const game of preGame) {
     const pin = game.bookmakers.find((b) => b.key === "pinnacle");
-    const h2h = pin?.markets.find((m) => m.key === "h2h");
-    const home = h2h?.outcomes.find((o) => o.name === game.home_team);
-    const away = h2h?.outcomes.find((o) => o.name === game.away_team);
-    if (!home || !away) continue;
-    anchored++;
-
-    const [fairHome, fairAway] = devig(1 / home.price, 1 / away.price);
-    const fair: Record<string, number> = {
-      [game.home_team]: fairHome,
-      [game.away_team]: fairAway,
-    };
-    if (wantAll)
-      anchors.push({
-        gameId: game.id,
-        commence: game.commence_time,
-        game: `${game.away_team} @ ${game.home_team}`,
-        fair: {
-          [game.home_team]: Math.round(fairHome * 1000) / 10,
-          [game.away_team]: Math.round(fairAway * 1000) / 10,
-        },
-      });
-
+    if (!pin) continue;
     const usGame = softById.get(game.id);
-    if (!usGame) continue;
+    const gameLabel = `${game.away_team} @ ${game.home_team}`;
+    let gameAnchored = false;
 
-    // Track the best US price per side so the edge names a specific,
-    // beatable number — "bet Cubs ML" without a book and price is useless.
-    for (const side of [game.home_team, game.away_team]) {
-      let best: { book: string; price: number } | null = null;
-      for (const b of usGame.bookmakers) {
-        const o = b.markets
-          .find((m) => m.key === "h2h")
-          ?.outcomes.find((x) => x.name === side);
-        if (o && (!best || o.price > best.price))
-          best = { book: b.key, price: o.price };
-      }
-      if (!best) continue;
-      const ev = (fair[side] * best.price - 1) * 100;
-      // Upper sanity bound, mirroring MAX_EV on the props board.
-      //
-      // A liquid MLB moneyline priced 8%+ better than Pinnacle's de-vigged
-      // number does not happen — every instance during development was bad
-      // data (in-play prices, a stale line, a mismatched game), never a real
-      // edge. The pre-game filter above removes the known cause; this is the
-      // backstop so the NEXT bad-data mode degrades to a short board instead
-      // of a confident garbage pick at the top of it.
-      if (ev > MAX_SANE_EV) {
-        skippedInsane++;
+    for (const mk of marketKeys) {
+      const market = MARKET_NAME[mk];
+      const pinMarket = pin.markets.find((m) => m.key === mk);
+      // Pinnacle posts one main line per market; a two-way pair is the unit
+      // of de-vigging. Anything without exactly two priced sides is skipped
+      // — a partial or alt-line payload can't be de-vigged honestly.
+      const pair = pinMarket?.outcomes?.filter((o) => o.price > 1) ?? [];
+      if (pair.length !== 2) continue;
+      const [a, b] = pair;
+      // For h2h the sides must be the two teams; for spreads/totals the two
+      // outcomes are complementary by construction (±point / Over-Under).
+      if (
+        mk === "h2h" &&
+        !(
+          [a.name, b.name].includes(game.home_team) &&
+          [a.name, b.name].includes(game.away_team)
+        )
+      )
         continue;
-      }
-      if (ev >= minEv) {
-        edges.push({
+      gameAnchored = true;
+
+      const [fairA, fairB] = devig(1 / a.price, 1 / b.price);
+      const fairBy = new Map<string, number>([
+        [a.name, fairA],
+        [b.name, fairB],
+      ]);
+      const pinPriceBy = new Map<string, number>([
+        [a.name, a.price],
+        [b.name, b.price],
+      ]);
+      // CLV anchors stay moneyline-only: the close-capture matcher keys on
+      // team name, and a scoreboard mixing market types would be unreadable.
+      if (wantAll && mk === "h2h")
+        anchors.push({
           gameId: game.id,
           commence: game.commence_time,
-          game: `${game.away_team} @ ${game.home_team}`,
-          side,
-          book: best.book,
-          price: decToAmerican(best.price),
-          decimalPrice: best.price,
-          fairProb: Math.round(fair[side] * 1000) / 10,
-          pinnaclePrice: decToAmerican(
-            side === game.home_team ? home.price : away.price,
-          ),
-          evPct: Math.round(ev * 100) / 100,
+          game: gameLabel,
+          fair: {
+            [a.name]: Math.round(fairA * 1000) / 10,
+            [b.name]: Math.round(fairB * 1000) / 10,
+          },
         });
+      if (!usGame) continue;
+
+      // Track the best US price per side so the edge names a specific,
+      // beatable number — "bet Cubs ML" without a book and price is useless.
+      for (const side of [a, b]) {
+        let best: { book: string; price: number } | null = null;
+        for (const bk of usGame.bookmakers) {
+          const o = bk.markets
+            .find((m) => m.key === mk)
+            ?.outcomes.find(
+              (x) => x.name === side.name && samePoint(x.point, side.point),
+            );
+          if (o && (!best || o.price > best.price))
+            best = { book: bk.key, price: o.price };
+        }
+        if (!best) continue;
+        const fair = fairBy.get(side.name)!;
+        const ev = (fair * best.price - 1) * 100;
+        // Upper sanity bound, mirroring MAX_EV on the props board.
+        //
+        // A liquid moneyline priced 8%+ better than Pinnacle's de-vigged
+        // number does not happen — every instance during development was
+        // bad data (in-play prices, a stale line, a mismatched game), never
+        // a real edge. The pre-game filter above removes the known cause;
+        // this is the backstop so the NEXT bad-data mode degrades to a
+        // short board instead of a confident garbage pick at the top of it.
+        if (ev > MAX_SANE_EV) {
+          skippedInsane++;
+          continue;
+        }
+        if (ev >= minEv) {
+          edges.push({
+            gameId: game.id,
+            commence: game.commence_time,
+            game: gameLabel,
+            market,
+            side: side.name,
+            point: side.point ?? null,
+            label: edgeLabel(market, side.name, side.point),
+            book: best.book,
+            price: decToAmerican(best.price),
+            decimalPrice: best.price,
+            fairProb: Math.round(fair * 1000) / 10,
+            pinnaclePrice: decToAmerican(pinPriceBy.get(side.name)!),
+            evPct: Math.round(ev * 100) / 100,
+          });
+        }
       }
     }
+    if (gameAnchored) anchored++;
   }
 
   edges.sort((a, b) => b.evPct - a.evPct);
@@ -262,6 +332,7 @@ export async function GET(req: NextRequest) {
     sport,
     anchor: "pinnacle",
     devig: "power",
+    markets: marketKeys.map((k) => MARKET_NAME[k]),
     minEv,
     gamesAnchored: anchored,
     // Surfaced, not swallowed: a sudden jump in either counter is the signal

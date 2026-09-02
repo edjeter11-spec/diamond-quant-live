@@ -104,6 +104,18 @@ const OVER_ONLY_MARKETS = new Set(["batter_home_runs"]);
 
 /** 15 -> "3pm", 10 -> "10am". Returns null for a missing/invalid hour so the
  *  caller can fall back to wording that doesn't quote a time. */
+// Sharp-anchor picks come in three market shapes (edge-scan): a moneyline
+// and a spread name a TEAM, a total names the matchup. None is a player prop.
+const isTeamPick = (m: string) => m === "moneyline" || m === "spread";
+const isSharpPick = (m: string) => isTeamPick(m) || m === "total";
+const signedNum = (n: number) => (n > 0 ? `+${n}` : `${n}`);
+function sharpPickLabel(p: { market: string; side: string; line: number }) {
+  if (p.market === "spread") return `Spread ${signedNum(Number(p.line))}`;
+  if (p.market === "total")
+    return `${p.side === "under" ? "UNDER" : "OVER"} ${p.line} Total`;
+  return "Moneyline";
+}
+
 function formatHourET(h: number | undefined): string | null {
   if (typeof h !== "number" || !Number.isFinite(h)) return null;
   const hour = ((Math.trunc(h) % 24) + 24) % 24;
@@ -706,8 +718,8 @@ export default function TodayPropPicks({
   // side; a team ML has none), so counting them here reported "2 Overs" on a
   // board of one ML and one prop. Count props only, and report the ML count
   // separately so the header stops calling a team moneyline a player prop.
-  const mlCount = picks.filter((p) => p.market === "moneyline").length;
-  const propOnly = picks.filter((p) => p.market !== "moneyline");
+  const mlCount = picks.filter((p) => isSharpPick(p.market)).length;
+  const propOnly = picks.filter((p) => !isSharpPick(p.market));
   const overCount = propOnly.filter((p) => p.side === "over").length;
 
   // Running W/L tally across all visible picks — updates live as games grade.
@@ -788,7 +800,7 @@ export default function TodayPropPicks({
                     and the header must not imply it is. */}
                 {mlCount > 0 && (
                   <>
-                    {mlCount} moneyline{mlCount !== 1 ? "s" : ""}
+                    {mlCount} sharp line{mlCount !== 1 ? "s" : ""}
                     {propOnly.length > 0 ? " · " : ""}
                   </>
                 )}
@@ -930,8 +942,12 @@ export default function TodayPropPicks({
                       initials ("KR" for Kansas City Royals), which is the
                       "no logo next to the Royals" bug. */}
                   <div className="flex-shrink-0">
-                    {p.market === "moneyline" ? (
+                    {isTeamPick(p.market) ? (
                       <TeamLogo team={p.playerName} size={28} />
+                    ) : p.market === "total" ? (
+                      <div className="w-7 h-7 rounded-full bg-gold/10 text-gold flex items-center justify-center">
+                        <Zap className="w-4 h-4" />
+                      </div>
                     ) : (
                       <PlayerAvatar
                         name={p.playerName}
@@ -946,14 +962,14 @@ export default function TodayPropPicks({
                       badge instead of an up/down arrow. */}
                   <div
                     className={`hidden sm:flex w-7 h-7 rounded-lg items-center justify-center flex-shrink-0 ${
-                      p.market === "moneyline"
+                      isSharpPick(p.market)
                         ? "bg-gold/10 text-gold"
                         : p.side === "over"
                           ? "bg-neon/10 text-neon"
                           : "bg-amber/10 text-amber"
                     }`}
                   >
-                    {p.market === "moneyline" ? (
+                    {isSharpPick(p.market) ? (
                       <Zap className="w-4 h-4" />
                     ) : p.side === "over" ? (
                       <ArrowUpRight className="w-4 h-4" />
@@ -983,7 +999,7 @@ export default function TodayPropPicks({
                       )}
                       {result === "live" &&
                         actual != null &&
-                        p.market !== "moneyline" && (
+                        !isSharpPick(p.market) && (
                           <span className="ml-1.5 text-[10px] font-bold text-electric">
                             LIVE {actual}
                           </span>
@@ -991,12 +1007,12 @@ export default function TodayPropPicks({
                     </p>
                     {/* Pick — bold, mobile gets inline side icon for hierarchy */}
                     <p
-                      className={`text-xs font-bold leading-tight mt-0.5 flex items-center gap-1 ${p.market === "moneyline" ? "text-gold" : p.side === "over" ? "text-neon" : "text-amber"}`}
+                      className={`text-xs font-bold leading-tight mt-0.5 flex items-center gap-1 ${isSharpPick(p.market) ? "text-gold" : p.side === "over" ? "text-neon" : "text-amber"}`}
                     >
-                      {p.market === "moneyline" ? (
+                      {isSharpPick(p.market) ? (
                         <>
                           <Zap className="w-3.5 h-3.5 sm:hidden" />
-                          Moneyline
+                          {sharpPickLabel(p)}
                         </>
                       ) : (
                         <>
@@ -1011,7 +1027,7 @@ export default function TodayPropPicks({
                       )}
                       {actual != null &&
                         boxRow?.gameStatus === "final" &&
-                        p.market !== "moneyline" && (
+                        !isSharpPick(p.market) && (
                           <span className="ml-1 text-mercury/70 font-normal">
                             (final: {actual})
                           </span>
@@ -1036,7 +1052,9 @@ export default function TodayPropPicks({
                         <span className="text-[10px] text-mercury/60 truncate">
                           {p.market === "moneyline"
                             ? `${p.bookmaker} · ${p.fairProb}% to win`
-                            : `${p.bookmaker} · ${p.fairProb}% to hit`}
+                            : p.market === "spread"
+                              ? `${p.bookmaker} · ${p.fairProb}% to cover`
+                              : `${p.bookmaker} · ${p.fairProb}% to hit`}
                         </span>
                       </div>
                       <div className="flex items-center gap-1 flex-wrap">

@@ -117,7 +117,45 @@ export async function GET(req: NextRequest) {
       wantsEdges ? edgesFor("nfl") : Promise.resolve([]),
     ]);
 
+  // Second wave — sources that only make sense once we know the team (or
+  // that the question is football). Injuries: the full feed is ~280 players,
+  // so it's trimmed to the matched player's team. Weather: null on an
+  // off-day or a dome, and that null is passed through rather than dropped
+  // so the model can say "no weather factor" instead of guessing.
+  const team: string | null = askData?.ok
+    ? (askData.player?.team ?? null)
+    : null;
+  const asksNfl =
+    /\b(nfl|football|touchdown|\btd\b|spread|week\s*\d)/i.test(q) ||
+    (nflBoard?.picks?.length ?? 0) > 0;
+  const [weather, injuries, nflNews] = await Promise.all([
+    team
+      ? j(`${SITE}/api/weather?team=${encodeURIComponent(team)}`, 8000)
+      : null,
+    team ? j(`${SITE}/api/mlb-injuries`, 10000) : null,
+    asksNfl ? j(`${SITE}/api/nfl-news`, 8000) : null,
+  ]);
+  const teamInjuries = team
+    ? (
+        (injuries?.injuries ?? []).find(
+          (t: any) => String(t.team).toLowerCase() === team.toLowerCase(),
+        )?.players ?? []
+      )
+        .slice(0, 6)
+        .map((p: any) => ({ name: p.name, pos: p.position, status: p.status }))
+    : null;
+
   const context = {
+    teamWeather: team ? { team, weather: weather?.weather ?? null } : null,
+    teamInjuries,
+    nflNews: nflNews?.items
+      ? nflNews.items.slice(0, 8).map((n: any) => ({
+          type: n.type,
+          player: n.player,
+          team: n.team || null,
+          status: n.status,
+        }))
+      : null,
     today: new Date().toLocaleDateString("en-US", {
       timeZone: "America/New_York",
       month: "short",
@@ -166,7 +204,8 @@ Answer using ONLY the data below. Hard rules:
 - NEVER invent a stat, price, pick, player, or game. If the data doesn't cover what they asked, say so plainly and offer the closest thing you DO have (e.g. today's board, the player's form).
 - Distinguish clearly between an OFFICIAL board pick (published, with a price) and a model read that did NOT make the board — a good probability at a bad price is not a pick.
 - If they ask about a player and playerLookup is null, say you couldn't match the name and ask them to try the full name.
-- When you cite a pick or edge, always include the book and price.
+- When you cite a pick or edge, always include the book and price. Edges carry a market (moneyline / spread / total) and a ready-made label like "Bengals -3.5" or "Over 47.5" — use the label verbatim.
+- Injuries and weather are context, not picks: mention them only when they bear on what was asked.
 - If they ask how we're doing / the record / this week: lead with last7dRecord as "W-L, +X.Xu over the last 7 days" (unitsNet is units won/lost).
 - Be direct and a little sharp, like a numbers guy at the table — no hype, no "lock of the century", no guarantees. One short honest caveat max, not a lecture.
 - Discord markdown allowed (** bold **, bullet lines). Under 150 words, at most 4 bullets. ALWAYS finish with a complete sentence — never stop mid-list.

@@ -195,8 +195,22 @@ export async function POST(req: NextRequest) {
       // titled "TODAY'S PLAYER PROPS" and numbered them in one list — so a
       // team moneyline read as a player prop: "Red Sox ML" under player props.
       // Same picks, honestly labelled.
-      const mlPicks = picks.filter((p) => p.market === "moneyline");
-      const propPicks = picks.filter((p) => p.market !== "moneyline");
+      // Sharp-anchor picks now come in three market shapes (moneyline,
+      // spread, total — see edge-scan). None of them is a player prop.
+      const isSharpMarket = (m: string) =>
+        m === "moneyline" || m === "spread" || m === "total";
+      const signed = (n: number) => (n > 0 ? `+${n}` : `${n}`);
+      // "Bengals ML" / "Bengals -3.5" / "Bucs @ Bengals Over 47.5" — the
+      // same text feeds the Discord post and the manual_picks.pick_text the
+      // grader later parses (it strips a trailing signed number for spreads).
+      const sharpText = (p: any) =>
+        p.market === "spread"
+          ? `${p.playerName} ${signed(Number(p.line))}`
+          : p.market === "total"
+            ? `${p.playerName} ${p.side === "under" ? "Under" : "Over"} ${p.line}`
+            : `${p.playerName} ML`;
+      const mlPicks = picks.filter((p) => isSharpMarket(p.market));
+      const propPicks = picks.filter((p) => !isSharpMarket(p.market));
 
       // Discord hype pass. Per the messaging playbook: probabilities INLINE
       // with each pick (previously listed separately at the bottom, so readers
@@ -208,7 +222,7 @@ export async function POST(req: NextRequest) {
       const sections: string[] = [];
       if (mlPicks.length > 0) {
         sections.push(
-          "**⚡ SHARP-PRICED MONEYLINES**\n" +
+          "**⚡ SHARP-PRICED LINES**\n" +
             mlPicks
               .map((p, i) => {
                 // Only show the sharp reference if we actually have it — a
@@ -218,7 +232,7 @@ export async function POST(req: NextRequest) {
                   typeof p.pinnaclePrice === "number"
                     ? ` Pinnacle has ${fmtOdds(p.pinnaclePrice)}.`
                     : "";
-                return `**${i + 1}.** ${p.playerName} ML ${fmtOdds(p.odds)} (${p.bookmaker}) —${ref} Edge **+${p.evPercentage?.toFixed(1)}%**.`;
+                return `**${i + 1}.** ${sharpText(p)} ${fmtOdds(p.odds)} (${p.bookmaker}) —${ref} Edge **+${p.evPercentage?.toFixed(1)}%**.`;
               })
               .join("\n"),
         );
@@ -248,7 +262,7 @@ export async function POST(req: NextRequest) {
         mlPicks.length > 0 && propPicks.length > 0
           ? "TODAY'S BOARD"
           : mlPicks.length > 0
-            ? "SHARP MONEYLINES"
+            ? "SHARP LINES"
             : "PLAYER PROPS";
       const emoji =
         sport === "mlb"
@@ -287,21 +301,24 @@ export async function POST(req: NextRequest) {
         // it as market:"player_prop" would send it to the prop grader, which
         // can never settle a team bet. Branch on the pick's own market.
         const rows = picks.map((p) => {
-          const isMl = p.market === "moneyline";
+          const isMl = isSharpMarket(p.market);
+          // Spread/total keep their line (the grader needs the number) and a
+          // total keeps its side; a moneyline has neither.
+          const keepsLine = p.market === "spread" || p.market === "total";
           return {
             created_by: null,
             source: "system",
             sport,
             game: p.team ?? null,
-            market: isMl ? "moneyline" : "player_prop",
+            market: isMl ? p.market : "player_prop",
             market_key: isMl ? null : p.market,
             player_name: isMl ? null : p.playerName,
-            line: isMl ? null : p.line,
-            side: isMl ? null : p.side,
+            line: isMl ? (keepsLine ? p.line : null) : p.line,
+            side: isMl ? (p.market === "total" ? p.side : null) : p.side,
             odds: p.odds,
             bookmaker: p.bookmaker,
             pick_text: isMl
-              ? `${p.playerName} ML`
+              ? sharpText(p)
               : `${p.playerName} ${p.side === "over" ? "Over" : "Under"} ${p.line} ${MARKET_LABEL[p.market] ?? p.market}`,
             units: 1,
             confidence: "Lock",
