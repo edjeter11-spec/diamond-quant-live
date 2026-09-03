@@ -287,6 +287,19 @@ export default function WarRoom() {
       // Odds + analysis load in parallel after scores
       const [oddsRes, analysisRes] = await Promise.all([oddsP, analysisP]);
       let oddsGames = oddsRes.games ?? [];
+      // NFL: the odds feed prices the ENTIRE season (272 games), and every
+      // downstream consumer — Locks, Longshots, Edge Finder, the "tonight /
+      // tomorrow" chips — assumes a day's slate. Left unfiltered it produced
+      // a "Dec 20 Cowboys ML" lock in September and "272 games" counters.
+      // Keep only the coming week; this week's slate is what the scores
+      // feed carries too.
+      if (currentSport === "nfl") {
+        const horizon = Date.now() + 8 * 24 * 3600 * 1000;
+        oddsGames = oddsGames.filter((g: any) => {
+          const t = Date.parse(g.commenceTime);
+          return Number.isFinite(t) && t <= horizon;
+        });
+      }
       setIsDemo(false);
 
       // Backup only for MLB. Was gated on `!isNBA`, so on the NFL and NHL
