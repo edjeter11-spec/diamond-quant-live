@@ -74,7 +74,7 @@ export default function ConversionBanner() {
               <>
                 <span className="font-bold text-gold">{stats.winRate}%</span>{" "}
                 win rate on last {stats.recent} graded prop picks.{" "}
-                <span className="text-mercury/70">
+                <span className="hidden sm:inline text-mercury/70">
                   Pro unlocks all picks + brain stats + parlay builder.
                 </span>
               </>
@@ -83,7 +83,9 @@ export default function ConversionBanner() {
                 <span className="font-bold text-gold">
                   Pro unlocks everything
                 </span>{" "}
-                — full prop list, AI brain stats, parlay builder, arb alerts.{" "}
+                <span className="hidden sm:inline">
+                  — full prop list, AI brain stats, parlay builder, arb alerts.{" "}
+                </span>
                 <span className="text-mercury/70">7-day free trial.</span>
               </>
             )}

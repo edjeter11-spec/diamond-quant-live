@@ -729,8 +729,10 @@ export default function WarRoom() {
             <div className="min-w-0">
               <h1 className="text-[15px] sm:text-xl font-display font-bold text-silver leading-tight whitespace-nowrap">
                 Quant
+                {/* "Betting" is desktop-only: on a 375px phone the sport
+                    switcher sits right after the wordmark and covered it. */}
                 <span
-                  className={`ml-1 ${currentSport === "nba" ? "text-orange-400" : "text-neon"}`}
+                  className={`hidden sm:inline ml-1 ${currentSport === "nba" ? "text-orange-400" : "text-neon"}`}
                 >
                   Betting
                 </span>
