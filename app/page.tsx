@@ -294,7 +294,19 @@ export default function WarRoom() {
       // Keep only the coming week; this week's slate is what the scores
       // feed carries too.
       if (currentSport === "nfl") {
-        const horizon = Date.now() + 8 * 24 * 3600 * 1000;
+        // Window ends at the LAST kickoff in the scores feed (this week's
+        // slate: Thu → Mon, up to 12 days out early in the week), not a
+        // fixed 8 days — that cut Sunday's games and blanked their lines.
+        const lastKick = Math.max(
+          0,
+          ...scoreGames
+            .map((g: any) => Date.parse(g.startTime))
+            .filter((t: number) => Number.isFinite(t)),
+        );
+        const horizon =
+          lastKick > 0
+            ? lastKick + 6 * 3600 * 1000
+            : Date.now() + 8 * 24 * 3600 * 1000;
         oddsGames = oddsGames.filter((g: any) => {
           const t = Date.parse(g.commenceTime);
           return Number.isFinite(t) && t <= horizon;
