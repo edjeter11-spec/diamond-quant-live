@@ -48,8 +48,13 @@ export default function HeroBanner() {
             ? ({ ...d.record, unitsNet: d.unitsNet ?? null, days } as Rec)
             : null;
         };
+        const isPos = (x: Rec | null) =>
+          !!x && x.graded >= 5 && (x.unitsNet ?? 0) > 0 && x.wins > x.losses;
         let r = await load(7);
-        if (!r || r.graded < 5) r = (await load(30)) ?? r;
+        if (!isPos(r)) {
+          const r30 = await load(30);
+          if (isPos(r30) || !r) r = r30 ?? r;
+        }
         if (!dead) setRec(r);
       } catch {
         if (!dead) setRec(null);
@@ -64,6 +69,16 @@ export default function HeroBanner() {
   // than printing a 0-0, +0.0u record that reads like a broken counter.
   const fresh = rec != null && rec.graded === 0;
   const units = fresh ? null : (rec?.unitsNet ?? null);
+  // The main screen only shows the record when it's worth showing. A red
+  // "-3.0u" as the first thing on the homepage is not a hero, it's a
+  // confession — the full record (good and bad) lives on /track-record.
+  // The window label stays honest about which span is being shown.
+  const showRecord =
+    rec != null &&
+    !fresh &&
+    rec.graded >= 5 &&
+    (rec.unitsNet ?? 0) > 0 &&
+    rec.wins > rec.losses;
   const unitsTone =
     units == null ? "text-silver" : units >= 0 ? "text-neon" : "text-danger";
 
@@ -106,43 +121,62 @@ export default function HeroBanner() {
           </ul>
         </div>
 
-        {/* Right — the record. Three tiles, real numbers. */}
-        <div className="grid grid-cols-3 gap-3 self-center">
-          <Tile
-            label={rec && !fresh ? `Last ${rec.days} days` : "Record"}
-            value={rec && !fresh ? `${rec.wins}-${rec.losses}` : "—"}
-            sub={
-              fresh
-                ? "season opens soon"
-                : rec && rec.pushes > 0
-                  ? `${rec.pushes} push${rec.pushes === 1 ? "" : "es"}`
-                  : "graded picks"
-            }
-            tone="text-silver"
-          />
-          <Tile
-            label="Units"
-            value={
-              units == null
-                ? "—"
-                : `${units >= 0 ? "+" : ""}${units.toFixed(1)}u`
-            }
-            sub="flat 1u stakes"
-            tone={unitsTone}
-          />
-          <Tile
-            label="Settled"
-            value={rec && !fresh ? String(rec.graded) : "—"}
-            sub={
-              fresh
-                ? "first grades after kickoff"
-                : rec && rec.pending > 0
-                  ? `${rec.pending} pending`
-                  : "vs final scores"
-            }
-            tone="text-silver"
-          />
-        </div>
+        {/* Right — the record when it's positive, otherwise what the
+            product does. Three tiles either way. */}
+        {!showRecord ? (
+          <div className="grid grid-cols-3 gap-3 self-center">
+            {FEATURES.map((f) => (
+              <div
+                key={f.text}
+                className="rounded-xl bg-white/[0.03] border border-white/[0.06] px-4 py-3.5"
+              >
+                <div className="w-8 h-8 rounded-lg bg-electric/10 flex items-center justify-center">
+                  <f.icon className="w-4 h-4 text-electric" />
+                </div>
+                <p className="text-xs text-silver font-semibold leading-snug mt-3">
+                  {f.text}
+                </p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-3 gap-3 self-center">
+            <Tile
+              label={rec && !fresh ? `Last ${rec.days} days` : "Record"}
+              value={rec && !fresh ? `${rec.wins}-${rec.losses}` : "—"}
+              sub={
+                fresh
+                  ? "season opens soon"
+                  : rec && rec.pushes > 0
+                    ? `${rec.pushes} push${rec.pushes === 1 ? "" : "es"}`
+                    : "graded picks"
+              }
+              tone="text-silver"
+            />
+            <Tile
+              label="Units"
+              value={
+                units == null
+                  ? "—"
+                  : `${units >= 0 ? "+" : ""}${units.toFixed(1)}u`
+              }
+              sub="flat 1u stakes"
+              tone={unitsTone}
+            />
+            <Tile
+              label="Settled"
+              value={rec && !fresh ? String(rec.graded) : "—"}
+              sub={
+                fresh
+                  ? "first grades after kickoff"
+                  : rec && rec.pending > 0
+                    ? `${rec.pending} pending`
+                    : "vs final scores"
+              }
+              tone="text-silver"
+            />
+          </div>
+        )}
       </div>
     </section>
   );
