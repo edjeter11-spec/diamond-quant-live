@@ -181,7 +181,7 @@ export default function LiveTicker() {
   }, [tickerItems.length, currentSport]);
 
   return (
-    <div className="safe-top w-full bg-bunker border-b border-slate/50 overflow-hidden">
+    <div className="safe-top w-full bg-void/95 border-b border-white/[0.05] overflow-hidden">
       <div className="ticker-wrap">
         <div
           ref={contentRef}

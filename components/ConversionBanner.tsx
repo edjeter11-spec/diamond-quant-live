@@ -65,7 +65,7 @@ export default function ConversionBanner() {
   };
 
   return (
-    <div className="relative px-4 py-2.5 bg-gradient-to-r from-gold/15 via-electric/10 to-purple/10 border-b border-gold/30">
+    <div className="relative px-4 py-2 bg-gold/[0.05] border-b border-gold/15">
       <div className="max-w-6xl mx-auto flex items-center gap-3">
         <Crown className="w-4 h-4 text-gold flex-shrink-0" />
         <div className="flex-1 min-w-0">
@@ -91,7 +91,7 @@ export default function ConversionBanner() {
         </div>
         <Link
           href={user ? "/pricing" : "/pricing"}
-          className="flex items-center justify-center gap-1 min-h-[36px] px-3.5 rounded-lg bg-gradient-to-r from-gold to-yellow-400 text-bunker text-[12px] font-bold hover:scale-[1.04] active:scale-95 shadow-md shadow-gold/30 transition-all flex-shrink-0"
+          className="flex items-center justify-center gap-1 min-h-[36px] px-3.5 rounded-lg bg-gold text-void text-[12px] font-bold hover:brightness-105 active:scale-95 transition-all flex-shrink-0"
         >
           Try Pro Free <span className="hidden sm:inline">→</span>
         </Link>

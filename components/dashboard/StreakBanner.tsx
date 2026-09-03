@@ -67,7 +67,7 @@ export default function StreakBanner() {
   return (
     <Link
       href="/results"
-      className="block relative rounded-xl overflow-hidden border border-gold/40 bg-gradient-to-r from-gold/15 via-neon/10 to-electric/10 hover:from-gold/20 hover:via-neon/15 hover:to-electric/15 transition-all shadow-[0_0_20px_rgba(255,215,0,0.15)] hover:shadow-[0_0_28px_rgba(255,215,0,0.25)] animate-pulse-neon"
+      className="block relative rounded-2xl overflow-hidden glass glass-hover border-gold/20 bg-gradient-to-r from-gold/[0.07] to-transparent transition-all"
     >
       {/* Subtle moving sheen */}
       <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[0.04] to-transparent pointer-events-none" />

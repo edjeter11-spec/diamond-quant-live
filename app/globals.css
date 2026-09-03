@@ -1,51 +1,70 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap");
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* ──────────────────────────────────────────────────────────
+   2026-09 revamp — "terminal luxe"
+   Deeper base, real surface elevation instead of border-on-border, a
+   display face for headings, brighter body text. Token names unchanged so
+   the ~40 dashboard components reskin without edits.
+   ────────────────────────────────────────────────────────── */
 :root {
-  --void: #05070d;
-  --bunker: #0a0e17;
-  --gunmetal: #121727;
-  --neon: #2ee6a6;
-  --electric: #4cc9ff;
-  --gold: #f5c451;
-  --danger: #ff5c7a;
+  --void: #08090c;
+  --bunker: #0e1016;
+  --gunmetal: #151823;
+  --neon: #3ce8a9;
+  --electric: #5ccbff;
+  --gold: #f8c95c;
+  --danger: #ff5f7e;
+  --line: rgba(255, 255, 255, 0.06);
+  --line-strong: rgba(255, 255, 255, 0.1);
 }
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: #232a3d #0a0e17;
+  scrollbar-color: #252a3a transparent;
+  -webkit-tap-highlight-color: transparent;
 }
-
 *::-webkit-scrollbar {
   width: 6px;
+  height: 6px;
 }
 *::-webkit-scrollbar-track {
-  background: #0a0e17;
+  background: transparent;
 }
 *::-webkit-scrollbar-thumb {
-  background: #232a3d;
+  background: #252a3a;
   border-radius: 3px;
 }
 *::-webkit-scrollbar-thumb:hover {
-  background: #323a52;
+  background: #353c52;
 }
 
 html {
   scroll-behavior: smooth;
   -webkit-text-size-adjust: 100%;
 }
+/* A touch more room on desktop: the dashboard is dense and every rem-based
+   size and padding scales with this. Phones keep 16px so nothing crowds. */
+@media (min-width: 1024px) {
+  html {
+    font-size: 16.5px;
+  }
+}
 
 body {
   background: var(--void);
-  color: #e6eaf4;
+  color: #eef1f8;
   font-family:
     "Inter",
     system-ui,
     -apple-system,
     sans-serif;
+  /* Odds, units and records line up in columns everywhere. */
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "cv11", "ss01";
   overflow-x: hidden;
   overscroll-behavior-y: none;
   -webkit-font-smoothing: antialiased;
@@ -53,8 +72,18 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-/* Aurora backdrop — fixed layer so iOS Safari keeps it steady while scrolling.
-   Subtle mint + indigo glows over deep ink navy; replaces the old grid look. */
+/* Headings get the display face. Tight tracking reads as intentional at
+   large sizes; small uppercase section labels keep Inter via .eyebrow. */
+h1,
+h2,
+h3,
+.font-display {
+  font-family: "Space Grotesk", "Inter", system-ui, sans-serif;
+  letter-spacing: -0.02em;
+}
+
+/* Backdrop: one cool glow top-left, one warm top-right, then black. Fixed
+   so iOS Safari keeps it steady while scrolling. */
 body::before {
   content: "";
   position: fixed;
@@ -63,42 +92,29 @@ body::before {
   pointer-events: none;
   background:
     radial-gradient(
-      ellipse 80% 50% at 15% -10%,
-      rgba(46, 230, 166, 0.07),
+      ellipse 70% 45% at 8% -8%,
+      rgba(60, 232, 169, 0.09),
       transparent 60%
     ),
     radial-gradient(
-      ellipse 70% 55% at 90% 5%,
-      rgba(76, 110, 245, 0.08),
+      ellipse 60% 40% at 95% -5%,
+      rgba(92, 203, 255, 0.07),
       transparent 55%
-    ),
-    radial-gradient(
-      ellipse 90% 60% at 50% 110%,
-      rgba(76, 201, 255, 0.05),
-      transparent 60%
     ),
     var(--void);
 }
 
-/* Better focus ring — accessibility + polish */
 *:focus-visible {
-  outline: 2px solid rgba(76, 201, 255, 0.6);
+  outline: 2px solid rgba(92, 203, 255, 0.7);
   outline-offset: 2px;
   border-radius: 6px;
 }
-/* Don't double-up rings on form inputs that already have rings */
 input:focus-visible,
 textarea:focus-visible,
 select:focus-visible {
   outline: none;
 }
 
-/* Tap highlight removed (looks bad on dark theme) */
-* {
-  -webkit-tap-highlight-color: transparent;
-}
-
-/* Respect user motion preference — kill scale-ups + animations for those who need it */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -108,14 +124,8 @@ select:focus-visible {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
-
-  /* The ticker is CONTENT, not decoration, so it can't just be frozen.
-     The blanket rule above ran its animation once in 0.01ms, which snapped
-     the strip straight to translateX(-50%) and left it parked there — on a
-     phone with Reduce Motion enabled (a very common setting) the banner
-     looked permanently broken/blank. Stop the animation entirely, reset the
-     transform so the strip sits at its natural position, and let the user
-     scroll it horizontally instead. */
+  /* The ticker is CONTENT, not decoration: stop it and let it scroll
+     horizontally instead of snapping to a parked, half-blank strip. */
   .ticker-content {
     animation: none !important;
     transform: none !important;
@@ -129,113 +139,174 @@ select:focus-visible {
   }
 }
 
-/* Mobile: drop heavy glass blur for battery + perf */
 @media (max-width: 640px) {
   .glass {
     backdrop-filter: blur(6px);
   }
 }
 
-/* Neon glow effects */
 @layer utilities {
   .glow-neon {
     box-shadow:
-      0 0 8px rgba(46, 230, 166, 0.25),
-      0 0 20px rgba(46, 230, 166, 0.08);
+      0 0 8px rgba(60, 232, 169, 0.25),
+      0 0 20px rgba(60, 232, 169, 0.08);
   }
   .glow-gold {
     box-shadow:
-      0 0 8px rgba(245, 196, 81, 0.25),
-      0 0 20px rgba(245, 196, 81, 0.08);
+      0 0 8px rgba(248, 201, 92, 0.25),
+      0 0 20px rgba(248, 201, 92, 0.08);
   }
   .glow-danger {
     box-shadow:
-      0 0 8px rgba(255, 92, 122, 0.25),
-      0 0 20px rgba(255, 92, 122, 0.08);
+      0 0 8px rgba(255, 95, 126, 0.25),
+      0 0 20px rgba(255, 95, 126, 0.08);
   }
   .glow-electric {
     box-shadow:
-      0 0 8px rgba(76, 201, 255, 0.25),
-      0 0 20px rgba(76, 201, 255, 0.08);
+      0 0 8px rgba(92, 203, 255, 0.25),
+      0 0 20px rgba(92, 203, 255, 0.08);
   }
-
   .text-glow-neon {
-    text-shadow: 0 0 10px rgba(46, 230, 166, 0.45);
+    text-shadow: 0 0 10px rgba(60, 232, 169, 0.45);
   }
   .text-glow-gold {
-    text-shadow: 0 0 10px rgba(245, 196, 81, 0.45);
+    text-shadow: 0 0 10px rgba(248, 201, 92, 0.45);
   }
-
   .border-glow-neon {
-    border-color: rgba(46, 230, 166, 0.3);
+    border-color: rgba(60, 232, 169, 0.3);
   }
 
-  /* Glass card — navy surface, soft border, faint top highlight */
+  /* Surface: the one card style the whole app uses. Elevation comes from a
+     top highlight + soft drop shadow, not from a bright border; the border
+     is a hairline so stacked cards stop reading as a grid of boxes. */
   .glass {
-    background: rgba(10, 14, 23, 0.72);
-    backdrop-filter: blur(14px);
-    border: 1px solid rgba(35, 42, 61, 0.55);
+    background: linear-gradient(
+      180deg,
+      rgba(21, 24, 35, 0.92) 0%,
+      rgba(14, 16, 22, 0.94) 100%
+    );
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--line);
     box-shadow:
-      inset 0 1px 0 rgba(230, 234, 244, 0.03),
-      0 4px 24px rgba(0, 0, 0, 0.25);
+      inset 0 1px 0 rgba(255, 255, 255, 0.045),
+      0 1px 2px rgba(0, 0, 0, 0.4),
+      0 14px 36px -16px rgba(0, 0, 0, 0.7);
   }
-
   .glass-hover:hover {
-    background: rgba(18, 23, 39, 0.8);
-    border-color: rgba(46, 230, 166, 0.18);
+    border-color: rgba(60, 232, 169, 0.22);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.06),
+      0 1px 2px rgba(0, 0, 0, 0.4),
+      0 18px 40px -16px rgba(0, 0, 0, 0.8);
   }
 
-  /* Legacy grid class — now a whisper-quiet dot matrix (aurora does the work) */
+  /* Small uppercase label above a section or stat. */
+  .eyebrow {
+    font-family: "Inter", system-ui, sans-serif;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: rgba(160, 169, 191, 0.75);
+  }
+
+  /* Buttons: one primary, one quiet. */
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    min-height: 40px;
+    padding: 0 1rem;
+    border-radius: 0.75rem;
+    background: linear-gradient(180deg, #4df0b6, #2fd39a);
+    color: #06110c;
+    font-weight: 700;
+    font-size: 13px;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.35),
+      0 8px 20px -8px rgba(60, 232, 169, 0.6);
+    transition:
+      transform 0.15s ease,
+      box-shadow 0.15s ease,
+      filter 0.15s ease;
+  }
+  .btn-primary:hover {
+    filter: brightness(1.05);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.35),
+      0 10px 24px -8px rgba(60, 232, 169, 0.75);
+  }
+  .btn-primary:active {
+    transform: scale(0.97);
+  }
+  .btn-ghost {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    min-height: 40px;
+    padding: 0 0.9rem;
+    border-radius: 0.75rem;
+    border: 1px solid var(--line-strong);
+    background: rgba(255, 255, 255, 0.03);
+    color: #eef1f8;
+    font-weight: 600;
+    font-size: 13px;
+    transition:
+      background 0.15s ease,
+      border-color 0.15s ease;
+  }
+  .btn-ghost:hover {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.16);
+  }
+
+  /* Big number in a stat tile. */
+  .stat-num {
+    font-family: "Space Grotesk", "Inter", system-ui, sans-serif;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    line-height: 1;
+  }
+
   .bg-grid {
     background-image: radial-gradient(
-      rgba(142, 154, 181, 0.05) 1px,
+      rgba(160, 169, 191, 0.05) 1px,
       transparent 1px
     );
     background-size: 28px 28px;
   }
-
-  /* Best odds highlight */
   .best-odds {
-    background: rgba(46, 230, 166, 0.08);
-    border: 1px solid rgba(46, 230, 166, 0.25);
-    color: #2ee6a6;
+    background: rgba(60, 232, 169, 0.09);
+    border: 1px solid rgba(60, 232, 169, 0.28);
+    color: #3ce8a9;
   }
-
-  /* Arbitrage flash */
   .arb-alert {
     background: linear-gradient(
       135deg,
-      rgba(245, 196, 81, 0.15),
-      rgba(245, 196, 81, 0.05)
+      rgba(248, 201, 92, 0.16),
+      rgba(248, 201, 92, 0.05)
     );
-    border: 1px solid rgba(245, 196, 81, 0.4);
+    border: 1px solid rgba(248, 201, 92, 0.4);
     animation: pulse-neon 2s ease-in-out infinite;
   }
-
-  /* Positive/Negative EV */
   .ev-positive {
-    color: #2ee6a6;
+    color: #3ce8a9;
   }
   .ev-negative {
-    color: #ff5c7a;
+    color: #ff5f7e;
   }
 
-  /* Ticker animation */
   .ticker-wrap {
     overflow: hidden;
     white-space: nowrap;
   }
   .ticker-content {
     display: inline-flex;
-    /* Duration here is only a FALLBACK for the first paint (and for SSR/no-JS).
-       LiveTicker overrides it inline with a value derived from the measured
-       strip width, so scroll SPEED stays constant instead of the duration.
-       A fixed duration meant a short strip crawled while a long one raced —
-       and at 110s over a 9,000px strip a headline took ~2 minutes to come
-       back around, which read as the banner being stuck. */
+    /* Fallback only: LiveTicker sets a width-derived duration inline so
+       scroll SPEED stays constant regardless of strip length. */
     animation: ticker-scroll 60s linear infinite;
-    /* Promote to its own layer: without this the long strip repaints on the
-       main thread every frame, which is what makes it stutter on a phone. */
     will-change: transform;
   }
   .ticker-content:hover {
@@ -243,13 +314,9 @@ select:focus-visible {
   }
 }
 
-/* The scrolling-scoreboard keyframe. This MUST live in plain CSS, not only
-   in tailwind.config.ts's `keyframes` — Tailwind only emits a configured
-   keyframe when something actually uses its `animate-*` utility class, and
-   nothing here does (the animation is applied via the .ticker-content
-   component class instead). Previously `.ticker-content` referenced an
-   `animation: ticker ...` whose @keyframes was never generated, so the
-   ticker rendered but never moved. */
+/* Must live in plain CSS: Tailwind only emits configured keyframes when an
+   animate-* utility references them, and .ticker-content applies this one
+   directly. */
 @keyframes ticker-scroll {
   0% {
     transform: translateX(0);
@@ -259,7 +326,6 @@ select:focus-visible {
   }
 }
 
-/* Hide scrollbar for mobile tab nav */
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }
@@ -268,12 +334,10 @@ select:focus-visible {
   scrollbar-width: none;
 }
 
-/* Prevent text selection on buttons for mobile */
 button {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Mobile safe area padding */
 @supports (padding: max(0px)) {
   .safe-bottom {
     padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
@@ -283,7 +347,6 @@ button {
   }
 }
 
-/* Number counter animation */
 @keyframes count-up {
   from {
     opacity: 0;
@@ -294,12 +357,10 @@ button {
     transform: translateY(0);
   }
 }
-
 .count-animate {
   animation: count-up 0.3s ease-out;
 }
 
-/* Pulse ring for live indicator */
 .live-pulse {
   position: relative;
 }
@@ -310,16 +371,16 @@ button {
   left: 50%;
   width: 8px;
   height: 8px;
-  background: #ff5c7a;
+  background: #ff5f7e;
   border-radius: 50%;
   transform: translate(-50%, -50%);
   animation: live-ring 1.5s ease-out infinite;
 }
 @keyframes live-ring {
   0% {
-    box-shadow: 0 0 0 0 rgba(255, 92, 122, 0.6);
+    box-shadow: 0 0 0 0 rgba(255, 95, 126, 0.6);
   }
   100% {
-    box-shadow: 0 0 0 12px rgba(255, 92, 122, 0);
+    box-shadow: 0 0 0 12px rgba(255, 95, 126, 0);
   }
 }

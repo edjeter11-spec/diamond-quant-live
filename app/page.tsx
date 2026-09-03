@@ -703,17 +703,15 @@ export default function WarRoom() {
       <LiveTicker />
 
       {/* Header */}
-      <header className="safe-top border-b border-slate/25 bg-void/70 backdrop-blur-xl sticky top-0 z-40">
-        <div className="max-w-[1800px] mx-auto px-3 sm:px-4 py-2 sm:py-3 flex items-center justify-between gap-2">
+      <header className="safe-top border-b border-white/[0.06] bg-void/80 backdrop-blur-xl sticky top-0 z-40">
+        <div className="max-w-[1800px] mx-auto px-3 sm:px-5 py-2.5 sm:py-3 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             {/* Brand mark — cropped from the QUANT logo. Sport-tinted ring
                 keeps the existing NBA/MLB color cue without recoloring the
                 artwork itself. */}
             <div
-              className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center border flex-shrink-0 shadow-lg overflow-hidden ${
-                currentSport === "nba"
-                  ? "border-orange-500/25"
-                  : "border-neon/25"
+              className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center ring-1 flex-shrink-0 shadow-panel overflow-hidden ${
+                currentSport === "nba" ? "ring-orange-500/30" : "ring-neon/30"
               }`}
             >
               <img
@@ -729,7 +727,7 @@ export default function WarRoom() {
                 "SPORTS INTELLIGENCE" subtitle stays desktop-only so the mobile
                 header doesn't crowd the sport switcher. */}
             <div className="min-w-0">
-              <h1 className="text-sm sm:text-lg font-extrabold text-silver tracking-tight leading-tight whitespace-nowrap">
+              <h1 className="text-[15px] sm:text-xl font-display font-bold text-silver leading-tight whitespace-nowrap">
                 Quant
                 <span
                   className={`ml-1 ${currentSport === "nba" ? "text-orange-400" : "text-neon"}`}
@@ -737,29 +735,33 @@ export default function WarRoom() {
                   Betting
                 </span>
               </h1>
-              <p className="hidden sm:block text-[10px] text-mercury/60 -mt-0.5 font-mono tracking-wider">
-                SPORTS INTELLIGENCE
+              <p className="hidden sm:block eyebrow -mt-0.5">
+                Sports intelligence
               </p>
             </div>
             {/* Sport Switcher — segmented pill, thumb-sized targets */}
-            <div className="flex items-center bg-gunmetal/60 border border-slate/30 rounded-full p-0.5 sm:p-1 sm:ml-1">
+            <div className="flex items-center bg-bunker border border-white/[0.07] rounded-xl p-1 sm:ml-2 shadow-panel">
               {(
                 [
-                  { key: "mlb", label: "MLB", active: "bg-neon/15 text-neon" },
+                  {
+                    key: "mlb",
+                    label: "MLB",
+                    active: "bg-gunmetal text-neon ring-1 ring-white/10",
+                  },
                   {
                     key: "nba",
                     label: "NBA",
-                    active: "bg-orange-500/15 text-orange-400",
+                    active: "bg-gunmetal text-orange-400 ring-1 ring-white/10",
                   },
                   {
                     key: "nfl",
                     label: "NFL",
-                    active: "bg-electric/15 text-electric",
+                    active: "bg-gunmetal text-electric ring-1 ring-white/10",
                   },
                   {
                     key: "nhl",
                     label: "NHL",
-                    active: "bg-sky-300/15 text-sky-300",
+                    active: "bg-gunmetal text-sky-300 ring-1 ring-white/10",
                   },
                 ] as const
               ).map((s) => (
@@ -769,10 +771,10 @@ export default function WarRoom() {
                     setSport(s.key);
                     selectGame(null);
                   }}
-                  className={`min-h-[36px] min-w-[42px] sm:min-w-[48px] px-2 sm:px-3 rounded-full text-[11px] font-bold transition-all active:scale-95 ${
+                  className={`min-h-[34px] min-w-[42px] sm:min-w-[50px] px-2 sm:px-3 rounded-lg text-[11px] font-bold tracking-wide transition-all active:scale-95 ${
                     currentSport === s.key
                       ? `${s.active} shadow-sm`
-                      : "text-mercury/50 hover:text-mercury"
+                      : "text-mercury/70 hover:text-silver"
                   }`}
                 >
                   {s.label}
@@ -781,15 +783,15 @@ export default function WarRoom() {
             </div>
           </div>
 
-          <nav className="hidden md:flex items-center gap-1">
+          <nav className="hidden md:flex items-center gap-0.5 rounded-xl bg-bunker/80 border border-white/[0.06] p-1">
             {tabs.map((tab) => (
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-[13px] font-semibold transition-all ${
                   activeTab === tab.key
-                    ? "bg-neon/10 text-neon border border-neon/20"
-                    : "text-mercury hover:text-silver hover:bg-gunmetal/50"
+                    ? "bg-white/[0.07] text-silver shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
+                    : "text-mercury hover:text-silver hover:bg-white/[0.04]"
                 }`}
               >
                 <tab.icon className="w-4 h-4" />
@@ -808,7 +810,7 @@ export default function WarRoom() {
             <button
               onClick={fetchData}
               disabled={refreshing}
-              className="hidden sm:flex items-center justify-center min-w-[40px] min-h-[36px] rounded-lg hover:bg-gunmetal/50 transition-colors"
+              className="hidden sm:flex items-center justify-center min-w-[40px] min-h-[40px] rounded-xl border border-white/[0.07] bg-white/[0.02] hover:bg-white/[0.06] transition-colors"
               title="Refresh data"
               aria-label="Refresh"
             >
@@ -1218,7 +1220,7 @@ export default function WarRoom() {
 
       {/* Mobile bottom nav — floating pill, native-app feel */}
       <nav
-        className="md:hidden fixed inset-x-3 z-50 rounded-2xl bg-bunker/90 backdrop-blur-xl border border-slate/40 shadow-[0_8px_32px_rgba(0,0,0,0.5)] flex items-stretch overflow-hidden"
+        className="md:hidden fixed inset-x-3 z-50 rounded-2xl bg-bunker/95 backdrop-blur-xl border border-white/[0.08] shadow-pop flex items-stretch overflow-hidden"
         style={{ bottom: "max(0.25rem, env(safe-area-inset-bottom))" }}
       >
         {tabs.map((tab) => {
@@ -1247,8 +1249,8 @@ export default function WarRoom() {
         })}
       </nav>
 
-      <footer className="border-t border-slate/15 mt-6 sm:mt-8 py-4 mb-24 md:mb-0 text-center px-4">
-        <p className="text-[10px] sm:text-xs text-mercury/40 font-mono">
+      <footer className="border-t border-white/[0.06] mt-8 sm:mt-12 py-6 mb-24 md:mb-0 text-center px-4">
+        <p className="eyebrow">
           Quant Betting v1.0 — Odds via The Odds API. Stats via{" "}
           {currentSport === "nba" ? "NBA Stats API" : "MLB Stats API"}.
         </p>
