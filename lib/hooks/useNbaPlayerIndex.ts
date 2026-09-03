@@ -233,3 +233,93 @@ export function useWarmMlbPlayerIndex(): void {
     loadMlbIndex().catch(() => {});
   }, []);
 }
+
+// ── NFL parallel ──────────────────────────────────────────
+// Same shape as MLB/NBA; ids are ESPN athlete ids (see /api/nfl-player-index).
+const NFL_CACHE_KEY = "dq_nfl_player_index_v1";
+const NFL_ENDPOINT = "/api/nfl-player-index";
+let nflMemoryCache: { byNameLower: Map<string, number> } | null = null;
+let nflInflight: Promise<Map<string, number>> | null = null;
+
+async function loadNflIndex(): Promise<Map<string, number>> {
+  if (nflMemoryCache) return nflMemoryCache.byNameLower;
+  if (nflInflight) return nflInflight;
+  nflInflight = (async () => {
+    if (typeof window !== "undefined") {
+      try {
+        const raw = localStorage.getItem(NFL_CACHE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw) as {
+            ts: number;
+            entries: PlayerEntry[];
+          };
+          if (
+            parsed.ts &&
+            Date.now() - parsed.ts < CACHE_TTL_MS &&
+            parsed.entries?.length > 0
+          ) {
+            const byNameLower = buildMap(parsed.entries);
+            nflMemoryCache = { byNameLower };
+            return byNameLower;
+          }
+        }
+      } catch {}
+    }
+    try {
+      const res = await fetch(NFL_ENDPOINT);
+      if (!res.ok) return new Map();
+      const data = await res.json();
+      const entries: PlayerEntry[] = data?.players ?? [];
+      if (entries.length === 0) return new Map();
+      if (typeof window !== "undefined") {
+        try {
+          localStorage.setItem(
+            NFL_CACHE_KEY,
+            JSON.stringify({ ts: Date.now(), entries }),
+          );
+        } catch {}
+      }
+      const byNameLower = buildMap(entries);
+      nflMemoryCache = { byNameLower };
+      return byNameLower;
+    } catch {
+      return new Map();
+    } finally {
+      nflInflight = null;
+    }
+  })();
+  return nflInflight;
+}
+
+export function useNflPlayerId(name: string | undefined | null): number | null {
+  const initial =
+    name && nflMemoryCache
+      ? resolveSync(name, nflMemoryCache.byNameLower)
+      : null;
+  const [id, setId] = useState<number | null>(initial);
+  useEffect(() => {
+    if (!name) {
+      setId(null);
+      return;
+    }
+    if (nflMemoryCache) {
+      setId(resolveSync(name, nflMemoryCache.byNameLower));
+      return;
+    }
+    let cancelled = false;
+    loadNflIndex().then((map) => {
+      if (cancelled) return;
+      setId(resolveSync(name, map));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [name]);
+  return id;
+}
+
+export function useWarmNflPlayerIndex(): void {
+  useEffect(() => {
+    loadNflIndex().catch(() => {});
+  }, []);
+}

@@ -60,7 +60,10 @@ export default function HeroBanner() {
     };
   }, [currentSport]);
 
-  const units = rec?.unitsNet ?? null;
+  // Nothing graded yet (a sport's season hasn't started) — say so rather
+  // than printing a 0-0, +0.0u record that reads like a broken counter.
+  const fresh = rec != null && rec.graded === 0;
+  const units = fresh ? null : (rec?.unitsNet ?? null);
   const unitsTone =
     units == null ? "text-silver" : units >= 0 ? "text-neon" : "text-danger";
 
@@ -106,12 +109,14 @@ export default function HeroBanner() {
         {/* Right — the record. Three tiles, real numbers. */}
         <div className="grid grid-cols-3 gap-3 self-center">
           <Tile
-            label={rec ? `Last ${rec.days} days` : "Record"}
-            value={rec ? `${rec.wins}-${rec.losses}` : "—"}
+            label={rec && !fresh ? `Last ${rec.days} days` : "Record"}
+            value={rec && !fresh ? `${rec.wins}-${rec.losses}` : "—"}
             sub={
-              rec && rec.pushes > 0
-                ? `${rec.pushes} push${rec.pushes === 1 ? "" : "es"}`
-                : "graded picks"
+              fresh
+                ? "season opens soon"
+                : rec && rec.pushes > 0
+                  ? `${rec.pushes} push${rec.pushes === 1 ? "" : "es"}`
+                  : "graded picks"
             }
             tone="text-silver"
           />
@@ -127,11 +132,13 @@ export default function HeroBanner() {
           />
           <Tile
             label="Settled"
-            value={rec ? String(rec.graded) : "—"}
+            value={rec && !fresh ? String(rec.graded) : "—"}
             sub={
-              rec && rec.pending > 0
-                ? `${rec.pending} pending`
-                : "vs final scores"
+              fresh
+                ? "first grades after kickoff"
+                : rec && rec.pending > 0
+                  ? `${rec.pending} pending`
+                  : "vs final scores"
             }
             tone="text-silver"
           />

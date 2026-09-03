@@ -1,13 +1,19 @@
 "use client";
 
 import { useState } from "react";
-import { useNbaPlayerId, useMlbPlayerId } from "@/lib/hooks/useNbaPlayerIndex";
+import {
+  useNbaPlayerId,
+  useMlbPlayerId,
+  useNflPlayerId,
+} from "@/lib/hooks/useNbaPlayerIndex";
+
+type AvatarSport = "mlb" | "nba" | "nfl" | "nhl";
 
 interface PlayerAvatarProps {
   name: string;
   photo?: string | null; // direct URL to headshot
   playerId?: number | string | null; // auto-builds URL if sport given
-  sport?: "mlb" | "nba" | null;
+  sport?: AvatarSport | null;
   size?: number; // px, default 20
   className?: string;
 }
@@ -20,16 +26,19 @@ function getInitials(name: string): string {
   return name.charAt(0).toUpperCase();
 }
 
-// Build the official headshot URL for a player id + sport.
+// Official headshot URL for a player id + sport. NHL has no index yet, so
+// it returns null and the avatar falls to initials rather than a 404.
 function buildHeadshotUrl(
   playerId: string | number,
-  sport: "mlb" | "nba",
-): string {
-  if (sport === "nba") {
+  sport: AvatarSport,
+): string | null {
+  if (sport === "nba")
     return `https://cdn.nba.com/headshots/nba/latest/260x190/${playerId}.png`;
-  }
-  // MLB stats API
-  return `https://img.mlbstatic.com/mlb-photos/image/upload/d_people:generic:headshot:67:current.png/w_213,q_auto:best/v1/people/${playerId}/headshot/67/current`;
+  if (sport === "nfl")
+    return `https://a.espncdn.com/i/headshots/nfl/players/full/${playerId}.png`;
+  if (sport === "mlb")
+    return `https://img.mlbstatic.com/mlb-photos/image/upload/d_people:generic:headshot:67:current.png/w_213,q_auto:best/v1/people/${playerId}/headshot/67/current`;
+  return null;
 }
 
 export default function PlayerAvatar({
@@ -42,14 +51,22 @@ export default function PlayerAvatar({
 }: PlayerAvatarProps) {
   const [imgError, setImgError] = useState(false);
 
-  // Auto-resolve player id from the shared client-side index when none was passed.
+  // Auto-resolve player id from the shared client-side index when none was
+  // passed. Hooks run unconditionally (rules of hooks); each is a no-op for
+  // the sports it doesn't own.
   const autoNbaId = useNbaPlayerId(sport === "nba" ? name : null);
   const autoMlbId = useMlbPlayerId(sport === "mlb" ? name : null);
+  const autoNflId = useNflPlayerId(sport === "nfl" ? name : null);
   const effectiveId =
     playerId ??
-    (sport === "nba" ? autoNbaId : sport === "mlb" ? autoMlbId : null);
+    (sport === "nba"
+      ? autoNbaId
+      : sport === "mlb"
+        ? autoMlbId
+        : sport === "nfl"
+          ? autoNflId
+          : null);
 
-  // Prefer an explicit photo URL. Fall back to auto-built URL when we have id + sport.
   const resolved =
     photo ??
     (effectiveId && sport ? buildHeadshotUrl(effectiveId, sport) : null);
@@ -61,14 +78,15 @@ export default function PlayerAvatar({
         alt={name}
         width={size}
         height={size}
-        className={`flex-shrink-0 rounded-full object-cover bg-gunmetal/30 ${className}`}
+        // ESPN NFL headshots are landscape crops on a transparent background;
+        // object-top keeps the face in frame when we round them.
+        className={`flex-shrink-0 rounded-full object-cover object-top bg-gunmetal/40 ring-1 ring-white/[0.06] ${className}`}
         style={{ width: size, height: size }}
         onError={() => setImgError(true)}
       />
     );
   }
 
-  // Fallback: initials in a gray circle
   const initials = getInitials(name);
   return (
     <div

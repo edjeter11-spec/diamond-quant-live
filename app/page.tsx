@@ -29,9 +29,11 @@ import StreakBanner from "@/components/dashboard/StreakBanner";
 import {
   useWarmNbaPlayerIndex,
   useWarmMlbPlayerIndex,
+  useWarmNflPlayerIndex,
 } from "@/lib/hooks/useNbaPlayerIndex";
 import FloatingParlayChip from "@/components/dashboard/FloatingParlayChip";
 import HeroBanner from "@/components/dashboard/HeroBanner";
+import NFLWeekSlate from "@/components/dashboard/NFLWeekSlate";
 import EdgeFinder from "@/components/dashboard/EdgeFinder";
 import InjuryAlerts from "@/components/dashboard/InjuryAlerts";
 import Toaster from "@/components/ui/Toaster";
@@ -147,6 +149,7 @@ export default function WarRoom() {
   // synchronously (no blank → photo flicker) when tabs remount.
   useWarmNbaPlayerIndex();
   useWarmMlbPlayerIndex();
+  useWarmNflPlayerIndex();
 
   // Pre-warm the OTHER sport's scores/analysis in the background so the first
   // sport-tab switch feels instant. Odds are deliberately NOT pre-warmed here —
@@ -1064,6 +1067,15 @@ export default function WarRoom() {
                   <SafeBoundary>
                     <HeroBanner />
                   </SafeBoundary>
+
+                  {/* NFL: the week's slate as matchup cards — the tab's
+                      centrepiece, since football has one slate a week and
+                      the props card is empty on the six days between. */}
+                  {currentSport === "nfl" && (
+                    <SafeBoundary>
+                      <NFLWeekSlate />
+                    </SafeBoundary>
+                  )}
 
                   {/* Streak banner — social proof / retention hook */}
                   <SafeBoundary>

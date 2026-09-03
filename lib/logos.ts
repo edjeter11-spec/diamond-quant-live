@@ -94,9 +94,17 @@ export function getTeamLogo(abbrev: string, sport: string = "mlb"): string {
     if (id) return `https://cdn.nba.com/logos/nba/${id}/primary/L/logo.svg`;
     return "";
   }
+  if (sport === "nfl") {
+    // ESPN's CDN keys NFL crests by lowercase abbreviation. Only teams in
+    // our own map qualify — an unknown code must fall to the text badge,
+    // never to a guessed URL that 404s into a broken-image icon.
+    if (NFL_ABBREVS.has(upper))
+      return `https://a.espncdn.com/i/teamlogos/nfl/500/${upper.toLowerCase()}.png`;
+    return "";
+  }
   // Only MLB remains — anything else must NOT fall through to the MLB table.
-  // NHL and NFL abbreviations collide with MLB ones (TOR, BOS, PIT, PHI...),
-  // so an unguarded lookup served a Blue Jays crest for the Maple Leafs.
+  // NHL abbreviations collide with MLB ones (TOR, BOS, PIT, PHI...), so an
+  // unguarded lookup served a Blue Jays crest for the Maple Leafs.
   if (sport !== "mlb") return "";
   const id = MLB_TEAM_IDS[upper];
   if (id) return `https://www.mlbstatic.com/team-logos/${id}.svg`;
@@ -140,15 +148,21 @@ export function getTeamLogoByName(
 // NHL tab. Callers cast currentSport to "mlb" | "nba", so the type system
 // does not catch this; the runtime guard has to.
 export function teamNameToAbbrev(name: string, sport: string): string {
-  if (sport !== "mlb" && sport !== "nba") return "";
+  if (sport !== "mlb" && sport !== "nba" && sport !== "nfl") return "";
 
   const upper = name.toUpperCase().trim();
   // If already a valid abbreviation, return it
   if (sport === "nba" && NBA_TEAM_IDS[upper]) return upper;
   if (sport === "mlb" && MLB_TEAM_IDS[upper]) return upper;
+  if (sport === "nfl" && NFL_ABBREVS.has(upper)) return upper;
 
   const lower = name.toLowerCase().trim();
-  const lookup = sport === "nba" ? NBA_NAME_TO_ABBREV : MLB_NAME_TO_ABBREV;
+  const lookup =
+    sport === "nba"
+      ? NBA_NAME_TO_ABBREV
+      : sport === "nfl"
+        ? NFL_NAME_TO_ABBREV
+        : MLB_NAME_TO_ABBREV;
   // Sort by key length descending so "los angeles clippers" matches before "los angeles"
   const entries = Object.entries(lookup).sort(
     (a, b) => b[0].length - a[0].length,
@@ -386,6 +400,7 @@ const NBA_ABBREV_TO_FULL: Record<string, string> = {
 
 export function getFullTeamName(abbrev: string, sport: string = "mlb"): string {
   if (sport === "nba") return NBA_ABBREV_TO_FULL[abbrev] ?? abbrev;
+  if (sport === "nfl") return NFL_ABBREV_TO_FULL[abbrev] ?? abbrev;
   // Only MLB has a map beyond NBA — anything else must return the abbrev
   // rather than expanding through the MLB table. NHL and NFL share codes with
   // MLB (TOR, BOS, PIT, PHI, WSH...), so the old `return MLB_...` fallthrough
@@ -407,3 +422,114 @@ export function getTeamNickname(abbrev: string, sport: string = "mlb"): string {
   }
   return full.split(" ").pop() ?? abbrev;
 }
+
+// ── NFL ──────────────────────────────────────────────────
+// ESPN abbreviations (what /api/nfl-scores emits and what the ESPN logo CDN
+// keys on). Kept as its own set — NFL codes collide with MLB (ARI, ATL, BAL,
+// KC, MIA, MIN, PHI, PIT, SF, SEA, TB, WSH) and must never share a table.
+export const NFL_ABBREV_TO_FULL: Record<string, string> = {
+  ARI: "Arizona Cardinals",
+  ATL: "Atlanta Falcons",
+  BAL: "Baltimore Ravens",
+  BUF: "Buffalo Bills",
+  CAR: "Carolina Panthers",
+  CHI: "Chicago Bears",
+  CIN: "Cincinnati Bengals",
+  CLE: "Cleveland Browns",
+  DAL: "Dallas Cowboys",
+  DEN: "Denver Broncos",
+  DET: "Detroit Lions",
+  GB: "Green Bay Packers",
+  HOU: "Houston Texans",
+  IND: "Indianapolis Colts",
+  JAX: "Jacksonville Jaguars",
+  KC: "Kansas City Chiefs",
+  LV: "Las Vegas Raiders",
+  LAC: "Los Angeles Chargers",
+  LAR: "Los Angeles Rams",
+  MIA: "Miami Dolphins",
+  MIN: "Minnesota Vikings",
+  NE: "New England Patriots",
+  NO: "New Orleans Saints",
+  NYG: "New York Giants",
+  NYJ: "New York Jets",
+  PHI: "Philadelphia Eagles",
+  PIT: "Pittsburgh Steelers",
+  SF: "San Francisco 49ers",
+  SEA: "Seattle Seahawks",
+  TB: "Tampa Bay Buccaneers",
+  TEN: "Tennessee Titans",
+  WSH: "Washington Commanders",
+};
+const NFL_ABBREVS = new Set(Object.keys(NFL_ABBREV_TO_FULL));
+
+const NFL_NAME_TO_ABBREV: Record<string, string> = {
+  // Nicknames
+  cardinals: "ARI",
+  falcons: "ATL",
+  ravens: "BAL",
+  bills: "BUF",
+  panthers: "CAR",
+  bears: "CHI",
+  bengals: "CIN",
+  browns: "CLE",
+  cowboys: "DAL",
+  broncos: "DEN",
+  lions: "DET",
+  packers: "GB",
+  texans: "HOU",
+  colts: "IND",
+  jaguars: "JAX",
+  chiefs: "KC",
+  raiders: "LV",
+  chargers: "LAC",
+  rams: "LAR",
+  dolphins: "MIA",
+  vikings: "MIN",
+  patriots: "NE",
+  saints: "NO",
+  giants: "NYG",
+  jets: "NYJ",
+  eagles: "PHI",
+  steelers: "PIT",
+  "49ers": "SF",
+  niners: "SF",
+  seahawks: "SEA",
+  buccaneers: "TB",
+  bucs: "TB",
+  titans: "TEN",
+  commanders: "WSH",
+  // Cities — shared cities carry a nickname initial for disambiguation.
+  "los angeles c": "LAC",
+  "los angeles r": "LAR",
+  "new york g": "NYG",
+  "new york j": "NYJ",
+  "las vegas": "LV",
+  "kansas city": "KC",
+  "new england": "NE",
+  "new orleans": "NO",
+  "green bay": "GB",
+  "san francisco": "SF",
+  "tampa bay": "TB",
+  arizona: "ARI",
+  atlanta: "ATL",
+  baltimore: "BAL",
+  buffalo: "BUF",
+  carolina: "CAR",
+  chicago: "CHI",
+  cincinnati: "CIN",
+  cleveland: "CLE",
+  dallas: "DAL",
+  denver: "DEN",
+  detroit: "DET",
+  houston: "HOU",
+  indianapolis: "IND",
+  jacksonville: "JAX",
+  miami: "MIA",
+  minnesota: "MIN",
+  philadelphia: "PHI",
+  pittsburgh: "PIT",
+  seattle: "SEA",
+  tennessee: "TEN",
+  washington: "WSH",
+};
