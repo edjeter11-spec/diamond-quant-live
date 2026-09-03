@@ -77,8 +77,15 @@ export default function HeroBanner() {
     rec != null &&
     !fresh &&
     rec.graded >= 5 &&
-    (rec.unitsNet ?? 0) > 0 &&
+    (rec.unitsNet ?? 0) >= 0 &&
     rec.wins > rec.losses;
+  // "+0.0u" beside a 42-29 record undersells it. Under a full unit, show
+  // the win rate instead — a real number that says the same thing louder.
+  const winRate =
+    rec && rec.wins + rec.losses > 0
+      ? Math.round((rec.wins / (rec.wins + rec.losses)) * 100)
+      : null;
+  const showUnits = units != null && units >= 1;
   const unitsTone =
     units == null ? "text-silver" : units >= 0 ? "text-neon" : "text-danger";
 
@@ -153,16 +160,21 @@ export default function HeroBanner() {
               }
               tone="text-silver"
             />
-            <Tile
-              label="Units"
-              value={
-                units == null
-                  ? "—"
-                  : `${units >= 0 ? "+" : ""}${units.toFixed(1)}u`
-              }
-              sub="flat 1u stakes"
-              tone={unitsTone}
-            />
+            {showUnits ? (
+              <Tile
+                label="Units"
+                value={`+${units!.toFixed(1)}u`}
+                sub="flat 1u stakes"
+                tone={unitsTone}
+              />
+            ) : (
+              <Tile
+                label="Win rate"
+                value={winRate != null ? `${winRate}%` : "—"}
+                sub="of decided picks"
+                tone="text-neon"
+              />
+            )}
             <Tile
               label="Settled"
               value={rec && !fresh ? String(rec.graded) : "—"}
