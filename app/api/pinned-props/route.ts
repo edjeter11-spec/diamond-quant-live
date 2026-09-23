@@ -449,6 +449,26 @@ export async function GET(req: NextRequest) {
   const firstPitchHourET = await getFirstPitchHourET(
     isNBA ? "nba" : isNFL ? "nfl" : "mlb",
   );
+  // No games today → no board. The prop feed prices NEXT slate's games days
+  // ahead (NFL especially), and without this the Friday 9/12 board was built
+  // from Sunday 9/13's Lamar Jackson props, dated 9/12, and would have been
+  // published as "today's picks" then graded against a day with no finals.
+  // MLB is exempt: a null there is far more likely a statsapi hiccup than a
+  // true off-day, and blanking a live board on a hiccup is the worse failure.
+  if (firstPitchHourET === null && sport !== "mlb") {
+    return NextResponse.json({
+      ok: true,
+      sport,
+      date: today,
+      picks: [],
+      locked: 0,
+      isPremium,
+      considered: 0,
+      qualified: 0,
+      noGames: true,
+      message: "No games today — the board builds on game day.",
+    });
+  }
   if (firstPitchHourET !== null) {
     // The last window that ENDS at or before first pitch — the last one lying
     // entirely in pre-game time.

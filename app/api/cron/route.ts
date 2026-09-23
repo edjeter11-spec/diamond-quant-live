@@ -237,8 +237,17 @@ export async function GET(req: Request) {
       if (events.length > 0) {
         const today = etDateString();
         // Normalize for commit
+        // Only games kicking off TODAY (ET). The scoreboard feed returns the
+        // whole week, so this committed Sunday's props every day from
+        // Tuesday on, stamped with the wrong game_date — 7 void rows a day
+        // for two weeks straight, and a "today's props" card on Friday for
+        // a Sunday game.
         const normalized = events
           .filter((ev: any) => getNFLGameStatus(ev) === "pre")
+          .filter((ev: any) => {
+            const t = Date.parse(ev?.date ?? ev?.competitions?.[0]?.date);
+            return Number.isFinite(t) && etDateString(new Date(t)) === today;
+          })
           .map((ev: any) => {
             const comp = ev.competitions?.[0];
             const home = comp?.competitors?.find(

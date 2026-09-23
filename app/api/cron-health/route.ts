@@ -41,9 +41,42 @@ export async function GET() {
   const ageMin = Math.round((Date.now() - new Date(hb.at).getTime()) / 60000);
   const stale = ageMin > STALE_MINUTES;
 
+  // Bot reachability. Publishing went dark for 12 days (2026-09-06 → 09-17)
+  // because the Railway bot was removed at trial expiry: the cron kept
+  // reporting healthy, publish-daily failed every tick, released its claim,
+  // and retried forever. A health endpoint that can't see the bot is blind
+  // to the one failure that matters most to a Discord-first product.
+  let bot: { reachable: boolean; detail: string } = {
+    reachable: false,
+    detail: "not configured",
+  };
+  if (process.env.BOT_API_URL) {
+    try {
+      const r = await fetch(
+        `${process.env.BOT_API_URL.replace(/\/+$/, "")}/health`,
+        {
+          headers: { "x-bot-secret": process.env.BOT_API_SECRET ?? "" },
+          signal: AbortSignal.timeout(6000),
+        },
+      );
+      const d = await r.json().catch(() => ({}));
+      bot = {
+        reachable: r.ok && d?.ok === true,
+        detail: r.ok
+          ? d?.ready
+            ? "ready"
+            : "up, not ready"
+          : `HTTP ${r.status}`,
+      };
+    } catch (e: any) {
+      bot = { reachable: false, detail: e?.message ?? "unreachable" };
+    }
+  }
+
   return NextResponse.json({
-    ok: !stale,
-    status: stale ? "stalled" : "healthy",
+    ok: !stale && bot.reachable,
+    status: stale ? "stalled" : !bot.reachable ? "bot-down" : "healthy",
+    bot,
     lastRunAt: hb.at,
     minutesAgo: ageMin,
     publishedToday: hb.publishedToday ?? false,

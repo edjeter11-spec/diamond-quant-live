@@ -208,6 +208,18 @@ export async function GET(req: NextRequest) {
   // numbers at 4:09 AM ET on 2026-08-10 and posted them straight to Discord.
   if (!force) {
     const gate = await checkLineupGate(sport, today);
+    // No games today (NFL/NBA/NHL) → no parlay. See the matching guard in
+    // pinned-props: the feed carries next slate's props days early.
+    if (gate.firstPitchHourET === null && sport !== "mlb") {
+      return NextResponse.json({
+        ok: true,
+        sport,
+        date: today,
+        legs: [],
+        noGames: true,
+        message: "No games today — the parlay builds on game day.",
+      });
+    }
     if (gate.waiting) {
       return NextResponse.json({
         ok: true,

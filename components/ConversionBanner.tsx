@@ -84,7 +84,8 @@ export default function ConversionBanner() {
                   Pro unlocks everything
                 </span>{" "}
                 <span className="hidden sm:inline">
-                  — full prop list, AI brain stats, parlay builder, arb alerts.{" "}
+                  — full prop list, AI brain stats, parlay builder, arb
+                  alerts.{" "}
                 </span>
                 <span className="text-mercury/70">7-day free trial.</span>
               </>
